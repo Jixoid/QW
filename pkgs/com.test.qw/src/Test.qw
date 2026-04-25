@@ -1,0 +1,30 @@
+
+namespace std 
+{
+
+  record string
+  {
+    ptr m_data, m_end;
+  }
+
+}
+
+
+
+fun add(i32 a,b) -> i32;
+
+fun main() -> i32
+{
+  #var std::string str = 1;
+  #var char str = 's';
+  #var bool ok = true;
+  var ptr p = null;
+
+  ret 0;
+
+  #var i16 a = 1;
+  #var i32 b = 2;
+  #var i64 c = 3;
+  #
+  #ret a+b+c;
+}
