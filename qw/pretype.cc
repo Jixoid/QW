@@ -9,9 +9,8 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
-#include "qw/basis.hh"
 #include "qw/pretype.hh"
+#include "qw/basis.hh"
 #include "qw/control/context.hh"
 #include <string>
 #include <string_view>
@@ -21,39 +20,38 @@
 namespace qw
 {
 
-  fun word::file() -> std::string_view { return m_mod->mmap()->view(); }
-  
-  fun word::fpath() -> std::string_view { return m_mod->fpath(); };
-  
-  fun word::view() -> std::string_view { return m_mod->mmap()->view().substr(m_off,m_size); };
-  fun word::str() -> std::string { return (std::string)m_mod->mmap()->view().substr(m_off,m_size); };
+  auto word::file() -> std::string_view { return m_mod->mmap()->view(); }
 
+  auto word::fpath() -> std::string_view { return m_mod->fpath(); };
 
-  fun word::interval() -> std::pair<humanPos,humanPos>
+  auto word::view() -> std::string_view { return m_mod->mmap()->view().substr(m_off, m_size); };
+  auto word::str() -> std::string { return (std::string)m_mod->mmap()->view().substr(m_off, m_size); };
+
+  auto word::interval() -> std::pair<humanPos, humanPos>
   {
-    const auto calc = [](std::string_view text, u0 offset) -> humanPos
-    {
+    const auto calc = [](std::string_view text, u0 offset) -> humanPos {
       u0 line = 1, last_newline_pos{};
 
-      for (u0 i{}; i < offset; i++) if (text[i] == '\n') {
-        line++;
-        last_newline_pos = i+1;
-      }
+      for (u0 i{}; i < offset; i++)
+        if (text[i] == '\n') {
+          line++;
+          last_newline_pos = i + 1;
+        }
 
       u0 column = 1;
       for (u0 i = last_newline_pos; i < offset; i++) {
         u8 c = text[i];
-        
-        if ((c & 0xC0) != 0x80) column++;
+
+        if ((c & 0xC0) != 0x80)
+          column++;
       }
 
-      return {line, column};
+      return { line, column };
     };
 
-
     auto file = m_mod->mmap()->view();
-    
-    return {calc(file, off()), calc(file, off()+size())};
+
+    return { calc(file, off()), calc(file, off() + size()) };
   }
 
 }

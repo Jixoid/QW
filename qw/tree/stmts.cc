@@ -9,12 +9,11 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
-#include "qw/basis.hh"
 #include "qw/tree/stmts.hh"
-#include "qw/tree/exprs.hh"
-#include "qw/tree/decls.hh"
+#include "qw/basis.hh"
 #include "qw/pretype.hh"
+#include "qw/tree/decls.hh"
+#include "qw/tree/exprs.hh"
 #include <string>
 
 #define ef else if
@@ -24,69 +23,66 @@
 namespace qw::stmts
 {
 
-  Stmt::Stmt(StmtEnum type, identy *parent, word pos)
+  Stmt::Stmt(StmtVari vari, identy *parent, word pos)
     : identy(IdentyEnum::Stmt, parent, pos)
-    , m_subType(type)
+    , m_vari(std::move(vari))
   {
-    if (auto C = static_cast<CodeVar*>(this); type == StmtEnum::CodeVar) {
-      if (parent && parent->type() == IdentyEnum::Stmt && static_cast<Stmt*>(parent)->subType() == StmtEnum::CodeBlock)
-        static_cast<CodeBlock*>(parent)->vars().push_back(C);
+    if (parent && parent->type() == IdentyEnum::Stmt) {
+      auto parentStmt = static_cast<Stmt *>(parent);
+
+      if (parentStmt->is<CodeBlock>()) {
+        auto cb = parentStmt->as<CodeBlock>();
+
+        if (this->is<CodeVar>()) {
+          cb->vars.push_back(this);
+        } else {
+          cb->codes.push_back(this);
+        }
+      }
     }
-    else {
-      if (parent && parent->type() == IdentyEnum::Stmt && static_cast<Stmt*>(parent)->subType() == StmtEnum::CodeBlock)
-        static_cast<CodeBlock*>(parent)->m_codes.push_back(this);
+    ef(this->is<CodeBlock>() && parent && parent->type() == IdentyEnum::Decl)
+    {
+      auto parentDecl = static_cast<decls::Decl *>(parent);
+
+      if (parentDecl->is<decls::FuncDecl>())
+        parentDecl->as<decls::FuncDecl>()->body = this;
     }
   }
 
-  
-
-  fun Stmt::make_CodeBlock(qw::context *ctx, identy *parent, word pos) -> CodeBlock*
+  fun Stmt::make_CodeBlock(qw::context *ctx, identy *parent, word pos) -> Stmt*
   {
-    auto obj = new CodeBlock(parent, pos);
+    auto obj = new Stmt(CodeBlock{}, parent, pos);
     ctx->push(obj);
     return obj;
   }
 
-  fun Stmt::make_CodeVar(qw::context *ctx, identy *parent, std::string name, types::Type *type, word pos, exprs::Expr *initialy, std::optional<word> initialy_pos) -> CodeVar*
+  fun Stmt::make_CodeVar(qw::context *ctx, identy *parent, std::string name, types::Type *type, word pos, exprs::Expr *initialy, std::optional<word> initialy_pos) -> Stmt*
   {
-    auto obj = new CodeVar(parent, name, type, pos, initialy, initialy_pos);
+    auto obj = new Stmt(CodeVar{ std::move(name), type, nullptr }, parent, pos);
+    ctx->push(obj);
+
+    if (initialy) {
+      auto ass = exprs::Expr::make_BinaryOp(
+        ctx, parent, exprs::BinaryOpEnum::Assign, exprs::Expr::make_VarExpr(ctx, parent, obj, pos), initialy, initialy_pos.value()
+      );
+      stmts::Stmt::make_ExprStmt(ctx, parent, ass, pos);
+    }
+
+    return obj;
+  }
+
+  fun Stmt::make_ExprStmt(qw::context *ctx, identy *parent, exprs::Expr *expr, word pos) -> Stmt*
+  {
+    auto obj = new Stmt(ExprStmt{ expr }, parent, pos);
     ctx->push(obj);
     return obj;
   }
 
-  fun Stmt::make_Return(qw::context *ctx, identy *parent, word pos, exprs::Expr *expr) -> Return*
+  fun Stmt::make_Return(qw::context *ctx, identy *parent, word pos, exprs::Expr *expr) -> Stmt* 
   {
-    auto obj = new Return(parent, pos, expr);
+    auto obj = new Stmt(ReturnStmt{ expr }, parent, pos);
     ctx->push(obj);
     return obj;
-  }
-
-  fun Stmt::make_ExprStmt(qw::context *ctx, identy *parent, exprs::Expr *expr, word pos) -> ExprStmt*
-  {
-    auto obj = new ExprStmt(parent, expr, pos);
-    ctx->push(obj);
-    return obj;
-  }
-
-
-
-  fun Stmt::dis() -> void { switch (subType())
-  {
-    case StmtEnum::CodeBlock: delete (CodeBlock*)this; break;
-    case StmtEnum::CodeVar: delete (CodeVar*)this; break;
-    
-    case StmtEnum::Return: delete (Return*)this; break;
-
-    case StmtEnum::ExprStmt: delete (ExprStmt*)this; break;
-  }}
-
-
-
-
-  CodeBlock::CodeBlock(identy *parent, word pos): Stmt(StmtEnum::CodeBlock, parent, pos)
-  {
-    if (parent && parent->type() == IdentyEnum::Decl && static_cast<decls::Decl*>(parent)->subType() == decls::DeclEnum::Func)
-      static_cast<decls::Func*>(parent)->body() = this;
   }
 
 }

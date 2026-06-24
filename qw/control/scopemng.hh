@@ -9,13 +9,11 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
 #include "qw/control/context.hh"
 #include "qw/pretype.hh"
-#include "qw/control/context.hh"
 #include <string>
 
 
@@ -26,8 +24,11 @@ namespace qw
   class scopemng
   {
     public:
-      inline scopemng(qw::context *ctx, std::vector<gst*> nGST, std::vector<std::string> nANS): ctx(ctx), m_gst(nGST), m_ans(nANS) {}
-  
+      scopemng(qw::context *ctx, std::vector<gst *> nGST, std::vector<std::string> nANS)
+        : ctx(ctx)
+        , m_gst(nGST)
+        , m_ans(nANS)
+      {}
 
     private:
       qw::context *ctx;
@@ -36,17 +37,15 @@ namespace qw
 
     public:
       static fun mangling_abi_qw(identy*) -> std::string;
-      static fun humanreadableTypes(types::Type*) -> std::string;
 
     public:
       fun fetch_type(identy*) -> types::Type*;
       fun fetch_expr(identy*) -> exprs::Expr*;
-      fun lookup(identy*, std::vector<std::string> names) -> identy*;
+      fun lookup(identy*, std::vector<std::string> names, std::vector<types::Type*> *arg_types = nullptr) -> identy*;
 
     public:
-      inline fun& gst() { return m_gst; } 
-      inline fun& ans() { return m_ans; } 
-
+      fun& gst() { return m_gst; }
+      fun& ans() { return m_ans; }
   };
 
 }

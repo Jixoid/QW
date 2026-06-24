@@ -57,7 +57,7 @@ namespace vfs::__embed
 			{
 				std::string fpath(_fpath);
 				for (char &C: fpath)
-					if (C == '.' | C == '/' | C == '-')
+					if (C == '.' || C == '/' || C == '-')
 						C = '_';
 
 				void *Sym_Beg{}, *Sym_End{};

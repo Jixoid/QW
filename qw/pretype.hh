@@ -9,7 +9,6 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
@@ -25,7 +24,6 @@ namespace qw
   class context;
   class module;
 
-
   struct word
   {
     public:
@@ -34,7 +32,6 @@ namespace qw
     public:
       inline word() {}
       inline word(qw::module *mod, u0 off, u0 size): m_mod(mod), m_off(off), m_size(size) {}
-
 
     private:
       qw::module *m_mod{};
@@ -45,24 +42,36 @@ namespace qw
       inline fun off() const { return m_off; }
       inline fun size() const { return m_size; }
 
-
     public:
       fun file() -> std::string_view;
       fun fpath() -> std::string_view;
-      
+
       fun view() -> std::string_view;
       [[nodiscard]] fun str() -> std::string;
 
-      [[nodiscard]] fun interval() -> std::pair<humanPos,humanPos>;
-
+      [[nodiscard]] fun interval() -> std::pair<humanPos, humanPos>;
 
     public:
       inline operator bool() { return (bool)m_mod; }
   };
 
+  enum struct Visibility: u8
+  {
+    Public    = 0x1,
+    Private   = 0x2,
+    Protected = 0x4,
+    Crate     = 0x8,
+    Group     = 0x10,
+  };
+
+  using VisibilityFlag = flags<Visibility>;
+
+  inline VisibilityFlag operator|(Visibility a, Visibility b) { return flags(a) | flags(b); }
 
 
-  enum struct IdentyEnum: u8 { Decl, Type, Stmt, Expr };
+  enum struct StageStatus: u8 { NotChecked, Checking, Checked };
+  
+  enum struct IdentyEnum: u8 { Decl, Stmt, Expr };
 
   struct identy
   {
@@ -72,22 +81,23 @@ namespace qw
         , m_type(type)
         , m_pos(pos)
       {}
-      
 
     private:
       identy *m_parent{};
       word m_pos{};
       IdentyEnum m_type;
+      StageStatus m_sema = StageStatus::NotChecked;
+      StageStatus m_cgen = StageStatus::NotChecked;
 
     public:
       inline fun  pos() { return m_pos; }
       inline fun& parent() { return m_parent; }
       inline fun  type() const { return m_type; }
+      inline fun& sema() { return m_sema; }
+      inline fun& cgen() { return m_cgen; }
   };
 
 }
-
-
 
 namespace qw::color
 {
@@ -105,18 +115,25 @@ namespace qw::color
   inline constinit const char *WHITE   = "\033[1;37m";
 }
 
-
-
 namespace qw::types
 {
   struct Type;
 
-  struct Sub;
-  struct Nick;
-  struct Func;
-  struct Record;
+  struct PrimitiveType;
 
-  struct MemberField;
+  struct PointerType;
+  struct ReferenceType;
+  struct ZArrayType;
+  struct PArrayType;
+
+  struct GenericType;
+
+  struct autocType;
+  struct RecordType;
+  struct EnumType;
+  struct SetType;
+
+  struct NickType;
 }
 
 namespace qw::stmts
@@ -125,9 +142,9 @@ namespace qw::stmts
 
   struct CodeBlock;
   struct CodeVar;
-  
+
   struct Return;
-  
+
   struct ExprStmt;
 }
 
@@ -141,6 +158,7 @@ namespace qw::exprs
   struct CharLiteral;
   struct BoolLiteral;
   struct PtrLiteral;
+  struct StringLiteral;
 
   struct ValExpr;
 
@@ -154,36 +172,11 @@ namespace qw::decls
 {
   struct Decl;
 
-  struct NameSpace;
-  struct Module;
-  struct Var;
-  struct Type;
-  struct Func;
-  struct Alias;
+  struct NameSpaceDecl;
+  struct VarDecl;
+  struct TypeDecl;
+  struct autocDecl;
+  struct AliasDecl;
 
-
-  #pragma region SystemType
-  struct IntU8;
-  struct IntU16;
-  struct IntU32;
-  struct IntU64;
-  struct IntU128;
-
-  struct IntS8;
-  struct IntS16;
-  struct IntS32;
-  struct IntS64;
-  struct IntS128;
-
-  struct Float16;
-  struct Float32;
-  struct Float64;
-  struct Float128;
-  
-  struct Char;
-
-  struct Bool;
-
-  struct Void;
-  #pragma endregion
+  struct RecordDecl;
 }

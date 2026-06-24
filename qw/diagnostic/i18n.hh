@@ -9,7 +9,6 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
@@ -20,49 +19,53 @@
 
 
 
-inline fun bulk_replace(std::string_view text, const std::vector<std::pair<std::string, std::string>> &replacements) -> std::string
+namespace qw
 {
-  std::string result;
-  result.reserve(text.size() * 1.2); 
 
-  for (u0 i{}; i < text.size();)
+  inline fun bulk_replace(std::string_view text, const std::vector<std::pair<std::string, std::string>> &replacements) -> std::string
   {
-    bool matched{};
+    std::string result;
+    result.reserve(text.size() * 1.2);
 
-    for (const auto &r: replacements)
-      if (text.substr(i).starts_with(r.first))
-      {
-        result.append(r.second);
-        i += r.first.size();
-        matched = true;
-        goto l_next;
+    for (u0 i{}; i < text.size();) {
+      bool matched{};
+
+      for (const auto &r: replacements)
+        if (text.substr(i).starts_with(r.first)) {
+          result.append(r.second);
+          i += r.first.size();
+          matched = true;
+          goto l_next;
+        }
+
+      if (!matched) {
+        result.push_back(text[i]);
+        i++;
       }
 
-    if (!matched) {
-      result.push_back(text[i]);
-      i++;
-    }
-
     l_next:
+    }
+    return result;
   }
-  return result;
-}
 
+  inline fun _(std::string str) -> std::string
+  {
+    std::string out = gettext(str.data());
 
-inline fun _(std::string str) -> std::string
-{
-  std::string out = gettext(str.data());
+    return bulk_replace(
+      out, {
+        { "<reset>", qw::color::RESET },
 
-  return bulk_replace(out, {
-    {"<reset>", qw::color::RESET},
+        { "<gray>", qw::color::GRAY },
+        { "<red>", qw::color::RED },
+        { "<green>", qw::color::GREEN },
+        { "<yellow>", qw::color::YELLOW },
+        { "<blue>", qw::color::BLUE },
+        { "<magenta>", qw::color::MAGENTA },
+        { "<cyan>", qw::color::CYAN },
+        { "<white>", qw::color::WHITE },
+      }
+    );
+  }
 
-    {"<gray>",   qw::color::GRAY},
-    {"<red>",    qw::color::RED},
-    {"<green>",  qw::color::GREEN},
-    {"<yellow>", qw::color::YELLOW},
-    {"<blue>",   qw::color::BLUE},
-    {"<magenta>", qw::color::MAGENTA},
-    {"<cyan>",   qw::color::CYAN},
-    {"<white>",  qw::color::WHITE},
-  });
 }

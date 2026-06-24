@@ -9,7 +9,6 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
@@ -22,129 +21,105 @@
 namespace qw::diagnostic
 {
 
-  enum qMsgType: u8 { mtFatal, mtError, mtWarning, mtHint, mtNote };
+  enum struct MsgType: u8 { Fatal, Error, Warning, Hint, Note };
 
-
-  struct qMessage
+  struct message
   {
     protected:
-      inline qMessage(qMsgType MsgType, word Pos, std::string Msg, std::vector<std::string> Params)
+      inline message(MsgType MsgType, word pos, std::string msg, std::vector<std::string> params)
         : m_msgType(MsgType)
-        , m_pos(Pos)
-        , m_msg(Msg)
-        , m_params(Params)
+        , m_pos(pos)
+        , m_msg(msg)
+        , m_params(params)
       {}
 
     private:
-      qMsgType m_msgType{};
+      MsgType m_msgType{};
       word m_pos;
       std::string m_msg;
       std::vector<std::string> m_params;
 
     public:
-      inline fun type() { return m_msgType; }
-      inline fun pos() { return m_pos; }
-      inline fun msg() { return m_msg; }
-      inline fun params() { return m_params; }
+      fun type() { return m_msgType; }
+      fun pos() { return m_pos; }
+      fun msg() { return m_msg; }
+      fun params() { return m_params; }
   };
-  fun operator <<(std::ostream &os, qMessage *msg) -> std::ostream&;
+  fun operator<<(std::ostream &os, message *msg) -> std::ostream&;
 
-
-  struct qFatal: qMessage
+  struct fatal: message
   {
-    protected:
-      inline qFatal(std::string Msg, std::vector<std::string> Params)
-        : qMessage(qMsgType::mtFatal, word{}, Msg, Params)
-      {}
+    inline fatal(std::string Msg, std::vector<std::string> Params)
+      : message(MsgType::Fatal, word{}, Msg, Params)
+    {}
 
-    public:
-      static inline fun make(std::string Msg, std::vector<std::string> Params = {}) {
-        return make_uptr(new qFatal(Msg, Params));
-      }
+    static fun make(std::string Msg, std::vector<std::string> Params = {}) { return make_uptr<fatal>(Msg, Params); }
   };
 
-  struct qError: qMessage
+  struct error: message
   {
-    protected:
-      inline qError(word Pos, std::string Msg, std::vector<std::string> Params)
-        : qMessage(qMsgType::mtError, std::move(Pos), Msg, Params)
-      {}
+    inline error(word Pos, std::string Msg, std::vector<std::string> Params)
+      : message(MsgType::Error, Pos, Msg, Params)
+    {}
 
-    public:
-      static inline fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) {
-        return make_uptr(new qError(std::move(Pos), Msg, Params));
-      }
+    static fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) { return make_uptr<error>(Pos, Msg, Params); }
   };
 
-  struct qWarning: qMessage
+  struct warning: message
   {
-    protected:
-      inline qWarning(word Pos, std::string Msg, std::vector<std::string> Params)
-        : qMessage(qMsgType::mtWarning, std::move(Pos), Msg, Params)
-      {}
+    inline warning(word Pos, std::string Msg, std::vector<std::string> Params)
+      : message(MsgType::Warning, Pos, Msg, Params)
+    {}
 
-    public:
-      static inline fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) {
-        return make_uptr(new qWarning(std::move(Pos), Msg, Params));
-      }
+    static fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) { return make_uptr<warning>(Pos, Msg, Params); }
   };
 
-  struct qHint: qMessage
+  struct hint: message
   {
-    protected:
-      inline qHint(word Pos, std::string Msg, std::vector<std::string> Params)
-        : qMessage(qMsgType::mtHint, std::move(Pos), Msg, Params)
-      {}
+    inline hint(word Pos, std::string Msg, std::vector<std::string> Params)
+      : message(MsgType::Hint, Pos, Msg, Params)
+    {}
 
-    public:
-      static inline fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) {
-        return make_uptr(new qHint(std::move(Pos), Msg, Params));
-      }
+    static fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) { return make_uptr<hint>(Pos, Msg, Params); }
   };
 
-  struct qNote: qMessage
+  struct note: message
   {
-    protected:
-      inline qNote(word Pos, std::string Msg, std::vector<std::string> Params)
-        : qMessage(qMsgType::mtNote, std::move(Pos), Msg, Params)
-      {}
+    inline note(word Pos, std::string Msg, std::vector<std::string> Params)
+      : message(MsgType::Note, Pos, Msg, Params)
+    {}
 
-    public:
-      static inline fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) {
-        return make_uptr(new qNote(std::move(Pos), Msg, Params));
-      }
+    static fun make(word Pos, std::string Msg, std::vector<std::string> Params = {}) { return make_uptr<note>(Pos, Msg, Params); }
   };
 
-
-
-  
-  struct qSummary
+  struct summary
   {
     private:
       u32 m_fatal{}, m_error{}, m_warning{}, m_hint{}, m_note{};
 
     public:
-      inline fun fatal() { return m_fatal; }
-      inline fun error() { return m_error; }
-      inline fun warning() { return m_warning; }
-      inline fun hint() { return m_hint; }
-      inline fun note() { return m_note; }
+      fun fatal() { return m_fatal; }
+      fun error() { return m_error; }
+      fun warning() { return m_warning; }
+      fun hint() { return m_hint; }
+      fun note() { return m_note; }
 
     public:
-      inline fun add(qMessage* Msg) { switch (Msg->type()) {
-        case qMsgType::mtFatal: m_fatal++; return;
-        case qMsgType::mtError: m_error++; return;
-        case qMsgType::mtWarning: m_warning++; return;
-        case qMsgType::mtHint: m_hint++; return;
-        case qMsgType::mtNote: m_note++; return;
-      }}
+      fun add(message *Msg)
+      {
+        switch (Msg->type()) {
+          case MsgType::Fatal: m_fatal++; return;
+          case MsgType::Error: m_error++; return;
+          case MsgType::Warning: m_warning++; return;
+          case MsgType::Hint: m_hint++; return;
+          case MsgType::Note: m_note++; return;
+        }
+      }
 
-      inline fun suma() { return (m_fatal + m_error + m_warning + m_hint + m_note); }
-      inline fun sum() { return (m_fatal + m_error); }
+      fun sumall() { return (m_fatal + m_error + m_warning + m_hint + m_note); }
+      fun sumerr() { return (m_fatal + m_error); }
   };
-  fun operator <<(std::ostream &os, qSummary &msg) -> std::ostream&;
-
-
+  fun operator<<(std::ostream &os, summary &msg) -> std::ostream&;
 
   [[gnu::noreturn]] fun fatal(std::string) -> void;
 }

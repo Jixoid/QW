@@ -9,7 +9,6 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
@@ -19,32 +18,25 @@
 
 #define ef else if
 
-
-
-#define REPN_0(m) 
+#define REPN_0(m)
 #define REPN_1(m) , m##1
 #define REPN_2(m) REPN_1(m), m##2
 #define REPN_3(m) REPN_2(m), m##3
 
 #define REPN(n, m) REPN_##n(m)
 
-
-#define REP_0(m) 
+#define REP_0(m)
 #define REP_1(m) m##1,
 #define REP_2(m) REP_1(m) m##2,
 #define REP_3(m) REP_2(m) m##3,
 
 #define REP(n, m) REP_##n(m)
 
+#define NewMsg(Name, Type, Msg, N)                                                                                                                   \
+  inline fun Name(word w REPN(N, std::string p)) { return std::unexpected(diagnostic::Type ::make(w, Msg, { REP(N, p) })); }
 
-
-
-#define NewMsg(Name, Type, Msg, N) \
-  inline fun Name(word w REPN(N, std::string p)) { return std::unexpected(diagnostic:: Type ::make(w, Msg, {REP(N, p)} )); }
-
-#define NewMsgF(Name, Msg, N) \
-  inline fun Name(REPN(N, std::string p)) { return std::unexpected(diagnostic::qFatal::make(Msg, {REP(N, p)} )); }
-
+#define NewMsgF(Name, Msg, N)                                                                                                                        \
+  inline fun Name(REPN(N, std::string p)) { return std::unexpected(diagnostic::fatal::make(Msg, { REP(N, p) })); }
 
 
 
@@ -61,27 +53,27 @@ namespace qw::fatals
 
 namespace qw::errors
 {
-  NewMsg( expectedIdentifierBut, qError, _(" expected ‘<blue>{}<reset>‘, but found ‘<blue>{}<reset>‘."), 2);
-  NewMsg( expectedIdentifierBut2, qError, _(" expected ‘<blue>{}<reset>‘ or ‘<blue>{}<reset>‘, but found ‘<blue>{}<reset>‘."), 3);
-  NewMsg( expectedAWord, qError, _(" expected a word, but found ‘<blue>{}<reset>‘."), 1);
-  
-  NewMsg(UnknownKeyword, qError, _("unknown keyword ‘<blue>{}<reset>‘."), 1);
+  NewMsg(ExpectedIdentifierBut, error, _("expected ‘<blue>{1}<reset>‘, but found ‘<blue>{0}<reset>‘."), 2);
+  NewMsg(ExpectedIdentifierBut2, error, _("expected ‘<blue>{1}<reset>‘ or ‘<blue>{2}<reset>‘, but found ‘<blue>{0}<reset>‘."), 3);
+  NewMsg(ExpectedAWord, error, _("expected a word, but found ‘<blue>{}<reset>‘."), 1);
 
-  NewMsg(NoMatchOperator, qError, _("no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ <yellow>{0}<reset> ‘<blue>{2}<reset>’)."), 3);
+  NewMsg(UnknownKeyword, error, _("unknown keyword ‘<blue>{}<reset>‘."), 1);
 
-  NewMsg(EmptyCharacterConstant, qError, _("empty character constant ‘‘."), 0);
-  NewMsg(CharacterConstantTooLong, qError, _("character constant too long ‘<blue>{}<reset>‘."), 1);
-  NewMsg(CantConvertInteger, qError, _("‘<blue>{}<reset>‘ could not be converted int."), 1);
+  NewMsg(NoMatchOperator, error, _("no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ <yellow>{0}<reset> ‘<blue>{2}<reset>’)."), 3);
 
-  NewMsg(UnexpectedIdentifier, qError, _("un expected identifier ‘<blue>{}<reset>‘."), 1);
-  
-  NewMsg(IdentifierNotFound, qError, _("identifier not found ‘<blue>{}<reset>‘."), 1);
-  NewMsg(IdentifierNType, qError, _("identifier is not a type ‘<blue>{}<reset>‘."), 1);
-  NewMsg(IdentifierNExpr, qError, _("identifier is not a expr ‘<blue>{}<reset>‘."), 1);
+  NewMsg(EmptyCharacterConstant, error, _("empty character constant ‘‘."), 0);
+  NewMsg(CharacterConstantTooLong, error, _("character constant too long ‘<blue>{}<reset>‘."), 1);
+  NewMsg(CantConvertInteger, error, _("‘<blue>{}<reset>‘ could not be converted to int."), 1);
+
+  NewMsg(UnexpectedIdentifier, error, _("un expected identifier ‘<blue>{}<reset>‘."), 1);
+
+  NewMsg(IdentifierNotFound, error, _("identifier not found ‘<blue>{}<reset>‘."), 1);
+  NewMsg(IdentifierNType, error, _("identifier is not a type ‘<blue>{}<reset>‘."), 1);
+  NewMsg(IdentifierNExpr, error, _("identifier is not a expr ‘<blue>{}<reset>‘."), 1);
+
+  NewMsg(OnlyOneVariableCanBeInitialized, error, _("only one variable can be initialized."), 1);
+  NewMsg(VisibilitySettingNApplicableInContext, error, _("‘<blue>{}<reset>‘ visibility setting is not applicable in this context."), 1);
 }
-
-
-
 
 #undef NewMsg
 #undef NewMsgF
@@ -97,4 +89,3 @@ namespace qw::errors
 #undef REPN_1
 #undef REPN_2
 #undef REPN_3
-

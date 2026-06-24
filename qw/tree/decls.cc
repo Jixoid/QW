@@ -9,9 +9,8 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
-#include "qw/basis.hh"
 #include "qw/tree/decls.hh"
+#include "qw/basis.hh"
 #include "qw/tree/types.hh"
 #include <cassert>
 #include <string>
@@ -21,94 +20,61 @@
 
 namespace qw::decls
 {
-  Decl::Decl(DeclEnum type, Decl *parent, std::string_view name, word pos)
+
+  Decl::Decl(DeclVari vari, Decl *parent, std::string_view name, word pos, Visibility vis)
     : identy(IdentyEnum::Decl, parent, pos)
-    , m_subType(type)
+    , m_vari(std::move(vari))
     , m_name(name)
+    , m_vis(vis)
   {
-    if (parent && parent->subType() == DeclEnum::NameSpace)
-      static_cast<NameSpace*>(parent)->m_decls.push_back(this);
+    if (parent && parent->is<NameSpaceDecl>()) {
+      parent->as<NameSpaceDecl>()->decls.push_back(this);
+    }
+    ef (this->is<FuncDecl>() && parent && parent->is<RecordDecl>()) {
+      parent->as<RecordDecl>()->func.push_back(this);
+    }
   }
 
-
-  fun Decl::make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos) -> NameSpace*
+  fun Decl::make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
   {
-    auto obj = new NameSpace(parent, name, pos);
+    auto obj = new Decl(NameSpaceDecl{}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-  fun Decl::make_Module(qw::context *ctx, Decl *parent, std::string_view name, word pos) -> Module*
+  fun Decl::make_Var(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type, Visibility vis, exprs::Expr *init) -> Decl*
   {
-    auto obj = new Module(parent, name, pos);
+    auto obj = new Decl(VarDecl{type, init}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-  fun Decl::make_Var(qw::context *ctx, Decl *parent, std::string_view name, types::Type *type, word pos) -> Var*
+  fun Decl::make_Type(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type, Visibility vis) -> Decl*
   {
-    auto obj = new Var(parent, name, type, pos);
+    auto obj = new Decl(TypeDecl{type}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-  fun Decl::make_Type(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type) -> Type*
+  fun Decl::make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type, Visibility vis) -> Decl*
   {
-    auto obj = new Type(parent, name, pos, type);
+    auto obj = new Decl(FuncDecl{nullptr, type, nullptr}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-  fun Decl::make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Func *type) -> Func*
+  fun Decl::make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos, Visibility vis) -> Decl*
   {
-    auto obj = new Func(parent, name, pos, type);
+    auto obj = new Decl(AliasDecl{decl}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-  fun Decl::make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos) -> Alias*
+  fun Decl::make_Record(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
   {
-    auto obj = new Alias(parent, name, decl, pos);
+    auto obj = new Decl(RecordDecl{}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }
 
-
-
-  fun Decl::dis() -> void { switch (subType())
-  {
-    case DeclEnum::Module: delete (decls::Module*)this; break;
-    case DeclEnum::NameSpace: delete (decls::NameSpace*)this; break;
-    case DeclEnum::Alias: delete (decls::Alias*)this; break;
-    case DeclEnum::Func: delete (decls::Func*)this; break;
-    case DeclEnum::Var: delete (decls::Var*)this; break;
-    case DeclEnum::Type: delete (decls::Type*)this; break;
-  }}
-  
-
-
-  Var::Var(Decl *parent, std::string_view name, types::Type *type, word pos): Decl(DeclEnum::Var, parent, name, pos), m_varType(type)
-  {
-    assert(!name.empty() && "Name is empty");
-    assert(type && "Type is null");
-
-    type->parent() = this;
-  }
-
-
-  Type::Type(Decl *parent, std::string_view name, word pos, types::Type *type): Decl(DeclEnum::Type, parent, name, pos), m_targetType(type)
-  {
-    assert(!name.empty() && "Name is empty");
-
-    if (type) type->parent() = this;
-  }
-
-  
-  Func::Func(Decl *parent, std::string_view name, word pos, types::Func *type): Decl(DeclEnum::Func, parent, name, pos), m_funcType(type)
-  {
-    assert(!name.empty() && "Name is empty");
-    
-    if (type) type->parent() = this;
-  }
-  
 }

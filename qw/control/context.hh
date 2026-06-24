@@ -9,18 +9,22 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
-#include <iostream>
-#include <llvm/IR/Module.h>    
+#include <llvm/IR/Module.h>
 
 #include "qw/basis.hh"
 #include "qw/pretype.hh"
+#include "qw/tree/decls.hh"
+#include "qw/tree/exprs.hh"
+#include "qw/tree/stmts.hh"
+#include "qw/tree/types.hh"
 #include "qw/vfs/vfs.hh"
 #include <fcntl.h>
+#include <iostream>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Verifier.h>
+#include <map>
 #include <optional>
 #include <ostream>
 #include <string>
@@ -28,8 +32,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 
 #define ef else if
 
@@ -37,82 +41,72 @@
 
 namespace qw
 {
-  fun operator <<(std::ostream &os, identy *ident) -> std::ostream&;
-
-  
+  fun operator<<(std::ostream &os, identy *ident)->std::ostream &;
+  fun operator<<(std::ostream &os, types::Type *typ)->std::ostream &;
 
   struct gst
   {
-    fun add_ident(std::string name, identy *ident) {
-      assert(ident && "object to be added is null");
+    public:
+      fun add_ident(std::string name, identy *ident) {
+        assert(ident && "object to be added is null");
 
-      auto it = m_idents.find(name);
-      
-      //cerr << color::B_YELLOW << "reg " << color::GRAY << "{"
-      //  << color::RESET << "symbol" << color::GRAY << ": " << color::B_BLUE << "\"" << name << "\"" << color::GRAY << ", "
-      //  << color::RESET << "kind" << color::GRAY <<  ": " << color::RESET << ident << color::GRAY << "}" << color::RESET
-      //  << endl;
+        auto it = m_idents.find(name);
 
-      if (it == m_idents.end())
-        m_idents[name] = ident;
-      else
-        assert(false && "DIAGNOSTIC");
-    }
+        if (it == m_idents.end())
+          m_idents[name] = ident;
+        else
+          assert(false && "DIAGNOSTIC");
+      }
 
+      fun find(std::string name) -> std::optional<identy*> {
+        auto it = m_idents.find(name);
 
-    fun find(std::string name) -> std::optional<identy*> {
-      auto it = m_idents.find(name);
-
-      if (it != m_idents.end())
-        return it->second;
-      else
-        return std::nullopt;
-    }
-
+        if (it != m_idents.end())
+          return it->second;
+        else
+          return std::nullopt;
+      }
 
     private:
       std::unordered_map<std::string, identy*> m_idents;
 
     public:
-      inline fun idents() { return m_idents; }
-  
+      fun idents() { return m_idents; }
   };
 
-
   enum struct ProgBits: u8 { Bit16 = 2, Bit32 = 4, Bit64 = 8 };
-
-
 
   class module;
 
   class context
   {
-    #pragma region New
+  #pragma region New
     protected:
       context(ProgBits pb);
-    
+
     public:
       ~context();
 
-
     public:
-      static inline fun make(ProgBits pb) {
-        return make_uptr(new context(pb));
-      }
+      static inline fun make(ProgBits pb) { return make_uptr(new context(pb)); }
 
-      fun make_module(std::string name, std::string fpath) -> module*;
-    #pragma endregion
-    
-
+      fun make_module(std::string name, std::string fpath) -> module *;
+  #pragma endregion
 
     protected:
       std::vector<module*> m_modules{};
-      std::vector<types::Type*> m_types{};
       std::vector<decls::Decl*> m_decls{};
       std::vector<exprs::Expr*> m_exprs{};
       std::vector<stmts::Stmt*> m_stmts{};
-    
-    
+
+    public:
+      std::vector<types::Type*> m_types{};
+      std::unordered_map<types::Type*, types::Type*> m_ptr_pool;
+      std::unordered_map<types::Type*, types::Type*> m_ref_pool;
+      std::unordered_map<types::Type*, types::Type*> m_zarray_pool;
+      std::map<std::pair<types::Type*, u32>, types::Type*> m_parray_pool;
+      std::map<std::pair<std::vector<types::Type*>, types::Type*>, types::Type*> m_func_pool;
+
     protected:
       sptr<llvm::LLVMContext> m_llvm{};
       gst m_gst;
@@ -120,12 +114,10 @@ namespace qw
 
     public:
       inline fun llvm() { return m_llvm.get(); }
-      inline fun& gst() { return m_gst; }
+      inline fun &gst() { return m_gst; }
       inline fun progBits() { return m_progBits; }
 
-
-    
-    #pragma region SystemTypes
+  #pragma region SystemTypes
     private:
       types::Type *mf_intU0{};
       types::Type *mf_intU8{};
@@ -146,11 +138,11 @@ namespace qw
       types::Type *mf_flo32{};
       types::Type *mf_flo64{};
       types::Type *mf_flo128{};
-      
+
       types::Type *mf_char{};
-      
+
       types::Type *mf_bool{};
-      
+
       types::Type *mf_void{};
 
       types::Type *mf_ptr{};
@@ -175,26 +167,26 @@ namespace qw
       inline fun flo32_t() { return mf_flo32; };
       inline fun flo64_t() { return mf_flo64; };
       inline fun flo128_t() { return mf_flo128; };
-      
+
       inline fun char_t() { return mf_char; };
-      
+
       inline fun bool_t() { return mf_bool; };
-      
+
       inline fun void_t() { return mf_void; };
 
       inline fun ptr_t() { return mf_ptr; };
-    #pragma endregion
-
+  #pragma endregion
 
     public:
-      fun push(identy *obj) { switch (obj->type()) {
-        case IdentyEnum::Type: m_types.push_back((types::Type*)obj); break;
-        case IdentyEnum::Decl: m_decls.push_back((decls::Decl*)obj); break;
-        case IdentyEnum::Expr: m_exprs.push_back((exprs::Expr*)obj); break;
-        case IdentyEnum::Stmt: m_stmts.push_back((stmts::Stmt*)obj); break;
-      }}
+      fun push(identy *obj)
+      {
+        switch (obj->type()) {
+          case IdentyEnum::Decl: m_decls.push_back((decls::Decl*)obj); break;
+          case IdentyEnum::Expr: m_exprs.push_back((exprs::Expr*)obj); break;
+          case IdentyEnum::Stmt: m_stmts.push_back((stmts::Stmt*)obj); break;
+        }
+      }
   };
-
 
   class module
   {
@@ -203,7 +195,6 @@ namespace qw
     protected:
       module(context *ctx, std::string name, std::string fpath);
 
-      
     public:
       inline fun write(std::string_view target) {
         std::error_code ErrorInfo;
@@ -214,31 +205,24 @@ namespace qw
           return false;
         }
 
-        //if (llvm::verifyModule(*m_llvm, &llvm::errs())) {
-        //  llvm::errs() << "--- ERROR: The module failed the validation process! ---\n";
-        //  m_llvm->print(llvm::errs(), nullptr); 
-        //  return false;
-        //}
-        
         m_llvm->print(dest, nil);
         return true;
       }
-
 
     private:
       std::string m_fpath;
       sptr<vfs::mapped> m_mmap;
       qw::context *m_ctx{};
       uptr<llvm::Module> m_llvm;
-      decls::NameSpace *m_ns{};
+      decls::Decl *m_ns{};
 
     public:
-      inline fun fpath() { return (std::string_view)m_fpath; }
-      inline fun& mmap() { return m_mmap; }
-      inline fun nameSpace() { return m_ns; }
-      inline fun llvm() { return m_llvm.get(); }
-      inline fun ctx() { return m_ctx; }
-      inline fun layouter() { return m_llvm->getDataLayout(); }
+      fun  fpath() { return std::string_view(m_fpath); }
+      fun& mmap() { return m_mmap; }
+      fun  nameSpace() { return m_ns; }
+      fun  llvm() { return m_llvm.get(); }
+      fun  ctx() { return m_ctx; }
+      fun  layouter() { return m_llvm->getDataLayout(); }
   };
 
 }

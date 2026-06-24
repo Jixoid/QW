@@ -9,212 +9,190 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
-
-#include "qw/basis.hh"
 #include "qw/front/front.hh"
+#include "qw/basis.hh"
+#include "qw/diagnostic/diagnostic.hh"
+#include "qw/diagnostic/msgs.hh"
+#include "qw/pretype.hh"
 #include "qw/tree/decls.hh"
 #include "qw/tree/exprs.hh"
 #include "qw/tree/stmts.hh"
 #include "qw/tree/types.hh"
-#include "qw/control/scopemng.hh"
-#include "qw/diagnostic/diagnostic.hh"
-#include "qw/diagnostic/msgs.hh"
-#include "qw/pretype.hh"
 #include <charconv>
 #include <expected>
 #include <fcntl.h>
 #include <iostream>
+#include <optional>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #define ef else if
 
-
-
 #define Require(X) \
-  if (!X.has_value()) return fatals::FileEndedButContextNotFinished();
+  if (!X.has_value()) \
+    return fatals::FileEndedButContextNotFinished();
 
-#define Require_Word(X,C) { \
-  Require(X); \
-  if (!isWord(X->view()[0])) {\
-    auto E = errors::expectedAWord(*X, X->str()); \
-    sum.add(E.error().get()); \
-    std::cerr << E.error(); \
-    \
-    C; \
-  } \
-}
-
-
-#define expected(LEX,T) { \
-  auto X = LEX; \
-  Require(X) \
-  ef (X->view() != T) \
-    return errors::expectedIdentifierBut(*X, X->str(), T); \
-}
-
-
-#define if_error(X) { \
-  auto E = X; \
-  \
-  if (!E.has_value()) \
+#define Require_Word(X, C) \
   { \
-    if (E.error()->type() == qw::diagnostic::qMsgType::mtFatal) \
+    Require(X); \
+    if (!isWord(X->view()[0])) { \
+      auto E = errors::ExpectedAWord(*X, X->str()); \
+      sum.add(E.error().get()); \
+      std::cerr << E.error(); \
+      C; \
+    } \
+  }
+
+#define expected(LEX, T) \
+  { \
+    auto X = LEX; \
+    Require(X) ef(X->view() != T) return errors::ExpectedIdentifierBut(*X, X->str(), T); \
+  }
+
+#define expected2(LEX, T, T2) \
+  { \
+    auto X = LEX; \
+    Require(X) ef(X->view() != T || X->view() != T2) return errors::ExpectedIdentifierBut2(*X, X->str(), T, T2); \
+  }
+
+#define if_error(X) \
+  { \
+    auto E = X; \
+    if (!E.has_value()) { \
+      if (E.error()->type() == qw::diagnostic::MsgType::Fatal) \
+        return std::unexpected(std::move(E.error())); \
+      else { \
+        sum.add(E.error().get()); \
+        std::cerr << E.error(); \
+      } \
+    } \
+  }
+
+#define if_except(X) \
+  { \
+    auto E = X; \
+    if (!E.has_value()) \
+      return std::unexpected(std::move(E.error())); \
+  }
+
+#define if_except_ref(X) \
+  { \
+    auto &E = X; \
+    if (!E.has_value()) \
+      return std::unexpected(std::move(E.error())); \
+  }
+
+#define print(E) \
+  { \
+    if (E.error()->type() == qw::diagnostic::MsgType::Fatal) \
       return std::unexpected(std::move(E.error())); \
     else { \
       sum.add(E.error().get()); \
       std::cerr << E.error(); \
     } \
-  } \
-}
+  }
 
-
-#define if_except(X) { \
-  auto E = X; \
-  \
-  if (!E.has_value()) \
-    return std::unexpected(std::move(E.error())); \
-}
-
-
-#define print(E) { \
-  if (E.error()->type() == qw::diagnostic::qMsgType::mtFatal) \
-    return std::unexpected(std::move(E.error())); \
-  else { \
-    sum.add(E.error().get()); \
-    std::cerr << E.error(); \
-  } \
-}
-
-
-#define val_error(X) { \
-  if (!X.has_value()) \
-    return std::unexpected(std::move(X.error())); \
-}
-
-
-
+#define val_error(X) \
+  { \
+    if (!X.has_value()) \
+      return std::unexpected(std::move(X.error())); \
+  }
 
 namespace qw
 {
 
-  fun frontend::read_File(decls::NameSpace *self) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_File(decls::Decl *self) -> std::expected<void, uptr<diagnostic::message>>
   {
     // Read
     while (true) {
       auto ID = Lex();
-      
+
       if (!ID.has_value()) return {};
 
-      ef (ID->view() == "module") if_error(read_Module(self))
-      ef (ID->view() == "namespace") if_error(read_NameSpace(self))
-
-      ef (ID->view() == "alias") if_error(read_AliasDecl(self))
-      ef (ID->view() == "type") if_error(read_TypeDecl(self))
-      ef (ID->view() == "fun") if_error(read_FuncDecl(self))
-      ef (ID->view() == "record") if_error(read_RecordDecl(self))
-
-      else print(errors::UnknownKeyword(*ID, ID->str()));
+      ef(ID->view() == "}") break;
+      else if_except(read_Route(ID->str(), ID.value(), self, Visibility::Public | Visibility::Private | Visibility::Crate | Visibility::Group));
     }
 
     return {};
   };
 
-
-
-
-  fun frontend::read_Module(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_NameSpace(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     // Create Self
     auto Name = Lex();
     Require(Name);
 
     auto self = decls::Decl::make_NameSpace(ctx, parent, Name->str(), *Name);
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
-    
+
     expected(Lex(), "{");
-    
 
     // Read
     while (true) {
       auto ID = Lex();
       Require(ID);
 
-      if (ID->view() == "}") break;
-      ef (ID->view() == "module") if_error(read_Module(self))
-      ef (ID->view() == "namespace") if_error(read_NameSpace(self))
-
-      ef (ID->view() == "alias") if_error(read_AliasDecl(self))
-      ef (ID->view() == "type") if_error(read_TypeDecl(self))
-      ef (ID->view() == "fun") if_error(read_FuncDecl(self))
-      ef (ID->view() == "record") if_error(read_RecordDecl(self))
-
-      else print(errors::UnknownKeyword(*ID, ID->str()));
+      if (ID->view() == "}")
+        break;
+      else
+        if_except(read_Route(ID->str(), ID.value(), self, Visibility::Public | Visibility::Private | Visibility::Crate | Visibility::Group));
     }
 
     return {};
   };
 
-  fun frontend::read_NameSpace(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_Route(std::string id, word w, decls::Decl *self, VisibilityFlag visflag) -> std::expected<void, uptr<diagnostic::message>>
   {
-    // Create Self
-    auto Name = Lex();
-    Require(Name);
+    Visibility vis = Visibility::Private;
 
-    auto self = decls::Decl::make_NameSpace(ctx, parent, Name->str(), *Name);
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
+    if (id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
+      if (id == "pub")   vis = Visibility::Public;
+      ef (id == "priv")  vis = Visibility::Private;
+      ef (id == "prot")  vis = Visibility::Protected;
+      ef (id == "crate") vis = Visibility::Crate;
+      ef (id == "group") vis = Visibility::Group;
 
-    expected(Lex(), "{");
-    
+      if (!(visflag & vis))
+        return std::unexpected(errors::VisibilitySettingNApplicableInContext(w, id));
 
-    // Read
-    while (true) {
-      auto ID = Lex();
-      Require(ID);
+      auto Nx = Lex();
+      Require(Nx);
 
-      if (ID->view() == "}") break;
-      ef (ID->view() == "module") if_error(read_Module(self))
-      ef (ID->view() == "namespace") if_error(read_NameSpace(self))
-
-      ef (ID->view() == "alias") if_error(read_AliasDecl(self))
-      ef (ID->view() == "type") if_error(read_TypeDecl(self))
-      ef (ID->view() == "fun") if_error(read_FuncDecl(self))
-      ef (ID->view() == "record") if_error(read_RecordDecl(self))
-
-      else print(errors::UnknownKeyword(*ID, ID->str()));
+      id = Nx->str();
+      w  = Nx.value();
     }
 
-    return {};
-  };
-
-
-
-
-  fun frontend::read_TypeDecl(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
-  {
-    // Create Self
-    auto Name = Lex();
-    Require(Name);
-    
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
-
-    // Assign
-    expected(Lex(), "=");
-
-    // Type
-    auto Type = read_Type(self);
-    val_error(Type);
-
-    
-    // End
-    expected(Lex(), ";");
-
+    if (id == "namespace") if_error(read_NameSpace(self))
+    ef (id == "alias")     if_error(read_AliasDecl(self))
+    ef (id == "var")       if_error(read_VarDecl(self))
+    ef (id == "type")      if_error(read_TypeDecl(self))
+    ef (id == "fun")       if_error(read_FuncDecl(self))
+    ef (id == "record")    if_error(read_RecordDecl(self))
+    else
+      print(errors::UnknownKeyword(w, id))
+        
     return {};
   }
 
-  fun frontend::read_FuncDecl(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_TypeDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto Name = Lex();
+    Require(Name);
+
+    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+
+    expected(Lex(), "=");
+
+    auto Type = read_Type(self, true);
+    val_error(Type);
+
+    self->as<decls::TypeDecl>()->type = *Type;
+
+    expected(Lex(), ";");
+    return {};
+  }
+
+  fun frontend::read_FuncDecl(decls::Decl *parent) -> std::expected<decls::Decl*, uptr<diagnostic::message>>
   {
     // Create Self
     auto Name = Lex();
@@ -222,12 +200,10 @@ namespace qw
 
     // FuncDecl
     auto self = decls::Decl::make_Func(ctx, parent, Name->str(), *Name, nil);
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
 
-    // FuncType
-    auto FType = types::Type::make_Func(ctx, self, *Name, {}, ctx->void_t());
     expected(Lex(), "(");
 
+    std::vector<types::FieldType> pars;
 
     // Params
     while (true) {
@@ -235,36 +211,40 @@ namespace qw
       Require(ID);
 
       if (ID->view() == ")") break;
-      else LexStore(ID);
-
-
-      // Type
-      auto Type = read_Type(FType, true);
-      val_error(Type);
+      else
+        LexStore(ID);
 
       // Name
       std::vector<std::string> Names;
       l_re:
-      auto Name = Lex();
-      Require(Name);
-      Names.push_back(Name->str());
+      auto NameArg = Lex();
+      Require(NameArg);
+      Names.push_back(NameArg->str());
+
+      // Colon
+      auto Colon = Lex();
+      Require(Colon);
+
+      if (Colon->view() == ",") goto l_re;
+      ef (Colon->view() == ":");
+      else
+        return errors::UnexpectedIdentifier(*Colon, Colon->str());
+
+      // Type
+      auto Type = read_Type(self, true);
+      val_error(Type);
 
       // End
       auto End = Lex();
       Require(End);
-      
-      if (End->view() == ",") goto l_re;
-      ef (End->view() == ";");
-      ef (End->view() == ")") LexStore(End);
-      else
-        return errors::UnexpectedIdentifier(*End, End->str());
 
+      if (End->view() == ";");
+      ef (End->view() == ")") LexStore(End);
+      else return errors::UnexpectedIdentifier(*End, End->str());
 
       // Add
       for (auto &X: Names) {
-        auto obj = types::Type::make_MemberField(ctx, FType, *Name, X, *Type);
-        ctx->gst().add_ident(scopemng::mangling_abi_qw(obj), obj);
-        FType->pars().push_back(obj);
+        pars.push_back({ X, *Type });
       }
     }
 
@@ -272,30 +252,31 @@ namespace qw
     auto Ret = Lex();
     Require(Ret)
 
+    types::Type *retType = ctx->void_t();
+    
     if (Ret->view() == "->") {
-      auto Type = read_Type(FType, true);
+      auto Type = read_Type(self, true);
       val_error(Type);
-      FType->ret() = *Type;
-      
+      retType = *Type;
+
       Ret = Lex();
       Require(Ret);
     }
 
+    auto FType = types::Type::make_Func(ctx, pars, retType);
+    self->as<decls::FuncDecl>()->funcType = FType;
 
     // Code & Decl
-    if (Ret->view() == ";")
-      return {};
-
+    if (Ret->view() == ";") return self;
     ef (Ret->view() == "{") {
       if_except(read_CodeBlock(self));
-
-      return {};
+      return self;
     }
     else
-      return errors:: expectedIdentifierBut2(*Ret, Ret->str(), ";","{");
+      return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
   }
 
-  fun frontend::read_AliasDecl(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_AliasDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     // Create Self
     auto Name = Lex();
@@ -304,14 +285,12 @@ namespace qw
     // Assign
     expected(Lex(), "=");
 
-    // Decl
     auto Target = Lex();
     Require(Target);
-    auto Decl = types::Type::make_Nick(ctx, parent, *Target, Target->str());
+    auto Decl = exprs::Expr::make_Nick(ctx, parent, {Target->str()}, *Target);
 
     // Create
     auto self = decls::Decl::make_Alias(ctx, parent, Name->str(), Decl, *Name);
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
 
     // End
     expected(Lex(), ";");
@@ -319,25 +298,91 @@ namespace qw
     return {};
   }
 
-  fun frontend::read_RecordDecl(decls::NameSpace *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_VarDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    l_re:
+    // Name
+    std::vector<word> Names;
+    auto Name = Lex();
+    Require(Name);
+    Names.push_back(*Name);
+
+    // Colon
+    auto Colon = Lex();
+    Require(Colon);
+
+    if (Colon->view() == ":");
+    ef (Colon->view() == ",") goto l_re;
+    else
+      return errors ::ExpectedIdentifierBut2(*Colon, Colon->str(), ":", ",");
+
+    auto self = decls::Decl::make_Var(ctx, parent, Names[0].str(), Names[0]);
+
+    // Type
+    auto Type = read_Type(self, true);
+    val_error(Type);
+
+    // Value
+    auto Assi = Lex();
+    Require(Assi);
+
+    if (Assi->view() == "=") {
+      if (Names.size() != 1)
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+
+      auto Expr = read_Expr(parent, Precedence::Lowest);
+      val_error(Expr);
+
+      decls::Decl::make_Var(ctx, parent, Name->str(), *Name, *Type, Visibility::Private, *Expr);
+    }
+    else {
+      LexStore(Assi);
+
+      for (int i = 1; i < Names.size(); i++)
+        decls::Decl::make_Var(ctx, parent, Names[0].str(), Names[0], *Type);
+    }
+
+    // End
+    expected(Lex(), ";");
+
+    return {};
+  }
+
+  fun frontend::read_RecordDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     // Create Self
     auto Name = Lex();
     Require(Name);
-    
+
     auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
 
     // Type
     auto Type = read_RecordType(self, false);
     val_error(Type);
 
+    self->as<decls::TypeDecl>()->type = *Type;
+
     return {};
   }
 
+  fun frontend::read_RecordFuncDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto fndecl = read_FuncDecl(parent);
+    if_except_ref(fndecl);
 
+    auto fdecl     = (*fndecl)->as<decls::FuncDecl>();
+    auto old_ftype = fdecl->funcType->as<types::FuncType>();
 
+    std::vector<types::FieldType> new_pars = old_ftype->pars;
 
-  fun frontend::read_CodeBlock(decls::Func *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+    new_pars.insert(new_pars.begin(), {"self", types::Type::make_Reference(ctx, recType), Visibility::Public});
+
+    fdecl->funcType = types::Type::make_Func(ctx, new_pars, old_ftype->ret);
+
+    return {};
+  }
+
+  fun frontend::read_CodeBlock(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *LexLast());
 
@@ -349,63 +394,60 @@ namespace qw
       if (ID->view() == "}") break;
       ef (ID->view() == "ret") if_error(read_ReturnStmt(self))
       ef (ID->view() == "var") if_error(read_VarStmt(self))
-
-      else print(errors::UnknownKeyword(*ID, ID->str()));
+      ef (ID->view() == "let") if_error(read_LetStmt(self))
+      else {
+        LexStore(ID);
+        auto expr = read_Expr(self, Precedence::Lowest);
+        val_error(expr);
+        stmts::Stmt::make_ExprStmt(ctx, self, *expr, *ID);
+        expected(Lex(), ";");
+      }
     }
 
     return {};
   }
 
-  fun frontend::read_VarStmt(identy *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
+  fun frontend::read_VarStmt(identy *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
-    auto Type = read_Type(parent, true);
-    val_error(Type);
-
+    std::vector<word> Vars;
 
     // Name
     l_re:
     auto Name = Lex();
     Require(Name);
+    Vars.push_back(*Name);
 
-    auto End = Lex();
-    Require(End);
+    auto Colon = Lex();
+    Require(Colon);
 
-    
-    if (End->view() == ",") {
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name);
+    if (Colon->view() == ",") goto l_re;
+    ef (Colon->view() == ":");
+    else
+      return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
 
-      goto l_re;
-    }
-    ef (End->view() == "=") {
-      auto Expr = read_Expr(parent);
+    // Type
+    auto Type = read_Type(parent, true);
+    val_error(Type);
+
+    // Value
+    auto Assi = Lex();
+    Require(Assi);
+
+    if (Assi->view() == "=") {
+      if (Vars.size() != 1)
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+
+      auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name, *Expr, End);
-
-      auto NE = Lex();
-      Require(NE);
-
-      if (NE->view() == ",") goto l_re;
-      else expected(NE, ";");
+      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name, *Expr, Assi);
     }
     else {
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name);
+      LexStore(Assi);
 
-      expected(End, ";");
+      for (auto &v : Vars)
+        stmts::Stmt::make_CodeVar(ctx, parent, v.str(), *Type, v);
     }
-    
-    return {};
-  }
-  
-  fun frontend::read_ReturnStmt(identy *parent) -> std::expected<void, uptr<diagnostic::qMessage>>
-  {
-    auto Pos = LexLast();
-
-    auto Expr = read_Expr(parent);
-    val_error(Expr);
-    
-    auto self = stmts::Stmt::make_Return(ctx, parent, *Pos, *Expr);
-
 
     // End
     expected(Lex(), ";");
@@ -413,84 +455,202 @@ namespace qw
     return {};
   }
 
+  fun frontend::read_LetStmt(identy *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    std::vector<word> Vars;
 
+    // Name
+    l_re:
+    auto Name = Lex();
+    Require(Name);
+    Vars.push_back(*Name);
 
+    auto Colon = Lex();
+    Require(Colon);
 
-  fun frontend::read_Expr(identy *parent, bool first) -> std::expected<exprs::Expr*, uptr<diagnostic::qMessage>>
+    if (Colon->view() == ",") goto l_re;
+    ef (Colon->view() == ":");
+    else
+      expected(Colon, ",\", \":");
+
+    // Type
+    auto Type = read_Type(parent, true);
+    val_error(Type);
+
+    // Value
+    auto Assi = Lex();
+    Require(Assi);
+
+    if (Assi->view() == "=") {
+      if (Vars.size() != 1)
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+
+      auto Expr = read_Expr(parent, Precedence::Lowest);
+      val_error(Expr);
+
+      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name, *Expr, Assi);
+    }
+    else {
+      LexStore(Assi);
+
+      for (auto &v : Vars)
+        stmts::Stmt::make_CodeVar(ctx, parent, v.str(), *Type, v);
+    }
+
+    // End
+    expected(Lex(), ";");
+
+    return {};
+  }
+
+  fun frontend::read_ReturnStmt(identy *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto Pos = LexLast();
+
+    auto Expr = read_Expr(parent, Precedence::Lowest);
+    val_error(Expr);
+
+    auto self = stmts::Stmt::make_Return(ctx, parent, *Pos, *Expr);
+
+    // End
+    expected(Lex(), ";");
+
+    return {};
+  }
+
+  fun frontend::read_Expr(identy *parent, Precedence min_prec) -> std::expected<exprs::Expr *, uptr<diagnostic::message>>
   {
     exprs::Expr *ret{};
     auto ID = Lex();
-
+    Require(ID);
 
     if (ID->view() == "true" || ID->view() == "false") {
-      
       ret = exprs::Expr::make_BoolLiteral(ctx, parent, ID->view() == "true", *ID);
     }
     ef (ID->view() == "null") {
-      
       ret = exprs::Expr::make_PtrLiteral(ctx, parent, 0, *ID);
     }
-    ef (isNumber(ID->view()[0])) {
+    ef(isNumber(ID->view()[0])) {
       u128 val;
-      
       auto eret = std::from_chars(ID->view().begin(), ID->view().end(), val);
       if (eret.ec != std::errc())
         return errors::CantConvertInteger(*ID, ID->str());
 
       ret = exprs::Expr::make_IntegerLiteral(ctx, parent, val, *ID);
     }
-    ef (ID->view()[0] == '\'') {
-      
-      if (ID->view().size() == 2)
-        return errors::EmptyCharacterConstant(*ID);
-
-      ef (ID->view().size() > 3)
-        return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size()-2));
+    ef(ID->view()[0] == '\'') {
+      if (ID->view().size() == 2) return errors::EmptyCharacterConstant(*ID);
+      ef (ID->view().size() > 3)  return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size() - 2));
 
       ret = exprs::Expr::make_CharLiteral(ctx, parent, ID->view()[1], *ID);
     }
-    ef (isWord(ID->view()[0])) {
-      ret = exprs::Expr::make_Nick(ctx, parent, ID->str(), *ID);
+    ef (ID->view()[0] == '\"') { ret = exprs::Expr::make_StringLiteral(ctx, parent, (std::string)ID->view().substr(1, ID->view().size() - 2), *ID); }
+    ef (isWord(ID->view()[0])) { ret = exprs::Expr::make_Nick(ctx, parent, { ID->str() }, *ID); }
+    else diagnostic::fatal(fatals::Internal_UnknownExpr().error()->msg());
+
+    // POSTFIX
+    while (true) {
+      auto Op = Lex();
+      if (!Op)
+        break;
+
+      if (Op->view() == ".") {
+        auto MemName = Lex();
+        Require(MemName);
+
+        auto MemExpr = exprs::Expr::make_Nick(ctx, parent, { MemName->str() }, *MemName);
+        ret          = exprs::Expr::make_MemberOp(ctx, parent, exprs::MemberOpEnum::Member, ret, MemExpr, *Op);
+      }
+      ef (Op->view() == "(" || Op->view() == "[") {
+        auto kind = Op->view() == "(" ? exprs::PostfixOpEnum::Call : exprs::PostfixOpEnum::Array;
+        auto clsb = Op->view() == "(" ? ")" : "]";
+
+        std::vector<exprs::Expr *> ops;
+        auto Next = Lex();
+        Require(Next);
+
+        while (Next->view() != clsb) {
+          LexStore(Next);
+          auto ex = read_Expr(parent, Precedence::Lowest);
+          if_except_ref(ex);
+          ops.push_back(*ex);
+
+          Next = Lex();
+          Require(Next);
+          if (Next->view() == ",") {
+            Next = Lex();
+            Require(Next);
+          }
+        }
+        ret = exprs::Expr::make_PostfixOp(ctx, parent, kind, ret, ops, *Next);
+      }
+      else {
+        LexStore(Op);
+        break;
+      }
     }
-    else
-      diagnostic::fatal(fatals::Internal_UnknownExpr().error()->msg());
 
-    if (!first) return ret;
+    // INFIX
+    while (true) {
+      auto Op = Lex();
+      if (!Op)
+        break;
 
-    
+      Precedence op_prec = Precedence::Lowest;
+      exprs::BinaryOpEnum kind;
 
-    l_re:
-    auto Op = Lex();
-    Require(Op);
+      if (Op->view() == "=") {
+        op_prec = Precedence::Assign;
+        kind    = exprs::BinaryOpEnum::Assign;
+      }
+      ef(Op->view() == "+" || Op->view() == "-") {
+        op_prec = Precedence::Add;
+        kind    = Op->view() == "+" ? exprs::BinaryOpEnum::Add : exprs::BinaryOpEnum::Sub;
+      }
+      ef(Op->view() == "*" || Op->view() == "/" || Op->view() == "%") {
+        op_prec = Precedence::Mul;
+        kind    = Op->view() == "*" ? exprs::BinaryOpEnum::Mul : Op->view() == "/" ? exprs::BinaryOpEnum::Div : exprs::BinaryOpEnum::Rem;
+      }
+      else {
+        LexStore(Op);
+        break;
+      }
 
-    if (Op->view() == "+") {
-      auto r2 = read_Expr(parent, false);
+      if (op_prec < min_prec) {
+        LexStore(Op);
+        break;
+      }
+
+      Precedence next_prec = (kind == exprs::BinaryOpEnum::Assign) ? op_prec : op_prec + 1;
+      auto r2              = read_Expr(parent, next_prec);
       val_error(r2);
 
-      ret = exprs::Expr::make_BinaryOp(ctx, parent, exprs::BinaryOpEnum::Add, ret, *r2, *Op);
-      goto l_re;
+      ret = exprs::Expr::make_BinaryOp(ctx, parent, kind, ret, *r2, *Op);
     }
-    else LexStore(Op);
 
     return ret;
   }
-  
 
-
-
-  fun frontend::read_Type(identy *parent, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::qMessage>>
+  fun frontend::read_Type(identy *parent, bool indecl) -> std::expected<types::Type *, uptr<diagnostic::message>>
   {
     // Select
     auto ID = Lex();
     Require(ID);
 
+    std::expected<types::Type *, uptr<diagnostic::message>> ret;
 
-    if (ID->view() == "record") return read_RecordType(parent, indecl);
-    if (ID->view() == "fun") return read_FuncType(parent, indecl);
+    if (ID->view() == "record") {
+      ret = read_RecordType(parent, indecl);
+      goto l_fin;
+    }
+    if (ID->view() == "fun") {
+      ret = read_FuncType(parent, indecl);
+      goto l_fin;
+    }
 
     else {
       if (indecl) {
-        auto Nick = types::Type::make_Nick(ctx, parent, *ID, ID->str());
+        auto Nick = types::Type::make_Nick(ctx, { ID->str() });
 
         l_re:
         auto S = Lex();
@@ -498,82 +658,166 @@ namespace qw
 
         if (S->view() == "::") {
           auto N = Lex();
-          Require_Word(N, {return Nick;});
-          
-          Nick->unResolvedName().push_back(N->str());
+          Require_Word(N, {
+            ret = Nick;
+            goto l_fin;
+          });
+
+          Nick->as<types::NickType>()->unresolved.push_back(N->str());
           goto l_re;
         }
         else
           LexStore(S);
 
-        return Nick;
+        ret = Nick;
+        goto l_fin;
       }
       else
         return errors::UnknownKeyword(*ID, ID->str());
     }
+
+    l_fin:
+    if (ret.has_value()) {
+      types::Type *baseType = *ret;
+
+      while (true) {
+        auto Op = Lex();
+        if (!Op)
+          break;
+
+        if (Op->view() == "^") baseType = types::Type::make_Pointer(ctx, baseType);
+        ef (Op->view() == "&") baseType = types::Type::make_Reference(ctx, baseType);
+        ef (Op->view() == "[") {
+          auto SizeOrClose = Lex();
+          Require(SizeOrClose);
+
+          if (SizeOrClose->view() == "]") {
+            baseType = types::Type::make_ZArray(ctx, baseType);
+          }
+          else {
+            u32 size = std::stoul(SizeOrClose->str());
+
+            auto Close = Lex();
+            Require(Close);
+
+            baseType = types::Type::make_PArray(ctx, baseType, size);
+          }
+        }
+        else {
+          LexStore(Op);
+          break;
+        }
+      }
+
+      ret = baseType;
+    }
+
+    return ret;
   }
 
-  fun frontend::read_RecordType(identy *parent, bool indecl) -> std::expected<types::Record*, uptr<diagnostic::qMessage>>
+  fun frontend::read_RecordType(identy *parent, bool indecl) -> std::expected<types::Type *, uptr<diagnostic::message>>
   {
     auto Bracket = Lex();
     expected(Bracket, "{");
-    
 
-    // Record
-    auto self = types::Type::make_Record(ctx, parent, *Bracket, {},{},{});
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
-    
+    Visibility visdef = Visibility::Public;
+    std::vector<types::FieldType> vars;
 
-    // Items
+    decls::Decl *recDecl = nil;
+    if (parent && parent->type() == IdentyEnum::Decl) {
+      auto pDecl = static_cast<decls::Decl *>(parent);
+      recDecl    = decls::Decl::make_Record(ctx, pDecl, "", pDecl->pos(), Visibility::Public);
+    }
+
+    auto selfType = types::Type::make_Record(ctx, {}, {}, recDecl ? recDecl->as<decls::RecordDecl>() : nil);
+
     while (true) {
       auto ID = Lex();
       Require(ID);
 
       if (ID->view() == "}") break;
-      else LexStore(ID);
+      else
+        LexStore(ID);
 
+      auto visone = visdef;
 
-      // Type
-      auto Type = read_Type(self, true);
-      val_error(Type);
+      // Visibility
+      auto Vis = Lex();
+      if (auto id = Vis->view(); id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
+        auto vis = visone;
+
+        if (id == "pub")   vis = Visibility::Public;
+        ef (id == "priv")  vis = Visibility::Private;
+        ef (id == "prot")  vis = Visibility::Protected;
+        ef (id == "crate") vis = Visibility::Crate;
+        ef (id == "group") vis = Visibility::Group;
+
+        auto Colon = Lex();
+        Require(Colon);
+
+        if (Colon->view() == ":") {
+          visdef = vis;
+          continue;
+        }
+        else {
+          visone = vis;
+          LexStore(Colon);
+        }
+      }
+      else {
+        LexStore(Vis);
+      }
+
+      // Is Function
+      auto Kwd = Lex();
+      Require(Kwd);
+      if (Kwd->view() == "fun") {
+        if_error(read_RecordFuncDecl(recDecl, selfType, visone));
+        continue;
+      }
+      else {
+        LexStore(Kwd);
+      }
 
       // Name
       std::vector<std::string> Names;
-      l_re:
+    l_re:
       auto Name = Lex();
       Require_Word(Name, continue);
       Names.push_back(Name->str());
 
-      // End
-      auto End = Lex();
-      Require(End);
-      
-      if (End->view() == ",") goto l_re;
-      else expected(End, ";");
+      // , :
+      auto Colon = Lex();
+      Require(Colon);
+      if (Colon->view() == ",")
+        goto l_re;
+      ef(Colon->view() == ":");
+      else return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
 
+      // Type
+      auto Type = read_Type(parent, true);
+      val_error(Type);
+
+      // End
+      expected(Lex(), ";");
 
       // Add
-      for (auto &X: Names) {
-        auto obj = types::Type::make_MemberField(ctx, self, *Name, X, *Type);
-        ctx->gst().add_ident(scopemng::mangling_abi_qw(obj), obj);
-        self->vars().push_back(obj);
+      for (auto &X : Names) {
+        vars.push_back({ X, *Type, visone });
       }
     }
 
+    selfType->as<types::RecordType>()->vars = vars;
 
-    return self;
+    return selfType;
   }
 
-  fun frontend::read_FuncType(identy *parent, bool indecl) -> std::expected<types::Func*, uptr<diagnostic::qMessage>>
+  fun frontend::read_FuncType(identy *parent, bool indecl) -> std::expected<types::Type *, uptr<diagnostic::message>>
   {
     auto Bracket = Lex();
     expected(Bracket, "(");
 
-
-    // FuncDecl
-    auto self = types::Type::make_Func(ctx, parent, *Bracket, {}, ctx->void_t());
-    ctx->gst().add_ident(scopemng::mangling_abi_qw(self), self);
-
+    std::vector<types::FieldType> pars;
 
     // Params
     while (true) {
@@ -581,55 +825,63 @@ namespace qw
       Require(ID);
 
       if (ID->view() == ")") break;
-      else LexStore(ID);
-
-
-      // Type
-      auto Type = read_Type(self, true);
-      val_error(Type);
+      else
+        LexStore(ID);
 
       // Name
       std::vector<std::string> Names;
       l_re:
-      auto Name = Lex();
-      Require(Name);
-      Names.push_back(Name->str());
+      auto NameArg = Lex();
+      Require(NameArg);
+      Names.push_back(NameArg->str());
+
+      // Colon
+      auto Colon = Lex();
+      Require(Colon);
+
+      if (Colon->view() == ",") goto l_re;
+      ef (Colon->view() == ":");
+      else
+        return errors::UnexpectedIdentifier(*Colon, Colon->str());
+
+      // Type
+      auto Type = read_Type(parent, true);
+      val_error(Type);
 
       // End
       auto End = Lex();
       Require(End);
-      
-      if (End->view() == ",") goto l_re;
-      ef (End->view() == ";");
+
+      if (End->view() == ";");
       ef (End->view() == ")") LexStore(End);
       else
         return errors::UnexpectedIdentifier(*End, End->str());
 
-
       // Add
-      for (auto &X: Names) {
-        auto obj = types::Type::make_MemberField(ctx, self, *Name, X, *Type);
-        ctx->gst().add_ident(scopemng::mangling_abi_qw(obj), obj);
-        self->pars().push_back(obj);
+      for (auto &X : Names) {
+        pars.push_back({ X, *Type });
       }
     }
-
 
     // Return
     auto Ret = Lex();
     Require(Ret)
 
+    types::Type *retType = ctx->void_t();
+    
     if (Ret->view() == "->") {
-      auto Type = read_Type(self, true);
+      auto Type = read_Type(parent, true);
       val_error(Type);
-      self->ret() = *Type;
-      
+      retType = *Type;
+
       Ret = Lex();
       Require(Ret);
     }
     else
       LexStore(Ret);
 
+    // FuncDecl
+    auto self = types::Type::make_Func(ctx, pars, retType);
 
     return self;
   }

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-16 23:07+0300\n"
+"POT-Creation-Date: 2026-06-24 17:10+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,118 +17,127 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:55
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:165
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:51
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:124
 msgid "fatal"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:56
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:166
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:52
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:125
 msgid "error"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:57
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:167
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:53
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:126
 msgid "warning"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:58
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:168
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:54
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:127
 msgid "hint"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:59
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:169
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:55
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:128
 msgid "note"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:174
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:130
 msgid "summary"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:176
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:130
 msgid "generated."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:53
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:45
 msgid "file ended but context not finished."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:56
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:48
 msgid "<red>internal<gray>:<reset> unknown decl."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:57
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:49
 msgid "<red>internal<gray>:<reset> unknown type."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:58
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:50
 msgid "<red>internal<gray>:<reset> unknown stmt."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:59
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:51
 msgid "<red>internal<gray>:<reset> unknown expr."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:64
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:56
 #, c++-format
-msgid " expected ‘<blue>{}<reset>‘, but found ‘<blue>{}<reset>‘."
+msgid "expected ‘<blue>{1}<reset>‘, but found ‘<blue>{0}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:65
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:57
 #, c++-format
 msgid ""
-" expected ‘<blue>{}<reset>‘ or ‘<blue>{}<reset>‘, but found ‘<blue>{}"
+"expected ‘<blue>{1}<reset>‘ or ‘<blue>{2}<reset>‘, but found ‘<blue>{0}"
 "<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:66
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:58
 #, c++-format
-msgid " expected a word, but found ‘<blue>{}<reset>‘."
+msgid "expected a word, but found ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:68
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:60
 #, c++-format
 msgid "unknown keyword ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:70
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:62
 #, c++-format
 msgid ""
 "no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ "
 "<yellow>{0}<reset> ‘<blue>{2}<reset>’)."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:72
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:64
 msgid "empty character constant ‘‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:73
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:65
 #, c++-format
 msgid "character constant too long ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:74
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:66
 #, c++-format
-msgid "‘<blue>{}<reset>‘ could not be converted int."
+msgid "‘<blue>{}<reset>‘ could not be converted to int."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:76
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:68
 #, c++-format
 msgid "un expected identifier ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:78
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:70
 #, c++-format
 msgid "identifier not found ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:79
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:71
 #, c++-format
 msgid "identifier is not a type ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:80
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:72
 #, c++-format
 msgid "identifier is not a expr ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:74
+msgid "only one variable can be initialized."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:75
+#, c++-format
+msgid "‘<blue>{}<reset>‘ visibility setting is not applicable in this context."
 msgstr ""

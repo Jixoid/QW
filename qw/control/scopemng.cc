@@ -9,290 +9,234 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
-#include "qw/basis.hh"
 #include "qw/control/scopemng.hh"
+#include "qw/basis.hh"
+#include "qw/diagnostic/diagnostic.hh"
+#include "qw/diagnostic/msgs.hh"
+#include "qw/pretype.hh"
 #include "qw/tree/decls.hh"
 #include "qw/tree/stmts.hh"
 #include "qw/tree/types.hh"
-#include "qw/diagnostic/diagnostic.hh"
-#include "qw/diagnostic/msgs.hh"
-#include "qw/diagnostic/i18n.hh"
-#include "qw/pretype.hh"
 #include <optional>
 #include <string>
-#include <variant>
 
 
 
 namespace qw
 {
 
+  static std::string mangle_type(types::Type *t)
+  {
+    if (!t) return "v";
+
+    if (t->is<types::PrimitiveType>()) {
+      auto kind = t->as<types::PrimitiveType>()->kind;
+      switch (kind) {
+        case types::PrimitiveEnum::I8:   return "i8";
+        case types::PrimitiveEnum::I16:  return "i16";
+        case types::PrimitiveEnum::I32:  return "i32";
+        case types::PrimitiveEnum::I64:  return "i64";
+        case types::PrimitiveEnum::I128: return "i128";
+        case types::PrimitiveEnum::U8:   return "u8";
+        case types::PrimitiveEnum::U16:  return "u16";
+        case types::PrimitiveEnum::U32:  return "u32";
+        case types::PrimitiveEnum::U64:  return "u64";
+        case types::PrimitiveEnum::U128: return "u128";
+        case types::PrimitiveEnum::F16:  return "f16";
+        case types::PrimitiveEnum::F32:  return "f32";
+        case types::PrimitiveEnum::F64:  return "f64";
+        case types::PrimitiveEnum::F128: return "f128";
+        case types::PrimitiveEnum::Bool: return "b";
+        case types::PrimitiveEnum::Char: return "c";
+        case types::PrimitiveEnum::Void: return "v";
+        case types::PrimitiveEnum::Ptr:  return "p";
+      }
+    }
+    if (t->is<types::PointerType>())   return "P" + mangle_type(t->as<types::PointerType>()->sub);
+    if (t->is<types::ReferenceType>()) return "R" + mangle_type(t->as<types::ReferenceType>()->sub);
+    
+    return "X";
+  }
+
   fun scopemng::mangling_abi_qw(identy *now) -> std::string
   {
     std::string ret;
-    u32 anon{};
+    std::string params_mangled = "";
 
-    auto nnow = now;
-    while (now) {
-      if (now->type() == IdentyEnum::Type) {
-        if (now->parent() && now->parent()->type() == IdentyEnum::Decl && (
-          static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Type &&
-          static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Func
-        ))
-          anon++;
+    if (now && now->type() == IdentyEnum::Decl) {
+      auto d = (decls::Decl *)now;
+      if (d->is<decls::FuncDecl>()) {
+        auto fdecl = d->as<decls::FuncDecl>();
+        if (fdecl->funcType && fdecl->funcType->is<types::FuncType>()) {
+          auto ftype     = fdecl->funcType->as<types::FuncType>();
+          params_mangled = "E"; // Parametre başlangıç belirteci
+          for (const auto &p : ftype->pars) {
+            params_mangled += "_" + mangle_type(p.type);
+          }
+        }
       }
-
-      now = now->parent();
     }
 
-
-
-    // Create Mangling
-    auto IDecl = [&ret, &anon](decls::Decl *now)
-    {
-      if (!now->name().empty())
-        ret = std::to_string(now->name().size()) + (std::string)now->name() +ret;
-    };
-
-    auto IType = [&ret, &anon](types::Type *now)
-    {
-      if (now->parent() && now->parent()->type() == IdentyEnum::Decl && (
-        static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Type &&
-        static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Func
-      ))
-        ret = "$_"+std::to_string(anon--)+"$" +ret;
-
-
-      if (auto X = static_cast<types::Member*>(now); now->subType() == types::TypeEnum::MemberField)
-        ret = std::to_string(X->name().size()) + X->name() +ret;
-    };
-
-
-    now = nnow;
-    while (now) {
-      if (now->type() == IdentyEnum::Decl) IDecl((decls::Decl*)now);
-      ef (now->type() == IdentyEnum::Type) IType((types::Type*)now);
-
-      now = now->parent();
+    identy *curr = now;
+    while (curr) {
+      if (curr->type() == IdentyEnum::Decl) {
+        auto d = (decls::Decl *)curr;
+        if (!d->name().empty())
+          ret = std::to_string(d->name().size()) + (std::string)d->name() + ret;
+      }
+      curr = curr->parent();
     }
-
-
-    return (ret == "4main") ? "main":"_Q"+ret;
+    return (ret == "4main") ? "main" : "_Q" + ret + params_mangled;
   }
-
-  fun scopemng::humanreadableTypes(types::Type *__now) -> std::string
-  {
-    identy *now{__now};
-
-    std::string ret;
-
-
-    // Create Mangling
-    auto IDecl = [&ret](decls::Decl *now)
-    {
-      if (!now->name().empty())
-        ret = "::" + (std::string)now->name() +ret;
-    };
-
-    auto IType = [&ret](types::Type *now) -> std::optional<std::string>
-    {
-      switch (now->subType())
-      {
-        case types::TypeEnum::IntU8:   return "u8";
-        case types::TypeEnum::IntU16:  return "u16";
-        case types::TypeEnum::IntU32:  return "u32";
-        case types::TypeEnum::IntU64:  return "u64";
-        case types::TypeEnum::IntU128: return "u128";
-
-        case types::TypeEnum::IntS8:   return "i8";
-        case types::TypeEnum::IntS16:  return "i16";
-        case types::TypeEnum::IntS32:  return "i32";
-        case types::TypeEnum::IntS64:  return "i64";
-        case types::TypeEnum::IntS128: return "i128";
-
-        case types::TypeEnum::Char: return "char";
-        case types::TypeEnum::Bool: return "bool";
-        case types::TypeEnum::Void: return "void";
-        case types::TypeEnum::Ptr:  return "ptr";
-
-        case types::TypeEnum::Reference: {
-          return scopemng::humanreadableTypes(static_cast<types::Sub*>(now)->sub())+"&";
-        };
-      
-        default: break;
-      }
-
-
-      if (now->parent() && now->parent()->type() == IdentyEnum::Decl && (
-        static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Type &&
-        static_cast<decls::Decl*>(now->parent())->subType() != decls::DeclEnum::Func
-      ))
-        ret = "::anonymous" +ret;
-
-
-      if (auto X = static_cast<types::Member*>(now); now->subType() == types::TypeEnum::MemberField)
-        ret = "::"+X->name() +ret;
-
-      return {};
-    };
-
-
-    while (now) {
-      if (now->type() == IdentyEnum::Decl) IDecl((decls::Decl*)now);
-      ef (now->type() == IdentyEnum::Type) {
-        auto ret = IType((types::Type*)now);
-
-        if (ret.has_value()) return *ret;
-      }
-
-      now = now->parent();
-    }
-
-
-    return ret.substr(2);
-  }
-
-
-  
 
   fun scopemng::fetch_type(identy *ident) -> types::Type*
   {
-    if (!ident) return nil;
+    if (!ident)
+      return nil;
 
-    ef (ident->type() == IdentyEnum::Type)
-      return (types::Type*)ident;
+    if (ident->type() == IdentyEnum::Decl && static_cast<decls::Decl*>(ident)->is<decls::TypeDecl>())
+      return static_cast<decls::Decl*>(ident)->as<decls::TypeDecl>()->type;
 
-    ef (ident->type() == IdentyEnum::Decl && static_cast<decls::Decl*>(ident)->subType() == decls::DeclEnum::Type)
-      return static_cast<decls::Type*>(ident)->targetType();
-
-    else return nil;
+    else
+      return nil;
   }
-
 
   fun scopemng::fetch_expr(identy *ident) -> exprs::Expr*
   {
-    if (!ident) return nil;
+    if (!ident)
+      return nil;
 
-    ef (ident->type() == IdentyEnum::Expr)
-      return (exprs::Expr*)ident;
+    if (ident->type() == IdentyEnum::Expr)
+      return (exprs::Expr *)ident;
 
-    ef (ident->type() == IdentyEnum::Stmt && static_cast<stmts::Stmt*>(ident)->subType() == stmts::StmtEnum::CodeVar)
+    ef(ident->type() == IdentyEnum::Stmt && static_cast<stmts::Stmt*>(ident)->is<stmts::CodeVar>())
     {
-      auto NType = types::Type::make_Reference(ctx, ident, static_cast<stmts::CodeVar*>(ident)->pos(), static_cast<stmts::CodeVar*>(ident)->targetType());
-
-      return exprs::Expr::make_ValExpr(ctx, ident, NType, static_cast<stmts::CodeVar*>(ident)->llvm(), static_cast<stmts::CodeVar*>(ident)->pos());
+      auto cvar  = static_cast<stmts::Stmt*>(ident)->as<stmts::CodeVar>();
+      auto NType = types::Type::make_Reference(ctx, cvar->targetType);
+      return exprs::Expr::make_ValExpr(ctx, ident, NType, cvar->llvm, ident->pos());
     }
-
 
     else return nil;
   }
-
-
 
   inline fun __join_symbol(std::vector<std::string> &ps) -> std::string
   {
     std::string ret;
 
-    for (auto x: ps)
-      ret += std::to_string(x.size()) +x;
+    for (auto x : ps)
+      ret += std::to_string(x.size()) + x;
 
     return ret;
   }
 
-
-  fun scopemng::lookup(identy *ident, std::vector<std::string> names) -> identy*
+  fun scopemng::lookup(identy *ident, std::vector<std::string> names, std::vector<types::Type*> *arg_types) -> identy*
   {
     assert(names.size() != 0 && "size should not be 0");
 
     l_unwind:
-    if (names.size() == 1) while (ident)
-    {
-      if (auto C = (decls::Decl*)ident; ident->type() == IdentyEnum::Decl) switch (C->subType())
-      {
-        case decls::DeclEnum::NameSpace: {
-          for (auto &X: static_cast<decls::NameSpace*>(ident)->decls())
-            if (X->name() == names[0])
-              return X;
+    if (names.size() == 1)
+      while (ident) {
+        if (ident->type() == IdentyEnum::Decl) {
+          auto C = (decls::Decl*)ident;
+          if (C->is<decls::NameSpaceDecl>()) {
+            for (auto &X: C->as<decls::NameSpaceDecl>()->decls) {
+              if (X->name() == names[0]) {
+                if (arg_types && X->is<decls::FuncDecl>()) {
+                  auto ftype = X->as<decls::FuncDecl>()->funcType->as<types::FuncType>();
+                  if (ftype->pars.size() == arg_types->size()) {
+                    bool match = true;
+                    for (size_t i = 0; i < arg_types->size(); i++) {
+                      if (ftype->pars[i].type->typname() != (*arg_types)[i]->typname()) {
+                        match = false;
+                        break;
+                      }
+                    }
+                    if (match)
+                      return X;
+                  }
+                } else
+                  return X;
+              }
+            }
+            ident = ident->parent();
+          }
 
-          ident = ident->parent();
-          break;
+          ef (C->is<decls::RecordDecl>()) {
+            for (auto &X : C->as<decls::RecordDecl>()->func)
+              if (X->name() == names[0]) {
+                if (arg_types && X->is<decls::FuncDecl>()) {
+                  auto ftype = X->as<decls::FuncDecl>()->funcType->as<types::FuncType>();
+                  if (ftype->pars.size() == arg_types->size()) {
+                    bool match = true;
+                    for (size_t i = 0; i < arg_types->size(); ++i) {
+                      if (ftype->pars[i].type->typname() != (*arg_types)[i]->typname()) {
+                        match = false;
+                        break;
+                      }
+                    }
+                    if (match)
+                      return X;
+                  }
+                } else
+                  return X;
+              }
+            
+            ident = ident->parent();
+          }
+          else {
+            ident = ident->parent();
+          }
         }
-        
-        case decls::DeclEnum::Var:  ident = ident->parent(); break;
-        case decls::DeclEnum::Func: ident = ident->parent(); break;
-        case decls::DeclEnum::Type: ident = ident->parent(); break;
-
-        default:
+        ef (ident->type() == IdentyEnum::Stmt) {
+          auto C = (stmts::Stmt*)ident;
+          if (C->is<stmts::CodeBlock>()) {
+            for (auto &X: C->as<stmts::CodeBlock>()->vars)
+              if (static_cast<stmts::Stmt*>(X)->as<stmts::CodeVar>()->name == names[0])
+                return X;
+            ident = ident->parent();
+          }
+          else {
+            ident = ident->parent();
+          }
+        }
+        else {
           diagnostic::fatal(fatals::Internal_UnknownDecl().error()->msg());
-      }
-      ef (auto C = (types::Type*)ident; ident->type() == IdentyEnum::Type) switch (C->subType())
-      {
-        case types::TypeEnum::Record: {
-          for (auto &X: static_cast<types::Record*>(ident)->vars())
-            if (X->name() == names[0])
-              return X;
-
-          ident = ident->parent();
-          break;
         }
-
-        case types::TypeEnum::Func: {
-          for (auto &X: static_cast<types::Func*>(ident)->pars())
-            if (X->name() == names[0])
-              return X;
-
-          ident = ident->parent();
-          break;
-        }
-
-
-        default:
-          diagnostic::fatal(fatals::Internal_UnknownType().error()->msg());
       }
-      ef (auto C = (stmts::Stmt*)ident; ident->type() == IdentyEnum::Stmt) switch (C->subType())
-      {
-        case stmts::StmtEnum::CodeBlock: {
-          for (auto &X: static_cast<stmts::CodeBlock*>(ident)->vars())
-            if (X->name() == names[0])
-              return X;
-
-          ident = ident->parent();
-          break;
-        }
-
-
-        default:
-          diagnostic::fatal(fatals::Internal_UnknownStmt().error()->msg());
-      }
-
-      else
-        diagnostic::fatal(fatals::Internal_UnknownType().error()->msg());
-    }
-
 
     l_gst:
     identy *ret{};
-
-    for (auto &ANS: m_ans)
-      for (auto &GST: m_gst)
-        if (auto it = GST->find(ANS + __join_symbol(names))) {
-          ret = *it;
-          goto l_end;
+    std::string base_target = __join_symbol(names);
+    for (auto &ANS: m_ans) {
+      for (auto &GST: m_gst) {
+        if (arg_types) {
+          std::string full_key = ANS + base_target + "E";
+          for (auto t : *arg_types)
+            full_key += "_" + mangle_type(t);
+          if (auto it = GST->find(full_key)) {
+            ret = *it;
+            goto l_end;
+          }
         }
-    
-    
-    l_end:
-    if (!ret) return nil;
-    
-    ef (ret->type() == IdentyEnum::Type && ((types::Type*)ret)->subType() == types::TypeEnum::Nick) { // fake tailcall
-      names = ((types::Nick*)ret)->unResolvedName();
-      ret = nil;
-      goto l_gst;
+        else {
+          if (auto it = GST->find(ANS + base_target)) {
+            ret = *it;
+            goto l_end;
+          }
+          for (const auto &pair : GST->idents()) {
+            if (pair.first.rfind(ANS + base_target + "E_", 0) == 0 || pair.first == ANS + base_target) {
+              ret = pair.second;
+              goto l_end;
+            }
+          }
+        }
+      }
     }
 
-    else
-      return ret;
+    l_end:
+    if (!ret)
+      return nil;
+    return ret;
   }
 
 }

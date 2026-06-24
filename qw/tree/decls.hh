@@ -9,15 +9,16 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-
 #pragma once
 
 #include "qw/basis.hh"
 #include "qw/pretype.hh"
+#include "qw/tree/types.hh"
 #include <cassert>
 #include <llvm/IR/Function.h>
 #include <string>
 #include <string_view>
+#include <variant>
 
 #define ef else if
 
@@ -26,130 +27,53 @@
 namespace qw::decls
 {
 
-  enum struct DeclEnum: u8 { Module, NameSpace, Func, Var, Type, Alias };
-  
+  struct NameSpaceDecl { std::vector<decls::Decl*> decls; };
+  struct VarDecl       { types::Type *type{}; exprs::Expr *initer{}; };
+  struct TypeDecl      { types::Type *type{}; };
+  struct FuncDecl      { llvm::Function *llvm{}; types::Type *funcType{}; stmts::Stmt *body{}; /* optional */ };
+  struct AliasDecl     { identy *decl{}; };
+
+  struct RecordDecl    { std::vector<decls::Decl*> func{}; };
+
+  using DeclVari = std::variant<NameSpaceDecl, VarDecl, TypeDecl, FuncDecl, AliasDecl, RecordDecl>;
+
+
   struct Decl: qw::identy
   {
     protected:
-      explicit Decl(DeclEnum type, Decl *parent, std::string_view name, word pos);
-
+      explicit Decl(DeclVari vari, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private);
 
     public:
-      static fun make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos) -> NameSpace*;
-      static fun make_Module(qw::context *ctx, Decl *parent, std::string_view name, word pos) -> Module*;
-      static fun make_Var(qw::context *ctx, Decl *parent, std::string_view name, types::Type *type, word pos) -> Var*;
-      static fun make_Type(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil) -> Type*;
-      static fun make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Func *type = nil) -> Func*;
-      static fun make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos) -> Alias*;
+      static fun make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
 
-      fun dis() -> void;
-      
+      static fun make_Var(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private, exprs::Expr *init = nil) -> Decl*;
+      static fun make_Type(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
+      static fun make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
+      static fun make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos, Visibility vis = Visibility::Private)-> Decl*;
+
+      static fun make_Record(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
 
     private:
-      DeclEnum m_subType;
-      std::string m_name;
+      DeclVari m_vari;
+      std::string m_name, m_cached_symbol;
+      Visibility m_vis;
 
     public:
       inline fun name() const { return (std::string_view)m_name; }
-      inline fun subType() const { return m_subType; }
-  };
-
-
-
-  // decls
-  struct NameSpace: Decl
-  {
-    friend struct Decl;
-    friend struct Module;
-
-    protected:
-      explicit inline NameSpace(Decl *parent, std::string_view name, word pos): Decl(DeclEnum::NameSpace, parent, name, pos) {}
-      explicit inline NameSpace(DeclEnum type, Decl *parent, std::string_view name, word pos): Decl(type, parent, name, pos) {}
-
-
-    private:
-      std::vector<decls::Decl*> m_decls;
+      inline fun &vari() const { return m_vari; }
+      inline fun vis() const { return m_vis; }
+      fun symbol() -> std::string_view;
 
     public:
-      inline fun& decls() const { return m_decls; }
-  };
+      template<typename T>
+      inline fun is() { return std::holds_alternative<T>(m_vari); }
 
-  struct Module: NameSpace
-  {
-    friend struct Decl;
+      template<typename T>
+      inline fun as() { return &std::get<T>(m_vari); }
 
-    protected:
-      inline Module(Decl *parent, std::string_view name, word pos): NameSpace(DeclEnum::Module, parent, name, pos) {}
-  };
+      template<typename T>
+      inline fun set(T val) { m_vari = val; }
 
-  struct Var: Decl
-  {
-    friend struct Decl;
-
-    protected:
-      Var(Decl *parent, std::string_view name, types::Type *type, word pos);
-
-
-    private:
-      types::Type *m_varType{};
-      exprs::Expr *m_initVal{};  // std::optional
-
-    public:
-      inline fun& varType() { return m_varType; }
-      inline fun& initVal() const { return m_initVal; }
-  };
-
-  struct Type: Decl
-  {
-    friend struct Decl;
-
-    protected:
-      Type(Decl *paren, std::string_view name, word pos, types::Type *type = nil);
-
-
-    private:
-      types::Type *m_targetType{};
-
-    public:
-      inline fun& targetType() { return m_targetType; }
-  };
-  
-  struct Func: Decl
-  {
-    friend struct Decl;
-
-    protected:
-      Func(Decl *parent, std::string_view name, word pos, types::Func *type = nil);
-
-
-    private:
-      llvm::Function *m_llvm{};
-
-    public:
-      inline fun& llvm() { return m_llvm; }
-
-    private:
-      types::Func *m_funcType{};
-      stmts::CodeBlock *m_body{};  // std::optional
-
-    public:
-      inline fun& funcType() { return m_funcType; }
-      inline fun& body() { return m_body; }
-  };
-
-  struct Alias: Decl
-  {
-    friend struct Decl;
-    
-    protected:
-      inline Alias(Decl *parent, std::string_view name, identy *decl, word pos): Decl(DeclEnum::Type, parent, name, pos), m_targetDecl(decl) {}
-
-
-    private:
-      identy *m_targetDecl{};
-
-    public:
-      inline fun& targetDecl() { return m_targetDecl; }
   };
 
 }
