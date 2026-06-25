@@ -40,12 +40,14 @@ namespace qw::stmts
         }
       }
     }
-    ef(this->is<CodeBlock>() && parent && parent->type() == IdentyEnum::Decl)
+    ef (this->is<CodeBlock>() && parent && parent->type() == IdentyEnum::Decl)
     {
       auto parentDecl = static_cast<decls::Decl *>(parent);
 
       if (parentDecl->is<decls::FuncDecl>())
         parentDecl->as<decls::FuncDecl>()->body = this;
+      ef (parentDecl->is<decls::ConstructorDecl>())
+        parentDecl->as<decls::ConstructorDecl>()->body = this;
     }
   }
 

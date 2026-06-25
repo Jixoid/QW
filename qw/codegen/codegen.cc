@@ -78,8 +78,10 @@ namespace qw
           auto ret = gen_Type(tdecl->type);
           auto rec = tdecl->type->as<types::RecordType>();
           
-          if (rec->decl)
+          if (rec->decl) {
             for (auto &F: rec->decl->func) gen_FuncDecl(F);
+            for (auto &C: rec->decl->constructors) gen_ConstructorDecl(C);
+          }
           
         }
       }
@@ -108,6 +110,55 @@ namespace qw
     }
   }
 
+  fun CodeGen::gen_ConstructorDecl(decls::Decl *now) -> void
+  {
+    auto cdecl         = now->as<decls::ConstructorDecl>();
+    types::Type *ftype = cdecl->funcType;
+
+    auto res = gen_Type(ftype);
+    // if_except(res);
+
+    cdecl->llvm = llvm::Function::Create(
+      llvm::cast<llvm::FunctionType>(ftype->llvm()), llvm::GlobalValue::ExternalLinkage, scopemng::mangling_abi_qw(now), mod->llvm()
+    );
+
+    if (cdecl->body) {
+      auto BB = llvm::BasicBlock::Create(*ctx->llvm(), "entry", cdecl->llvm);
+      IR.SetInsertPoint(BB);
+
+      // Gen inits
+      auto ftype_concrete = ftype->as<types::FuncType>();
+      if (ftype_concrete->pars.size() > 0) {
+        auto self_ref = ftype_concrete->pars[0].type->as<types::ReferenceType>();
+        if (self_ref && self_ref->sub->is<types::RecordType>()) {
+          auto recType = self_ref->sub->as<types::RecordType>();
+          
+          auto self_val = cdecl->llvm->arg_begin();
+          
+          for (auto &init_pair : cdecl->inits) {
+            u32 idx = 0;
+            for (auto &v : recType->vars) {
+              if (v.name == init_pair.first) break;
+              idx++;
+            }
+            
+            auto val = gen_Expr(init_pair.second);
+            val = gen_Convert(recType->vars[idx].type, init_pair.second);
+
+            auto gep = IR.CreateStructGEP(self_ref->sub->llvm(), &*self_val, idx);
+            IR.CreateStore(val, gep);
+          }
+        }
+      }
+
+      gen_CodeBlock(ftype_concrete->ret, cdecl->body);
+
+      if (!IR.GetInsertBlock()->getTerminator()) {
+        IR.CreateRetVoid();
+      }
+    }
+  }
+
   fun CodeGen::gen_VarDecl(decls::Decl *now) -> void
   {
     // Gelecekte Global Değişken (GlobalVariable) eklendiğinde burası doldurulacak.
@@ -122,21 +173,40 @@ namespace qw
       gen_VarStmt(X);
 
     // Pars
-    if (now->parent() && now->parent()->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(now->parent())->is<decls::FuncDecl>()) {
-      auto fdecl = static_cast<decls::Decl *>(now->parent())->as<decls::FuncDecl>();
-      auto ftype = fdecl->funcType->as<types::FuncType>();
+    if (now->parent() && now->parent()->type() == IdentyEnum::Decl) {
+      if (static_cast<decls::Decl *>(now->parent())->is<decls::FuncDecl>()) {
+        auto fdecl = static_cast<decls::Decl *>(now->parent())->as<decls::FuncDecl>();
+        auto ftype = fdecl->funcType->as<types::FuncType>();
 
-      auto arg_it = fdecl->llvm->arg_begin();
-      for (const auto &p: ftype->pars) {
-        for (auto X: block->vars) {
-          auto cvar = X->as<stmts::CodeVar>();
-          if (cvar->name == p.name) {
-            llvm::Value *arg_val = &*arg_it;
-            IR.CreateStore(arg_val, cvar->llvm);
-            break;
+        auto arg_it = fdecl->llvm->arg_begin();
+        for (const auto &p: ftype->pars) {
+          for (auto X: block->vars) {
+            auto cvar = X->as<stmts::CodeVar>();
+            if (cvar->name == p.name) {
+              llvm::Value *arg_val = &*arg_it;
+              IR.CreateStore(arg_val, cvar->llvm);
+              break;
+            }
           }
+          arg_it++;
         }
-        arg_it++;
+      }
+      ef (static_cast<decls::Decl *>(now->parent())->is<decls::ConstructorDecl>()) {
+        auto cdecl = static_cast<decls::Decl *>(now->parent())->as<decls::ConstructorDecl>();
+        auto ftype = cdecl->funcType->as<types::FuncType>();
+
+        auto arg_it = cdecl->llvm->arg_begin();
+        for (const auto &p: ftype->pars) {
+          for (auto X: block->vars) {
+            auto cvar = X->as<stmts::CodeVar>();
+            if (cvar->name == p.name) {
+              llvm::Value *arg_val = &*arg_it;
+              IR.CreateStore(arg_val, cvar->llvm);
+              break;
+            }
+          }
+          arg_it++;
+        }
       }
     }
 
@@ -247,6 +317,29 @@ namespace qw
 
     ef (now->is<exprs::ValExpr>()) { return now->llvm(); }
 
+    ef (now->is<exprs::UnaryOp>()) {
+      auto U = now->as<exprs::UnaryOp>();
+      if (U->kind == exprs::UnaryOpEnum::AddrOf) {
+        return gen_Expr(U->o1);
+      }
+      else if (U->kind == exprs::UnaryOpEnum::Minus) {
+        auto v = gen_Convert(now->targetType(), U->o1);
+        return now->targetType()->isFloat() ? IR.CreateFNeg(v) : IR.CreateNeg(v);
+      }
+      else if (U->kind == exprs::UnaryOpEnum::Plus) {
+        return gen_Convert(now->targetType(), U->o1);
+      }
+      else if (U->kind == exprs::UnaryOpEnum::LNot) {
+        auto v = gen_Convert(now->targetType(), U->o1);
+        return IR.CreateNot(v);
+      }
+      else if (U->kind == exprs::UnaryOpEnum::BitNot) {
+        auto v = gen_Convert(now->targetType(), U->o1);
+        return IR.CreateNot(v);
+      }
+      return nullptr;
+    }
+
     ef (now->is<exprs::BinaryOp>()) {
       auto C = now->as<exprs::BinaryOp>();
 
@@ -289,7 +382,12 @@ namespace qw
 
     ef (now->is<exprs::PostfixOp>()) {
       auto M = now->as<exprs::PostfixOp>();
-      if (M->kind == exprs::PostfixOpEnum::Call) {
+      if (M->kind == exprs::PostfixOpEnum::Deref) {
+        types::Type *ptrType = M->obj->targetType();
+        if (ptrType->isReference()) ptrType = ptrType->as<types::ReferenceType>()->sub;
+        return gen_Convert(ptrType, M->obj);
+      }
+      ef (M->kind == exprs::PostfixOpEnum::Call) {
         llvm::Function *calleeFn = nullptr;
 
         if (M->obj->is<exprs::MemberOp>()) {

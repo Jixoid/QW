@@ -33,6 +33,9 @@ namespace qw::decls
     ef (this->is<FuncDecl>() && parent && parent->is<RecordDecl>()) {
       parent->as<RecordDecl>()->func.push_back(this);
     }
+    ef (this->is<ConstructorDecl>() && parent && parent->is<RecordDecl>()) {
+      parent->as<RecordDecl>()->constructors.push_back(this);
+    }
   }
 
   fun Decl::make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
@@ -59,6 +62,13 @@ namespace qw::decls
   fun Decl::make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type, Visibility vis) -> Decl*
   {
     auto obj = new Decl(FuncDecl{nullptr, type, nullptr}, parent, name, pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Decl::make_Constructor(qw::context *ctx, Decl *parent, word pos, types::Type *type, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(ConstructorDecl{nullptr, type, {}, nullptr}, parent, "init", pos, vis);
     ctx->push(obj);
     return obj;
   }

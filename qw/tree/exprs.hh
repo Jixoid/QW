@@ -26,17 +26,16 @@
 namespace qw::exprs
 {
 
-  enum struct UnaryOpEnum : u8
+  enum struct UnaryOpEnum: u8
   {
     Plus /* "+" */,
     Minus /* "-" */,
     LNot /* "!" */,
     BitNot /* "~" */,
     AddrOf /* "@" */,
-    Deref /* "?" */,
   };
 
-  enum struct BinaryOpEnum : u8
+  enum struct BinaryOpEnum: u8
   {
     Assign /* "=" */,
     Eq /* "==" */,
@@ -64,76 +63,35 @@ namespace qw::exprs
     RangeEq /* ".." */,
   };
 
-  enum struct PostfixOpEnum : u8
+  enum struct PostfixOpEnum: u8
   {
     Call /* "("  */,
     Array /* "[" */,
+    Deref /* "?" */,
   };
 
-  enum struct MemberOpEnum : u8
+  enum struct MemberOpEnum: u8
   {
     Member /* "." */,
     NameS /* "::" */,
   };
 
-  struct IntegerLiteral
-  {
-    std::variant<u128, i128> val{};
-  };
-  struct FloatingLiteral
-  {
-    f128 val{};
-  };
-  struct CharLiteral
-  {
-    u8 val{};
-  };
-  struct BoolLiteral
-  {
-    bool val{};
-  };
-  struct PtrLiteral
-  {
-    u64 val{};
-  };
-  struct StringLiteral
-  {
-    std::string val{};
-  };
+  struct IntegerLiteral  { std::variant<u128, i128> val{}; };
+  struct FloatingLiteral { f128 val{}; };
+  struct CharLiteral     { u8 val{}; };
+  struct BoolLiteral     { bool val{}; };
+  struct PtrLiteral      { u64 val{}; };
+  struct StringLiteral   { std::string val{}; };
 
-  struct UnaryOp
-  {
-    Expr *o1{};
-    UnaryOpEnum kind;
-  };
-  struct BinaryOp
-  {
-    Expr *o1{}, *o2{};
-    BinaryOpEnum kind;
-  };
-  struct PostfixOp
-  {
-    Expr *obj{};
-    std::vector<Expr *> operands;
-    PostfixOpEnum kind;
-  };
-  struct MemberOp
-  {
-    Expr *obj{}, *mem{};
-    MemberOpEnum kind;
-  };
+  struct UnaryOp   { Expr *o1{}; UnaryOpEnum kind; };
+  struct BinaryOp  { Expr *o1{}, *o2{}; BinaryOpEnum kind; };
+  struct PostfixOp { Expr *obj{}; std::vector<Expr *> operands; PostfixOpEnum kind; };
+  struct MemberOp  { Expr *obj{}, *mem{}; MemberOpEnum kind; };
 
-  struct VarExpr
-  {
-    stmts::Stmt *var{};
-  };
-  struct ValExpr
-  {
-  };
-  struct NickExpr
-  {
-    std::vector<std::string> unresolved;
-  };
+  struct VarExpr { stmts::Stmt *var{}; };
+  struct ValExpr {};
+
+  struct NickExpr { std::vector<std::string> unresolved; };
 
   using ExprVari = std::variant<
     IntegerLiteral, FloatingLiteral, CharLiteral, BoolLiteral, PtrLiteral, StringLiteral,

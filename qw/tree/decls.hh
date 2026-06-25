@@ -27,15 +27,15 @@
 namespace qw::decls
 {
 
-  struct NameSpaceDecl { std::vector<decls::Decl*> decls; };
-  struct VarDecl       { types::Type *type{}; exprs::Expr *initer{}; };
-  struct TypeDecl      { types::Type *type{}; };
-  struct FuncDecl      { llvm::Function *llvm{}; types::Type *funcType{}; stmts::Stmt *body{}; /* optional */ };
-  struct AliasDecl     { identy *decl{}; };
+  struct NameSpaceDecl   { std::vector<decls::Decl*> decls; };
+  struct VarDecl         { types::Type *type{}; exprs::Expr *initer{}; };
+  struct TypeDecl        { types::Type *type{}; };
+  struct FuncDecl        { llvm::Function *llvm{}; types::Type *funcType{}; stmts::Stmt *body{}; /* optional */ };
+  struct ConstructorDecl { llvm::Function *llvm{}; types::Type *funcType{}; std::vector<std::pair<std::string, exprs::Expr*>> inits{}; stmts::Stmt *body{}; };
+  struct AliasDecl       { identy *decl{}; };
+  struct RecordDecl      { std::vector<decls::Decl*> func{}; std::vector<decls::Decl*> constructors{}; };
 
-  struct RecordDecl    { std::vector<decls::Decl*> func{}; };
-
-  using DeclVari = std::variant<NameSpaceDecl, VarDecl, TypeDecl, FuncDecl, AliasDecl, RecordDecl>;
+  using DeclVari = std::variant<NameSpaceDecl, VarDecl, TypeDecl, FuncDecl, ConstructorDecl, AliasDecl, RecordDecl>;
 
 
   struct Decl: qw::identy
@@ -49,6 +49,7 @@ namespace qw::decls
       static fun make_Var(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private, exprs::Expr *init = nil) -> Decl*;
       static fun make_Type(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
       static fun make_Func(qw::context *ctx, Decl *parent, std::string_view name, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
+      static fun make_Constructor(qw::context *ctx, Decl *parent, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
       static fun make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos, Visibility vis = Visibility::Private)-> Decl*;
 
       static fun make_Record(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;

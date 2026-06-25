@@ -372,6 +372,7 @@ namespace qw
       fun read_VarDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_RecordDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_RecordFuncDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_RecordConstructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
 
       fun read_CodeBlock(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_VarStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;

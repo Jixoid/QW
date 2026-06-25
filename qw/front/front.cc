@@ -382,6 +382,97 @@ namespace qw
     return {};
   }
 
+  fun frontend::read_RecordConstructorDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto self = decls::Decl::make_Constructor(ctx, parent, *LexLast(), nil, vis);
+
+    expected(Lex(), "(");
+
+    std::vector<types::FieldType> pars;
+    pars.push_back({"self", types::Type::make_Reference(ctx, recType), Visibility::Public});
+
+    // Params
+    while (true) {
+      auto ID = Lex();
+      Require(ID);
+
+      if (ID->view() == ")") break;
+      else
+        LexStore(ID);
+
+      // Name
+      std::vector<std::string> Names;
+      l_re:
+      auto NameArg = Lex();
+      Require(NameArg);
+      Names.push_back(NameArg->str());
+
+      // Colon
+      auto Colon = Lex();
+      Require(Colon);
+
+      if (Colon->view() == ",") goto l_re;
+      ef (Colon->view() == ":");
+      else
+        return errors::UnexpectedIdentifier(*Colon, Colon->str());
+
+      // Type
+      auto Type = read_Type(self, true);
+      val_error(Type);
+
+      // End
+      auto End = Lex();
+      Require(End);
+
+      if (End->view() == ";");
+      ef (End->view() == ")") LexStore(End);
+      else return errors::UnexpectedIdentifier(*End, End->str());
+
+      // Add
+      for (auto &X: Names) {
+        pars.push_back({ X, *Type });
+      }
+    }
+
+    auto FType = types::Type::make_Func(ctx, pars, ctx->void_t());
+    self->as<decls::ConstructorDecl>()->funcType = FType;
+
+    auto Ret = Lex();
+    Require(Ret);
+
+    // Initializers
+    if (Ret->view() == ":") {
+      while (true) {
+        auto Mem = Lex();
+        Require(Mem);
+        std::string mem_name = Mem->str();
+
+        expected(Lex(), "(");
+        auto InitExpr = read_Expr(self, Precedence::Lowest);
+        val_error(InitExpr);
+        expected(Lex(), ")");
+
+        self->as<decls::ConstructorDecl>()->inits.push_back({mem_name, *InitExpr});
+
+        auto Comma = Lex();
+        Require(Comma);
+        if (Comma->view() == ",") continue;
+        else { LexStore(Comma); break; }
+      }
+      Ret = Lex();
+      Require(Ret);
+    }
+
+    // Code & Decl
+    if (Ret->view() == ";") return {};
+    ef (Ret->view() == "{") {
+      if_except(read_CodeBlock(self));
+      return {};
+    }
+    else
+      return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
+  }
+
   fun frontend::read_CodeBlock(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *LexLast());
@@ -524,13 +615,25 @@ namespace qw
     auto ID = Lex();
     Require(ID);
 
-    if (ID->view() == "true" || ID->view() == "false") {
+    if (ID->view() == "@" || ID->view() == "+" || ID->view() == "-" || ID->view() == "!" || ID->view() == "~") {
+      exprs::UnaryOpEnum kind;
+      if (ID->view() == "@") kind = exprs::UnaryOpEnum::AddrOf;
+      ef (ID->view() == "+") kind = exprs::UnaryOpEnum::Plus;
+      ef (ID->view() == "-") kind = exprs::UnaryOpEnum::Minus;
+      ef (ID->view() == "!") kind = exprs::UnaryOpEnum::LNot;
+      ef (ID->view() == "~") kind = exprs::UnaryOpEnum::BitNot;
+
+      auto sub = read_Expr(parent, Precedence::Unary);
+      val_error(sub);
+      ret = exprs::Expr::make_UnaryOp(ctx, parent, kind, *sub, *ID);
+    }
+    ef (ID->view() == "true" || ID->view() == "false") {
       ret = exprs::Expr::make_BoolLiteral(ctx, parent, ID->view() == "true", *ID);
     }
     ef (ID->view() == "null") {
       ret = exprs::Expr::make_PtrLiteral(ctx, parent, 0, *ID);
     }
-    ef(isNumber(ID->view()[0])) {
+    ef (isNumber(ID->view()[0])) {
       u128 val;
       auto eret = std::from_chars(ID->view().begin(), ID->view().end(), val);
       if (eret.ec != std::errc())
@@ -538,16 +641,32 @@ namespace qw
 
       ret = exprs::Expr::make_IntegerLiteral(ctx, parent, val, *ID);
     }
-    ef(ID->view()[0] == '\'') {
+    ef (ID->view()[0] == '\'') {
       if (ID->view().size() == 2) return errors::EmptyCharacterConstant(*ID);
       ef (ID->view().size() > 3)  return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size() - 2));
 
       ret = exprs::Expr::make_CharLiteral(ctx, parent, ID->view()[1], *ID);
     }
-    ef (ID->view()[0] == '\"') { ret = exprs::Expr::make_StringLiteral(ctx, parent, (std::string)ID->view().substr(1, ID->view().size() - 2), *ID); }
-    ef (isWord(ID->view()[0])) { ret = exprs::Expr::make_Nick(ctx, parent, { ID->str() }, *ID); }
-    else diagnostic::fatal(fatals::Internal_UnknownExpr().error()->msg());
+    ef (ID->view()[0] == '\"') {
+      ret = exprs::Expr::make_StringLiteral(
+        ctx, parent, 
+        std::string(ID->view().substr(1, ID->view().size() -2)),
+        *ID
+      );
+    }
+    ef (isWord(ID->view()[0])) {
+      ret = exprs::Expr::make_Nick(ctx, parent, {ID->str()}, *ID);
+    }
+    ef (ID->view() == "(") {
+      auto expr = read_Expr(parent, Precedence::Lowest);
+      val_error(expr);
+      ret = *expr;
+      expected(Lex(), ")");
+    }
+    else
+      diagnostic::fatal(fatals::Internal_UnknownExpr().error()->msg());
 
+    
     // POSTFIX
     while (true) {
       auto Op = Lex();
@@ -583,6 +702,9 @@ namespace qw
           }
         }
         ret = exprs::Expr::make_PostfixOp(ctx, parent, kind, ret, ops, *Next);
+      }
+      ef (Op->view() == "?") {
+        ret = exprs::Expr::make_PostfixOp(ctx, parent, exprs::PostfixOpEnum::Deref, ret, {}, *Op);
       }
       else {
         LexStore(Op);
@@ -773,6 +895,10 @@ namespace qw
       Require(Kwd);
       if (Kwd->view() == "fun") {
         if_error(read_RecordFuncDecl(recDecl, selfType, visone));
+        continue;
+      }
+      ef (Kwd->view() == "init") {
+        if_error(read_RecordConstructorDecl(recDecl, selfType, visone));
         continue;
       }
       else {

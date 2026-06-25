@@ -114,6 +114,65 @@ namespace qw
     return {};
   }
 
+  fun Sema::sema_ConstructorDecl(decls::Decl *now) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto cdecl         = now->as<decls::ConstructorDecl>();
+    types::Type *ctype = cdecl->funcType;
+
+    if_except(sema_FuncType(ctype, now->pos()));
+
+    auto ftype_concrete = ctype->as<types::FuncType>();
+    
+    // Check inits
+    if (ftype_concrete->pars.size() > 0) {
+      auto self_ref = ftype_concrete->pars[0].type->as<types::ReferenceType>();
+      if (self_ref && self_ref->sub->is<types::RecordType>()) {
+        auto recType = self_ref->sub->as<types::RecordType>();
+
+        for (auto &init_pair : cdecl->inits) {
+          bool found = false;
+          types::Type *target_type = nullptr;
+          for (auto &v : recType->vars) {
+            if (v.name == init_pair.first) {
+              found = true;
+              target_type = v.type;
+              break;
+            }
+          }
+          
+          if (!found) {
+            // Field not found error could be here. For simplicity assume it exists or report error.
+            return errors::UnexpectedIdentifier(now->pos(), init_pair.first);
+          }
+
+          if_except(sema_Expr(init_pair.second));
+          if_except(sema_Convert(target_type, init_pair.second, now->pos()));
+        }
+      }
+    }
+
+    if (cdecl->body) {
+      auto block = cdecl->body->as<stmts::CodeBlock>();
+
+      for (const auto &p: ftype_concrete->pars) {
+        bool exists = false;
+        for (auto v : block->vars) {
+          if (v->as<stmts::CodeVar>()->name == p.name) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists) {
+          stmts::Stmt::make_CodeVar(ctx, cdecl->body, p.name, p.type, cdecl->body->pos());
+        }
+      }
+
+      if_except(sema_CodeBlock(cdecl->body, ftype_concrete->ret));
+    }
+
+    return {};
+  }
+
   fun Sema::sema_VarDecl(decls::Decl *now) -> std::expected<void, uptr<diagnostic::message>>
   {
     return sema_Type(now->as<decls::VarDecl>()->type, now->pos());
@@ -229,6 +288,44 @@ namespace qw
 
       return {};
     }
+    ef (now->is<exprs::UnaryOp>()) {
+      auto U = now->as<exprs::UnaryOp>();
+      if_except(sema_Expr(U->o1));
+
+      if (U->kind == exprs::UnaryOpEnum::AddrOf) {
+        if (!U->o1->targetType()->isReference()) {
+          return errors::NoMatchOperator(now->pos(), "@", std::string(U->o1->targetType()->typname()), "operand must be an lvalue");
+        }
+        auto base_type = U->o1->targetType()->as<types::ReferenceType>()->sub;
+        now->targetType() = types::Type::make_Pointer(ctx, base_type);
+      }
+      ef (U->kind == exprs::UnaryOpEnum::Minus || U->kind == exprs::UnaryOpEnum::Plus) {
+        auto t = U->o1->targetType();
+        if (t->isReference()) t = t->as<types::ReferenceType>()->sub;
+        if (!t->isInteger() && !t->isFloat()) {
+          return errors::NoMatchOperator(now->pos(), U->kind == exprs::UnaryOpEnum::Minus ? "-" : "+", std::string(t->typname()), "operand must be numeric");
+        }
+        now->targetType() = t;
+      }
+      ef (U->kind == exprs::UnaryOpEnum::LNot) {
+        auto t = U->o1->targetType();
+        if (t->isReference()) t = t->as<types::ReferenceType>()->sub;
+        if (t->typname() != ctx->bool_t()->typname()) {
+          return errors::NoMatchOperator(now->pos(), "!", std::string(t->typname()), "operand must be boolean");
+        }
+        now->targetType() = t;
+      }
+      ef (U->kind == exprs::UnaryOpEnum::BitNot) {
+        auto t = U->o1->targetType();
+        if (t->isReference()) t = t->as<types::ReferenceType>()->sub;
+        if (!t->isInteger()) {
+          return errors::NoMatchOperator(now->pos(), "~", std::string(t->typname()), "operand must be an integer");
+        }
+        now->targetType() = t;
+      }
+
+      return {};
+    }
     ef (now->is<exprs::BinaryOp>()) {
       auto C = now->as<exprs::BinaryOp>();
 
@@ -330,7 +427,20 @@ namespace qw
     }
     ef (now->is<exprs::PostfixOp>()) {
       auto M = now->as<exprs::PostfixOp>();
-      if (M->kind == exprs::PostfixOpEnum::Call) {
+      if (M->kind == exprs::PostfixOpEnum::Deref) {
+        if_except(sema_Expr(M->obj));
+        auto t = M->obj->targetType();
+        if (t->isReference()) t = t->as<types::ReferenceType>()->sub;
+
+        if (!t->is<types::PointerType>()) {
+          return errors::NoMatchOperator(now->pos(), "?", std::string(t->typname()), "operand must be a pointer");
+        }
+
+        auto base_type = t->as<types::PointerType>()->sub;
+        now->targetType() = types::Type::make_Reference(ctx, base_type);
+        return {};
+      }
+      ef (M->kind == exprs::PostfixOpEnum::Call) {
 
         if (M->obj->is<exprs::MemberOp>()) {
           auto memOp = M->obj->as<exprs::MemberOp>();
@@ -606,11 +716,16 @@ namespace qw
 
     now->sema() = StageStatus::Checked;
 
-    if (record->decl)
+    if (record->decl) {
       for (auto &F : record->decl->func) {
         if_except(sema_FuncDecl(F));
         ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
       }
+      for (auto &C : record->decl->constructors) {
+        if_except(sema_ConstructorDecl(C));
+        ctx->gst().add_ident(scopemng::mangling_abi_qw(C), C);
+      }
+    }
 
     return {};
   }

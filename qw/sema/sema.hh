@@ -69,6 +69,7 @@ namespace qw
       fun sema_NameSpace(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_TypeDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_FuncDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_ConstructorDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_VarDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
 
       // Stat

@@ -68,6 +68,7 @@ namespace qw
       // Decl
       fun gen_NameSpace(decls::Decl *now) -> void;
       fun gen_FuncDecl(decls::Decl *now) -> void;
+      fun gen_ConstructorDecl(decls::Decl *now) -> void;
       fun gen_VarDecl(decls::Decl *now) -> void;
 
       // Stat
