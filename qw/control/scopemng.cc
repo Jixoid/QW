@@ -146,7 +146,11 @@ namespace qw
                   if (ftype->pars.size() == arg_types->size()) {
                     bool match = true;
                     for (size_t i = 0; i < arg_types->size(); i++) {
-                      if (ftype->pars[i].type->typname() != (*arg_types)[i]->typname()) {
+                      auto t1 = ftype->pars[i].type;
+                      auto t2 = (*arg_types)[i];
+                      if (t1->isReference()) t1 = t1->as<types::ReferenceType>()->sub;
+                      if (t2->isReference()) t2 = t2->as<types::ReferenceType>()->sub;
+                      if (t1->typname() != t2->typname()) {
                         match = false;
                         break;
                       }
@@ -169,7 +173,11 @@ namespace qw
                   if (ftype->pars.size() == arg_types->size()) {
                     bool match = true;
                     for (size_t i = 0; i < arg_types->size(); ++i) {
-                      if (ftype->pars[i].type->typname() != (*arg_types)[i]->typname()) {
+                      auto t1 = ftype->pars[i].type;
+                      auto t2 = (*arg_types)[i];
+                      if (t1->isReference()) t1 = t1->as<types::ReferenceType>()->sub;
+                      if (t2->isReference()) t2 = t2->as<types::ReferenceType>()->sub;
+                      if (t1->typname() != t2->typname()) {
                         match = false;
                         break;
                       }

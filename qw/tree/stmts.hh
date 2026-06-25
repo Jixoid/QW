@@ -59,6 +59,10 @@ namespace qw::stmts
       static fun make_ExprStmt(qw::context *ctx, identy *parent, exprs::Expr *expr, word pos) -> Stmt*;
 
       static fun make_Return(qw::context *ctx, identy *parent, word pos, exprs::Expr *expr = nil) -> Stmt*;
+      static fun make_IfStmt(qw::context *ctx, identy *parent, word pos, exprs::Expr *condition, Stmt *then_block, Stmt *else_block = nil) -> Stmt*;
+      static fun make_WhileStmt(qw::context *ctx, identy *parent, word pos, exprs::Expr *condition, Stmt *body) -> Stmt*;
+      static fun make_Break(qw::context *ctx, identy *parent, word pos) -> Stmt*;
+      static fun make_Continue(qw::context *ctx, identy *parent, word pos) -> Stmt*;
 
     private:
       StmtVari m_vari;

@@ -99,6 +99,8 @@
       return std::unexpected(std::move(X.error())); \
   }
 
+
+
 namespace qw
 {
 
@@ -269,7 +271,8 @@ namespace qw
     // Code & Decl
     if (Ret->view() == ";") return self;
     ef (Ret->view() == "{") {
-      if_except(read_CodeBlock(self));
+      auto block_ret = read_CodeBlock(self);
+      if (!block_ret) return std::unexpected(std::move(block_ret.error()));
       return self;
     }
     else
@@ -466,14 +469,15 @@ namespace qw
     // Code & Decl
     if (Ret->view() == ";") return {};
     ef (Ret->view() == "{") {
-      if_except(read_CodeBlock(self));
+      auto block_ret = read_CodeBlock(self);
+      if (!block_ret) return std::unexpected(std::move(block_ret.error()));
       return {};
     }
     else
       return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
   }
 
-  fun frontend::read_CodeBlock(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  fun frontend::read_CodeBlock(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>
   {
     auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *LexLast());
 
@@ -486,6 +490,16 @@ namespace qw
       ef (ID->view() == "ret") if_error(read_ReturnStmt(self))
       ef (ID->view() == "var") if_error(read_VarStmt(self))
       ef (ID->view() == "let") if_error(read_LetStmt(self))
+      ef (ID->view() == "if") if_error(read_IfStmt(self))
+      ef (ID->view() == "while") if_error(read_WhileStmt(self))
+      ef (ID->view() == "break") {
+        stmts::Stmt::make_Break(ctx, self, *ID);
+        expected(Lex(), ";");
+      }
+      ef (ID->view() == "continue") {
+        stmts::Stmt::make_Continue(ctx, self, *ID);
+        expected(Lex(), ";");
+      }
       else {
         LexStore(ID);
         auto expr = read_Expr(self, Precedence::Lowest);
@@ -495,7 +509,72 @@ namespace qw
       }
     }
 
-    return {};
+    return self;
+  }
+
+  fun frontend::read_IfStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>
+  {
+    word pos = *LexLast();
+    expected(Lex(), "(");
+    auto cond = read_Expr(parent, Precedence::Lowest);
+    val_error(cond);
+    expected(Lex(), ")");
+
+    expected(Lex(), "{");
+    
+    auto if_stmt = stmts::Stmt::make_IfStmt(ctx, parent, pos, *cond, nullptr, nullptr);
+    
+    auto then_ret = read_CodeBlock(if_stmt);
+    if (!then_ret) return std::unexpected(std::move(then_ret.error()));
+    if_stmt->as<stmts::IfStmt>()->then_block = *then_ret;
+
+    auto nxt = Lex();
+    if (!nxt) return {};
+
+    if (nxt->view() == "else") {
+      auto nxt2 = Lex();
+      Require(nxt2);
+
+      if (nxt2->view() == "if") {
+        auto elif_ret = read_IfStmt(if_stmt);
+        if (!elif_ret) return std::unexpected(std::move(elif_ret.error()));
+        if_stmt->as<stmts::IfStmt>()->else_block = *elif_ret;
+      }
+      ef (nxt2->view() == "{") {
+        auto else_ret = read_CodeBlock(if_stmt);
+        if (!else_ret) return std::unexpected(std::move(else_ret.error()));
+        if_stmt->as<stmts::IfStmt>()->else_block = *else_ret;
+      }
+      else return errors::ExpectedIdentifierBut2(*nxt2, nxt2->str(), "if", "{");
+    }
+    ef (nxt->view() == "ef") {
+      auto elif_ret = read_IfStmt(if_stmt);
+      if (!elif_ret) return std::unexpected(std::move(elif_ret.error()));
+      if_stmt->as<stmts::IfStmt>()->else_block = *elif_ret;
+    }
+    else {
+      LexStore(nxt);
+    }
+
+    return if_stmt;
+  }
+
+  fun frontend::read_WhileStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>
+  {
+    word pos = *LexLast();
+    expected(Lex(), "(");
+    auto cond = read_Expr(parent, Precedence::Lowest);
+    val_error(cond);
+    expected(Lex(), ")");
+
+    auto while_stmt = stmts::Stmt::make_WhileStmt(ctx, parent, pos, *cond, nullptr);
+
+    expected(Lex(), "{");
+    auto body_ret = read_CodeBlock(while_stmt);
+    if (!body_ret) return std::unexpected(std::move(body_ret.error()));
+    while_stmt->as<stmts::WhileStmt>()->body = *body_ret;
+
+    return while_stmt;
   }
 
   fun frontend::read_VarStmt(identy *parent) -> std::expected<void, uptr<diagnostic::message>>
@@ -725,6 +804,30 @@ namespace qw
         op_prec = Precedence::Assign;
         kind    = exprs::BinaryOpEnum::Assign;
       }
+      ef (Op->view() == "+=" || Op->view() == "-=" || Op->view() == "*=" || Op->view() == "/=" || Op->view() == "%=" || Op->view() == "&=" || Op->view() == "|=" || Op->view() == "^=" || Op->view() == "<<=" || Op->view() == ">>=") {
+        op_prec = Precedence::Assign;
+        if (Op->view() == "+=") kind = exprs::BinaryOpEnum::AddAssign;
+        ef (Op->view() == "-=") kind = exprs::BinaryOpEnum::SubAssign;
+        ef (Op->view() == "*=") kind = exprs::BinaryOpEnum::MulAssign;
+        ef (Op->view() == "/=") kind = exprs::BinaryOpEnum::DivAssign;
+        ef (Op->view() == "%=") kind = exprs::BinaryOpEnum::RemAssign;
+        ef (Op->view() == "&=") kind = exprs::BinaryOpEnum::BitAndAssign;
+        ef (Op->view() == "|=") kind = exprs::BinaryOpEnum::BitOrAssign;
+        ef (Op->view() == "^=") kind = exprs::BinaryOpEnum::BitXorAssign;
+        ef (Op->view() == "<<=") kind = exprs::BinaryOpEnum::ShlAssign;
+        ef (Op->view() == ">>=") kind = exprs::BinaryOpEnum::ShrAssign;
+      }
+      ef(Op->view() == "==" || Op->view() == "!=") {
+        op_prec = Precedence::Eq;
+        kind    = Op->view() == "==" ? exprs::BinaryOpEnum::Eq : exprs::BinaryOpEnum::NEq;
+      }
+      ef(Op->view() == "<" || Op->view() == ">" || Op->view() == "<=" || Op->view() == ">=") {
+        op_prec = Precedence::Rel;
+        if (Op->view() == "<") kind = exprs::BinaryOpEnum::Lt;
+        ef (Op->view() == ">") kind = exprs::BinaryOpEnum::Gt;
+        ef (Op->view() == "<=") kind = exprs::BinaryOpEnum::LEq;
+        ef (Op->view() == ">=") kind = exprs::BinaryOpEnum::GEq;
+      }
       ef(Op->view() == "+" || Op->view() == "-") {
         op_prec = Precedence::Add;
         kind    = Op->view() == "+" ? exprs::BinaryOpEnum::Add : exprs::BinaryOpEnum::Sub;
@@ -732,6 +835,22 @@ namespace qw
       ef(Op->view() == "*" || Op->view() == "/" || Op->view() == "%") {
         op_prec = Precedence::Mul;
         kind    = Op->view() == "*" ? exprs::BinaryOpEnum::Mul : Op->view() == "/" ? exprs::BinaryOpEnum::Div : exprs::BinaryOpEnum::Rem;
+      }
+      ef(Op->view() == "&") {
+        op_prec = Precedence::BitAnd;
+        kind    = exprs::BinaryOpEnum::BitAnd;
+      }
+      ef(Op->view() == "|") {
+        op_prec = Precedence::BitOr;
+        kind    = exprs::BinaryOpEnum::BitOr;
+      }
+      ef(Op->view() == "^") {
+        op_prec = Precedence::BitXor;
+        kind    = exprs::BinaryOpEnum::BitXor;
+      }
+      ef(Op->view() == "<<" || Op->view() == ">>") {
+        op_prec = Precedence::Shift;
+        kind    = Op->view() == "<<" ? exprs::BinaryOpEnum::Shl : exprs::BinaryOpEnum::LShr; // LShr or AShr will be determined in sema.cc
       }
       else {
         LexStore(Op);

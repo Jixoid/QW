@@ -87,4 +87,31 @@ namespace qw::stmts
     return obj;
   }
 
+  fun Stmt::make_IfStmt(qw::context *ctx, identy *parent, word pos, exprs::Expr *condition, Stmt *then_block, Stmt *else_block) -> Stmt* 
+  {
+    auto obj = new Stmt(IfStmt{ condition, then_block, else_block }, parent, pos);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Stmt::make_WhileStmt(qw::context *ctx, identy *parent, word pos, exprs::Expr *condition, Stmt *body) -> Stmt* 
+  {
+    auto obj = new Stmt(WhileStmt{ condition, body }, parent, pos);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Stmt::make_Break(qw::context *ctx, identy *parent, word pos) -> Stmt* 
+  {
+    auto obj = new Stmt(BreakStmt{}, parent, pos);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Stmt::make_Continue(qw::context *ctx, identy *parent, word pos) -> Stmt* 
+  {
+    auto obj = new Stmt(ContinueStmt{}, parent, pos);
+    ctx->push(obj);
+    return obj;
+  }
 }

@@ -63,6 +63,13 @@ namespace qw::types
     return as<PrimitiveType>()->kind == PrimitiveEnum::Char;
   }
 
+  fun Type::isBool() -> bool
+  {
+    if (!is<PrimitiveType>()) return false;
+
+    return as<PrimitiveType>()->kind == PrimitiveEnum::Bool;
+  }
+
   fun Type::intBit() -> u8
   {
     if (!is<PrimitiveType>()) return 0;

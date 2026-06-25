@@ -75,6 +75,8 @@ namespace qw
       // Stat
       fun sema_CodeBlock(stmts::Stmt*, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_VarStmt(stmts::Stmt*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_IfStmt(stmts::Stmt*, types::Type* expected_ret) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_WhileStmt(stmts::Stmt*, types::Type* expected_ret) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_ReturnStmt(stmts::Stmt*, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>>;
 
       // Expr

@@ -135,9 +135,9 @@ namespace qw
           
           auto self_val = cdecl->llvm->arg_begin();
           
-          for (auto &init_pair : cdecl->inits) {
+          for (auto &init_pair: cdecl->inits) {
             u32 idx = 0;
-            for (auto &v : recType->vars) {
+            for (auto &v: recType->vars) {
               if (v.name == init_pair.first) break;
               idx++;
             }
@@ -174,8 +174,8 @@ namespace qw
 
     // Pars
     if (now->parent() && now->parent()->type() == IdentyEnum::Decl) {
-      if (static_cast<decls::Decl *>(now->parent())->is<decls::FuncDecl>()) {
-        auto fdecl = static_cast<decls::Decl *>(now->parent())->as<decls::FuncDecl>();
+      if (static_cast<decls::Decl*>(now->parent())->is<decls::FuncDecl>()) {
+        auto fdecl = static_cast<decls::Decl*>(now->parent())->as<decls::FuncDecl>();
         auto ftype = fdecl->funcType->as<types::FuncType>();
 
         auto arg_it = fdecl->llvm->arg_begin();
@@ -191,8 +191,8 @@ namespace qw
           arg_it++;
         }
       }
-      ef (static_cast<decls::Decl *>(now->parent())->is<decls::ConstructorDecl>()) {
-        auto cdecl = static_cast<decls::Decl *>(now->parent())->as<decls::ConstructorDecl>();
+      ef (static_cast<decls::Decl*>(now->parent())->is<decls::ConstructorDecl>()) {
+        auto cdecl = static_cast<decls::Decl*>(now->parent())->as<decls::ConstructorDecl>();
         auto ftype = cdecl->funcType->as<types::FuncType>();
 
         auto arg_it = cdecl->llvm->arg_begin();
@@ -214,12 +214,108 @@ namespace qw
     for (auto &X: block->codes) {
       if (X->is<stmts::ReturnStmt>()) {
         gen_ReturnStmt(expected_ret, X);
+        break;
       }
       ef (X->is<stmts::ExprStmt>()) {
         auto expr_stmt = X->as<stmts::ExprStmt>();
         gen_Expr(expr_stmt->expr);
       }
+      ef (X->is<stmts::IfStmt>()) {
+        gen_IfStmt(expected_ret, X);
+      }
+      ef (X->is<stmts::WhileStmt>()) {
+        gen_WhileStmt(expected_ret, X);
+      }
+      ef (X->is<stmts::BreakStmt>()) {
+        if (!loop_stack.empty()) {
+          IR.CreateBr(loop_stack.back().second);
+        }
+        break;
+      }
+      ef (X->is<stmts::ContinueStmt>()) {
+        if (!loop_stack.empty()) {
+          IR.CreateBr(loop_stack.back().first);
+        }
+        break;
+      }
+      ef (X->is<stmts::CodeBlock>()) {
+        gen_CodeBlock(expected_ret, X);
+      }
     }
+  }
+
+  fun CodeGen::gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void
+  {
+    auto if_stmt = now->as<stmts::IfStmt>();
+    
+    llvm::Function *TheFunction = IR.GetInsertBlock()->getParent();
+    llvm::BasicBlock *ThenBB = llvm::BasicBlock::Create(*ctx->llvm(), "", TheFunction);
+    llvm::BasicBlock *ElseBB = llvm::BasicBlock::Create(*ctx->llvm());
+    llvm::BasicBlock *MergeBB = llvm::BasicBlock::Create(*ctx->llvm());
+
+    llvm::Value *CondV = gen_Convert(ctx->bool_t(), if_stmt->condition);
+    IR.CreateCondBr(CondV, ThenBB, if_stmt->else_block ? ElseBB : MergeBB);
+
+    IR.SetInsertPoint(ThenBB);
+    if (if_stmt->then_block) {
+      gen_CodeBlock(expected_ret, if_stmt->then_block);
+    }
+    if (!IR.GetInsertBlock()->getTerminator())
+      IR.CreateBr(MergeBB);
+
+    if (if_stmt->else_block) {
+      TheFunction->insert(TheFunction->end(), ElseBB);
+      IR.SetInsertPoint(ElseBB);
+      
+      if (if_stmt->else_block->is<stmts::IfStmt>()) {
+        gen_IfStmt(expected_ret, if_stmt->else_block);
+      }
+      else {
+        gen_CodeBlock(expected_ret, if_stmt->else_block);
+      }
+      
+      if (!IR.GetInsertBlock()->getTerminator())
+        IR.CreateBr(MergeBB);
+    }
+    else {
+      delete ElseBB;
+    }
+
+    TheFunction->insert(TheFunction->end(), MergeBB);
+    IR.SetInsertPoint(MergeBB);
+  }
+
+  fun CodeGen::gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void
+  {
+    auto while_stmt = now->as<stmts::WhileStmt>();
+
+    llvm::Function *TheFunction = IR.GetInsertBlock()->getParent();
+    llvm::BasicBlock *CondBB = llvm::BasicBlock::Create(*ctx->llvm(), "", TheFunction);
+    llvm::BasicBlock *LoopBB = llvm::BasicBlock::Create(*ctx->llvm());
+    llvm::BasicBlock *MergeBB = llvm::BasicBlock::Create(*ctx->llvm());
+
+    IR.CreateBr(CondBB);
+    IR.SetInsertPoint(CondBB);
+
+    llvm::Value *CondV = gen_Convert(ctx->bool_t(), while_stmt->condition);
+    IR.CreateCondBr(CondV, LoopBB, MergeBB);
+
+    TheFunction->insert(TheFunction->end(), LoopBB);
+    IR.SetInsertPoint(LoopBB);
+
+    loop_stack.push_back({CondBB, MergeBB});
+
+    if (while_stmt->body) {
+      gen_CodeBlock(expected_ret, while_stmt->body);
+    }
+
+    loop_stack.pop_back();
+
+    if (!IR.GetInsertBlock()->getTerminator())
+      IR.CreateBr(CondBB);
+
+    TheFunction->insert(TheFunction->end(), MergeBB);
+    IR.SetInsertPoint(MergeBB);
   }
 
   fun CodeGen::gen_VarStmt(stmts::Stmt *now) -> void
@@ -299,7 +395,6 @@ namespace qw
 
     ef (now->is<exprs::StringLiteral>()) {
       auto lit = now->as<exprs::StringLiteral>();
-      // LLVM Global String Üretimi (Eskiden Sema'da yapılırdı)
       now->llvm() = IR.CreateGlobalString(lit->val, "", 0, mod->llvm());
       return now->llvm();
     }
@@ -315,7 +410,9 @@ namespace qw
       return cvar->llvm;
     }
 
-    ef (now->is<exprs::ValExpr>()) { return now->llvm(); }
+    ef (now->is<exprs::ValExpr>()) {
+      return now->llvm();
+    }
 
     ef (now->is<exprs::UnaryOp>()) {
       auto U = now->as<exprs::UnaryOp>();
@@ -343,7 +440,9 @@ namespace qw
     ef (now->is<exprs::BinaryOp>()) {
       auto C = now->as<exprs::BinaryOp>();
 
-      if (C->kind == exprs::BinaryOpEnum::Assign) {
+      bool is_compound_assign = (C->kind >= exprs::BinaryOpEnum::AddAssign && C->kind <= exprs::BinaryOpEnum::ShrAssign);
+
+      if (C->kind == exprs::BinaryOpEnum::Assign || is_compound_assign) {
         llvm::Value *ptr = gen_Expr(C->o1);
 
         auto lhs_type = C->o1->targetType();
@@ -351,15 +450,44 @@ namespace qw
           lhs_type = lhs_type->as<types::ReferenceType>()->sub;
         }
 
-        llvm::Value *val = gen_Convert(lhs_type, C->o2);
-        IR.CreateStore(val, ptr);
-        return val;
+        llvm::Value *val2 = gen_Convert(lhs_type, C->o2);
+        
+        if (is_compound_assign) {
+           llvm::Value *val1 = IR.CreateLoad(lhs_type->llvm(), ptr);
+           bool is_float = lhs_type->isFloat();
+           bool is_signed = lhs_type->isSigned();
+
+           switch (C->kind) {
+             case exprs::BinaryOpEnum::AddAssign: val2 = is_float ? IR.CreateFAdd(val1, val2) : IR.CreateAdd(val1, val2); break;
+             case exprs::BinaryOpEnum::SubAssign: val2 = is_float ? IR.CreateFSub(val1, val2) : IR.CreateSub(val1, val2); break;
+             case exprs::BinaryOpEnum::MulAssign: val2 = is_float ? IR.CreateFMul(val1, val2) : IR.CreateMul(val1, val2); break;
+             case exprs::BinaryOpEnum::DivAssign:
+               if (is_float) val2 = IR.CreateFDiv(val1, val2);
+               else val2 = is_signed ? IR.CreateSDiv(val1, val2) : IR.CreateUDiv(val1, val2);
+               break;
+             case exprs::BinaryOpEnum::RemAssign:
+               if (is_float) val2 = IR.CreateFRem(val1, val2);
+               else val2 = is_signed ? IR.CreateSRem(val1, val2) : IR.CreateURem(val1, val2);
+               break;
+             case exprs::BinaryOpEnum::BitAndAssign: val2 = IR.CreateAnd(val1, val2); break;
+             case exprs::BinaryOpEnum::BitOrAssign:  val2 = IR.CreateOr(val1, val2); break;
+             case exprs::BinaryOpEnum::BitXorAssign: val2 = IR.CreateXor(val1, val2); break;
+             case exprs::BinaryOpEnum::ShlAssign:    val2 = IR.CreateShl(val1, val2); break;
+             case exprs::BinaryOpEnum::ShrAssign:    val2 = is_signed ? IR.CreateAShr(val1, val2) : IR.CreateLShr(val1, val2); break;
+             default: break;
+           }
+        }
+
+        IR.CreateStore(val2, ptr);
+        return val2;
       }
 
-      llvm::Value *v1 = gen_Convert(now->targetType(), C->o1);
-      llvm::Value *v2 = gen_Convert(now->targetType(), C->o2);
+      types::Type *computationType = C->computationType ? C->computationType : now->targetType();
+      llvm::Value *v1 = gen_Convert(computationType, C->o1);
+      llvm::Value *v2 = gen_Convert(computationType, C->o2);
 
-      bool is_float = now->targetType()->isFloat();
+      bool is_float = computationType->isFloat();
+      bool is_signed = computationType->isSigned();
 
       switch (C->kind) {
         case exprs::BinaryOpEnum::Add: return is_float ? IR.CreateFAdd(v1, v2) : IR.CreateAdd(v1, v2);
@@ -367,14 +495,32 @@ namespace qw
         case exprs::BinaryOpEnum::Mul: return is_float ? IR.CreateFMul(v1, v2) : IR.CreateMul(v1, v2);
 
         case exprs::BinaryOpEnum::Div:
-          if (is_float)
-            return IR.CreateFDiv(v1, v2);
-          return now->targetType()->isSigned() ? IR.CreateSDiv(v1, v2) : IR.CreateUDiv(v1, v2);
+          if (is_float) return IR.CreateFDiv(v1, v2);
+          return is_signed ? IR.CreateSDiv(v1, v2) : IR.CreateUDiv(v1, v2);
 
         case exprs::BinaryOpEnum::Rem:
-          if (is_float)
-            return IR.CreateFRem(v1, v2);
-          return now->targetType()->isSigned() ? IR.CreateSRem(v1, v2) : IR.CreateURem(v1, v2);
+          if (is_float) return IR.CreateFRem(v1, v2);
+          return is_signed ? IR.CreateSRem(v1, v2) : IR.CreateURem(v1, v2);
+
+        case exprs::BinaryOpEnum::BitAnd: return IR.CreateAnd(v1, v2);
+        case exprs::BinaryOpEnum::BitOr:  return IR.CreateOr(v1, v2);
+        case exprs::BinaryOpEnum::BitXor: return IR.CreateXor(v1, v2);
+        case exprs::BinaryOpEnum::Shl:    return IR.CreateShl(v1, v2);
+        case exprs::BinaryOpEnum::LShr:   return IR.CreateLShr(v1, v2);
+        case exprs::BinaryOpEnum::AShr:   return IR.CreateAShr(v1, v2);
+
+        case exprs::BinaryOpEnum::Eq:
+          return is_float ? IR.CreateFCmpOEQ(v1, v2) : IR.CreateICmpEQ(v1, v2);
+        case exprs::BinaryOpEnum::NEq:
+          return is_float ? IR.CreateFCmpONE(v1, v2) : IR.CreateICmpNE(v1, v2);
+        case exprs::BinaryOpEnum::Lt:
+          return is_float ? IR.CreateFCmpOLT(v1, v2) : (is_signed ? IR.CreateICmpSLT(v1, v2) : IR.CreateICmpULT(v1, v2));
+        case exprs::BinaryOpEnum::Gt:
+          return is_float ? IR.CreateFCmpOGT(v1, v2) : (is_signed ? IR.CreateICmpSGT(v1, v2) : IR.CreateICmpUGT(v1, v2));
+        case exprs::BinaryOpEnum::LEq:
+          return is_float ? IR.CreateFCmpOLE(v1, v2) : (is_signed ? IR.CreateICmpSLE(v1, v2) : IR.CreateICmpULE(v1, v2));
+        case exprs::BinaryOpEnum::GEq:
+          return is_float ? IR.CreateFCmpOGE(v1, v2) : (is_signed ? IR.CreateICmpSGE(v1, v2) : IR.CreateICmpUGE(v1, v2));
 
         default: diagnostic::fatal("CodeGen: Unimplemented BinaryOp!"); return nullptr;
       }
@@ -461,7 +607,7 @@ namespace qw
 
         if (obj_type->is<types::PArrayType>()) {
           llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), 0);
-          return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, { zero, idx });
+          return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, {zero, idx});
         }
         ef (obj_type->is<types::ZArrayType>()) {
           llvm::Value *elem_ptr = IR.CreateLoad(obj_type->llvm(), obj_ptr);
@@ -505,7 +651,7 @@ namespace qw
       llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), 0);
       llvm::Value *idx  = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), index);
 
-      return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, { zero, idx });
+      return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, {zero, idx});
     }
 
     else {

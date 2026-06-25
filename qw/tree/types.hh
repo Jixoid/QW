@@ -117,6 +117,7 @@ namespace qw::types
       fun isFloat() -> bool;
       fun isSigned() -> bool;
       fun isChar() -> bool;
+      fun isBool() -> bool;
       inline fun isReference() -> bool { return is<ReferenceType>(); }
       fun intBit() -> u8;
   };

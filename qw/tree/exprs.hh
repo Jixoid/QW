@@ -61,6 +61,16 @@ namespace qw::exprs
     Div /* "/" */,
     Rem /* "%" */,
     RangeEq /* ".." */,
+    AddAssign /* "+=" */,
+    SubAssign /* "-=" */,
+    MulAssign /* "*=" */,
+    DivAssign /* "/=" */,
+    RemAssign /* "%=" */,
+    BitAndAssign /* "&=" */,
+    BitOrAssign /* "|=" */,
+    BitXorAssign /* "^=" */,
+    ShlAssign /* "<<=" */,
+    ShrAssign /* ">>=" */,
   };
 
   enum struct PostfixOpEnum: u8
@@ -84,7 +94,7 @@ namespace qw::exprs
   struct StringLiteral   { std::string val{}; };
 
   struct UnaryOp   { Expr *o1{}; UnaryOpEnum kind; };
-  struct BinaryOp  { Expr *o1{}, *o2{}; BinaryOpEnum kind; };
+  struct BinaryOp  { Expr *o1{}, *o2{}; BinaryOpEnum kind; types::Type *computationType{}; };
   struct PostfixOp { Expr *obj{}; std::vector<Expr *> operands; PostfixOpEnum kind; };
   struct MemberOp  { Expr *obj{}, *mem{}; MemberOpEnum kind; };
 

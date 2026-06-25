@@ -70,10 +70,11 @@ namespace qw
     }
 
     // Big Symbols
-    if (Off + 1 < is.size() && find(BigSyms.begin(), BigSyms.end(), std::string_view(&is[Off], 2)) != BigSyms.end()) {
-      Off += 2;
-
-      return word{mod, Off - 2, 2};
+    for (const auto &sym : BigSyms) {
+      if (Off + sym.size() <= is.size() && std::string_view(&is[Off], sym.size()) == sym) {
+        Off += sym.size();
+        return word{mod, Off - sym.size(), (u0)sym.size()};
+      }
     }
 
     // Symbols

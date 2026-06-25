@@ -195,6 +195,19 @@ namespace qw
         auto expr_stmt = X->as<stmts::ExprStmt>();
         if_error(sema_Expr(expr_stmt->expr));
       }
+      ef (X->is<stmts::IfStmt>()) {
+        if_error(sema_IfStmt(X, expected_ret));
+      }
+      ef (X->is<stmts::WhileStmt>()) {
+        if_error(sema_WhileStmt(X, expected_ret));
+      }
+      ef (X->is<stmts::BreakStmt>()) {
+      }
+      ef (X->is<stmts::ContinueStmt>()) {
+      }
+      ef (X->is<stmts::CodeBlock>()) {
+        if_error(sema_CodeBlock(X, expected_ret));
+      }
       else
       {
         diagnostic::fatal(fatals::Internal_UnknownStmt().error()->msg());
@@ -213,10 +226,51 @@ namespace qw
 
   fun Sema::sema_ReturnStmt(stmts::Stmt *now, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>>
   {
-    auto ret = now->as<stmts::ReturnStmt>();
-    if_except(sema_Expr(ret->expr));
+    auto Ret = now->as<stmts::ReturnStmt>();
+    if_except(sema_Expr(Ret->expr));
 
-    if_except(sema_Convert(expected_ret, ret->expr, now->pos()));
+    if_except(sema_Convert(expected_ret, Ret->expr, now->pos()));
+
+    return {};
+  }
+
+  fun Sema::sema_IfStmt(stmts::Stmt *now, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto if_stmt = now->as<stmts::IfStmt>();
+    if_except(sema_Expr(if_stmt->condition));
+
+    if (!if_stmt->condition->targetType()->isBool()) {
+      return errors::NoMatchOperator(now->pos(), "if", std::string(if_stmt->condition->targetType()->typname()), "condition must be boolean");
+    }
+
+    if (if_stmt->then_block) {
+      if_except(sema_CodeBlock(if_stmt->then_block, expected_ret));
+    }
+    
+    if (if_stmt->else_block) {
+      if (if_stmt->else_block->is<stmts::IfStmt>()) {
+        if_except(sema_IfStmt(if_stmt->else_block, expected_ret));
+      }
+      else {
+        if_except(sema_CodeBlock(if_stmt->else_block, expected_ret));
+      }
+    }
+
+    return {};
+  }
+
+  fun Sema::sema_WhileStmt(stmts::Stmt *now, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto while_stmt = now->as<stmts::WhileStmt>();
+    if_except(sema_Expr(while_stmt->condition));
+
+    if (!while_stmt->condition->targetType()->isBool()) {
+      return errors::NoMatchOperator(now->pos(), "while", std::string(while_stmt->condition->targetType()->typname()), "condition must be boolean");
+    }
+
+    if (while_stmt->body) {
+      if_except(sema_CodeBlock(while_stmt->body, expected_ret));
+    }
 
     return {};
   }
@@ -329,17 +383,29 @@ namespace qw
     ef (now->is<exprs::BinaryOp>()) {
       auto C = now->as<exprs::BinaryOp>();
 
-      if (C->kind == exprs::BinaryOpEnum::Assign) {
+      bool is_compound_assign = (C->kind >= exprs::BinaryOpEnum::AddAssign && C->kind <= exprs::BinaryOpEnum::ShrAssign);
+
+      if (C->kind == exprs::BinaryOpEnum::Assign || is_compound_assign) {
         if_except(sema_Expr(C->o1));
         if_except(sema_Expr(C->o2));
 
         if (!C->o1->targetType()->isReference()) {
           return errors::NoMatchOperator(
-            now->pos(), "=", std::string(C->o1->targetType()->typname()), "left-hand side of assignment must be an lvalue"
+            now->pos(), is_compound_assign ? "compound assignment" : "=", std::string(C->o1->targetType()->typname()), "left-hand side of assignment must be an lvalue"
           );
         }
 
         auto lhs_concrete_type = C->o1->targetType()->as<types::ReferenceType>()->sub;
+
+        if (is_compound_assign) {
+          if (!lhs_concrete_type->isInteger() && !lhs_concrete_type->isFloat()) {
+            return errors::NoMatchOperator(now->pos(), "compound assignment", std::string(lhs_concrete_type->typname()), "left-hand side must be numeric");
+          }
+          if (lhs_concrete_type->isFloat() && (C->kind >= exprs::BinaryOpEnum::RemAssign)) {
+            return errors::NoMatchOperator(now->pos(), "compound assignment", std::string(lhs_concrete_type->typname()), "bitwise or remainder operator not allowed for float");
+          }
+          C->computationType = lhs_concrete_type;
+        }
 
         if_except(sema_Convert(lhs_concrete_type, C->o2, now->pos()));
 
@@ -361,7 +427,14 @@ namespace qw
         else
           target = t1;
 
-        now->targetType() = target;
+        if (C->kind == exprs::BinaryOpEnum::Eq || C->kind == exprs::BinaryOpEnum::NEq ||
+            C->kind == exprs::BinaryOpEnum::Lt || C->kind == exprs::BinaryOpEnum::Gt ||
+            C->kind == exprs::BinaryOpEnum::LEq || C->kind == exprs::BinaryOpEnum::GEq) {
+          C->computationType = target;
+          now->targetType() = ctx->bool_t();
+        } else {
+          now->targetType() = target;
+        }
         return {};
       }
       ef (t1->isFloat() && t2->isFloat()) {
@@ -372,7 +445,14 @@ namespace qw
         else
           target = t1;
 
-        now->targetType() = target;
+        if (C->kind == exprs::BinaryOpEnum::Eq || C->kind == exprs::BinaryOpEnum::NEq ||
+            C->kind == exprs::BinaryOpEnum::Lt || C->kind == exprs::BinaryOpEnum::Gt ||
+            C->kind == exprs::BinaryOpEnum::LEq || C->kind == exprs::BinaryOpEnum::GEq) {
+          C->computationType = target;
+          now->targetType() = ctx->bool_t();
+        } else {
+          now->targetType() = target;
+        }
         return {};
       }
 
@@ -387,6 +467,9 @@ namespace qw
       std::unordered_map<exprs::BinaryOpEnum, std::string> Ops = {
         { exprs::BinaryOpEnum::Add, "+" }, { exprs::BinaryOpEnum::Sub, "-" }, { exprs::BinaryOpEnum::Mul, "*" },
         { exprs::BinaryOpEnum::Div, "/" }, { exprs::BinaryOpEnum::Rem, "%" },
+        { exprs::BinaryOpEnum::Eq, "==" }, { exprs::BinaryOpEnum::NEq, "!=" },
+        { exprs::BinaryOpEnum::Lt, "<" }, { exprs::BinaryOpEnum::Gt, ">" },
+        { exprs::BinaryOpEnum::LEq, "<=" }, { exprs::BinaryOpEnum::GEq, ">=" },
       };
 
       return errors::NoMatchOperator(

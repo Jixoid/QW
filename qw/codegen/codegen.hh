@@ -55,6 +55,7 @@ namespace qw
       scopemng SMng;
 
       llvm::IRBuilder<> IR;
+      std::vector<std::pair<llvm::BasicBlock*, llvm::BasicBlock*>> loop_stack;
 
     public:
       static fun pass(qw::module *mod, std::vector<std::string> ans = {}) -> void {
@@ -73,6 +74,8 @@ namespace qw
 
       // Stat
       fun gen_CodeBlock(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
       fun gen_VarStmt(stmts::Stmt *now) -> void;
       fun gen_ReturnStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
 

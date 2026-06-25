@@ -38,8 +38,12 @@ namespace qw
     Assign = 10, // =
     LogOr  = 20, // ||
     LogAnd = 30, // &&
+    BitOr  = 32, // |
+    BitXor = 34, // ^
+    BitAnd = 36, // &
     Eq     = 40, // ==, !=
     Rel    = 50, // <, >, <=, >=
+    Shift  = 55, // <<, >>
     Add    = 60, // +, -
     Mul    = 70, // *, /, %
     Unary  = 80, // !, ~, @
@@ -262,7 +266,9 @@ namespace qw
         /*for comment -->*/ '#', '{', '}', '.', ':', ';', ',', '=', '(', ')', '<', '>', '[', ']', '-', '+', '/', '%', '*', '^', '~', '&', '|', '@', '?', '!'
       };
       std::vector<std::string> BigSyms = {
-        /*for comment -->*/ "//", "->", "<-", "::", "==", "<=", ">=", "!=", "&&", "||", "^^", "<<", ">>", "<<|", "|>>", "[[", "]]"
+        /* 3 chars */ "<<=", ">>=", "<<|", "|>>",
+        /* 2 chars */ "//", "->", "<-", "::", "==", "<=", ">=", "!=", "&&", "||", "^^", "<<", ">>", "[[", "]]",
+        "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="
       };
       std::vector<char> IgnSyms = {
         ' ', '\n', '\r', '\0', '\e', '\t'
@@ -374,7 +380,9 @@ namespace qw
       fun read_RecordFuncDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_RecordConstructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
 
-      fun read_CodeBlock(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_CodeBlock(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
+      fun read_IfStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
+      fun read_WhileStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_VarStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_LetStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_ReturnStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
