@@ -220,18 +220,16 @@ namespace qw::types
     return obj;
   }
 
-  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl) -> Type*
+  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl, Type *baseType) -> Type*
   {
-    auto obj = new Type(EnumType{vals, typs, decl}, "enum");
-    obj->llvm() = llvm::Type::getInt32Ty(*ctx->llvm());
+    auto obj = new Type(EnumType{vals, typs, decl, baseType}, "enum");
     ctx->m_types.push_back(obj);
     return obj;
   }
 
-  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl) -> Type*
+  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl, Type *baseType) -> Type*
   {
-    auto obj = new Type(SetType{vals, typs, decl}, "set");
-    obj->llvm() = llvm::Type::getInt32Ty(*ctx->llvm());
+    auto obj = new Type(SetType{vals, typs, decl, baseType}, "set");
     ctx->m_types.push_back(obj);
     return obj;
   }

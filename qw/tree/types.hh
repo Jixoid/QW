@@ -53,8 +53,8 @@ namespace qw::types
 
   struct FuncType   { std::vector<FieldType> pars{}; Type *ret{}; };
   struct RecordType { std::vector<FieldType> vars{}; std::vector<FieldType> typs{}; decls::RecordDecl *decl{}; };
-  struct EnumType   { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::EnumDecl *decl{}; };
-  struct SetType    { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::SetDecl *decl{}; };
+  struct EnumType   { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::EnumDecl *decl{}; Type *baseType{}; };
+  struct SetType    { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::SetDecl *decl{}; Type *baseType{}; };
   
   struct NickType   { std::vector<std::string> unresolved; };
 
@@ -88,8 +88,8 @@ namespace qw::types
       static fun make_Func(qw::context *ctx, std::vector<FieldType> pars, Type *ret) -> Type*;
 
       static fun make_Record(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::RecordDecl *decl) -> Type*;
-      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl) -> Type*;
-      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl) -> Type*;
+      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl, Type *baseType) -> Type*;
+      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl, Type *baseType) -> Type*;
 
       static fun make_Nick(qw::context *ctx, std::vector<std::string> unresolved) -> Type*;
 

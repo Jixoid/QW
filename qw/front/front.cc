@@ -376,10 +376,25 @@ namespace qw
     
     auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
 
-    auto Bracket = Lex();
-    expected(Bracket, "{");
+    auto ColonOpt = Lex();
+    types::Type *baseType = nullptr;
+    if (ColonOpt && ColonOpt->view() == ":") {
+      auto parsedType = read_Type(parent, true);
+      val_error(parsedType);
+      baseType = *parsedType;
+      auto Bracket = Lex();
+      expected(Bracket, "{");
+    }
+    ef (ColonOpt) {
+      if (ColonOpt->view() != "{") {
+        return errors::UnexpectedIdentifier(*ColonOpt, "{");
+      }
+    }
+    else {
+      return errors::UnexpectedIdentifier(*Name, "Expected { or :");
+    }
 
-    auto enumDecl = decls::Decl::make_Enum(ctx, self, "", *Bracket, Visibility::Public);
+    auto enumDecl = decls::Decl::make_Enum(ctx, self, "", *Name, Visibility::Public);
     
     std::vector<types::FieldCons> vals;
     std::vector<types::FieldType> typs;
@@ -426,7 +441,7 @@ namespace qw
       }
     }
 
-    auto enumType = types::Type::make_Enum(ctx, vals, typs, enumDecl->as<decls::EnumDecl>());
+    auto enumType = types::Type::make_Enum(ctx, vals, typs, enumDecl->as<decls::EnumDecl>(), baseType);
     self->as<decls::TypeDecl>()->type = enumType;
 
     return {};
@@ -448,10 +463,25 @@ namespace qw
     
     auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
 
-    auto Bracket = Lex();
-    expected(Bracket, "{");
+    auto ColonOpt = Lex();
+    types::Type *baseType = nullptr;
+    if (ColonOpt && ColonOpt->view() == ":") {
+      auto parsedType = read_Type(parent, true);
+      val_error(parsedType);
+      baseType = *parsedType;
+      auto Bracket = Lex();
+      expected(Bracket, "{");
+    }
+    ef (ColonOpt) {
+      if (ColonOpt->view() != "{") {
+        return errors::UnexpectedIdentifier(*ColonOpt, "{");
+      }
+    }
+    else {
+      return errors::UnexpectedIdentifier(*Name, "Expected { or :");
+    }
 
-    auto setDecl = decls::Decl::make_Set(ctx, self, "", *Bracket, Visibility::Public);
+    auto setDecl = decls::Decl::make_Set(ctx, self, "", *Name, Visibility::Public);
     
     std::vector<types::FieldCons> vals;
     std::vector<types::FieldType> typs;
@@ -498,7 +528,7 @@ namespace qw
       }
     }
 
-    auto setType = types::Type::make_Set(ctx, vals, typs, setDecl->as<decls::SetDecl>());
+    auto setType = types::Type::make_Set(ctx, vals, typs, setDecl->as<decls::SetDecl>(), baseType);
     self->as<decls::TypeDecl>()->type = setType;
 
     return {};

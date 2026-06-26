@@ -1,7 +1,6 @@
-## QW
+# QW Language
 
-A minimalist compiler front-end and infrastructure written in C++. 
-QAOS focuses on a clean, modular architecture leveraging LLVM for low-level code generation.
+QW is a minimalist compiler front-end and infrastructure written in C++. Part of the QAOS ecosystem, it focuses on a clean, modular architecture leveraging LLVM for efficient, low-level code generation.
 
 Other languages: [tr](README.tr.md)
 

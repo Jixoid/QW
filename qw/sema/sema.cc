@@ -902,7 +902,49 @@ namespace qw
         ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
       }
     }
-    
+
+    i128 min_val = 0;
+    i128 max_val = 0;
+    if (!enumType->vals.empty()) {
+      min_val = std::holds_alternative<u128>(enumType->vals[0].val) ? (i128)std::get<u128>(enumType->vals[0].val) : std::get<i128>(enumType->vals[0].val);
+      max_val = min_val;
+    }
+    for (auto &v : enumType->vals) {
+      i128 cv = std::holds_alternative<u128>(v.val) ? (i128)std::get<u128>(v.val) : std::get<i128>(v.val);
+      if (cv < min_val) min_val = cv;
+      if (cv > max_val) max_val = cv;
+    }
+
+    if (enumType->baseType) {
+      if_except(sema_Type(enumType->baseType, errpos));
+      if (!enumType->baseType->isInteger()) {
+        return errors::UnexpectedIdentifier(errpos, "enum base type must be an integer");
+      }
+      bool is_signed = enumType->baseType->isSigned();
+      u32 bits = enumType->baseType->intBit();
+      
+      i128 b_min = is_signed ? -((i128)1 << (bits - 1)) : 0;
+      i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
+      
+      if (min_val < b_min || max_val > b_max) {
+        return errors::UnexpectedIdentifier(errpos, "enum values do not fit in the specified base type");
+      }
+    } else {
+      if (min_val >= 0) {
+        if (max_val <= 255) enumType->baseType = ctx->intU8_t();
+        ef (max_val <= 65535) enumType->baseType = ctx->intU16_t();
+        ef (max_val <= 4294967295ULL) enumType->baseType = ctx->intU32_t();
+        else enumType->baseType = ctx->intU64_t();
+      } else {
+        if (min_val >= -128 && max_val <= 127) enumType->baseType = ctx->intS8_t();
+        ef (min_val >= -32768 && max_val <= 32767) enumType->baseType = ctx->intS16_t();
+        ef (min_val >= -2147483648LL && max_val <= 2147483647LL) enumType->baseType = ctx->intS32_t();
+        else enumType->baseType = ctx->intS64_t();
+      }
+    }
+
+    now->llvm() = enumType->baseType->llvm();
+
     return {};
   }
 
@@ -921,6 +963,37 @@ namespace qw
         ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
       }
     }
+
+    i128 max_val = 0;
+    if (!setType->vals.empty()) {
+      max_val = std::holds_alternative<u128>(setType->vals[0].val) ? (i128)std::get<u128>(setType->vals[0].val) : std::get<i128>(setType->vals[0].val);
+    }
+    for (auto &v : setType->vals) {
+      i128 cv = std::holds_alternative<u128>(v.val) ? (i128)std::get<u128>(v.val) : std::get<i128>(v.val);
+      if (cv > max_val) max_val = cv;
+    }
+
+    if (setType->baseType) {
+      if_except(sema_Type(setType->baseType, errpos));
+      if (!setType->baseType->isInteger()) {
+        return errors::UnexpectedIdentifier(errpos, "set base type must be an integer");
+      }
+      bool is_signed = setType->baseType->isSigned();
+      u32 bits = setType->baseType->intBit();
+      
+      i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
+      
+      if (max_val > b_max) {
+        return errors::UnexpectedIdentifier(errpos, "set values do not fit in the specified base type");
+      }
+    } else {
+      if (max_val <= 255) setType->baseType = ctx->intU8_t();
+      ef (max_val <= 65535) setType->baseType = ctx->intU16_t();
+      ef (max_val <= 4294967295ULL) setType->baseType = ctx->intU32_t();
+      else setType->baseType = ctx->intU64_t();
+    }
+
+    now->llvm() = setType->baseType->llvm();
 
     return {};
   }
