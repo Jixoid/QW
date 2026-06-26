@@ -95,18 +95,19 @@ namespace qw::exprs
 
   struct UnaryOp   { Expr *o1{}; UnaryOpEnum kind; };
   struct BinaryOp  { Expr *o1{}, *o2{}; BinaryOpEnum kind; types::Type *computationType{}; };
-  struct PostfixOp { Expr *obj{}; std::vector<Expr *> operands; PostfixOpEnum kind; };
+  struct PostfixOp { Expr *obj{}; std::vector<Expr*> operands; PostfixOpEnum kind; };
   struct MemberOp  { Expr *obj{}, *mem{}; MemberOpEnum kind; };
 
   struct VarExpr { stmts::Stmt *var{}; };
   struct ValExpr {};
 
   struct NickExpr { std::vector<std::string> unresolved; };
+  struct GenericOp { Expr *obj; std::vector<types::Type*> args; };
 
   using ExprVari = std::variant<
     IntegerLiteral, FloatingLiteral, CharLiteral, BoolLiteral, PtrLiteral, StringLiteral,
 
-    UnaryOp, BinaryOp, PostfixOp, MemberOp,
+    UnaryOp, BinaryOp, PostfixOp, MemberOp, GenericOp,
 
     ValExpr, VarExpr, NickExpr
   >;
@@ -132,6 +133,7 @@ namespace qw::exprs
       static fun make_BinaryOp(qw::context *ctx, identy *parent, BinaryOpEnum kind, Expr *o1, Expr *o2, word pos) -> Expr*;
       static fun make_PostfixOp(qw::context *ctx, identy *parent, PostfixOpEnum kind, Expr *obj, std::vector<Expr *> operands, word pos) -> Expr*;
       static fun make_MemberOp(qw::context *ctx, identy *parent, MemberOpEnum kind, Expr *obj, Expr *mem, word pos) -> Expr*;
+      static fun make_GenericOp(qw::context *ctx, identy *parent, Expr *obj, std::vector<types::Type*> args, word pos) -> Expr*;
 
       static fun make_VarExpr(qw::context *ctx, identy *parent, stmts::Stmt *var, word pos) -> Expr*;
       static fun make_ValExpr(qw::context *ctx, identy *parent, types::Type *type, llvm::Value *value, word pos) -> Expr*;
@@ -145,7 +147,7 @@ namespace qw::exprs
     public:
       inline fun& targetType() { return m_targetType; }
       inline fun& llvm() { return m_llvm; }
-      inline fun  vari() { return m_vari; }
+      inline fun& vari() { return m_vari; }
 
     public:
       template<typename T>

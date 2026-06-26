@@ -141,7 +141,6 @@ namespace qw
           }
           
           if (!found) {
-            // Field not found error could be here. For simplicity assume it exists or report error.
             return errors::UnexpectedIdentifier(now->pos(), init_pair.first);
           }
 
@@ -239,7 +238,12 @@ namespace qw
     auto if_stmt = now->as<stmts::IfStmt>();
     if_except(sema_Expr(if_stmt->condition));
 
-    if (!if_stmt->condition->targetType()->isBool()) {
+    auto cond_type = if_stmt->condition->targetType();
+    while (cond_type->isReference()) {
+      cond_type = cond_type->as<types::ReferenceType>()->sub;
+    }
+
+    if (!cond_type->isBool()) {
       return errors::NoMatchOperator(now->pos(), "if", std::string(if_stmt->condition->targetType()->typname()), "condition must be boolean");
     }
 
@@ -264,7 +268,12 @@ namespace qw
     auto while_stmt = now->as<stmts::WhileStmt>();
     if_except(sema_Expr(while_stmt->condition));
 
-    if (!while_stmt->condition->targetType()->isBool()) {
+    auto cond_type = while_stmt->condition->targetType();
+    while (cond_type->isReference()) {
+      cond_type = cond_type->as<types::ReferenceType>()->sub;
+    }
+
+    if (!cond_type->isBool()) {
       return errors::NoMatchOperator(now->pos(), "while", std::string(while_stmt->condition->targetType()->typname()), "condition must be boolean");
     }
 
@@ -284,16 +293,16 @@ namespace qw
     if (typ == styp)
       return {};
 
-    ef(styp->isReference()) {
+    ef (styp->isReference()) {
       styp = styp->as<types::ReferenceType>()->sub;
       goto l_re;
     }
 
-    ef(typ->isInteger() && styp->isInteger()) return {};
-    ef(typ->isFloat() && styp->isFloat()) return {};
+    ef (typ->isInteger() && styp->isInteger()) return {};
+    ef (typ->isFloat() && styp->isFloat()) return {};
 
-    ef(typ->isChar() && styp->isInteger()) return {};
-    ef(typ->isInteger() && styp->isChar()) return {};
+    ef (typ->isChar() && styp->isInteger()) return {};
+    ef (typ->isInteger() && styp->isChar()) return {};
 
     return errors::NoMatchOperator(errpos, "=", std::string(typ->typname()), std::string(val->targetType()->typname()));
   }
@@ -372,8 +381,8 @@ namespace qw
       ef (U->kind == exprs::UnaryOpEnum::BitNot) {
         auto t = U->o1->targetType();
         if (t->isReference()) t = t->as<types::ReferenceType>()->sub;
-        if (!t->isInteger()) {
-          return errors::NoMatchOperator(now->pos(), "~", std::string(t->typname()), "operand must be an integer");
+        if (!t->isInteger() && !t->is<types::SetType>()) {
+          return errors::NoMatchOperator(now->pos(), "~", std::string(t->typname()), "operand must be an integer or a set");
         }
         now->targetType() = t;
       }
@@ -463,6 +472,28 @@ namespace qw
           t2 = t2->as<types::ReferenceType>()->sub;
         goto l_re;
       }
+      
+      if (t1->is<types::EnumType>() && t1 == t2) {
+        if (C->kind == exprs::BinaryOpEnum::Eq || C->kind == exprs::BinaryOpEnum::NEq) {
+          C->computationType = t1;
+          now->targetType() = ctx->bool_t();
+          return {};
+        }
+      }
+      
+      if (t1->is<types::SetType>() && t1 == t2) {
+        if (C->kind == exprs::BinaryOpEnum::Eq || C->kind == exprs::BinaryOpEnum::NEq) {
+          C->computationType = t1;
+          now->targetType() = ctx->bool_t();
+          return {};
+        }
+        if (C->kind == exprs::BinaryOpEnum::BitOr || C->kind == exprs::BinaryOpEnum::BitAnd || C->kind == exprs::BinaryOpEnum::BitXor ||
+            C->kind == exprs::BinaryOpEnum::BitOrAssign || C->kind == exprs::BinaryOpEnum::BitAndAssign || C->kind == exprs::BinaryOpEnum::BitXorAssign) {
+          C->computationType = t1;
+          now->targetType() = t1;
+          return {};
+        }
+      }
 
       std::unordered_map<exprs::BinaryOpEnum, std::string> Ops = {
         { exprs::BinaryOpEnum::Add, "+" }, { exprs::BinaryOpEnum::Sub, "-" }, { exprs::BinaryOpEnum::Mul, "*" },
@@ -479,6 +510,37 @@ namespace qw
     ef (now->is<exprs::MemberOp>()) {
       auto M = now->as<exprs::MemberOp>();
 
+      if (M->kind == exprs::MemberOpEnum::NameS && M->obj->is<exprs::NickExpr>()) {
+         auto nick = M->obj->as<exprs::NickExpr>();
+         auto ret = SMng.lookup(now->parent(), nick->unresolved);
+         if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl*>(ret)->is<decls::TypeDecl>()) {
+            auto typeDecl = static_cast<decls::Decl*>(ret)->as<decls::TypeDecl>();
+            if (typeDecl->type->is<types::EnumType>()) {
+               auto enum_t = typeDecl->type->as<types::EnumType>();
+               auto field_name = M->mem->as<exprs::NickExpr>()->unresolved[0];
+               for (auto &v : enum_t->vals) {
+                  if (v.cons == field_name) {
+                     now->vari() = exprs::IntegerLiteral{ v.val };
+                     now->targetType() = typeDecl->type;
+                     return {};
+                  }
+               }
+               return errors::IdentifierNotFound(M->mem->pos(), field_name);
+            } else if (typeDecl->type->is<types::SetType>()) {
+               auto set_t = typeDecl->type->as<types::SetType>();
+               auto field_name = M->mem->as<exprs::NickExpr>()->unresolved[0];
+               for (auto &v : set_t->vals) {
+                  if (v.cons == field_name) {
+                     now->vari() = exprs::IntegerLiteral{ v.val };
+                     now->targetType() = typeDecl->type;
+                     return {};
+                  }
+               }
+               return errors::IdentifierNotFound(M->mem->pos(), field_name);
+            }
+         }
+      }
+
       if_except(sema_Expr(M->obj));
 
       auto obj_type = M->obj->targetType();
@@ -488,7 +550,7 @@ namespace qw
       }
 
       if (!obj_type->is<types::RecordType>()) {
-        return errors::NoMatchOperator(now->pos(), ".", std::string(M->obj->targetType()->typname()), M->mem->as<exprs::NickExpr>()->unresolved[0]);
+        return errors::NoMatchOperator(now->pos(), M->kind == exprs::MemberOpEnum::NameS ? "::" : ".", std::string(M->obj->targetType()->typname()), M->mem->as<exprs::NickExpr>()->unresolved[0]);
       }
 
       auto rec_type   = obj_type->as<types::RecordType>();
@@ -524,6 +586,45 @@ namespace qw
         return {};
       }
       ef (M->kind == exprs::PostfixOpEnum::Call) {
+
+        bool is_sys = false;
+        std::string sys_name;
+        std::vector<types::Type*> sys_gargs;
+        auto check_sys_nick = [&](exprs::Expr *E) {
+          if (E->is<exprs::NickExpr>()) {
+            auto nick = E->as<exprs::NickExpr>();
+            if (nick->unresolved.size() == 2 && nick->unresolved[0] == "sys") {
+              is_sys = true;
+              sys_name = nick->unresolved[1];
+            }
+          }
+          ef (E->is<exprs::MemberOp>()) {
+            auto memOp = E->as<exprs::MemberOp>();
+            if (memOp->kind == exprs::MemberOpEnum::NameS) {
+              if (memOp->obj->is<exprs::NickExpr>() && memOp->mem->is<exprs::NickExpr>()) {
+                auto n1 = memOp->obj->as<exprs::NickExpr>();
+                auto n2 = memOp->mem->as<exprs::NickExpr>();
+                if (n1->unresolved.size() == 1 && n1->unresolved[0] == "sys" && n2->unresolved.size() == 1) {
+                  is_sys = true;
+                  sys_name = n2->unresolved[0];
+                }
+              }
+            }
+          }
+        };
+
+        if (M->obj->is<exprs::GenericOp>()) {
+          auto gop = M->obj->as<exprs::GenericOp>();
+          check_sys_nick(gop->obj);
+          if (is_sys) sys_gargs = gop->args;
+        } else {
+          check_sys_nick(M->obj);
+        }
+        
+        if (is_sys) {
+           return sema_SysIntrinsic(now, sys_name, sys_gargs, M->operands);
+        }
+
 
         if (M->obj->is<exprs::MemberOp>()) {
           auto memOp = M->obj->as<exprs::MemberOp>();
@@ -728,6 +829,8 @@ namespace qw
       return {};
 
     ef (now->is<types::RecordType>()) return sema_RecordType(now, errpos);
+    ef (now->is<types::EnumType>())   return sema_EnumType(now, errpos);
+    ef (now->is<types::SetType>())    return sema_SetType(now, errpos);
 
     ef (now->is<types::FuncType>()) {
       auto ftype                                  = now->as<types::FuncType>();
@@ -781,6 +884,44 @@ namespace qw
     }
 
     diagnostic::fatal(fatals::Internal_UnknownType().error()->msg());
+    return {};
+  }
+
+  fun Sema::sema_EnumType(types::Type *now, word errpos) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    if (now->sema() == StageStatus::Checked) return {};
+    now->sema() = StageStatus::Checking;
+    
+    auto enumType = now->as<types::EnumType>();
+    
+    now->sema() = StageStatus::Checked;
+    
+    if (enumType->decl) {
+      for (auto &F : enumType->decl->func) {
+        if_except(sema_FuncDecl(F));
+        ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
+      }
+    }
+    
+    return {};
+  }
+
+  fun Sema::sema_SetType(types::Type *now, word errpos) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    if (now->sema() == StageStatus::Checked) return {};
+    now->sema() = StageStatus::Checking;
+    
+    auto setType = now->as<types::SetType>();
+    
+    now->sema() = StageStatus::Checked;
+    
+    if (setType->decl) {
+      for (auto &F : setType->decl->func) {
+        if_except(sema_FuncDecl(F));
+        ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
+      }
+    }
+
     return {};
   }
 
@@ -839,6 +980,157 @@ namespace qw
     for (auto &X : ftype->pars)
       if_except(sema_Type(X.type, errpos));
     if_except(sema_Type(ftype->ret, errpos));
+    return {};
+  }
+
+  fun Sema::sema_SysIntrinsic(exprs::Expr *&now, const std::string &intrin, const std::vector<types::Type*> &gargs, const std::vector<exprs::Expr*> &args) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    std::vector<types::Type*> resolved_gargs;
+    for (auto t : gargs) {
+      if_except(sema_Type(t, now->pos()));
+      resolved_gargs.push_back(t);
+    }
+
+    if (intrin == "is_size") {
+      if (resolved_gargs.size() != 1) return errors::UnexpectedIdentifier(now->pos(), "is_size expects 1 generic argument");
+      now->vari() = exprs::IntegerLiteral{ (u128)8 };
+      now->targetType() = ctx->intU64_t();
+      return {};
+    }
+    
+    bool res = false;
+    
+    if (intrin == "is_int" || intrin == "is_float" || intrin == "is_bool" || intrin == "is_char" || intrin == "is_void" || intrin == "is_ptr" || intrin == "is_signed" || intrin == "is_unsigned") {
+      if (resolved_gargs.size() != 1) return errors::UnexpectedIdentifier(now->pos(), intrin + " expects 1 generic argument");
+      auto T = resolved_gargs[0];
+      
+      if (intrin == "is_int") res = T->is<types::PrimitiveType>() && T->as<types::PrimitiveType>()->kind >= types::PrimitiveEnum::I8 && T->as<types::PrimitiveType>()->kind <= types::PrimitiveEnum::U128;
+      ef (intrin == "is_float") res = T->isFloat();
+      ef (intrin == "is_bool") res = T->is<types::PrimitiveType>() && T->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Bool;
+      ef (intrin == "is_char") res = T->is<types::PrimitiveType>() && T->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Char;
+      ef (intrin == "is_void") res = T->is<types::PrimitiveType>() && T->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Void;
+      ef (intrin == "is_ptr") res = T->is<types::PrimitiveType>() && T->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Ptr;
+      ef (intrin == "is_signed") res = T->isSigned();
+      ef (intrin == "is_unsigned") res = T->isUnSigned();
+    }
+    ef (intrin == "is_pointer" || intrin == "is_reference" || intrin == "is_array" || intrin == "is_struct" || intrin == "is_function" || intrin == "is_enum") {
+      if (resolved_gargs.size() != 1) return errors::UnexpectedIdentifier(now->pos(), intrin + " expects 1 generic argument");
+      auto T = resolved_gargs[0];
+      
+      if (intrin == "is_pointer") res = T->is<types::PointerType>();
+      ef (intrin == "is_reference") res = T->is<types::ReferenceType>();
+      ef (intrin == "is_array") res = T->is<types::ZArrayType>() || T->is<types::PArrayType>();
+      ef (intrin == "is_struct") res = T->is<types::RecordType>();
+      ef (intrin == "is_function") res = T->is<types::FuncType>();
+      ef (intrin == "is_enum") res = T->is<types::EnumType>();
+      ef (intrin == "is_set") res = T->is<types::SetType>();
+    }
+    ef (intrin == "is_same") {
+      if (resolved_gargs.size() != 2) return errors::UnexpectedIdentifier(now->pos(), intrin + " expects 2 generic arguments");
+      res = (resolved_gargs[0]->typname() == resolved_gargs[1]->typname());
+    }
+    ef (intrin == "is_convertible") {
+      if (resolved_gargs.size() != 2) return errors::UnexpectedIdentifier(now->pos(), intrin + " expects 2 generic arguments");
+      auto dummy = exprs::Expr::make_IntegerLiteral(ctx, now, (i128)0, now->pos()); // Dummy
+      dummy->targetType() = resolved_gargs[0];
+      res = sema_Convert(resolved_gargs[1], dummy, now->pos()).has_value();
+    }
+    ef (intrin == "cast") {
+      if (resolved_gargs.size() != 1) return errors::UnexpectedIdentifier(now->pos(), "cast expects 1 generic argument");
+      if (args.size() != 1) return errors::UnexpectedIdentifier(now->pos(), "cast expects 1 argument");
+      
+      auto target_type = resolved_gargs[0];
+      auto val = args[0];
+      if_except(sema_Expr(val));
+      
+      auto src_type = val->targetType();
+      while (src_type->isReference()) src_type = src_type->as<types::ReferenceType>()->sub;
+      while (target_type->isReference()) target_type = target_type->as<types::ReferenceType>()->sub;
+            if ((target_type->is<types::EnumType>() && src_type->isInteger()) ||
+          (target_type->isInteger() && src_type->is<types::EnumType>()) ||
+          (target_type->is<types::SetType>() && src_type->isInteger()) ||
+          (target_type->isInteger() && src_type->is<types::SetType>())) {
+          
+        if (target_type->is<types::EnumType>() && val->is<exprs::IntegerLiteral>()) {
+           auto enum_t = target_type->as<types::EnumType>();
+           auto iv = val->as<exprs::IntegerLiteral>();
+           
+           i128 target_val = 0;
+           if (std::holds_alternative<u128>(iv->val)) target_val = (i128)std::get<u128>(iv->val);
+           else target_val = std::get<i128>(iv->val);
+
+           bool found = false;
+           for (auto &v : enum_t->vals) {
+               i128 enum_v = 0;
+               if (std::holds_alternative<u128>(v.val)) enum_v = (i128)std::get<u128>(v.val);
+               else enum_v = std::get<i128>(v.val);
+
+               if (target_val == enum_v) { found = true; break; }
+           }
+           if (!found) {
+               return errors::UnexpectedIdentifier(now->pos(), "enum cast bounds check failed");
+           }
+        }
+
+        if (target_type->is<types::SetType>() && val->is<exprs::IntegerLiteral>()) {
+            auto set_t = target_type->as<types::SetType>();
+            auto iv = val->as<exprs::IntegerLiteral>();
+            
+            i128 target_val = 0;
+            if (std::holds_alternative<u128>(iv->val)) target_val = (i128)std::get<u128>(iv->val);
+            else target_val = std::get<i128>(iv->val);
+
+            i128 max_v = 0;
+            for (auto &v : set_t->vals) {
+                i128 set_v = 0;
+                if (std::holds_alternative<u128>(v.val)) set_v = (i128)std::get<u128>(v.val);
+                else set_v = std::get<i128>(v.val);
+                if (set_v > max_v) max_v = set_v;
+            }
+            
+            i128 allowed_max = (max_v << 1) - 1;
+            if (target_val < 0 || target_val > allowed_max) {
+                return errors::UnexpectedIdentifier(now->pos(), "set cast bounds check failed");
+            }
+         }
+         
+        if (target_type->isInteger() && target_type->is<types::PrimitiveType>() && val->is<exprs::IntegerLiteral>()) {
+            auto iv = val->as<exprs::IntegerLiteral>();
+            auto pt = target_type->as<types::PrimitiveType>();
+            // Strict bit-width checking based on user prompt "Örneğin 257 değerindeki bir enum u8 e cast edilememeli"
+            u128 max_val = 0;
+            switch(pt->kind) {
+                case types::PrimitiveEnum::I8:
+                case types::PrimitiveEnum::U8: max_val = 0xFF; break;
+                case types::PrimitiveEnum::I16:
+                case types::PrimitiveEnum::U16: max_val = 0xFFFF; break;
+                case types::PrimitiveEnum::I32:
+                case types::PrimitiveEnum::U32: max_val = 0xFFFFFFFF; break;
+                case types::PrimitiveEnum::I64:
+                case types::PrimitiveEnum::U64: max_val = 0xFFFFFFFFFFFFFFFF; break;
+                default: max_val = (u128)-1; break;
+            }
+            if (std::holds_alternative<u128>(iv->val)) {
+                if (std::get<u128>(iv->val) > max_val) return errors::UnexpectedIdentifier(now->pos(), "enum to int cast bounds check failed");
+            } else {
+                if ((u128)std::get<i128>(iv->val) > max_val) return errors::UnexpectedIdentifier(now->pos(), "enum to int cast bounds check failed");
+            }
+        }
+        
+        now = exprs::Expr::make_UnaryOp(ctx, now->parent(), exprs::UnaryOpEnum::Plus, val, now->pos());
+        now->targetType() = target_type;
+        return {};
+      }
+      
+      return errors::UnexpectedIdentifier(now->pos(), "sys::cast only supports enum <-> int for now");
+    }
+    else {
+      return errors::UnexpectedIdentifier(now->pos(), intrin);
+    }
+    
+    now->vari() = exprs::BoolLiteral{ res };
+    now->targetType() = ctx->bool_t();
+    
     return {};
   }
 

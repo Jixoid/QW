@@ -84,6 +84,12 @@ namespace qw
           }
           
         }
+        ef (tdecl->type && tdecl->type->is<types::EnumType>()) {
+          auto enum_t = tdecl->type->as<types::EnumType>();
+          if (enum_t->decl) {
+            for (auto &F: enum_t->decl->func) gen_FuncDecl(F);
+          }
+        }
       }
     }
 
@@ -340,23 +346,22 @@ namespace qw
     types::Type *styp = val->targetType();
 
     l_re:
-    // Eğer tipler birebir aynıysa, işlem yapmadan dön
     if (typ == styp)
       return src;
 
-    // Referans çözme işlemi (Auto-Deref)
     ef (styp->isReference()) {
       styp = styp->as<types::ReferenceType>()->sub;
       src  = IR.CreateLoad(styp->llvm(), src);
       goto l_re;
     }
 
-    // Tamsayı Dönüşümleri (Upcast / Downcast)
     ef (typ->isInteger() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), typ->isSigned() && styp->isSigned()); }
+    ef (typ->is<types::EnumType>() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), false); }
+    ef (typ->isInteger() && styp->is<types::EnumType>()) { return IR.CreateIntCast(src, typ->llvm(), typ->isSigned()); }
+    ef (typ->is<types::EnumType>() && styp->is<types::EnumType>()) { return IR.CreateIntCast(src, typ->llvm(), false); }
     ef (typ->isChar() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), false); }
     ef (typ->isInteger() && styp->isChar()) { return IR.CreateIntCast(src, typ->llvm(), false); }
 
-    // Kod Sema'dan geçtiği için buraya normalde asla düşmemesi gerekir.
     return src;
   }
 
@@ -371,34 +376,28 @@ namespace qw
       else
         return llvm::ConstantInt::get(t->llvm(), std::get<i128>(lit->val), true);
     }
-
     ef (now->is<exprs::FloatingLiteral>()) {
       auto lit       = now->as<exprs::FloatingLiteral>();
       types::Type *t = now->targetType() ? now->targetType() : ctx->flo32_t();
       return llvm::ConstantFP::get(t->llvm(), lit->val);
     }
-
     ef (now->is<exprs::CharLiteral>()) {
       auto lit = now->as<exprs::CharLiteral>();
       return llvm::ConstantInt::get(ctx->char_t()->llvm(), lit->val, false);
     }
-
     ef (now->is<exprs::BoolLiteral>()) {
       auto lit = now->as<exprs::BoolLiteral>();
       return llvm::ConstantInt::get(ctx->bool_t()->llvm(), lit->val, false);
     }
-
     ef (now->is<exprs::PtrLiteral>()) {
       types::Type *t = now->targetType() ? now->targetType() : ctx->ptr_t();
       return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(t->llvm()));
     }
-
     ef (now->is<exprs::StringLiteral>()) {
       auto lit = now->as<exprs::StringLiteral>();
       now->llvm() = IR.CreateGlobalString(lit->val, "", 0, mod->llvm());
       return now->llvm();
     }
-
     ef (now->is<exprs::VarExpr>()) {
       auto vexpr = now->as<exprs::VarExpr>();
       auto cvar  = vexpr->var->as<stmts::CodeVar>();
@@ -409,11 +408,9 @@ namespace qw
 
       return cvar->llvm;
     }
-
     ef (now->is<exprs::ValExpr>()) {
       return now->llvm();
     }
-
     ef (now->is<exprs::UnaryOp>()) {
       auto U = now->as<exprs::UnaryOp>();
       if (U->kind == exprs::UnaryOpEnum::AddrOf) {
@@ -436,7 +433,6 @@ namespace qw
       }
       return nullptr;
     }
-
     ef (now->is<exprs::BinaryOp>()) {
       auto C = now->as<exprs::BinaryOp>();
 
@@ -525,7 +521,6 @@ namespace qw
         default: diagnostic::fatal("CodeGen: Unimplemented BinaryOp!"); return nullptr;
       }
     }
-
     ef (now->is<exprs::PostfixOp>()) {
       auto M = now->as<exprs::PostfixOp>();
       if (M->kind == exprs::PostfixOpEnum::Deref) {
@@ -624,7 +619,6 @@ namespace qw
         return nullptr;
       }
     }
-
     ef (now->is<exprs::MemberOp>()) {
       auto M = now->as<exprs::MemberOp>();
 
@@ -653,7 +647,6 @@ namespace qw
 
       return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, {zero, idx});
     }
-
     else {
       diagnostic::fatal("CodeGen: Unknown Expr Type!");
       return nullptr;
@@ -675,6 +668,7 @@ namespace qw
       now->llvm() = llvm::ArrayType::get(parray->sub->llvm(), parray->size);
       return {};
     }
+    ef (now->is<types::EnumType>() || now->is<types::SetType>()) return {};
     ef (now->is<types::PointerType>() || now->is<types::ReferenceType>() || now->is<types::ZArrayType>()) return {};
 
     diagnostic::fatal(fatals::Internal_UnknownType().error()->msg());

@@ -170,6 +170,8 @@ namespace qw
     ef (id == "type")      if_error(read_TypeDecl(self))
     ef (id == "fun")       if_error(read_FuncDecl(self))
     ef (id == "record")    if_error(read_RecordDecl(self))
+    ef (id == "enum")      if_error(read_EnumDecl(self))
+    ef (id == "set")       if_error(read_SetDecl(self))
     else
       print(errors::UnknownKeyword(w, id))
         
@@ -359,11 +361,145 @@ namespace qw
 
     auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
 
-    // Type
     auto Type = read_RecordType(self, false);
     val_error(Type);
 
     self->as<decls::TypeDecl>()->type = *Type;
+
+    return {};
+  }
+
+  fun frontend::read_EnumDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto Name = Lex();
+    Require(Name);
+    
+    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+
+    auto Bracket = Lex();
+    expected(Bracket, "{");
+
+    auto enumDecl = decls::Decl::make_Enum(ctx, self, "", *Bracket, Visibility::Public);
+    
+    std::vector<types::FieldCons> vals;
+    std::vector<types::FieldType> typs;
+    
+    i128 next_val = 1;
+    
+    while (true) {
+      auto ID = Lex();
+      Require(ID);
+
+      if (ID->view() == "}") break;
+      else LexStore(ID);
+
+      // Name
+      auto EnumConst = Lex();
+      Require_Word(EnumConst, continue);
+      
+      i128 current_val = next_val;
+
+      auto AssignOpt = Lex();
+      if (AssignOpt && AssignOpt->view() == "=") {
+         auto val_expr = read_Expr(parent, Precedence::Lowest);
+         val_error(val_expr);
+         if (!(*val_expr)->is<exprs::IntegerLiteral>()) {
+            return errors::UnexpectedIdentifier(*AssignOpt, "enum assigned value must be an integer literal");
+         }
+         auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
+         if (std::holds_alternative<u128>(lit->val)) current_val = (i128)std::get<u128>(lit->val);
+         else current_val = std::get<i128>(lit->val);
+      } else if (AssignOpt) {
+         LexStore(AssignOpt);
+      }
+
+      vals.push_back({EnumConst->str(), current_val});
+      next_val = current_val + 1;
+
+      auto Comma = Lex();
+      if (Comma && Comma->view() == ",") {
+        continue;
+      } else if (Comma && Comma->view() == "}") {
+        LexStore(Comma);
+      } else if (Comma) {
+        return errors::UnexpectedIdentifier(*Comma, Comma->str());
+      }
+    }
+
+    auto enumType = types::Type::make_Enum(ctx, vals, typs, enumDecl->as<decls::EnumDecl>());
+    self->as<decls::TypeDecl>()->type = enumType;
+
+    return {};
+  }
+
+  static u128 next_pow2(u128 n) {
+      if (n == 0) return 1;
+      u128 p = 1;
+      while (p <= n) {
+          p <<= 1;
+      }
+      return p;
+  }
+
+  fun frontend::read_SetDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto Name = Lex();
+    Require(Name);
+    
+    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+
+    auto Bracket = Lex();
+    expected(Bracket, "{");
+
+    auto setDecl = decls::Decl::make_Set(ctx, self, "", *Bracket, Visibility::Public);
+    
+    std::vector<types::FieldCons> vals;
+    std::vector<types::FieldType> typs;
+    
+    i128 next_val = 1;
+    
+    while (true) {
+      auto ID = Lex();
+      Require(ID);
+
+      if (ID->view() == "}") break;
+      else LexStore(ID);
+
+      // Name
+      auto SetConst = Lex();
+      Require_Word(SetConst, continue);
+      
+      i128 current_val = next_val;
+
+      auto AssignOpt = Lex();
+      if (AssignOpt && AssignOpt->view() == "=") {
+         auto val_expr = read_Expr(parent, Precedence::Lowest);
+         val_error(val_expr);
+         if (!(*val_expr)->is<exprs::IntegerLiteral>()) {
+            return errors::UnexpectedIdentifier(*AssignOpt, "set assigned value must be an integer literal");
+         }
+         auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
+         if (std::holds_alternative<u128>(lit->val)) current_val = (i128)std::get<u128>(lit->val);
+         else current_val = std::get<i128>(lit->val);
+      } else if (AssignOpt) {
+         LexStore(AssignOpt);
+      }
+
+      vals.push_back({SetConst->str(), current_val});
+      next_val = (i128)next_pow2((u128)current_val);
+
+      auto Comma = Lex();
+      if (Comma && Comma->view() == ",") {
+        continue;
+      } else if (Comma && Comma->view() == "}") {
+        LexStore(Comma);
+      } else if (Comma) {
+        return errors::UnexpectedIdentifier(*Comma, Comma->str());
+      }
+    }
+
+    auto setType = types::Type::make_Set(ctx, vals, typs, setDecl->as<decls::SetDecl>());
+    self->as<decls::TypeDecl>()->type = setType;
 
     return {};
   }
@@ -752,12 +888,13 @@ namespace qw
       if (!Op)
         break;
 
-      if (Op->view() == ".") {
+      if (Op->view() == "." || Op->view() == "::") {
         auto MemName = Lex();
         Require(MemName);
 
+        auto kind = Op->view() == "." ? exprs::MemberOpEnum::Member : exprs::MemberOpEnum::NameS;
         auto MemExpr = exprs::Expr::make_Nick(ctx, parent, { MemName->str() }, *MemName);
-        ret          = exprs::Expr::make_MemberOp(ctx, parent, exprs::MemberOpEnum::Member, ret, MemExpr, *Op);
+        ret          = exprs::Expr::make_MemberOp(ctx, parent, kind, ret, MemExpr, *Op);
       }
       ef (Op->view() == "(" || Op->view() == "[") {
         auto kind = Op->view() == "(" ? exprs::PostfixOpEnum::Call : exprs::PostfixOpEnum::Array;
@@ -784,6 +921,43 @@ namespace qw
       }
       ef (Op->view() == "?") {
         ret = exprs::Expr::make_PostfixOp(ctx, parent, exprs::PostfixOpEnum::Deref, ret, {}, *Op);
+      }
+      ef (Op->view() == "<") {
+        u0 old_off = Off; // save position
+        
+        std::vector<types::Type *> generic_args;
+        bool success = true;
+        
+        while (true) {
+          auto type = read_Type(parent, true); // attempt to read type
+          if (!type) { // Not a type!
+            success = false;
+            break;
+          }
+          generic_args.push_back(*type);
+          
+          auto Next = Lex();
+          if (!Next) { success = false; break; }
+          
+          if (Next->view() == ">") {
+            break; // Finished successfully
+          } ef (Next->view() == ",") {
+            continue; // Next arg
+          } else {
+            success = false; // Expected ',' or '>'
+            break;
+          }
+        }
+        
+        if (success) {
+          ret = exprs::Expr::make_GenericOp(ctx, parent, ret, std::move(generic_args), *Op);
+        } else {
+          // Rollback to `<`
+          Off = old_off;
+          m_lexStore = std::nullopt; // clear lex cache
+          LexStore(Op);
+          break; // Let binary operator handle `<`
+        }
       }
       else {
         LexStore(Op);
@@ -878,7 +1052,7 @@ namespace qw
     auto ID = Lex();
     Require(ID);
 
-    std::expected<types::Type *, uptr<diagnostic::message>> ret;
+    std::expected<types::Type*, uptr<diagnostic::message>> ret;
 
     if (ID->view() == "record") {
       ret = read_RecordType(parent, indecl);

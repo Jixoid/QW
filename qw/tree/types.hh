@@ -18,6 +18,7 @@
 #include <llvm/IR/Type.h>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <variant>
 
 #define ef else if
@@ -52,8 +53,8 @@ namespace qw::types
 
   struct FuncType   { std::vector<FieldType> pars{}; Type *ret{}; };
   struct RecordType { std::vector<FieldType> vars{}; std::vector<FieldType> typs{}; decls::RecordDecl *decl{}; };
-  struct EnumType   { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::RecordDecl *decl{}; };
-  struct SetType    { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::RecordDecl *decl{}; };
+  struct EnumType   { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::EnumDecl *decl{}; };
+  struct SetType    { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::SetDecl *decl{}; };
   
   struct NickType   { std::vector<std::string> unresolved; };
 
@@ -69,6 +70,7 @@ namespace qw::types
     NickType
   >;
 
+  constexpr auto a = std::is_same_v<int, int>;
 
   struct Type
   {
@@ -86,8 +88,8 @@ namespace qw::types
       static fun make_Func(qw::context *ctx, std::vector<FieldType> pars, Type *ret) -> Type*;
 
       static fun make_Record(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::RecordDecl *decl) -> Type*;
-      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs) -> Type*;
-      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs) -> Type*;
+      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl) -> Type*;
+      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl) -> Type*;
 
       static fun make_Nick(qw::context *ctx, std::vector<std::string> unresolved) -> Type*;
 
@@ -116,6 +118,7 @@ namespace qw::types
       fun isInteger() -> bool;
       fun isFloat() -> bool;
       fun isSigned() -> bool;
+      fun isUnSigned() -> bool;
       fun isChar() -> bool;
       fun isBool() -> bool;
       inline fun isReference() -> bool { return is<ReferenceType>(); }

@@ -88,18 +88,25 @@ namespace qw::exprs
     return obj;
   }
 
-  fun Expr::make_PostfixOp(qw::context *ctx, identy *parent, PostfixOpEnum kind, exprs::Expr *_obj, std::vector<exprs::Expr *> operands, word pos) -> Expr*
+  fun Expr::make_PostfixOp(qw::context *ctx, identy *parent, PostfixOpEnum kind, exprs::Expr *_obj, std::vector<exprs::Expr*> operands, word pos) -> Expr*
   {
     auto obj = new Expr(PostfixOp{ _obj, std::move(operands), kind }, parent, pos);
     ctx->push(obj);
     return obj;
   }
 
-  fun Expr::make_MemberOp(qw::context *ctx, identy *parent, MemberOpEnum kind, exprs::Expr *_obj, exprs::Expr *_mem, word pos) -> Expr*
+  fun Expr::make_MemberOp(qw::context *ctx, identy *parent, MemberOpEnum kind, Expr *obj, Expr *mem, word pos) -> Expr*
   {
-    auto obj = new Expr(MemberOp{ _obj, _mem, kind }, parent, pos);
-    ctx->push(obj);
-    return obj;
+    auto expr = new Expr(MemberOp{obj, mem, kind}, parent, pos);
+    ctx->push(expr);
+    return expr;
+  }
+
+  fun Expr::make_GenericOp(qw::context *ctx, identy *parent, Expr *obj, std::vector<types::Type*> args, word pos) -> Expr*
+  {
+    auto expr = new Expr(GenericOp{obj, std::move(args)}, parent, pos);
+    ctx->push(expr);
+    return expr;
   }
 
   fun Expr::make_VarExpr(qw::context *ctx, identy *parent, stmts::Stmt *var, word pos) -> Expr*

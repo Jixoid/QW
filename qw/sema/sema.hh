@@ -84,10 +84,13 @@ namespace qw
 
       fun sema_Expr(exprs::Expr*&) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_NickExpr(exprs::Expr*) -> std::expected<exprs::Expr*, uptr<diagnostic::message>>;
+      fun sema_SysIntrinsic(exprs::Expr *&now, const std::string &intrin, const std::vector<types::Type*> &gargs, const std::vector<exprs::Expr*> &args) -> std::expected<void, uptr<diagnostic::message>>;
 
       // Type
       fun sema_Type(types::Type*&, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_RecordType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_EnumType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_SetType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_NickType(types::Type*, word errpos) -> std::expected<types::Type*, uptr<diagnostic::message>>;
       fun sema_FuncType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
   };

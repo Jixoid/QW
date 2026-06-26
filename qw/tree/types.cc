@@ -56,6 +56,14 @@ namespace qw::types
     return (kind >= PrimitiveEnum::I8 && kind <= PrimitiveEnum::I128);
   }
 
+  fun Type::isUnSigned() -> bool
+  {
+    if (!is<PrimitiveType>()) return false;
+
+    auto kind = as<PrimitiveType>()->kind;
+    return (kind >= PrimitiveEnum::U8 && kind <= PrimitiveEnum::U128);
+  }
+
   fun Type::isChar() -> bool
   {
     if (!is<PrimitiveType>()) return false;
@@ -212,18 +220,18 @@ namespace qw::types
     return obj;
   }
 
-  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs) -> Type*
+  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl) -> Type*
   {
-    auto obj = new Type(EnumType{vals, typs, nullptr}, "enum");
+    auto obj = new Type(EnumType{vals, typs, decl}, "enum");
     obj->llvm() = llvm::Type::getInt32Ty(*ctx->llvm());
     ctx->m_types.push_back(obj);
     return obj;
   }
 
-  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs) -> Type*
+  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl) -> Type*
   {
-    auto obj = new Type(SetType{vals, typs, nullptr}, "set");
-    obj->llvm() = llvm::Type::getInt64Ty(*ctx->llvm());
+    auto obj = new Type(SetType{vals, typs, decl}, "set");
+    obj->llvm() = llvm::Type::getInt32Ty(*ctx->llvm());
     ctx->m_types.push_back(obj);
     return obj;
   }

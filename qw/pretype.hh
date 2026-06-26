@@ -179,4 +179,6 @@ namespace qw::decls
   struct AliasDecl;
 
   struct RecordDecl;
+  struct EnumDecl;
+  struct SetDecl;
 }

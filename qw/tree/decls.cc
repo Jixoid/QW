@@ -87,4 +87,18 @@ namespace qw::decls
     return obj;
   }
 
+  fun Decl::make_Enum(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(EnumDecl{}, parent, name, pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Decl::make_Set(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(SetDecl{}, parent, name, pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
 }
