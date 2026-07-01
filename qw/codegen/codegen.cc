@@ -74,9 +74,9 @@ namespace qw
 
       ef (X->is<decls::TypeDecl>()) {
         auto tdecl = X->as<decls::TypeDecl>();
-        if (tdecl->type && tdecl->type->is<types::RecordType>()) {
+        if (tdecl->type && tdecl->type->is<types::StructType>()) {
           auto ret = gen_Type(tdecl->type);
-          auto rec = tdecl->type->as<types::RecordType>();
+          auto rec = tdecl->type->as<types::StructType>();
           
           if (rec->decl) {
             for (auto &F: rec->decl->func) gen_FuncDecl(F);
@@ -136,8 +136,8 @@ namespace qw
       auto ftype_concrete = ftype->as<types::FuncType>();
       if (ftype_concrete->pars.size() > 0) {
         auto self_ref = ftype_concrete->pars[0].type->as<types::ReferenceType>();
-        if (self_ref && self_ref->sub->is<types::RecordType>()) {
-          auto recType = self_ref->sub->as<types::RecordType>();
+        if (self_ref && self_ref->sub->is<types::StructType>()) {
+          auto recType = self_ref->sub->as<types::StructType>();
           
           auto self_val = cdecl->llvm->arg_begin();
           
@@ -537,7 +537,7 @@ namespace qw
           while (obj_type->isReference()) {
             obj_type = obj_type->as<types::ReferenceType>()->sub;
           }
-          auto rec_type    = obj_type->as<types::RecordType>();
+          auto rec_type    = obj_type->as<types::StructType>();
           auto member_name = memOp->mem->as<exprs::NickExpr>()->unresolved[0];
 
           std::vector<types::Type *> arg_types;
@@ -567,9 +567,21 @@ namespace qw
         }
         ef (M->obj->is<exprs::NickExpr>()) {
           auto nick = M->obj->as<exprs::NickExpr>();
-          auto ret  = SMng.lookup(now->parent(), nick->unresolved);
+          
+          std::vector<types::Type *> arg_types;
+          for (auto op : M->operands)
+            arg_types.push_back(op->targetType());
+            
+          auto ret  = SMng.lookup(now->parent(), nick->unresolved, &arg_types);
           if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::FuncDecl>()) {
-            calleeFn = static_cast<decls::Decl *>(ret)->as<decls::FuncDecl>()->llvm;
+            auto fdecl = static_cast<decls::Decl *>(ret)->as<decls::FuncDecl>();
+            if (!fdecl->llvm) {
+                auto _r = gen_Type(fdecl->funcType);
+                fdecl->llvm = llvm::Function::Create(
+                    llvm::cast<llvm::FunctionType>(fdecl->funcType->llvm()), llvm::GlobalValue::ExternalLinkage, scopemng::mangling_abi_qw(ret), mod->llvm()
+                );
+            }
+            calleeFn = fdecl->llvm;
           }
         }
 
@@ -631,7 +643,7 @@ namespace qw
 
       auto ret = gen_Type(obj_type);
 
-      auto rec_type   = obj_type->as<types::RecordType>();
+      auto rec_type   = obj_type->as<types::StructType>();
       auto field_name = M->mem->as<exprs::NickExpr>()->unresolved[0];
 
       u32 index{};
@@ -660,7 +672,7 @@ namespace qw
     if (now->is<types::PrimitiveType>())
       return {};
 
-    ef (now->is<types::RecordType>()) return gen_RecordType(now);
+    ef (now->is<types::StructType>()) return gen_StructType(now);
     ef (now->is<types::FuncType>())   return gen_FuncType(now);
     ef (now->is<types::PArrayType>()) {
       auto parray = now->as<types::PArrayType>();
@@ -675,23 +687,22 @@ namespace qw
     return {};
   }
 
-  fun CodeGen::gen_RecordType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>>
+  fun CodeGen::gen_StructType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>>
   {
     if (now->cgen() == StageStatus::Checked) return {};
     ef (now->cgen() == StageStatus::Checking) std::cerr << "!!!CHECKING" << std::endl;
 
     now->cgen() = StageStatus::Checking;
 
-    auto record = now->as<types::RecordType>();
-    for (auto &X : record->vars)
+    auto strct = now->as<types::StructType>();
+    for (auto &X: strct->vars)
       if_except(gen_Type(X.type));
 
-    std::vector<llvm::Type *> llvm_vars;
-    for (auto &v : record->vars)
-      llvm_vars.push_back(v.type->llvm());
+    std::vector<llvm::Type*> LTyps;
+    for (auto &v: strct->vars)
+      LTyps.push_back(v.type->llvm());
 
-    now->llvm() = llvm::StructType::create(*ctx->llvm(), llvm_vars, "typerec" + std::to_string(m_counter_typerec++));
-
+    now->llvm() = llvm::StructType::create(*ctx->llvm(), LTyps, "typerec" + std::to_string(m_counter_typerec++));
     now->cgen() = StageStatus::Checked;
 
     return {};

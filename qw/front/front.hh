@@ -141,11 +141,12 @@ namespace qw
       fun read_FuncDecl(decls::Decl*) -> std::expected<decls::Decl*, uptr<diagnostic::message>>;
       fun read_AliasDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_VarDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
-      fun read_RecordDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_StructDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_EnumDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_SetDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
-      fun read_RecordFuncDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
-      fun read_RecordConstructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_ModDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_StructFuncDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_StructConstructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
 
       fun read_CodeBlock(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_IfStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
@@ -157,7 +158,7 @@ namespace qw
       fun read_Expr(identy*, Precedence prec) -> std::expected<exprs::Expr*, uptr<diagnostic::message>>;
 
       fun read_Type(identy*, bool indecl = false) -> std::expected<types::Type*, uptr<diagnostic::message>>;
-      fun read_RecordType(identy*, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>>;
+      fun read_StructType(identy*, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>>;
       fun read_FuncType(identy*, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>>;
   };
 

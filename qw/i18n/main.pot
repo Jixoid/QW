@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-26 18:26+0300\n"
+"POT-Creation-Date: 2026-06-27 12:32+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -120,24 +120,34 @@ msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:70
 #, c++-format
-msgid "identifier not found ‘<blue>{}<reset>‘."
+msgid "invalid escape sequence ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:71
 #, c++-format
-msgid "identifier is not a type ‘<blue>{}<reset>‘."
+msgid "module ‘<blue>{}<reset>‘ could not be found."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:72
 #, c++-format
-msgid "identifier is not a expr ‘<blue>{}<reset>‘."
+msgid "identifier not found ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:73
+#, c++-format
+msgid "identifier is not a type ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:74
+#, c++-format
+msgid "identifier is not a expr ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:76
 msgid "only one variable can be initialized."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:75
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:77
 #, c++-format
 msgid "‘<blue>{}<reset>‘ visibility setting is not applicable in this context."
 msgstr ""

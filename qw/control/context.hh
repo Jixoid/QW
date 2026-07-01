@@ -54,7 +54,7 @@ namespace qw
 
         if (it == m_idents.end())
           m_idents[name] = ident;
-        else
+        ef (it->second != ident)
           assert(false && "DIAGNOSTIC");
       }
 
@@ -113,9 +113,24 @@ namespace qw
       ProgBits m_progBits;
 
     public:
-      inline fun llvm() { return m_llvm.get(); }
-      inline fun &gst() { return m_gst; }
-      inline fun progBits() { return m_progBits; }
+      inline fun  llvm() { return m_llvm.get(); }
+      inline fun& gst() { return m_gst; }
+      inline fun  progBits() { return m_progBits; }
+
+      struct SysAPI {
+        decls::Decl *sys_ns{};
+        decls::Decl *heap_ns{};
+        
+        decls::Decl *heap_alloc{};
+        decls::Decl *heap_dispose{};
+        decls::Decl *heap_realloc{};
+        
+        fun call_heap_alloc(context *ctx, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;
+        fun call_heap_dispose(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;
+        fun call_heap_realloc(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *old_size, exprs::Expr *new_size, word pos) -> exprs::Expr*;
+      };
+      
+      SysAPI sys_api;
 
   #pragma region SystemTypes
     private:

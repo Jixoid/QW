@@ -21,6 +21,7 @@
 #include <charconv>
 #include <expected>
 #include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <sys/mman.h>
@@ -169,12 +170,42 @@ namespace qw
     ef (id == "var")       if_error(read_VarDecl(self))
     ef (id == "type")      if_error(read_TypeDecl(self))
     ef (id == "fun")       if_error(read_FuncDecl(self))
-    ef (id == "record")    if_error(read_RecordDecl(self))
+    ef (id == "struct")    if_error(read_StructDecl(self))
     ef (id == "enum")      if_error(read_EnumDecl(self))
     ef (id == "set")       if_error(read_SetDecl(self))
+    ef (id == "mod")       if_error(read_ModDecl(self))
     else
       print(errors::UnknownKeyword(w, id))
         
+    return {};
+  }
+
+  fun frontend::read_ModDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  {
+    auto Name = Lex();
+    Require(Name);
+    expected(Lex(), ";");
+
+    std::string mod_name = Name->str();
+
+    std::filesystem::path curr_path(m_fpath);
+    std::filesystem::path base_dir = curr_path.parent_path();
+
+    std::string target_file1 = (base_dir / (mod_name + ".qw")).string();
+    std::string target_file2 = (base_dir / mod_name / "mod.qw").string();
+
+    std::string target_file = std::filesystem::exists(target_file1) ? target_file1 : target_file2;
+    if (!std::filesystem::exists(target_file)) {
+      return errors::ModuleNotFound(*Name, mod_name);
+    }
+
+    auto sub_mod = ctx->make_module(mod_name, target_file);
+    auto sub_ns = decls::Decl::make_NameSpace(ctx, parent, mod_name, *Name);
+
+    frontend sub_front(sub_mod);
+    auto err = sub_front.read_File(sub_ns);
+    if (!err) return err;
+
     return {};
   }
 
@@ -353,7 +384,7 @@ namespace qw
     return {};
   }
 
-  fun frontend::read_RecordDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
+  fun frontend::read_StructDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>>
   {
     // Create Self
     auto Name = Lex();
@@ -361,7 +392,7 @@ namespace qw
 
     auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
 
-    auto Type = read_RecordType(self, false);
+    auto Type = read_StructType(self, false);
     val_error(Type);
 
     self->as<decls::TypeDecl>()->type = *Type;
@@ -534,7 +565,7 @@ namespace qw
     return {};
   }
 
-  fun frontend::read_RecordFuncDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
+  fun frontend::read_StructFuncDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
   {
     auto fndecl = read_FuncDecl(parent);
     if_except_ref(fndecl);
@@ -551,7 +582,7 @@ namespace qw
     return {};
   }
 
-  fun frontend::read_RecordConstructorDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
+  fun frontend::read_StructConstructorDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>
   {
     auto self = decls::Decl::make_Constructor(ctx, parent, *LexLast(), nil, vis);
 
@@ -923,6 +954,12 @@ namespace qw
         Require(MemName);
 
         auto kind = Op->view() == "." ? exprs::MemberOpEnum::Member : exprs::MemberOpEnum::NameS;
+        
+        if (kind == exprs::MemberOpEnum::NameS && ret->is<exprs::NickExpr>()) {
+          ret->as<exprs::NickExpr>()->unresolved.push_back(MemName->str());
+          continue;
+        }
+
         auto MemExpr = exprs::Expr::make_Nick(ctx, parent, { MemName->str() }, *MemName);
         ret          = exprs::Expr::make_MemberOp(ctx, parent, kind, ret, MemExpr, *Op);
       }
@@ -1084,8 +1121,8 @@ namespace qw
 
     std::expected<types::Type*, uptr<diagnostic::message>> ret;
 
-    if (ID->view() == "record") {
-      ret = read_RecordType(parent, indecl);
+    if (ID->view() == "struct") {
+      ret = read_StructType(parent, indecl);
       goto l_fin;
     }
     if (ID->view() == "fun") {
@@ -1160,7 +1197,7 @@ namespace qw
     return ret;
   }
 
-  fun frontend::read_RecordType(identy *parent, bool indecl) -> std::expected<types::Type *, uptr<diagnostic::message>>
+  fun frontend::read_StructType(identy *parent, bool indecl) -> std::expected<types::Type *, uptr<diagnostic::message>>
   {
     auto Bracket = Lex();
     expected(Bracket, "{");
@@ -1171,10 +1208,10 @@ namespace qw
     decls::Decl *recDecl = nil;
     if (parent && parent->type() == IdentyEnum::Decl) {
       auto pDecl = static_cast<decls::Decl *>(parent);
-      recDecl    = decls::Decl::make_Record(ctx, pDecl, "", pDecl->pos(), Visibility::Public);
+      recDecl    = decls::Decl::make_Struct(ctx, pDecl, "", pDecl->pos(), Visibility::Public);
     }
 
-    auto selfType = types::Type::make_Record(ctx, {}, {}, recDecl ? recDecl->as<decls::RecordDecl>() : nil);
+    auto selfType = types::Type::make_Struct(ctx, {}, {}, recDecl ? recDecl->as<decls::StructDecl>() : nil);
 
     while (true) {
       auto ID = Lex();
@@ -1217,11 +1254,11 @@ namespace qw
       auto Kwd = Lex();
       Require(Kwd);
       if (Kwd->view() == "fun") {
-        if_error(read_RecordFuncDecl(recDecl, selfType, visone));
+        if_error(read_StructFuncDecl(recDecl, selfType, visone));
         continue;
       }
       ef (Kwd->view() == "init") {
-        if_error(read_RecordConstructorDecl(recDecl, selfType, visone));
+        if_error(read_StructConstructorDecl(recDecl, selfType, visone));
         continue;
       }
       else {
@@ -1256,7 +1293,7 @@ namespace qw
       }
     }
 
-    selfType->as<types::RecordType>()->vars = vars;
+    selfType->as<types::StructType>()->vars = vars;
 
     return selfType;
   }

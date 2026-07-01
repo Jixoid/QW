@@ -88,7 +88,7 @@ namespace qw
 
       // Type
       fun sema_Type(types::Type*&, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
-      fun sema_RecordType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
+      fun sema_StructType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_EnumType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_SetType(types::Type*, word errpos) -> std::expected<void, uptr<diagnostic::message>>;
       fun sema_NickType(types::Type*, word errpos) -> std::expected<types::Type*, uptr<diagnostic::message>>;

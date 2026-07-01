@@ -1,0 +1,14 @@
+struct Complex {
+    pub:
+        real: i32;
+        imag: i32;
+}
+
+pub fun new(r,i: i32) -> Complex {
+    var res: Complex;
+
+    res.real = r;
+    res.imag = i;
+
+    ret res;
+}

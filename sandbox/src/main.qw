@@ -1,31 +1,14 @@
-
-record vec2
-{
-	priv:
-		m_x: f32;
-		m_y: f32;
-
-	pub:
-		fun x() -> f32& { ret self.m_x; }
-		fun y() -> f32& { ret self.m_y; }
-
-	pub:
-		fun dot() -> f32 {
-			ret self.x()*self.x() + self.y()*self.y();
-		}
-
-		fun dot(it: vec2&) -> f32 {
-			ret self.x()*it.x() + self.y()*it.y();
-		}
-}
-
+mod math;
+mod engine;
 
 pub fun main() -> i32 {
-	var v1,v2: vec2;
-	let b: bool[2];
-
-	b[0] = true;
-	let a: bool = b[0];
+	var v1,v2: math::vec2;
+    var c1: math::complex::Complex;
+    
+    c1 = math::complex::new(1,2);
+    
+    var p: ptr = sys::heap::alloc(8, 1024);
+    sys::heap::dispose(p, 8, 1024);
 
 	ret 0;
 }

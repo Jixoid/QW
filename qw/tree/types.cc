@@ -212,9 +212,9 @@ namespace qw::types
     return obj;
   }
 
-  fun Type::make_Record(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::RecordDecl *decl) -> Type*
+  fun Type::make_Struct(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::StructDecl *decl) -> Type*
   {
-    auto obj = new Type(RecordType{vars, typs, decl}, "record");
+    auto obj = new Type(StructType{vars, typs, decl}, "struct");
 
     ctx->m_types.push_back(obj);
     return obj;

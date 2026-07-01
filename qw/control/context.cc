@@ -43,7 +43,7 @@ namespace qw
       ef(now->is<decls::VarDecl>()) os << "Var";
       ef(now->is<decls::TypeDecl>()) os << "Type";
       ef(now->is<decls::AliasDecl>()) os << "Alias";
-      ef(now->is<decls::RecordDecl>()) os << "Record";
+      ef(now->is<decls::StructDecl>()) os << "Record";
 
       os << color::RESET;
     };
@@ -137,6 +137,18 @@ namespace qw
     mf_void = types::Type::make_Primitive(this, types::PrimitiveEnum::Void);
 
     mf_ptr = types::Type::make_Primitive(this, types::PrimitiveEnum::Ptr);
+  }
+
+  fun context::SysAPI::call_heap_alloc(context *ctx, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr* {
+      return exprs::Expr::make_PostfixOp(ctx, nil, exprs::PostfixOpEnum::Call, exprs::Expr::make_Nick(ctx, nil, {"sys", "heap", "alloc"}, pos), {align, size}, pos);
+  }
+  
+  fun context::SysAPI::call_heap_dispose(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr* {
+      return exprs::Expr::make_PostfixOp(ctx, nil, exprs::PostfixOpEnum::Call, exprs::Expr::make_Nick(ctx, nil, {"sys", "heap", "dispose"}, pos), {p, align, size}, pos);
+  }
+  
+  fun context::SysAPI::call_heap_realloc(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *old_size, exprs::Expr *new_size, word pos) -> exprs::Expr* {
+      return exprs::Expr::make_PostfixOp(ctx, nil, exprs::PostfixOpEnum::Call, exprs::Expr::make_Nick(ctx, nil, {"sys", "heap", "realloc"}, pos), {p, align, old_size, new_size}, pos);
   }
 
   context::~context()

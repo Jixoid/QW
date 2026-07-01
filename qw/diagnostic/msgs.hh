@@ -67,6 +67,8 @@ namespace qw::errors
 
   NewMsg(UnexpectedIdentifier, error, _("un expected identifier ‘<blue>{}<reset>‘."), 1);
 
+  NewMsg(InvalidEscapeSequence, error, _("invalid escape sequence ‘<blue>{}<reset>‘."), 1);
+  NewMsg(ModuleNotFound, error, _("module ‘<blue>{}<reset>‘ could not be found."), 1);
   NewMsg(IdentifierNotFound, error, _("identifier not found ‘<blue>{}<reset>‘."), 1);
   NewMsg(IdentifierNType, error, _("identifier is not a type ‘<blue>{}<reset>‘."), 1);
   NewMsg(IdentifierNExpr, error, _("identifier is not a expr ‘<blue>{}<reset>‘."), 1);

@@ -90,6 +90,8 @@ namespace qw
     types::Type *ftype = fdecl->funcType;
 
     if_except(sema_FuncType(ftype, now->pos()));
+    
+    ctx->gst().add_ident(scopemng::mangling_abi_qw(now), now);
 
     if (fdecl->body) {
       auto block          = fdecl->body->as<stmts::CodeBlock>();
@@ -120,14 +122,16 @@ namespace qw
     types::Type *ctype = cdecl->funcType;
 
     if_except(sema_FuncType(ctype, now->pos()));
+    
+    ctx->gst().add_ident(scopemng::mangling_abi_qw(now), now);
 
     auto ftype_concrete = ctype->as<types::FuncType>();
     
     // Check inits
     if (ftype_concrete->pars.size() > 0) {
       auto self_ref = ftype_concrete->pars[0].type->as<types::ReferenceType>();
-      if (self_ref && self_ref->sub->is<types::RecordType>()) {
-        auto recType = self_ref->sub->as<types::RecordType>();
+      if (self_ref && self_ref->sub->is<types::StructType>()) {
+        auto recType = self_ref->sub->as<types::StructType>();
 
         for (auto &init_pair : cdecl->inits) {
           bool found = false;
@@ -549,11 +553,11 @@ namespace qw
         obj_type = obj_type->as<types::ReferenceType>()->sub;
       }
 
-      if (!obj_type->is<types::RecordType>()) {
+      if (!obj_type->is<types::StructType>()) {
         return errors::NoMatchOperator(now->pos(), M->kind == exprs::MemberOpEnum::NameS ? "::" : ".", std::string(M->obj->targetType()->typname()), M->mem->as<exprs::NickExpr>()->unresolved[0]);
       }
 
-      auto rec_type   = obj_type->as<types::RecordType>();
+      auto rec_type   = obj_type->as<types::StructType>();
       auto field_name = M->mem->as<exprs::NickExpr>()->unresolved[0];
 
       bool found{};
@@ -635,8 +639,8 @@ namespace qw
             obj_type = obj_type->as<types::ReferenceType>()->sub;
           }
 
-          if (obj_type->is<types::RecordType>()) {
-            auto rec_type    = obj_type->as<types::RecordType>();
+          if (obj_type->is<types::StructType>()) {
+            auto rec_type    = obj_type->as<types::StructType>();
             auto member_name = memOp->mem->as<exprs::NickExpr>()->unresolved[0];
 
             for (size_t i = 0; i < M->operands.size(); i++) {
@@ -828,7 +832,7 @@ namespace qw
     if (now->is<types::PrimitiveType>())
       return {};
 
-    ef (now->is<types::RecordType>()) return sema_RecordType(now, errpos);
+    ef (now->is<types::StructType>()) return sema_StructType(now, errpos);
     ef (now->is<types::EnumType>())   return sema_EnumType(now, errpos);
     ef (now->is<types::SetType>())    return sema_SetType(now, errpos);
 
@@ -998,7 +1002,7 @@ namespace qw
     return {};
   }
 
-  fun Sema::sema_RecordType(types::Type *now, word errpos) -> std::expected<void, uptr<diagnostic::message>>
+  fun Sema::sema_StructType(types::Type *now, word errpos) -> std::expected<void, uptr<diagnostic::message>>
   {
     if (now->sema() == StageStatus::Checked)
       return {};
@@ -1006,19 +1010,19 @@ namespace qw
 
     now->sema() = StageStatus::Checking;
 
-    auto record = now->as<types::RecordType>();
+    auto strct = now->as<types::StructType>();
 
-    for (auto &X : record->vars)
+    for (auto &X: strct->vars)
       if_except(sema_Type(X.type, errpos));
 
     now->sema() = StageStatus::Checked;
 
-    if (record->decl) {
-      for (auto &F : record->decl->func) {
+    if (strct->decl) {
+      for (auto &F: strct->decl->func) {
         if_except(sema_FuncDecl(F));
         ctx->gst().add_ident(scopemng::mangling_abi_qw(F), F);
       }
-      for (auto &C : record->decl->constructors) {
+      for (auto &C: strct->decl->constructors) {
         if_except(sema_ConstructorDecl(C));
         ctx->gst().add_ident(scopemng::mangling_abi_qw(C), C);
       }
@@ -1093,7 +1097,7 @@ namespace qw
       if (intrin == "is_pointer") res = T->is<types::PointerType>();
       ef (intrin == "is_reference") res = T->is<types::ReferenceType>();
       ef (intrin == "is_array") res = T->is<types::ZArrayType>() || T->is<types::PArrayType>();
-      ef (intrin == "is_struct") res = T->is<types::RecordType>();
+      ef (intrin == "is_struct") res = T->is<types::StructType>();
       ef (intrin == "is_function") res = T->is<types::FuncType>();
       ef (intrin == "is_enum") res = T->is<types::EnumType>();
       ef (intrin == "is_set") res = T->is<types::SetType>();

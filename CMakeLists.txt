@@ -116,6 +116,7 @@ target_include_directories(qaos_qw_shared PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 add_dependencies(qaos_qw_shared update-pot)
 target_link_libraries(qaos_qw_shared PUBLIC
   LLVM
+  lldELF lldCOFF lldMachO lldMinGW lldWasm lldCommon
 )
 
 
@@ -124,8 +125,15 @@ target_include_directories(qaos_qw_static PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 add_dependencies(qaos_qw_static update-pot)
 target_link_libraries(qaos_qw_static PUBLIC
   LLVM
+  lldELF lldCOFF lldMachO lldMinGW lldWasm lldCommon
 )
 
+
+
+# CLI11
+add_library(CLI11 INTERFACE)
+target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cli11/include")
+add_library(CLI11::CLI11 ALIAS CLI11)
 
 
 # Test App

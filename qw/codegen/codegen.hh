@@ -86,7 +86,7 @@ namespace qw
 
       // Type
       fun gen_Type(types::Type*&) -> std::expected<void, uptr<diagnostic::message>>;
-      fun gen_RecordType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun gen_StructType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
       fun gen_FuncType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
   };
 

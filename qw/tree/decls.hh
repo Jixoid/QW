@@ -33,11 +33,11 @@ namespace qw::decls
   struct FuncDecl        { llvm::Function *llvm{}; types::Type *funcType{}; stmts::Stmt *body{}; /* optional */ };
   struct ConstructorDecl { llvm::Function *llvm{}; types::Type *funcType{}; std::vector<std::pair<std::string, exprs::Expr*>> inits{}; stmts::Stmt *body{}; };
   struct AliasDecl       { identy *decl{}; };
-  struct RecordDecl      { std::vector<decls::Decl*> func{}; std::vector<decls::Decl*> constructors{}; };
+  struct StructDecl      { std::vector<decls::Decl*> func{}; std::vector<decls::Decl*> constructors{}; };
   struct EnumDecl        { std::vector<decls::Decl*> func{}; };
   struct SetDecl         { std::vector<decls::Decl*> func{}; };
 
-  using DeclVari = std::variant<NameSpaceDecl, VarDecl, TypeDecl, FuncDecl, ConstructorDecl, AliasDecl, RecordDecl, EnumDecl, SetDecl>;
+  using DeclVari = std::variant<NameSpaceDecl, VarDecl, TypeDecl, FuncDecl, ConstructorDecl, AliasDecl, StructDecl, EnumDecl, SetDecl>;
 
 
   struct Decl: qw::identy
@@ -54,7 +54,7 @@ namespace qw::decls
       static fun make_Constructor(qw::context *ctx, Decl *parent, word pos, types::Type *type = nil, Visibility vis = Visibility::Private) -> Decl*;
       static fun make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos, Visibility vis = Visibility::Private)-> Decl*;
 
-      static fun make_Record(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
+      static fun make_Struct(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
       static fun make_Enum(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
       static fun make_Set(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis = Visibility::Private) -> Decl*;
 

@@ -1,0 +1,3 @@
+pub fun init() -> i32 {
+    ret 42;
+}

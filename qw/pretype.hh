@@ -129,7 +129,7 @@ namespace qw::types
   struct GenericType;
 
   struct autocType;
-  struct RecordType;
+  struct StructType;
   struct EnumType;
   struct SetType;
 
@@ -178,7 +178,7 @@ namespace qw::decls
   struct autocDecl;
   struct AliasDecl;
 
-  struct RecordDecl;
+  struct StructDecl;
   struct EnumDecl;
   struct SetDecl;
 }

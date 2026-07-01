@@ -78,15 +78,27 @@ namespace qw
     }
 
     identy *curr = now;
+    std::vector<std::string> path;
     while (curr) {
       if (curr->type() == IdentyEnum::Decl) {
         auto d = (decls::Decl *)curr;
-        if (!d->name().empty())
+        if (!d->name().empty()) {
+          path.push_back(std::string(d->name()));
           ret = std::to_string(d->name().size()) + (std::string)d->name() + ret;
+        }
       }
       curr = curr->parent();
     }
-    return (ret == "4main") ? "main" : "_Q" + ret + params_mangled;
+    
+    if (path.size() >= 2 && path.back() == "sys" && now->type() == IdentyEnum::Decl && ((decls::Decl*)now)->is<decls::FuncDecl>()) {
+        std::string rtl_name = "qwrtl";
+        for (int i = path.size() - 2; i >= 0; i--) {
+            rtl_name += "_" + path[i];
+        }
+        return rtl_name;
+    }
+    
+    return (ret == "4main") ? "qw_entry" : "_Q" + ret + params_mangled;
   }
 
   fun scopemng::fetch_type(identy *ident) -> types::Type*
@@ -165,8 +177,8 @@ namespace qw
             ident = ident->parent();
           }
 
-          ef (C->is<decls::RecordDecl>()) {
-            for (auto &X : C->as<decls::RecordDecl>()->func)
+          ef (C->is<decls::StructDecl>()) {
+            for (auto &X : C->as<decls::StructDecl>()->func)
               if (X->name() == names[0]) {
                 if (arg_types && X->is<decls::FuncDecl>()) {
                   auto ftype = X->as<decls::FuncDecl>()->funcType->as<types::FuncType>();
@@ -215,6 +227,20 @@ namespace qw
     l_gst:
     identy *ret{};
     std::string base_target = __join_symbol(names);
+    
+    // RTL Bindings intercept
+    if (names.size() >= 2 && names[0] == "sys") {
+        std::string rtl_name = "qwrtl";
+        for (int i = 1; i < names.size(); i++) {
+            rtl_name += "_" + names[i];
+        }
+        for (auto &GST: m_gst) {
+            if (auto it = GST->find(rtl_name)) {
+                return *it;
+            }
+        }
+    }
+
     for (auto &ANS: m_ans) {
       for (auto &GST: m_gst) {
         if (arg_types) {
