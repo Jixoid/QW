@@ -58,6 +58,8 @@ namespace qw::errors
   NewMsg(ExpectedAWord, error, _("expected a word, but found ‘<blue>{}<reset>‘."), 1);
 
   NewMsg(UnknownKeyword, error, _("unknown keyword ‘<blue>{}<reset>‘."), 1);
+  NewMsg(InvalidAttribute, error, _("invalid attribute ‘<blue>{}<reset>‘."), 1);
+  NewMsg(InvalidAttributeValue, error, _("invalid value ‘<blue>{1}<reset>‘ for attribute ‘<blue>{0}<reset>‘."), 2);
 
   NewMsg(NoMatchOperator, error, _("no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ <yellow>{0}<reset> ‘<blue>{2}<reset>’)."), 3);
 
@@ -68,13 +70,25 @@ namespace qw::errors
   NewMsg(UnexpectedIdentifier, error, _("un expected identifier ‘<blue>{}<reset>‘."), 1);
 
   NewMsg(InvalidEscapeSequence, error, _("invalid escape sequence ‘<blue>{}<reset>‘."), 1);
-  NewMsg(ModuleNotFound, error, _("module ‘<blue>{}<reset>‘ could not be found."), 1);
+  NewMsg(ModuleNotFound, error, _("module ‘<blue>{}<reset>‘ not found."), 1);
+  NewMsg(CyclicImport, error, _("cyclic import detected for module ‘<blue>{}<reset>‘."), 1);
   NewMsg(IdentifierNotFound, error, _("identifier not found ‘<blue>{}<reset>‘."), 1);
   NewMsg(IdentifierNType, error, _("identifier is not a type ‘<blue>{}<reset>‘."), 1);
   NewMsg(IdentifierNExpr, error, _("identifier is not a expr ‘<blue>{}<reset>‘."), 1);
 
   NewMsg(OnlyOneVariableCanBeInitialized, error, _("only one variable can be initialized."), 1);
   NewMsg(VisibilitySettingNApplicableInContext, error, _("‘<blue>{}<reset>‘ visibility setting is not applicable in this context."), 1);
+  NewMsg(InvalidBaseType, error, _("invalid base type for ‘<blue>{0}<reset>‘: {1}."), 2);
+  NewMsg(InvalidConstantValue, error, _("invalid constant value for ‘<blue>{0}<reset>‘: {1}."), 2);
+  NewMsg(MissingInterfaceMethod, error, _("struct ‘<blue>{0}<reset>‘ missing implementation for method ‘<yellow>{1}<reset>‘ from interface ‘<blue>{2}<reset>‘."), 3);
+  NewMsg(GenericArgumentCountMismatch, error, _("intrinsic ‘<blue>{0}<reset>‘ expects {1} generic argument(s)."), 2);
+  NewMsg(TypeCannotBeGeneric, error, _("type ‘<blue>{0}<reset>‘ is not a generic type."), 1);
+  NewMsg(GenericParamsNotEqual, error, _("generic type expects {0} parameter(s), but {1} argument(s) provided."), 2);
+  NewMsg(ArgumentCountMismatch, error, _("intrinsic ‘<blue>{0}<reset>‘ expects {1} argument(s)."), 2);
+  NewMsg(UnsupportedCast, error, _("unsupported cast using sys::cast."), 0);
+  NewMsg(CastBoundsError, error, _("cast bounds check failed for ‘<blue>{0}<reset>‘."), 1);
+  NewMsg(UnsupportedIntrinsic, error, _("unsupported intrinsic ‘<blue>{0}<reset>‘."), 1);
+  NewMsg(OnlyFunAllowed, error, _("only ‘<blue>fun<reset>‘ declarations are allowed in interfaces."), 0);
 }
 
 #undef NewMsg

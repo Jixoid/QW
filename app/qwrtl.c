@@ -1,4 +1,3 @@
-
 #ifndef _GNU_SOURCE
 	#define _GNU_SOURCE
 #endif
@@ -12,9 +11,6 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-
-
-
 
 #pragma region sys::exit
 
@@ -37,8 +33,6 @@ void __attribute__((weak, noreturn)) qwrtl_exit_exit(int status) {
 
 #pragma endregion
 
-
-
 #pragma region sys::io
 
 // sys::io::write
@@ -57,8 +51,6 @@ ssize_t __attribute__((weak)) qwrtl_io_read(int fd, void* ptr, size_t size) {
 
 #pragma endregion
 
-
-
 #pragma region sys::signal
 
 // sys::signal::hook
@@ -68,42 +60,50 @@ bool __attribute__((weak)) qwrtl_signal_hook(int sig, void (*handler)(int)) {
 
 #pragma endregion
 
-
-
 #pragma region sys::heap
 
 // sys::heap::alloc
 void* __attribute__((weak)) qwrtl_heap_alloc(size_t align, size_t size) {
+  if (align < sizeof(void*)) align = sizeof(void*);
+  size_t remainder = size % align;
+  if (remainder != 0) {
+    size += (align - remainder);
+  }
   return aligned_alloc(align, size);
 }
 
 // sys::heap::dispose
 bool __attribute__((weak)) qwrtl_heap_dispose(void* ptr, size_t align, size_t size) {
-  free_aligned_sized(ptr, align, size);
+
+  free(ptr);
   return true;
 }
 
 // sys::heap::realloc
 void* __attribute__((weak)) qwrtl_heap_realloc(void* ptr, size_t align, size_t old_size, size_t new_size) {
-	void* new_ptr = aligned_alloc(align, new_size);
-	if (!new_ptr)
-		return NULL;
+  if (align < sizeof(void*)) align = sizeof(void*);
+  size_t remainder = old_size % align;
+  if (remainder != 0) old_size += (align - remainder);
+  remainder = new_size % align;
+  if (remainder != 0) new_size += (align - remainder);
 
-	size_t copy_size = (old_size < new_size) ? old_size : new_size;
-	memcpy(new_ptr, ptr, copy_size);
+  void* new_ptr = aligned_alloc(align, new_size);
+  if (!new_ptr)
+    return NULL;
 
-	free_aligned_sized(ptr, align, old_size); 
+  size_t copy_size = (old_size < new_size) ? old_size : new_size;
+  if (ptr) {
+    memcpy(new_ptr, ptr, copy_size);
+    free(ptr);
+  }
 
-	return new_ptr;
+  return new_ptr;
 }
 
 #pragma endregion
 
-
-
 #pragma region sys::page
 
-// sys::page::prot::* for linux
 enum Prot: int {
   None  = 0,
   Read  = 0x1,
@@ -111,7 +111,6 @@ enum Prot: int {
   Exec  = 0x4,
 };
 
-// sys::page::flag::* for linux
 enum Flag: int {
   File      =	0,
   Private   =	0x02,
@@ -123,8 +122,6 @@ enum Flag: int {
 	Locked    =	0x2000,
 	Populate	= 0x8000,
 };
-
-
 
 // sys::page::alloc
 void* __attribute__((weak)) qwrtl_page_alloc(size_t size, int prot, int flag) {
@@ -166,8 +163,6 @@ bool __attribute__((weak)) qwrtl_page_protect(void* ptr, size_t size, int prot) 
 
 #pragma endregion
 
-
-
 #pragma region entry
 
 int qw_entry();
@@ -175,7 +170,6 @@ int qw_entry();
 int __argc = 0;
 char** __argv = NULL;
 char** __envp;
-
 
 int main(int argc, char** argv, char** envp) {
 	__argc = argc;
@@ -186,8 +180,6 @@ int main(int argc, char** argv, char** envp) {
 }
 
 #pragma endregion
-
-
 
 #pragma region sys::args
 
@@ -203,8 +195,6 @@ char* __attribute__((weak)) qwrtl_args_get(int index) {
 
 #pragma endregion
 
-
-
 #pragma region sys::env
 
 // sys::env::get
@@ -219,4 +209,3 @@ char* __attribute__((weak)) qwrtl_env_get(char* name) {
 }
 
 #pragma endregion
-

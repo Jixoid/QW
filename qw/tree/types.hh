@@ -29,17 +29,18 @@ namespace qw::types
 {
 
   struct FieldType { std::string name{}; Type *type{}; Visibility vis = Visibility::Public; };
-  struct FieldCons { std::string cons{}; std::variant<u128, i128> val{}; };
+  struct FieldCons { std::string cons{}; std::variant<u64, i64> val{}; };
 
-  enum struct PrimitiveEnum : u8
+  enum struct PrimitiveEnum: u8
   {
-    I8, I16, I32, I64, I128,
-    U8, U16, U32, U64, U128,
+    I8, I16, I32, I64, I128, ISize,
+    U8, U16, U32, U64, U128, USize,
     F16, F32, F64, F128,
     Bool,
     Char,
     Void,
     Ptr,
+    Null,
   };
 
   struct PrimitiveType { PrimitiveEnum kind; };
@@ -51,10 +52,12 @@ namespace qw::types
 
   struct GenericType { Type *sub{}; std::vector<Type *> fields{}; };
 
-  struct FuncType   { std::vector<FieldType> pars{}; Type *ret{}; };
-  struct StructType { std::vector<FieldType> vars{}; std::vector<FieldType> typs{}; decls::StructDecl *decl{}; };
-  struct EnumType   { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::EnumDecl *decl{}; Type *baseType{}; };
-  struct SetType    { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::SetDecl *decl{}; Type *baseType{}; };
+  struct FuncType      { std::vector<FieldType> pars{}; Type *ret{}; };
+  struct StructType    { std::vector<Type*> baseTypes{}; std::vector<FieldType> vars{}; std::vector<FieldType> typs{}; decls::Decl *decl{}; std::vector<word> baseTypePos{}; };
+  struct EnumType      { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::Decl *decl{}; Type *baseType{}; word baseTypePos{}; };
+  struct SetType       { std::vector<FieldCons> vals{}; std::vector<FieldType> typs{}; decls::Decl *decl{}; Type *baseType{}; word baseTypePos{}; };
+  struct IFaceType     { std::vector<Type*> baseTypes{}; std::vector<FieldType> typs{}; decls::Decl *decl{}; std::vector<word> baseTypePos{}; };
+  struct TypeParamType { decls::Decl *decl{}; };
   
   struct NickType   { std::vector<std::string> unresolved; };
 
@@ -65,9 +68,9 @@ namespace qw::types
 
     FuncType,
 
-    StructType, EnumType, SetType,
+    StructType, EnumType, SetType, IFaceType,
 
-    NickType
+    TypeParamType, NickType
   >;
 
   constexpr auto a = std::is_same_v<int, int>;
@@ -86,12 +89,15 @@ namespace qw::types
       static fun make_PArray(qw::context *ctx, Type *sub, u32 size) -> Type*;
 
       static fun make_Func(qw::context *ctx, std::vector<FieldType> pars, Type *ret) -> Type*;
+      static fun make_Struct(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::Decl *decl, std::vector<Type*> baseTypes = {}, std::vector<word> baseTypePos = {}, std::string tname = "struct") -> Type*;
+      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::Decl *decl, Type *baseType, word baseTypePos = {}, std::string tname = "enum") -> Type*;
+      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::Decl *decl, Type *baseType, word baseTypePos = {}, std::string tname = "set") -> Type*;
+      static fun make_IFace(qw::context *ctx, std::vector<FieldType> typs, decls::Decl *decl, std::vector<Type*> baseTypes = {}, std::vector<word> baseTypePos = {}, std::string tname = "iface") -> Type*;
 
-      static fun make_Struct(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::StructDecl *decl) -> Type*;
-      static fun make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl, Type *baseType) -> Type*;
-      static fun make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl, Type *baseType) -> Type*;
+      static fun make_Generic(qw::context *ctx, Type *sub, std::vector<Type*> fields) -> Type*;
 
       static fun make_Nick(qw::context *ctx, std::vector<std::string> unresolved) -> Type*;
+      static fun make_TypeParam(qw::context *ctx, decls::Decl *decl, std::string tname) -> Type*;
 
     private:
       TypeVari m_vari;
@@ -99,6 +105,9 @@ namespace qw::types
       std::string m_cached_typname;
       StageStatus m_sema = StageStatus::NotChecked;
       StageStatus m_cgen = StageStatus::NotChecked;
+
+    public:
+      identy *owner_ident{};
 
     public:
       inline fun& llvm() { return m_llvm; }
@@ -121,7 +130,8 @@ namespace qw::types
       fun isUnSigned() -> bool;
       fun isChar() -> bool;
       fun isBool() -> bool;
-      inline fun isReference() -> bool { return is<ReferenceType>(); }
+      fun isReference() -> bool { return is<ReferenceType>(); }
+      fun isPointer() -> bool { return is<PointerType>(); }
       fun intBit() -> u8;
   };
 

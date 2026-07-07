@@ -132,6 +132,7 @@ namespace qw::types
   struct StructType;
   struct EnumType;
   struct SetType;
+  struct IFaceType;
 
   struct NickType;
 }
@@ -181,4 +182,5 @@ namespace qw::decls
   struct StructDecl;
   struct EnumDecl;
   struct SetDecl;
+  struct IFaceDecl;
 }

@@ -30,6 +30,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <sys/mman.h>
@@ -54,8 +55,10 @@ namespace qw
 
         if (it == m_idents.end())
           m_idents[name] = ident;
-        ef (it->second != ident)
+        ef (it->second != ident) {
+          printf("COLLISION: %s\n", name.c_str());
           assert(false && "DIAGNOSTIC");
+        }
       }
 
       fun find(std::string name) -> std::optional<identy*> {
@@ -106,6 +109,7 @@ namespace qw
       std::unordered_map<types::Type*, types::Type*> m_zarray_pool;
       std::map<std::pair<types::Type*, u32>, types::Type*> m_parray_pool;
       std::map<std::pair<std::vector<types::Type*>, types::Type*>, types::Type*> m_func_pool;
+      std::unordered_set<std::string> m_parsed_files;
 
     protected:
       sptr<llvm::LLVMContext> m_llvm{};
@@ -120,6 +124,7 @@ namespace qw
       struct SysAPI {
         decls::Decl *sys_ns{};
         decls::Decl *heap_ns{};
+        decls::Decl *vmt_ns{};
         
         decls::Decl *heap_alloc{};
         decls::Decl *heap_dispose{};
@@ -161,6 +166,7 @@ namespace qw
       types::Type *mf_void{};
 
       types::Type *mf_ptr{};
+      types::Type *mf_null{};
 
     public:
       inline fun intU0_t() { return mf_intU0; };
@@ -190,6 +196,7 @@ namespace qw
       inline fun void_t() { return mf_void; };
 
       inline fun ptr_t() { return mf_ptr; };
+      inline fun null_t() { return mf_null; };
   #pragma endregion
 
     public:
@@ -200,6 +207,14 @@ namespace qw
           case IdentyEnum::Expr: m_exprs.push_back((exprs::Expr*)obj); break;
           case IdentyEnum::Stmt: m_stmts.push_back((stmts::Stmt*)obj); break;
         }
+      }
+
+      fun is_parsed(const std::string& path) -> bool {
+        return m_parsed_files.find(path) != m_parsed_files.end();
+      }
+
+      fun mark_parsed(const std::string& path) {
+        m_parsed_files.insert(path);
       }
   };
 

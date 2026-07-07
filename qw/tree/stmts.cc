@@ -48,6 +48,8 @@ namespace qw::stmts
         parentDecl->as<decls::FuncDecl>()->body = this;
       ef (parentDecl->is<decls::ConstructorDecl>())
         parentDecl->as<decls::ConstructorDecl>()->body = this;
+      ef (parentDecl->is<decls::DestructorDecl>())
+        parentDecl->as<decls::DestructorDecl>()->body = this;
     }
   }
 
@@ -60,7 +62,7 @@ namespace qw::stmts
 
   fun Stmt::make_CodeVar(qw::context *ctx, identy *parent, std::string name, types::Type *type, word pos, exprs::Expr *initialy, std::optional<word> initialy_pos) -> Stmt*
   {
-    auto obj = new Stmt(CodeVar{ std::move(name), type, nullptr }, parent, pos);
+    auto obj = new Stmt(CodeVar{ std::move(name), type, nullptr, initialy != nullptr }, parent, pos);
     ctx->push(obj);
 
     if (initialy) {
@@ -108,10 +110,16 @@ namespace qw::stmts
     return obj;
   }
 
-  fun Stmt::make_Continue(qw::context *ctx, identy *parent, word pos) -> Stmt* 
-  {
+  fun Stmt::make_Continue(qw::context *ctx, identy *parent, word pos) -> Stmt* {
     auto obj = new Stmt(ContinueStmt{}, parent, pos);
     ctx->push(obj);
     return obj;
   }
+
+  fun Stmt::make_Unsafe(qw::context *ctx, identy *parent, word pos, Stmt *stmt) -> Stmt* {
+    auto obj = new Stmt(UnsafeStmt{stmt}, parent, pos);
+    ctx->push(obj);
+    return obj;
+  }
+  
 }

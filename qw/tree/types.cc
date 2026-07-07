@@ -96,6 +96,8 @@ namespace qw::types
       case PrimitiveEnum::I128:
       case PrimitiveEnum::U128: return 128;
       case PrimitiveEnum::Bool: return 1;
+      case PrimitiveEnum::ISize:
+      case PrimitiveEnum::USize: return 0; // Handled specially or target dependent
       default: return 0;
     }
   }
@@ -106,24 +108,27 @@ namespace qw::types
     std::string name;
 
     switch (kind) {
-      case PrimitiveEnum::I8:   name = "i8";   llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
-      case PrimitiveEnum::I16:  name = "i16";  llvm = llvm::Type::getInt16Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::I32:  name = "i32";  llvm = llvm::Type::getInt32Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::I64:  name = "i64";  llvm = llvm::Type::getInt64Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::I128: name = "i128"; llvm = llvm::Type::getInt128Ty(*ctx->llvm()); break;
-      case PrimitiveEnum::U8:   name = "u8";   llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
-      case PrimitiveEnum::U16:  name = "u16";  llvm = llvm::Type::getInt16Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::U32:  name = "u32";  llvm = llvm::Type::getInt32Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::U64:  name = "u64";  llvm = llvm::Type::getInt64Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::U128: name = "u128"; llvm = llvm::Type::getInt128Ty(*ctx->llvm()); break;
-      case PrimitiveEnum::F16:  name = "f16";  llvm = llvm::Type::getHalfTy(*ctx->llvm());   break;
-      case PrimitiveEnum::F32:  name = "f32";  llvm = llvm::Type::getFloatTy(*ctx->llvm());  break;
-      case PrimitiveEnum::F64:  name = "f64";  llvm = llvm::Type::getDoubleTy(*ctx->llvm()); break;
-      case PrimitiveEnum::F128: name = "f128"; llvm = llvm::Type::getFP128Ty(*ctx->llvm());  break;
-      case PrimitiveEnum::Bool: name = "bool"; llvm = llvm::Type::getInt1Ty(*ctx->llvm());   break;
-      case PrimitiveEnum::Char: name = "char"; llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
-      case PrimitiveEnum::Void: name = "void"; llvm = llvm::Type::getVoidTy(*ctx->llvm());   break;
-      case PrimitiveEnum::Ptr:  name = "ptr";  llvm = llvm::PointerType::get(*ctx->llvm(), 0); break;
+      case PrimitiveEnum::I8:    name = "i8";   llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
+      case PrimitiveEnum::I16:   name = "i16";  llvm = llvm::Type::getInt16Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::I32:   name = "i32";  llvm = llvm::Type::getInt32Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::I64:   name = "i64";  llvm = llvm::Type::getInt64Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::I128:  name = "i128"; llvm = llvm::Type::getInt128Ty(*ctx->llvm()); break;
+      case PrimitiveEnum::U8:    name = "u8";   llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
+      case PrimitiveEnum::U16:   name = "u16";  llvm = llvm::Type::getInt16Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::U32:   name = "u32";  llvm = llvm::Type::getInt32Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::U64:   name = "u64";  llvm = llvm::Type::getInt64Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::U128:  name = "u128"; llvm = llvm::Type::getInt128Ty(*ctx->llvm()); break;
+      case PrimitiveEnum::ISize: name = "isize"; llvm = llvm::IntegerType::get(*ctx->llvm(), (u32)ctx->progBits() * 8); break;
+      case PrimitiveEnum::USize: name = "usize"; llvm = llvm::IntegerType::get(*ctx->llvm(), (u32)ctx->progBits() * 8); break;
+      case PrimitiveEnum::F16:   name = "f16";  llvm = llvm::Type::getHalfTy(*ctx->llvm());   break;
+      case PrimitiveEnum::F32:   name = "f32";  llvm = llvm::Type::getFloatTy(*ctx->llvm());  break;
+      case PrimitiveEnum::F64:   name = "f64";  llvm = llvm::Type::getDoubleTy(*ctx->llvm()); break;
+      case PrimitiveEnum::F128:  name = "f128"; llvm = llvm::Type::getFP128Ty(*ctx->llvm());  break;
+      case PrimitiveEnum::Bool:  name = "bool"; llvm = llvm::Type::getInt1Ty(*ctx->llvm());   break;
+      case PrimitiveEnum::Char:  name = "char"; llvm = llvm::Type::getInt8Ty(*ctx->llvm());   break;
+      case PrimitiveEnum::Void:  name = "void"; llvm = llvm::Type::getVoidTy(*ctx->llvm());   break;
+      case PrimitiveEnum::Ptr:   name = "ptr";  llvm = llvm::PointerType::get(*ctx->llvm(), 0); break;
+      case PrimitiveEnum::Null:  name = "null_t"; llvm = llvm::PointerType::get(*ctx->llvm(), 0); break;
     }
 
     auto obj = new Type(PrimitiveType{kind}, name);
@@ -212,24 +217,34 @@ namespace qw::types
     return obj;
   }
 
-  fun Type::make_Struct(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::StructDecl *decl) -> Type*
-  {
-    auto obj = new Type(StructType{vars, typs, decl}, "struct");
-
+  fun Type::make_Struct(qw::context *ctx, std::vector<FieldType> vars, std::vector<FieldType> typs, decls::Decl *decl, std::vector<Type*> baseTypes, std::vector<word> baseTypePos, std::string tname) -> Type* {
+    auto obj = new Type(StructType{std::move(baseTypes), std::move(vars), std::move(typs), decl, std::move(baseTypePos)}, tname);
     ctx->m_types.push_back(obj);
     return obj;
   }
 
-  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::EnumDecl *decl, Type *baseType) -> Type*
-  {
-    auto obj = new Type(EnumType{vals, typs, decl, baseType}, "enum");
+  fun Type::make_Enum(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::Decl *decl, Type *baseType, word baseTypePos, std::string tname) -> Type* {
+    auto obj = new Type(EnumType{std::move(vals), std::move(typs), decl, baseType, baseTypePos}, tname);
     ctx->m_types.push_back(obj);
     return obj;
   }
 
-  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::SetDecl *decl, Type *baseType) -> Type*
-  {
-    auto obj = new Type(SetType{vals, typs, decl, baseType}, "set");
+  fun Type::make_Set(qw::context *ctx, std::vector<FieldCons> vals, std::vector<FieldType> typs, decls::Decl *decl, Type *baseType, word baseTypePos, std::string tname) -> Type* {
+    auto obj = new Type(SetType{std::move(vals), std::move(typs), decl, baseType, baseTypePos}, tname);
+    ctx->m_types.push_back(obj);
+    return obj;
+  }
+
+  fun Type::make_IFace(qw::context *ctx, std::vector<FieldType> typs, decls::Decl *decl, std::vector<Type*> baseTypes, std::vector<word> baseTypePos, std::string tname) -> Type* {
+    auto obj = new Type(IFaceType{std::move(baseTypes), std::move(typs), decl, std::move(baseTypePos)}, tname);
+    auto i8_ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+    obj->llvm() = llvm::StructType::get(*ctx->llvm(), {i8_ptr_ty, i8_ptr_ty});
+    ctx->m_types.push_back(obj);
+    return obj;
+  }
+
+  fun Type::make_Generic(qw::context *ctx, Type *sub, std::vector<Type*> fields) -> Type* {
+    auto obj = new Type(GenericType{sub, std::move(fields)}, "generic");
     ctx->m_types.push_back(obj);
     return obj;
   }
@@ -237,6 +252,13 @@ namespace qw::types
   fun Type::make_Nick(qw::context *ctx, std::vector<std::string> unresolved) -> Type*
   {
     auto obj = new Type(NickType{unresolved}, "nick");
+    ctx->m_types.push_back(obj);
+    return obj;
+  }
+
+  fun Type::make_TypeParam(qw::context *ctx, decls::Decl *decl, std::string tname) -> Type*
+  {
+    auto obj = new Type(TypeParamType{decl}, tname);
     ctx->m_types.push_back(obj);
     return obj;
   }

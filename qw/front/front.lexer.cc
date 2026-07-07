@@ -24,10 +24,18 @@
 namespace qw
 {
 
-  fun frontend::isIgn(char C) -> bool { return find(IgnSyms.begin(), IgnSyms.end(), C) != IgnSyms.end(); }
-  fun frontend::isSeperator(char C) -> bool { return find(Seperater.begin(), Seperater.end(), C) != Seperater.end(); }
-  fun frontend::isNumber(char C) -> bool { return isdigit(C); }
-  fun frontend::isString(char C) -> bool { return find(strings.begin(), strings.end(), C) != strings.end(); }
+  fun frontend::isIgn(char C) -> bool {
+    return find(IgnSyms.begin(), IgnSyms.end(), C) != IgnSyms.end();
+  }
+  fun frontend::isSeperator(char C) -> bool {
+    return find(Seperater.begin(), Seperater.end(), C) != Seperater.end();
+  }
+  fun frontend::isNumber(char C) -> bool {
+    return isdigit(C);
+  }
+  fun frontend::isString(char C) -> bool {
+    return find(strings.begin(), strings.end(), C) != strings.end();
+  }
   fun frontend::isWord(char C) -> bool {
     return (
       !isdigit(C) && !isIgn(C) && find(strings.begin(), strings.end(), C) == strings.end() &&
@@ -35,10 +43,11 @@ namespace qw
     );
   }
 
-  fun frontend::LexStore(std::optional<word> W) -> void { m_lexStore.emplace(*W); }
+  fun frontend::LexStore(std::optional<word> W) -> void {
+    m_lexStore.emplace(*W);
+  }
 
-  [[gnu::hot]] fun frontend::__Lex() -> std::optional<word>
-  {
+  [[gnu::hot]] fun frontend::__Lex() -> std::optional<word> {
     entry:
     // EOF
     if (Off >= is.size())
@@ -48,7 +57,11 @@ namespace qw
     if (char StrSym = is[Off]; isString(is[Off])) {
       auto LegOff = Off++;
 
-      while (Off < is.size() && is[Off] != StrSym) Off++;
+      while (Off < is.size() && is[Off] != StrSym)
+        if (is[Off] == '\\' && Off + 1 < is.size())
+          Off += 2;
+        else
+          Off++;
 
       if (Off < is.size()) Off++;
       else
@@ -60,12 +73,10 @@ namespace qw
     // Comment
     if (is[Off] == '#') {
       while (Off < is.size() && is[Off++] != '\n');
-
       goto entry;
     }
     if (Off + 1 < is.size() && std::string_view(&is[Off], 2) == "//") {
       while (Off < is.size() && is[Off++] != '\n');
-
       goto entry;
     }
 
@@ -77,17 +88,16 @@ namespace qw
       }
     }
 
+
     // Symbols
     if (isSeperator(is[Off])) {
       Off++;
-
       return word{ mod, Off - 1, 1 };
     }
 
     // Whitespace
     if (isIgn(is[Off])) {
       while (Off < is.size() && isIgn(is[Off])) Off++;
-
       goto entry;
     }
 
@@ -98,7 +108,6 @@ namespace qw
 
     if (LegOff == Off) {
       Off++;
-
       goto entry;
     }
 

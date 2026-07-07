@@ -32,8 +32,7 @@
 namespace qw
 {
 
-  enum struct Precedence : int
-  {
+  enum struct Precedence: i32 {
     Lowest = 0,
     Assign = 10, // =
     LogOr  = 20, // ||
@@ -89,7 +88,7 @@ namespace qw
       };
       std::vector<std::string> BigSyms = {
         /* 3 chars */ "<<=", ">>=", "<<|", "|>>",
-        /* 2 chars */ "//", "->", "<-", "::", "==", "<=", ">=", "!=", "&&", "||", "^^", "<<", ">>", "[[", "]]",
+        /* 2 chars */ "//", "->", "<-", "::", "==", "<=", ">=", "!=", "&&", "||", "^^", "<<", ">>", "[[", "]]", "![",
         "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="
       };
       std::vector<char> IgnSyms = {
@@ -130,35 +129,49 @@ namespace qw
     private:
       std::optional<word> m_lexLast;
       std::optional<word> m_lexStore;
+      std::vector<decls::Attribute> m_current_attrs;
 
-    protected:
+    public:
       fun read_File(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
-      fun read_NameSpace(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
-
+    
+      
+    protected:
       fun read_Route(std::string id, word w, decls::Decl *self, VisibilityFlag visflag) -> std::expected<void, uptr<diagnostic::message>>;
+      
+      fun read_Attributes() -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_FileAttributes(decls::Decl *self) -> std::expected<void, uptr<diagnostic::message>>;
 
       fun read_TypeDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_FuncParams(identy *parent) -> std::expected<std::vector<types::FieldType>, uptr<diagnostic::message>>;
       fun read_FuncDecl(decls::Decl*) -> std::expected<decls::Decl*, uptr<diagnostic::message>>;
       fun read_AliasDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_VarDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_StructDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_EnumDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_SetDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_IFaceDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_ModDecl(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_StructFuncDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_StructConstructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_StructDestructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
 
       fun read_CodeBlock(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
+      fun read_ExprStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
+      fun read_GenericParams(decls::Decl *parent) -> std::expected<decls::GenericContext*, uptr<diagnostic::message>>;
       fun read_IfStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_WhileStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_VarStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_LetStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
       fun read_ReturnStmt(identy*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_UnsafeStmt(identy*, word pos) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
 
       fun read_Expr(identy*, Precedence prec) -> std::expected<exprs::Expr*, uptr<diagnostic::message>>;
+      fun read_Expr_Postfix(identy*, exprs::Expr *ret) -> std::expected<exprs::Expr*, uptr<diagnostic::message>>;
+      fun read_Expr_Infix(identy*, Precedence min_prec, exprs::Expr *ret) -> std::expected<exprs::Expr*, uptr<diagnostic::message>>;
 
       fun read_Type(identy*, bool indecl = false) -> std::expected<types::Type*, uptr<diagnostic::message>>;
-      fun read_StructType(identy*, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>>;
+      fun read_StructType(identy *parent, bool indecl, std::vector<types::Type*> baseTypes = {}, std::vector<word> baseTypePos = {}) -> std::expected<types::Type*, uptr<diagnostic::message>>;
+      fun read_IFaceType(identy *parent, bool indecl, std::vector<types::Type*> baseTypes = {}, std::vector<word> baseTypePos = {}) -> std::expected<types::Type*, uptr<diagnostic::message>>;
       fun read_FuncType(identy*, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>>;
   };
 

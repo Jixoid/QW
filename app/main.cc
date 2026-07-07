@@ -11,6 +11,7 @@
 
 #include <CLI/CLI.hpp>
 #include "qw/codegen/codegen.hh"
+#include "qw/sys/sys.hh"
 #include "qw/control/context.hh"
 #include "qw/control/scopemng.hh"
 #include "qw/front/front.hh"
@@ -22,6 +23,8 @@
 #include <filesystem>
 #include <iostream>
 #include <llvm/IR/Type.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
@@ -60,12 +63,19 @@ fun main(int argc, char** argv) -> int
   auto build_cmd = app.add_subcommand("build", "Builds the QW project/module");
   build_cmd->add_flag("-f,--fpic", fpic, "Generate position independent code");
   build_cmd->add_option("--rtl", rtl_path, "Path to RTL library");
-  build_cmd->add_option("--dst", dst, "Target destination (native, bytecode, object, archive, shared, executable)")->check(CLI::IsMember({"native", "bytecode", "object", "archive", "shared", "executable"}));
+  build_cmd->add_option("--dst", dst, "Target destination (native, bytecode, llir, object, archive, shared, executable)")->check(CLI::IsMember({"native", "bytecode", "llir", "object", "archive", "shared", "executable"}));
   build_cmd->add_option("path", path, "Path to the project directory");
+
+  auto run_cmd = app.add_subcommand("run", "Runs the QW project/module using lli");
+  run_cmd->add_option("path", path, "Path to the project directory");
+  run_cmd->add_option("--rtl", rtl_path, "Path to RTL library");
 
   CLI11_PARSE(app, argc, argv);
 
-  if (build_cmd->parsed()) {
+  if (build_cmd->parsed() || run_cmd->parsed()) {
+    if (run_cmd->parsed())
+      dst = "bytecode";
+
     auto vfs_file = vfs::__file::get();
 
     setlocale(LC_ALL, "");
@@ -96,50 +106,15 @@ fun main(int argc, char** argv) -> int
     // Prepare
     auto ctx = context::make(ProgBits::Bit64);
     auto mod = ctx->make_module(project_name, entry_file);
+    ctx->mark_parsed(entry_file);
 
     // qw system unit
-    auto sys = decls::Decl::make_NameSpace(ctx.get(), nil, "sys", word{});
+    auto sys = qw::sys::build_sys_module(ctx.get());
 
-    l_sys: {
-      #define NewSys(Name, Type) { \
-        auto tdecl = decls::Decl::make_Type(ctx.get(), sys, #Name, word{}, Type); \
-        ctx->gst().add_ident(scopemng::mangling_abi_qw(tdecl), tdecl); \
-      }
+    bool use_no_rtl = false;
 
-      // Types
-      NewSys(u8, ctx->intU8_t()) NewSys(u16, ctx->intU16_t()) NewSys(u32, ctx->intU32_t()) NewSys(u64, ctx->intU64_t()) NewSys(u128, ctx->intU128_t())
-      NewSys(i8, ctx->intS8_t()) NewSys(i16, ctx->intS16_t()) NewSys(i32, ctx->intS32_t()) NewSys(i64, ctx->intS64_t()) NewSys(i128, ctx->intS128_t())
-      NewSys(f16, ctx->flo16_t()) NewSys(f32, ctx->flo32_t()) NewSys(f64, ctx->flo64_t()) NewSys(f128, ctx->flo128_t())
-      NewSys(char, ctx->char_t())
-      NewSys(bool, ctx->bool_t())
-      NewSys(void, ctx->void_t())
-      NewSys(ptr, ctx->ptr_t())
-
-      #undef NewSys
-      
-      // RTL Bindings
-      ctx->sys_api.sys_ns = sys;
-      ctx->sys_api.heap_ns = decls::Decl::make_NameSpace(ctx.get(), sys, "heap", word{});
-      sys->as<decls::NameSpaceDecl>()->decls.push_back(ctx->sys_api.heap_ns);
-      
-      // sys::heap::alloc(align: u64, size: u64) -> ptr
-      ctx->sys_api.heap_alloc = decls::Decl::make_Func(ctx.get(), ctx->sys_api.heap_ns, "alloc", word{}, types::Type::make_Func(ctx.get(), {{"align", ctx->intU64_t()}, {"size", ctx->intU64_t()}}, ctx->ptr_t()), Visibility::Public);
-      ctx->sys_api.heap_ns->as<decls::NameSpaceDecl>()->decls.push_back(ctx->sys_api.heap_alloc);
-      ctx->gst().add_ident("qwrtl_heap_alloc", ctx->sys_api.heap_alloc);
-
-      // sys::heap::dispose(p: ptr, align: u64, size: u64) -> void
-      ctx->sys_api.heap_dispose = decls::Decl::make_Func(ctx.get(), ctx->sys_api.heap_ns, "dispose", word{}, types::Type::make_Func(ctx.get(), {{"p", ctx->ptr_t()}, {"align", ctx->intU64_t()}, {"size", ctx->intU64_t()}}, ctx->void_t()), Visibility::Public);
-      ctx->sys_api.heap_ns->as<decls::NameSpaceDecl>()->decls.push_back(ctx->sys_api.heap_dispose);
-      ctx->gst().add_ident("qwrtl_heap_dispose", ctx->sys_api.heap_dispose);
-
-      // sys::heap::realloc(p: ptr, align: u64, old_size: u64, new_size: u64) -> ptr
-      ctx->sys_api.heap_realloc = decls::Decl::make_Func(ctx.get(), ctx->sys_api.heap_ns, "realloc", word{}, types::Type::make_Func(ctx.get(), {{"p", ctx->ptr_t()}, {"align", ctx->intU64_t()}, {"old_size", ctx->intU64_t()}, {"new_size", ctx->intU64_t()}}, ctx->ptr_t()), Visibility::Public);
-      ctx->sys_api.heap_ns->as<decls::NameSpaceDecl>()->decls.push_back(ctx->sys_api.heap_realloc);
-      ctx->gst().add_ident("qwrtl_heap_realloc", ctx->sys_api.heap_realloc);
-    }
 
     // Front
-    std::cerr << color::RED << "# Front" << color::RESET << std::endl;
     l_pass_0: {
       auto Sum = frontend(mod).process();
 
@@ -147,10 +122,71 @@ fun main(int argc, char** argv) -> int
         std::cerr << Sum;
         goto l_final;
       }
+      
+      // Check for ![use no rtl]
+      for (const auto& attr : mod->nameSpace()->const_attrs()) {
+        if (attr.name == "use" && attr.value == "no rtl") {
+          use_no_rtl = true;
+          break;
+        }
+      }
+
+      // If use_no_rtl, remove heap, vmt from sys and skip rtl parsing
+      if (use_no_rtl) {
+        auto& decls = sys->as<decls::NameSpaceDecl>()->decls;
+        decls.erase(
+          std::remove_if(decls.begin(), decls.end(), [](decls::Decl* d) {
+            return d->name() == "heap" || d->name() == "vmt";
+          }),
+          decls.end()
+        );
+      }
+
+      // Load RTL files if specified and allowed
+      if (!rtl_path.empty() && !use_no_rtl) {
+        if (std::filesystem::exists(rtl_path) && std::filesystem::is_directory(rtl_path)) {
+          for (const auto& entry : std::filesystem::recursive_directory_iterator(rtl_path)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".qw") {
+              std::string rel_path = std::filesystem::relative(entry.path(), rtl_path).string();
+              
+              decls::Decl* curr_ns = sys;
+              std::filesystem::path p(rel_path);
+              std::vector<std::string> parts;
+              for (auto it = p.begin(); it != p.end(); ++it) {
+                if (it == --p.end())
+                  parts.push_back(p.stem().string());
+                else
+                  parts.push_back(it->string());
+              }
+              
+              std::string full_ns_name = "sys";
+              for (const auto &part: parts) {
+                full_ns_name += "::" + part;
+                decls::Decl* next_ns = nullptr;
+                for (auto decl: curr_ns->as<decls::NameSpaceDecl>()->decls)
+                  if (decl->is<decls::NameSpaceDecl>() && decl->name() == part) {
+                    next_ns = decl;
+                    break;
+                  }
+                
+                if (!next_ns) {
+                  next_ns = decls::Decl::make_NameSpace(ctx.get(), curr_ns, part, word{});
+                }
+                curr_ns = next_ns;
+              }
+              
+              auto rtl_mod = ctx->make_module("__qwrtl_" + full_ns_name, entry.path().string());
+              frontend rtl_front(rtl_mod);
+              if (auto E = rtl_front.read_File(curr_ns); !E.has_value()) {
+                std::cerr << E.error();
+              }
+            }
+          }
+        }
+      }
     }
 
     // Sema
-    std::cerr << color::RED << "# Sema" << color::RESET << std::endl;
     l_pass_1: {
       auto Sum = Sema::pass(mod, { scopemng::mangling_abi_qw(sys) });
 
@@ -161,14 +197,33 @@ fun main(int argc, char** argv) -> int
     }
 
     // CodeGen
-    std::cerr << color::RED << "# CodeGen" << color::RESET << std::endl;
     l_pass_2: {
       CodeGen::pass(mod, { scopemng::mangling_abi_qw(sys) });
+
+      if (!rtl_path.empty() && !use_no_rtl) {
+        std::string first_rtl_file = rtl_path;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(rtl_path)) {
+          if (entry.is_regular_file() && entry.path().extension() == ".qw") {
+            first_rtl_file = entry.path().string();
+            break;
+          }
+        }
+        auto rtl_master_mod = ctx->make_module("qwrtl", first_rtl_file);
+        auto Sum2 = qw::Sema::pass_ns(rtl_master_mod, sys, {});
+        if (Sum2.sumerr()) {
+          std::cerr << Sum2;
+        }
+        qw::CodeGen::pass_ns(rtl_master_mod, sys, {});
+        
+        
+        bool err = llvm::Linker::linkModules(*mod->llvm(), llvm::CloneModule(*rtl_master_mod->llvm()));
+        if (err) {
+          std::cerr << "RTL moduulunu ana module baglarken hata olustu." << std::endl;
+        }
+      }
     }
 
     // LLVM
-    std::cerr << color::RED << "# LLVM" << color::RESET << std::endl;
-    
     l_pass_3: {
       llvm::Triple TheTriple(llvm::sys::getDefaultTargetTriple());
       mod->llvm()->setTargetTriple(TheTriple);
@@ -176,7 +231,7 @@ fun main(int argc, char** argv) -> int
       std::string Error;
       auto Target = llvm::TargetRegistry::lookupTarget("", TheTriple, Error); // Use the one taking Triple
       if (!Target) {
-        Target = llvm::TargetRegistry::lookupTarget(TheTriple.str(), Error); // Fallback
+        Target = llvm::TargetRegistry::lookupTarget(TheTriple, Error);
         if (!Target) {
           std::cerr << "LLVM Target Error: " << Error << std::endl;
           goto l_final;
@@ -218,6 +273,7 @@ fun main(int argc, char** argv) -> int
       std::string out_file;
       
       if (dst == "bytecode")   out_file = base_file + ".bc";
+      ef (dst == "llir")       out_file = base_file + ".ll";
       ef (dst == "object")     out_file = base_file + ext_o;
       ef (dst == "native")     out_file = base_file + ext_o;
       ef (dst == "archive")    out_file = base_file + ext_a;
@@ -225,11 +281,10 @@ fun main(int argc, char** argv) -> int
       ef (dst == "executable") out_file = base_file + ext_exe;
 
       std::filesystem::create_directories(path + "/build");
-      for (const auto& entry : std::filesystem::directory_iterator(path + "/build")) {
-        if (entry.path().filename().string().starts_with("out")) {
+      for (const auto& entry : std::filesystem::directory_iterator(path + "/build"))
+        if (entry.path().filename().string().starts_with("out"))
           std::filesystem::remove(entry.path());
-        }
-      }
+      
 
       std::error_code EC;
       
@@ -242,6 +297,9 @@ fun main(int argc, char** argv) -> int
         llvm::WriteBitcodeToFile(*mod->llvm(), dest);
         dest.flush();
         dest.close();
+      }
+      ef (dst == "llir") {
+        mod->write(out_file);
       }
       else {
         std::string obj_file = (dst == "object" || dst == "native") ? out_file : (base_file + ext_o);
@@ -285,25 +343,27 @@ fun main(int argc, char** argv) -> int
           args.push_back(obj_file.c_str());
           
           bool linkSuccess = false;
-          if (TheTriple.isOSWindows()) {
+          if (TheTriple.isOSWindows())
             linkSuccess = lld::coff::link(args, llvm::outs(), llvm::errs(), false, false);
-          }
-          ef (TheTriple.isMacOSX()) {
+          ef (TheTriple.isMacOSX())
             linkSuccess = lld::macho::link(args, llvm::outs(), llvm::errs(), false, false);
-          }
-          else {
+          else
             linkSuccess = lld::elf::link(args, llvm::outs(), llvm::errs(), false, false);
-          }
           
-          if (!linkSuccess) {
+          if (!linkSuccess)
             std::cerr << "LLD Linker failed." << std::endl;
-          }
         }
       }
     }
 
     // Final
     l_final:
+    if (run_cmd->parsed()) {
+      std::string lli_cmd = "lli -entry-function=qw_entry " + path + "/build/out.bc";
+      int ret = system(lli_cmd.c_str());
+      if (ret != 0)
+        std::cerr << "lli execution failed." << std::endl;
+    }
   }
 
   return 0;

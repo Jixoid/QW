@@ -19,6 +19,7 @@ add_compile_options(-gdwarf-4)
 # Debug
 add_compile_definitions($<$<CONFIG:Debug>:_DBG> $<$<CONFIG:RelWithDebInfo>:_DBG>)
 add_compile_definitions(_QW_use_internal_diagnostic)
+add_compile_definitions(_QW_use_verbose_for_frontend)
 
 
 # Sanitizer

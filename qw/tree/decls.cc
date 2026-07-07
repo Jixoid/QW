@@ -33,9 +33,19 @@ namespace qw::decls
     ef (this->is<FuncDecl>() && parent && parent->is<StructDecl>()) {
       parent->as<StructDecl>()->func.push_back(this);
     }
+    ef (this->is<FuncDecl>() && parent && parent->is<IFaceDecl>()) {
+      parent->as<IFaceDecl>()->func.push_back(this);
+    }
     ef (this->is<ConstructorDecl>() && parent && parent->is<StructDecl>()) {
       parent->as<StructDecl>()->constructors.push_back(this);
     }
+    ef (this->is<DestructorDecl>() && parent && parent->is<StructDecl>()) {
+      parent->as<StructDecl>()->destructors.push_back(this);
+    }
+  }
+
+  Decl::~Decl() {
+    delete m_generic_ctx;
   }
 
   fun Decl::make_NameSpace(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
@@ -73,6 +83,13 @@ namespace qw::decls
     return obj;
   }
 
+  fun Decl::make_Destructor(qw::context *ctx, Decl *parent, word pos, types::Type *type, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(DestructorDecl{nullptr, type, nullptr}, parent, "fini", pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
   fun Decl::make_Alias(qw::context *ctx, Decl *parent, std::string_view name, identy *decl, word pos, Visibility vis) -> Decl*
   {
     auto obj = new Decl(AliasDecl{decl}, parent, name, pos, vis);
@@ -97,6 +114,20 @@ namespace qw::decls
   fun Decl::make_Set(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
   {
     auto obj = new Decl(SetDecl{}, parent, name, pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Decl::make_IFace(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(IFaceDecl{}, parent, name, pos, vis);
+    ctx->push(obj);
+    return obj;
+  }
+
+  fun Decl::make_TypeParam(qw::context *ctx, Decl *parent, std::string_view name, word pos, Visibility vis) -> Decl*
+  {
+    auto obj = new Decl(TypeParamDecl{}, parent, name, pos, vis);
     ctx->push(obj);
     return obj;
   }

@@ -1,14 +1,29 @@
-mod math;
-mod engine;
+[[symbol:bare]]
+fun puts(s: char^) -> i32;
 
-pub fun main() -> i32 {
-	var v1,v2: math::vec2;
-    var c1: math::complex::Complex;
-    
-    c1 = math::complex::new(1,2);
-    
-    var p: ptr = sys::heap::alloc(8, 1024);
-    sys::heap::dispose(p, 8, 1024);
+iface Animal {
+  fun speak();
+}
 
-	ret 0;
+struct Dog: Animal {
+  fun speak() {
+    puts("Hav");
+  }
+}
+
+struct Cat: Animal {
+  fun speak() {
+    puts("Miyav");
+  }
+}
+
+fun main() -> void {
+  var d: Dog;
+  var c: Cat;
+  
+  var a1: Animal = d;
+  var a2: Animal = c;
+  
+  a1.speak();
+  a2.speak();
 }

@@ -1,10 +1,7 @@
 # Helpers
-.vscode
-.remote
+/.vscode
+/.remote
 /build
-.cache
-
-
-# Compiled
-**/@*
-**/!*
+/.cache
+/.obsidian
+/CONTEXT.md

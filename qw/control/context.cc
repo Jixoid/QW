@@ -17,6 +17,7 @@
 #include "qw/tree/stmts.hh"
 #include "qw/tree/types.hh"
 #include "qw/vfs/vfs.hh"
+#include <format>
 #include <llvm/IR/LLVMContext.h>
 #include <ostream>
 #include <string_view>
@@ -28,8 +29,15 @@ namespace qw
 
   fun operator<<(std::ostream &os, types::Type *typ)->std::ostream &
   {
-    os << color::GREEN << "type" << color::GRAY << ":" << color::BLUE << typ->typname() << color::RESET;
-    return os;
+    os << color::GREEN << "type" << color::GRAY << ":" << color::BLUE;
+
+    if (typ->is<types::PrimitiveType>()) os << "primitive";
+    ef (typ->is<types::StructType>())    os << "struct";
+    ef (typ->is<types::IFaceType>())     os << "iface";
+    else
+      os << "UNKNOWN";
+
+    return os << " " << color::WHITE << typ->typname() << color::RESET;
   }
 
   fun operator<<(std::ostream &os, identy *ident)->std::ostream &
@@ -37,15 +45,17 @@ namespace qw
     auto IDecl = [&os](decls::Decl *now) {
       os << color::GREEN << "decl" << color::GRAY << ":" << color::BLUE;
 
-      if (now->is<decls::NameSpaceDecl>())
-        os << "NameSpace";
-      ef(now->is<decls::FuncDecl>()) os << "Func";
-      ef(now->is<decls::VarDecl>()) os << "Var";
-      ef(now->is<decls::TypeDecl>()) os << "Type";
-      ef(now->is<decls::AliasDecl>()) os << "Alias";
-      ef(now->is<decls::StructDecl>()) os << "Record";
+      if (now->is<decls::NameSpaceDecl>()) os << "ns";
+      ef (now->is<decls::FuncDecl>())      os << "fun";
+      ef (now->is<decls::VarDecl>())       os << "var";
+      ef (now->is<decls::TypeDecl>())      os << "type";
+      ef (now->is<decls::AliasDecl>())     os << "alias";
+      ef (now->is<decls::StructDecl>())    os << "struct";
+      ef (now->is<decls::IFaceDecl>())     os << "iface";
+      else
+        os << "UNKNOWN";
 
-      os << color::RESET;
+      os << " " << color::WHITE << now->name() << color::RESET;
     };
 
     auto IStmt = [&os](stmts::Stmt *now) {
@@ -84,6 +94,7 @@ namespace qw
       os << color::RESET;
     };
 
+
     switch (ident->type()) {
       case IdentyEnum::Decl: IDecl((decls::Decl *)ident); break;
       case IdentyEnum::Stmt: IStmt((stmts::Stmt *)ident); break;
@@ -103,22 +114,14 @@ namespace qw
     mf_intU32  = types::Type::make_Primitive(this, types::PrimitiveEnum::U32);
     mf_intU64  = types::Type::make_Primitive(this, types::PrimitiveEnum::U64);
     mf_intU128 = types::Type::make_Primitive(this, types::PrimitiveEnum::U128);
-    switch (progBits()) {
-      case ProgBits::Bit16: mf_intU0 = mf_intU16; break;
-      case ProgBits::Bit32: mf_intU0 = mf_intU32; break;
-      case ProgBits::Bit64: mf_intU0 = mf_intU64; break;
-    }
+    mf_intU0 = types::Type::make_Primitive(this, types::PrimitiveEnum::USize);
 
     mf_intS8   = types::Type::make_Primitive(this, types::PrimitiveEnum::I8);
     mf_intS16  = types::Type::make_Primitive(this, types::PrimitiveEnum::I16);
     mf_intS32  = types::Type::make_Primitive(this, types::PrimitiveEnum::I32);
     mf_intS64  = types::Type::make_Primitive(this, types::PrimitiveEnum::I64);
     mf_intS128 = types::Type::make_Primitive(this, types::PrimitiveEnum::I128);
-    switch (progBits()) {
-      case ProgBits::Bit16: mf_intS0 = mf_intS16; break;
-      case ProgBits::Bit32: mf_intS0 = mf_intS32; break;
-      case ProgBits::Bit64: mf_intS0 = mf_intS64; break;
-    }
+    mf_intS0 = types::Type::make_Primitive(this, types::PrimitiveEnum::ISize);
 
     mf_flo16  = types::Type::make_Primitive(this, types::PrimitiveEnum::F16);
     mf_flo32  = types::Type::make_Primitive(this, types::PrimitiveEnum::F32);
@@ -130,13 +133,12 @@ namespace qw
       case ProgBits::Bit64: mf_flo0 = mf_flo64; break;
     }
 
-    mf_char = types::Type::make_Primitive(this, types::PrimitiveEnum::Char);
-
     mf_bool = types::Type::make_Primitive(this, types::PrimitiveEnum::Bool);
-
+    mf_char = types::Type::make_Primitive(this, types::PrimitiveEnum::Char);
+    
     mf_void = types::Type::make_Primitive(this, types::PrimitiveEnum::Void);
-
-    mf_ptr = types::Type::make_Primitive(this, types::PrimitiveEnum::Ptr);
+    mf_ptr  = types::Type::make_Primitive(this, types::PrimitiveEnum::Ptr);
+    mf_null = types::Type::make_Primitive(this, types::PrimitiveEnum::Null);
   }
 
   fun context::SysAPI::call_heap_alloc(context *ctx, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr* {

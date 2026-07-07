@@ -1,0 +1,35 @@
+# vector Module
+
+struct vector<T> {
+  data: T^;
+  size: u64;
+  cap: u64;
+
+  init(initial_cap: u64) {
+    self.size = 0;
+    self.cap = initial_cap;
+    
+    if (initial_cap > 0) {
+      self.data = sys::cast<T^>(sys::heap::alloc(8, initial_cap * 8));
+    }
+    else {
+      self.data = null;
+    }
+  }
+
+  init() {
+    self.size = 0;
+    self.cap = 0;
+    self.data = null;
+  }
+
+  fini() {
+    if (self.cap > 0) {
+      sys::heap::dispose(sys::cast<ptr>(self.data), self.cap * 8);
+      self.data = null;
+      self.cap = 0;
+      self.size = 0;
+    }
+  }
+
+}

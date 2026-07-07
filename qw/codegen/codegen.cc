@@ -62,33 +62,44 @@
 namespace qw
 {
 
+  static fun get_symbol_name(decls::Decl* now) -> std::string {
+    for (auto& attr : now->const_attrs()) {
+      if (attr.name == "symbol") {
+        if (attr.value == "bare") return std::string(now->name());
+        ef (attr.value == "qw") return scopemng::mangling_abi_qw(now);
+      }
+    }
+    return scopemng::mangling_abi_qw(now);
+  }
+
+  static fun setup_function_attrs(decls::Decl* now, llvm::Function* func) -> void {
+    for (auto& attr : now->const_attrs()) {
+      if (attr.name == "weak") {
+        func->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
+      }
+      ef (attr.name == "calling") {
+        if (attr.value == "fast")  func->setCallingConv(llvm::CallingConv::Fast);
+        ef (attr.value == "cdecl") func->setCallingConv(llvm::CallingConv::C);
+        ef (attr.value == "cold")  func->setCallingConv(llvm::CallingConv::Cold);
+      }
+    }
+  }
+
+
+
   // Decl
-  fun CodeGen::gen_NameSpace(decls::Decl *now) -> void
-  {
+  fun CodeGen::gen_NameSpace(decls::Decl *now) -> void {
     SMng.ans().push_back(scopemng::mangling_abi_qw(now));
 
     for (auto &X : now->as<decls::NameSpaceDecl>()->decls) {
       if (X->is<decls::NameSpaceDecl>()) gen_NameSpace(X);
       ef (X->is<decls::FuncDecl>())      gen_FuncDecl(X);
       ef (X->is<decls::VarDecl>())       gen_VarDecl(X);
-
       ef (X->is<decls::TypeDecl>()) {
+        if (static_cast<decls::Decl*>(X)->is_generic()) continue;
         auto tdecl = X->as<decls::TypeDecl>();
-        if (tdecl->type && tdecl->type->is<types::StructType>()) {
+        if (tdecl->type && (tdecl->type->is<types::StructType>() || tdecl->type->is<types::EnumType>())) {
           auto ret = gen_Type(tdecl->type);
-          auto rec = tdecl->type->as<types::StructType>();
-          
-          if (rec->decl) {
-            for (auto &F: rec->decl->func) gen_FuncDecl(F);
-            for (auto &C: rec->decl->constructors) gen_ConstructorDecl(C);
-          }
-          
-        }
-        ef (tdecl->type && tdecl->type->is<types::EnumType>()) {
-          auto enum_t = tdecl->type->as<types::EnumType>();
-          if (enum_t->decl) {
-            for (auto &F: enum_t->decl->func) gen_FuncDecl(F);
-          }
         }
       }
     }
@@ -96,37 +107,54 @@ namespace qw
     SMng.ans().pop_back();
   }
 
-  fun CodeGen::gen_FuncDecl(decls::Decl *now) -> void
-  {
-    auto fdecl         = now->as<decls::FuncDecl>();
+  fun CodeGen::gen_FuncDecl(decls::Decl *now) -> void {
+    auto fdecl = now->as<decls::FuncDecl>();
     types::Type *ftype = fdecl->funcType;
 
     auto res = gen_Type(ftype);
-    // if_except(res);
 
-    fdecl->llvm = llvm::Function::Create(
-      llvm::cast<llvm::FunctionType>(ftype->llvm()), llvm::GlobalValue::ExternalLinkage, scopemng::mangling_abi_qw(now), mod->llvm()
-    );
+    if (!fdecl->llvm) {
+      fdecl->llvm = llvm::Function::Create(
+        llvm::cast<llvm::FunctionType>(ftype->llvm()),
+        llvm::GlobalValue::ExternalLinkage,
+        get_symbol_name(now), mod->llvm()
+      );
+      setup_function_attrs(now, fdecl->llvm);
+    }
 
     if (fdecl->body) {
       auto BB = llvm::BasicBlock::Create(*ctx->llvm(), "entry", fdecl->llvm);
       IR.SetInsertPoint(BB);
 
       gen_CodeBlock(ftype->as<types::FuncType>()->ret, fdecl->body);
+      
+      if (!IR.GetInsertBlock()->getTerminator()) {
+        if (
+          ftype->as<types::FuncType>()->ret->is<types::PrimitiveType>() && 
+          ftype->as<types::FuncType>()->ret->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Void
+        ){
+          IR.CreateRetVoid();
+        }
+        else
+          IR.CreateUnreachable();
+      }
     }
   }
 
-  fun CodeGen::gen_ConstructorDecl(decls::Decl *now) -> void
-  {
-    auto cdecl         = now->as<decls::ConstructorDecl>();
+  fun CodeGen::gen_ConstructorDecl(decls::Decl *now) -> void {
+    auto cdecl = now->as<decls::ConstructorDecl>();
     types::Type *ftype = cdecl->funcType;
 
     auto res = gen_Type(ftype);
-    // if_except(res);
 
-    cdecl->llvm = llvm::Function::Create(
-      llvm::cast<llvm::FunctionType>(ftype->llvm()), llvm::GlobalValue::ExternalLinkage, scopemng::mangling_abi_qw(now), mod->llvm()
-    );
+      if (!cdecl->llvm) {
+        cdecl->llvm = llvm::Function::Create(
+          llvm::cast<llvm::FunctionType>(cdecl->funcType->llvm()),
+          llvm::GlobalValue::ExternalLinkage,
+          get_symbol_name(now), mod->llvm()
+        );
+        setup_function_attrs(now, cdecl->llvm);
+      }
 
     if (cdecl->body) {
       auto BB = llvm::BasicBlock::Create(*ctx->llvm(), "entry", cdecl->llvm);
@@ -141,6 +169,7 @@ namespace qw
           
           auto self_val = cdecl->llvm->arg_begin();
           
+
           for (auto &init_pair: cdecl->inits) {
             u32 idx = 0;
             for (auto &v: recType->vars) {
@@ -159,21 +188,83 @@ namespace qw
 
       gen_CodeBlock(ftype_concrete->ret, cdecl->body);
 
-      if (!IR.GetInsertBlock()->getTerminator()) {
+      if (!IR.GetInsertBlock()->getTerminator())
         IR.CreateRetVoid();
-      }
     }
   }
 
-  fun CodeGen::gen_VarDecl(decls::Decl *now) -> void
-  {
-    // Gelecekte Global Değişken (GlobalVariable) eklendiğinde burası doldurulacak.
+  fun CodeGen::gen_DestructorDecl(decls::Decl *now) -> void {
+    auto cdecl = now->as<decls::DestructorDecl>();
+    types::Type *ftype = cdecl->funcType;
+
+    auto res = gen_Type(ftype);
+
+    cdecl->llvm = llvm::Function::Create(
+      llvm::cast<llvm::FunctionType>(ftype->llvm()),
+      llvm::GlobalValue::ExternalLinkage,
+      get_symbol_name(now), mod->llvm()
+    );
+    setup_function_attrs(now, cdecl->llvm);
+
+    if (cdecl->body) {
+      auto BB = llvm::BasicBlock::Create(*ctx->llvm(), "entry", cdecl->llvm);
+      IR.SetInsertPoint(BB);
+
+      auto ftype_concrete = ftype->as<types::FuncType>();
+      gen_CodeBlock(ftype_concrete->ret, cdecl->body);
+
+      if (!IR.GetInsertBlock()->getTerminator())
+        IR.CreateRetVoid();
+    }
   }
 
+  fun CodeGen::call_destructors(stmts::CodeBlock *target_block) -> void {
+    for (auto it = active_blocks.rbegin(); it != active_blocks.rend(); ++it) {
+      auto block = *it;
+      
+      for (auto var_it = block->vars.rbegin(); var_it != block->vars.rend(); ++var_it) {
+        auto cvar = (*var_it)->as<stmts::CodeVar>();
+        auto target_type = cvar->targetType;
+        if (target_type->is<types::StructType>()) {
+          auto rec = target_type->as<types::StructType>();
+          if (rec->decl) {
+            auto sdecl = rec->decl->as<decls::StructDecl>();
+            for (auto &D : sdecl->destructors) {
+              auto ddecl = D->as<decls::DestructorDecl>();
+              auto ftype = ddecl->funcType->as<types::FuncType>();
+              if (ftype->pars.size() == 1) {
+                if (!ddecl->llvm) {
+                  types::Type *btype = ddecl->funcType;
+                  auto _r = gen_Type(btype);
+                  ddecl->llvm = llvm::Function::Create(
+                    llvm::cast<llvm::FunctionType>(btype->llvm()),
+                    llvm::GlobalValue::ExternalLinkage,
+                    get_symbol_name(D), mod->llvm()
+                  );
+                  setup_function_attrs(D, ddecl->llvm);
+                }
+                std::vector<llvm::Value*> args;
+                args.push_back(cvar->llvm);
+                IR.CreateCall(llvm::cast<llvm::FunctionType>(ddecl->funcType->llvm()), ddecl->llvm, args);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (block == target_block) break;
+    }
+  }
+
+  fun CodeGen::gen_VarDecl(decls::Decl *now) -> void {}
+
+
+
   // Stat
-  fun CodeGen::gen_CodeBlock(types::Type *expected_ret, stmts::Stmt *now) -> void
-  {
+  fun CodeGen::gen_CodeBlock(types::Type *expected_ret, stmts::Stmt *now) -> void {
     auto block = now->as<stmts::CodeBlock>();
+    active_blocks.push_back(block);
 
     for (auto X : block->vars)
       gen_VarStmt(X);
@@ -214,6 +305,23 @@ namespace qw
           arg_it++;
         }
       }
+      ef (static_cast<decls::Decl*>(now->parent())->is<decls::DestructorDecl>()) {
+        auto cdecl = static_cast<decls::Decl*>(now->parent())->as<decls::DestructorDecl>();
+        auto ftype = cdecl->funcType->as<types::FuncType>();
+
+        auto arg_it = cdecl->llvm->arg_begin();
+        for (const auto &p: ftype->pars) {
+          for (auto X: block->vars) {
+            auto cvar = X->as<stmts::CodeVar>();
+            if (cvar->name == p.name) {
+              llvm::Value *arg_val = &*arg_it;
+              IR.CreateStore(arg_val, cvar->llvm);
+              break;
+            }
+          }
+          arg_it++;
+        }
+      }
     }
 
     // Codes
@@ -226,32 +334,37 @@ namespace qw
         auto expr_stmt = X->as<stmts::ExprStmt>();
         gen_Expr(expr_stmt->expr);
       }
-      ef (X->is<stmts::IfStmt>()) {
-        gen_IfStmt(expected_ret, X);
-      }
-      ef (X->is<stmts::WhileStmt>()) {
-        gen_WhileStmt(expected_ret, X);
-      }
+      ef (X->is<stmts::IfStmt>())    gen_IfStmt(expected_ret, X);
+      ef (X->is<stmts::WhileStmt>()) gen_WhileStmt(expected_ret, X);
+      ef (X->is<stmts::CodeBlock>()) gen_CodeBlock(expected_ret, X);
+      ef (X->is<stmts::UnsafeStmt>()) gen_UnsafeStmt(expected_ret, X);
       ef (X->is<stmts::BreakStmt>()) {
-        if (!loop_stack.empty()) {
-          IR.CreateBr(loop_stack.back().second);
+        auto break_stmt = X->as<stmts::BreakStmt>();
+        if (break_stmt->loop) {
+          call_destructors(break_stmt->loop->as<stmts::WhileStmt>()->body->as<stmts::CodeBlock>());
+          IR.CreateBr(break_stmt->loop->as<stmts::WhileStmt>()->end_block);
         }
+        
         break;
       }
       ef (X->is<stmts::ContinueStmt>()) {
-        if (!loop_stack.empty()) {
-          IR.CreateBr(loop_stack.back().first);
+        auto continue_stmt = X->as<stmts::ContinueStmt>();
+        if (continue_stmt->loop) {
+          call_destructors(continue_stmt->loop->as<stmts::WhileStmt>()->body->as<stmts::CodeBlock>());
+          IR.CreateBr(continue_stmt->loop->as<stmts::WhileStmt>()->cond_block);
         }
+        
         break;
       }
-      ef (X->is<stmts::CodeBlock>()) {
-        gen_CodeBlock(expected_ret, X);
-      }
     }
+
+    if (!IR.GetInsertBlock()->getTerminator()) {
+      call_destructors(block);
+    }
+    active_blocks.pop_back();
   }
 
-  fun CodeGen::gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void
-  {
+  fun CodeGen::gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void {
     auto if_stmt = now->as<stmts::IfStmt>();
     
     llvm::Function *TheFunction = IR.GetInsertBlock()->getParent();
@@ -263,9 +376,10 @@ namespace qw
     IR.CreateCondBr(CondV, ThenBB, if_stmt->else_block ? ElseBB : MergeBB);
 
     IR.SetInsertPoint(ThenBB);
-    if (if_stmt->then_block) {
+    
+    if (if_stmt->then_block)
       gen_CodeBlock(expected_ret, if_stmt->then_block);
-    }
+    
     if (!IR.GetInsertBlock()->getTerminator())
       IR.CreateBr(MergeBB);
 
@@ -273,26 +387,21 @@ namespace qw
       TheFunction->insert(TheFunction->end(), ElseBB);
       IR.SetInsertPoint(ElseBB);
       
-      if (if_stmt->else_block->is<stmts::IfStmt>()) {
+      if (if_stmt->else_block->is<stmts::IfStmt>())
         gen_IfStmt(expected_ret, if_stmt->else_block);
-      }
-      else {
+      else
         gen_CodeBlock(expected_ret, if_stmt->else_block);
-      }
       
       if (!IR.GetInsertBlock()->getTerminator())
         IR.CreateBr(MergeBB);
     }
-    else {
-      delete ElseBB;
-    }
+    else delete ElseBB;
 
     TheFunction->insert(TheFunction->end(), MergeBB);
     IR.SetInsertPoint(MergeBB);
   }
 
-  fun CodeGen::gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void
-  {
+  fun CodeGen::gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void {
     auto while_stmt = now->as<stmts::WhileStmt>();
 
     llvm::Function *TheFunction = IR.GetInsertBlock()->getParent();
@@ -309,13 +418,11 @@ namespace qw
     TheFunction->insert(TheFunction->end(), LoopBB);
     IR.SetInsertPoint(LoopBB);
 
-    loop_stack.push_back({CondBB, MergeBB});
+    while_stmt->cond_block = CondBB;
+    while_stmt->end_block = MergeBB;
 
-    if (while_stmt->body) {
+    if (while_stmt->body)
       gen_CodeBlock(expected_ret, while_stmt->body);
-    }
-
-    loop_stack.pop_back();
 
     if (!IR.GetInsertBlock()->getTerminator())
       IR.CreateBr(CondBB);
@@ -324,35 +431,101 @@ namespace qw
     IR.SetInsertPoint(MergeBB);
   }
 
-  fun CodeGen::gen_VarStmt(stmts::Stmt *now) -> void
-  {
-    auto cvar  = now->as<stmts::CodeVar>();
+  fun CodeGen::gen_UnsafeStmt(types::Type *expected_ret, stmts::Stmt *now) -> void {
+    auto u_stmt = now->as<stmts::UnsafeStmt>();
+    auto X = u_stmt->stmt;
+
+    if (X->is<stmts::ReturnStmt>()) {
+      gen_ReturnStmt(expected_ret, X);
+    }
+    ef (X->is<stmts::ExprStmt>()) {
+      auto expr_stmt = X->as<stmts::ExprStmt>();
+      gen_Expr(expr_stmt->expr);
+    }
+    ef (X->is<stmts::IfStmt>())    gen_IfStmt(expected_ret, X);
+    ef (X->is<stmts::WhileStmt>()) gen_WhileStmt(expected_ret, X);
+    ef (X->is<stmts::CodeBlock>()) gen_CodeBlock(expected_ret, X);
+    ef (X->is<stmts::BreakStmt>()) {
+      auto break_stmt = X->as<stmts::BreakStmt>();
+      if (break_stmt->loop) {
+        call_destructors(break_stmt->loop->as<stmts::WhileStmt>()->body->as<stmts::CodeBlock>());
+        IR.CreateBr(break_stmt->loop->as<stmts::WhileStmt>()->end_block);
+      }
+    }
+    ef (X->is<stmts::ContinueStmt>()) {
+      auto continue_stmt = X->as<stmts::ContinueStmt>();
+      if (continue_stmt->loop) {
+        call_destructors(continue_stmt->loop->as<stmts::WhileStmt>()->body->as<stmts::CodeBlock>());
+        IR.CreateBr(continue_stmt->loop->as<stmts::WhileStmt>()->cond_block);
+      }
+    }
+    ef (X->is<stmts::UnsafeStmt>()) {
+      gen_UnsafeStmt(expected_ret, X);
+    }
+  }
+
+  fun CodeGen::gen_VarStmt(stmts::Stmt *now) -> void {
+    auto cvar = now->as<stmts::CodeVar>();
     auto res   = gen_Type(cvar->targetType);
     cvar->llvm = IR.CreateAlloca(cvar->targetType->llvm());
+
+    if (!cvar->has_init_expr) {
+      auto target_type = cvar->targetType;
+      if (target_type->is<types::StructType>()) {
+        auto rec = target_type->as<types::StructType>();
+        if (rec->decl) {
+          auto sdecl = rec->decl->as<decls::StructDecl>();
+          for (auto &C : sdecl->constructors) {
+            auto cdecl = C->as<decls::ConstructorDecl>();
+            auto ftype = cdecl->funcType->as<types::FuncType>();
+            if (ftype->pars.size() == 1) {
+              if (!cdecl->llvm) {
+                types::Type *btype = cdecl->funcType;
+                auto _r = gen_Type(btype);
+                cdecl->llvm = llvm::Function::Create(
+                  llvm::cast<llvm::FunctionType>(btype->llvm()),
+                  llvm::GlobalValue::ExternalLinkage,
+                  get_symbol_name(C), mod->llvm()
+                );
+                setup_function_attrs(C, cdecl->llvm);
+              }
+              std::vector<llvm::Value*> args;
+              args.push_back(cvar->llvm);
+              IR.CreateCall(llvm::cast<llvm::FunctionType>(cdecl->funcType->llvm()), cdecl->llvm, args);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
-  fun CodeGen::gen_ReturnStmt(types::Type *expected_ret, stmts::Stmt *now) -> void
-  {
+  fun CodeGen::gen_ReturnStmt(types::Type *expected_ret, stmts::Stmt *now) -> void {
     auto ret = now->as<stmts::ReturnStmt>();
-
-    llvm::Value *val = gen_Convert(expected_ret, ret->expr);
-    IR.CreateRet(val);
+    llvm::Value *val = nullptr;
+    
+    if (ret->expr)
+      val = gen_Convert(expected_ret, ret->expr);
+    
+    call_destructors(nullptr);
+    if (val) IR.CreateRet(val);
+    else IR.CreateRetVoid();
   }
+
+
 
   // Expr
-  fun CodeGen::gen_Convert(types::Type *typ, exprs::Expr *val) -> llvm::Value*
-  {
+  fun CodeGen::gen_Convert(types::Type *typ, exprs::Expr *val) -> llvm::Value*  {
     llvm::Value *src  = gen_Expr(val);
     types::Type *styp = val->targetType();
 
-    l_re:
-    if (typ == styp)
-      return src;
+    re:
+    if (typ == styp) return src;
 
     ef (styp->isReference()) {
       styp = styp->as<types::ReferenceType>()->sub;
       src  = IR.CreateLoad(styp->llvm(), src);
-      goto l_re;
+      goto re;
     }
 
     ef (typ->isInteger() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), typ->isSigned() && styp->isSigned()); }
@@ -362,14 +535,55 @@ namespace qw
     ef (typ->isChar() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), false); }
     ef (typ->isInteger() && styp->isChar()) { return IR.CreateIntCast(src, typ->llvm(), false); }
 
+    ef (typ->is<types::IFaceType>() && styp->is<types::StructType>()) {
+      auto iface_type = typ->as<types::IFaceType>();
+      auto ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+      
+      std::string mangled = scopemng::mangle_type(styp);
+      if (!mangled.empty() && mangled.front() == 'N' && mangled.back() == 'Z') {
+        mangled = mangled.substr(1, mangled.size() - 2);
+      }
+      std::string vmt_name = "_qw_" + mangled + "@vmt_data";
+      auto vmt_gv = mod->llvm()->getNamedGlobal(vmt_name);
+      llvm::Value *vmt_ptr = llvm::ConstantPointerNull::get(ptr_ty);
+      if (vmt_gv) {
+          size_t header_size = 5;
+          auto anchor_idx = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), header_size);
+          auto zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), 0);
+          std::vector<llvm::Value*> indices = {zero, anchor_idx};
+          vmt_ptr = IR.CreateInBoundsGEP(vmt_gv->getValueType(), vmt_gv, indices);
+      }
+      
+      llvm::Value *struct_ptr = IR.CreateAlloca(styp->llvm());
+      IR.CreateStore(src, struct_ptr);
+      
+      llvm::Value *fat_ptr = llvm::UndefValue::get(typ->llvm());
+      fat_ptr = IR.CreateInsertValue(fat_ptr, struct_ptr, 0);
+      fat_ptr = IR.CreateInsertValue(fat_ptr, vmt_ptr, 1);
+      
+      return fat_ptr;
+    }
+    
+    ef (typ->is<types::IFaceType>() && styp->is<types::IFaceType>()) {
+      auto target_iface_type = typ->as<types::IFaceType>();
+      auto ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+      llvm::Value *data_ptr = IR.CreateExtractValue(src, 0);
+      llvm::Value *old_vmt = IR.CreateExtractValue(src, 1);
+      
+      llvm::Value *fat_ptr = llvm::UndefValue::get(typ->llvm());
+      fat_ptr = IR.CreateInsertValue(fat_ptr, data_ptr, 0);
+      fat_ptr = IR.CreateInsertValue(fat_ptr, old_vmt, 1); // Upcast offset logic to be done later
+      
+      return fat_ptr;
+    }
+
     return src;
   }
 
-  fun CodeGen::gen_Expr(exprs::Expr *now) -> llvm::Value*
-  {
+  fun CodeGen::gen_Expr(exprs::Expr *now) -> llvm::Value* {
     if (now->is<exprs::IntegerLiteral>()) {
       auto lit       = now->as<exprs::IntegerLiteral>();
-      types::Type *t = now->targetType() ? now->targetType() : ctx->intS32_t(); // Fallback
+      types::Type *t = now->targetType() ? now->targetType() : ctx->intS32_t();
 
       if (std::holds_alternative<u128>(lit->val))
         return llvm::ConstantInt::get(t->llvm(), std::get<u128>(lit->val), false);
@@ -402,10 +616,9 @@ namespace qw
       auto vexpr = now->as<exprs::VarExpr>();
       auto cvar  = vexpr->var->as<stmts::CodeVar>();
 
-      if (cvar->targetType && cvar->targetType->isReference()) {
+      if (cvar->targetType && cvar->targetType->isReference())
         return IR.CreateLoad(llvm::PointerType::getUnqual(*ctx->llvm()), cvar->llvm);
-      }
-
+      
       return cvar->llvm;
     }
     ef (now->is<exprs::ValExpr>()) {
@@ -416,18 +629,18 @@ namespace qw
       if (U->kind == exprs::UnaryOpEnum::AddrOf) {
         return gen_Expr(U->o1);
       }
-      else if (U->kind == exprs::UnaryOpEnum::Minus) {
+      ef (U->kind == exprs::UnaryOpEnum::Minus) {
         auto v = gen_Convert(now->targetType(), U->o1);
         return now->targetType()->isFloat() ? IR.CreateFNeg(v) : IR.CreateNeg(v);
       }
-      else if (U->kind == exprs::UnaryOpEnum::Plus) {
+      ef (U->kind == exprs::UnaryOpEnum::Plus) {
         return gen_Convert(now->targetType(), U->o1);
       }
-      else if (U->kind == exprs::UnaryOpEnum::LNot) {
+      ef (U->kind == exprs::UnaryOpEnum::LNot) {
         auto v = gen_Convert(now->targetType(), U->o1);
         return IR.CreateNot(v);
       }
-      else if (U->kind == exprs::UnaryOpEnum::BitNot) {
+      ef (U->kind == exprs::UnaryOpEnum::BitNot) {
         auto v = gen_Convert(now->targetType(), U->o1);
         return IR.CreateNot(v);
       }
@@ -449,29 +662,29 @@ namespace qw
         llvm::Value *val2 = gen_Convert(lhs_type, C->o2);
         
         if (is_compound_assign) {
-           llvm::Value *val1 = IR.CreateLoad(lhs_type->llvm(), ptr);
-           bool is_float = lhs_type->isFloat();
-           bool is_signed = lhs_type->isSigned();
+          llvm::Value *val1 = IR.CreateLoad(lhs_type->llvm(), ptr);
+          bool is_float = lhs_type->isFloat();
+          bool is_signed = lhs_type->isSigned();
 
-           switch (C->kind) {
-             case exprs::BinaryOpEnum::AddAssign: val2 = is_float ? IR.CreateFAdd(val1, val2) : IR.CreateAdd(val1, val2); break;
-             case exprs::BinaryOpEnum::SubAssign: val2 = is_float ? IR.CreateFSub(val1, val2) : IR.CreateSub(val1, val2); break;
-             case exprs::BinaryOpEnum::MulAssign: val2 = is_float ? IR.CreateFMul(val1, val2) : IR.CreateMul(val1, val2); break;
-             case exprs::BinaryOpEnum::DivAssign:
-               if (is_float) val2 = IR.CreateFDiv(val1, val2);
-               else val2 = is_signed ? IR.CreateSDiv(val1, val2) : IR.CreateUDiv(val1, val2);
-               break;
-             case exprs::BinaryOpEnum::RemAssign:
-               if (is_float) val2 = IR.CreateFRem(val1, val2);
-               else val2 = is_signed ? IR.CreateSRem(val1, val2) : IR.CreateURem(val1, val2);
-               break;
-             case exprs::BinaryOpEnum::BitAndAssign: val2 = IR.CreateAnd(val1, val2); break;
-             case exprs::BinaryOpEnum::BitOrAssign:  val2 = IR.CreateOr(val1, val2); break;
-             case exprs::BinaryOpEnum::BitXorAssign: val2 = IR.CreateXor(val1, val2); break;
-             case exprs::BinaryOpEnum::ShlAssign:    val2 = IR.CreateShl(val1, val2); break;
-             case exprs::BinaryOpEnum::ShrAssign:    val2 = is_signed ? IR.CreateAShr(val1, val2) : IR.CreateLShr(val1, val2); break;
-             default: break;
-           }
+          switch (C->kind) {
+            case exprs::BinaryOpEnum::AddAssign: val2 = is_float ? IR.CreateFAdd(val1, val2) : IR.CreateAdd(val1, val2); break;
+            case exprs::BinaryOpEnum::SubAssign: val2 = is_float ? IR.CreateFSub(val1, val2) : IR.CreateSub(val1, val2); break;
+            case exprs::BinaryOpEnum::MulAssign: val2 = is_float ? IR.CreateFMul(val1, val2) : IR.CreateMul(val1, val2); break;
+            case exprs::BinaryOpEnum::DivAssign:
+              if (is_float) val2 = IR.CreateFDiv(val1, val2);
+              else val2 = is_signed ? IR.CreateSDiv(val1, val2) : IR.CreateUDiv(val1, val2);
+              break;
+            case exprs::BinaryOpEnum::RemAssign:
+              if (is_float) val2 = IR.CreateFRem(val1, val2);
+              else val2 = is_signed ? IR.CreateSRem(val1, val2) : IR.CreateURem(val1, val2);
+              break;
+            case exprs::BinaryOpEnum::BitAndAssign: val2 = IR.CreateAnd(val1, val2); break;
+            case exprs::BinaryOpEnum::BitOrAssign:  val2 = IR.CreateOr(val1, val2); break;
+            case exprs::BinaryOpEnum::BitXorAssign: val2 = IR.CreateXor(val1, val2); break;
+            case exprs::BinaryOpEnum::ShlAssign:    val2 = IR.CreateShl(val1, val2); break;
+            case exprs::BinaryOpEnum::ShrAssign:    val2 = is_signed ? IR.CreateAShr(val1, val2) : IR.CreateLShr(val1, val2); break;
+            default: break;
+          }
         }
 
         IR.CreateStore(val2, ptr);
@@ -537,32 +750,78 @@ namespace qw
           while (obj_type->isReference()) {
             obj_type = obj_type->as<types::ReferenceType>()->sub;
           }
-          auto rec_type    = obj_type->as<types::StructType>();
-          auto member_name = memOp->mem->as<exprs::NickExpr>()->unresolved[0];
+          if (obj_type->is<types::StructType>()) {
+            auto rec_type    = obj_type->as<types::StructType>();
+            auto member_name = memOp->mem->as<exprs::NickExpr>()->unresolved[0];
 
-          std::vector<types::Type *> arg_types;
-          for (auto op : M->operands)
-            arg_types.push_back(op->targetType());
+            std::vector<types::Type *> arg_types;
+            for (auto op : M->operands)
+              arg_types.push_back(op->targetType());
 
-          if (rec_type->decl) {
-            for (auto &F : rec_type->decl->func) {
-              if (F->name() == member_name) {
-                auto ftype = F->as<decls::FuncDecl>()->funcType->as<types::FuncType>();
-                if (ftype->pars.size() == arg_types.size()) {
-                  bool match = true;
-                  for (size_t i = 0; i < arg_types.size(); i++)
-                    if (ftype->pars[i].type->typname() != arg_types[i]->typname()) {
-                      match = false;
+            if (rec_type->decl) {
+              for (auto &F : rec_type->decl->as<decls::StructDecl>()->func) {
+                if (F->name() == member_name) {
+                  auto ftype = F->as<decls::FuncDecl>()->funcType->as<types::FuncType>();
+                  if (ftype->pars.size() == arg_types.size()) {
+                    bool match = true;
+                    for (size_t i = 0; i < arg_types.size(); i++) {
+                      auto t1 = ftype->pars[i].type;
+                      auto t2 = arg_types[i];
+                      if (t1->isReference()) t1 = t1->as<types::ReferenceType>()->sub;
+                      if (t2->isReference()) t2 = t2->as<types::ReferenceType>()->sub;
+                      if (t1->typname() != t2->typname()) {
+                        match = false;
+                        break;
+                      }
+                    }
+                      
+                    if (match) {
+                      calleeFn = F->as<decls::FuncDecl>()->llvm;
                       break;
                     }
-                    
-                  if (match) {
-                    calleeFn = F->as<decls::FuncDecl>()->llvm;
-                    break;
                   }
                 }
               }
             }
+          }
+          ef (obj_type->is<types::IFaceType>()) {
+            auto iface_type = obj_type->as<types::IFaceType>();
+            auto member_name = memOp->mem->as<exprs::NickExpr>()->unresolved[0];
+            
+            u32 method_index = 0;
+            for (size_t i = 0; i < iface_type->decl->as<decls::IFaceDecl>()->func.size(); ++i) {
+              if (iface_type->decl->as<decls::IFaceDecl>()->func[i]->name() == member_name) {
+                method_index = i;
+                break;
+              }
+            }
+            
+            llvm::Value *obj_ptr = gen_Expr(memOp->obj); // This is pointer to fat pointer {ptr, ptr}
+            
+            llvm::Type *ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+            
+            llvm::Value *data_ptr_ptr = IR.CreateStructGEP(obj_type->llvm(), obj_ptr, 0);
+            llvm::Value *data_ptr = IR.CreateLoad(ptr_ty, data_ptr_ptr);
+            
+            llvm::Value *vmt_ptr_ptr = IR.CreateStructGEP(obj_type->llvm(), obj_ptr, 1);
+            llvm::Value *vmt_ptr = IR.CreateLoad(ptr_ty, vmt_ptr_ptr);
+            
+            llvm::Value *idx  = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), method_index);
+            llvm::Value *method_ptr_ptr = IR.CreateInBoundsGEP(ptr_ty, vmt_ptr, idx);
+            llvm::Value *method_ptr = IR.CreateLoad(ptr_ty, method_ptr_ptr);
+            
+            auto ftype = M->obj->targetType()->as<types::FuncType>();
+            auto _r = gen_Type(M->obj->targetType());
+            std::vector<llvm::Value *> args;
+            
+            if (M->operands.size() > 0) {
+              args.push_back(data_ptr); // The 'self' parameter is data_ptr, not the fat pointer
+              for (size_t i = 1; i < M->operands.size(); ++i) {
+                args.push_back(gen_Convert(ftype->pars[i].type, M->operands[i]));
+              }
+            }
+            
+            return IR.CreateCall(llvm::cast<llvm::FunctionType>(M->obj->targetType()->llvm()), method_ptr, args);
           }
         }
         ef (M->obj->is<exprs::NickExpr>()) {
@@ -577,9 +836,11 @@ namespace qw
             auto fdecl = static_cast<decls::Decl *>(ret)->as<decls::FuncDecl>();
             if (!fdecl->llvm) {
                 auto _r = gen_Type(fdecl->funcType);
+                auto ret_decl = static_cast<decls::Decl *>(ret);
                 fdecl->llvm = llvm::Function::Create(
-                    llvm::cast<llvm::FunctionType>(fdecl->funcType->llvm()), llvm::GlobalValue::ExternalLinkage, scopemng::mangling_abi_qw(ret), mod->llvm()
+                  llvm::cast<llvm::FunctionType>(fdecl->funcType->llvm()), llvm::GlobalValue::ExternalLinkage, get_symbol_name(ret_decl), mod->llvm()
                 );
+                setup_function_attrs(ret_decl, fdecl->llvm);
             }
             calleeFn = fdecl->llvm;
           }
@@ -654,25 +915,35 @@ namespace qw
         }
       }
 
+      bool has_iface = false;
+      for (auto &bt: rec_type->baseTypes) {
+        auto resolved = bt;
+        while (resolved->isReference()) resolved = resolved->as<types::ReferenceType>()->sub;
+        if (resolved->is<types::IFaceType>()) {
+          has_iface = true;
+          break;
+        }
+      }
+      
+      if (has_iface) index++;
+
       llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), 0);
       llvm::Value *idx  = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx->llvm()), index);
 
       return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, {zero, idx});
     }
-    else {
+    else
       diagnostic::fatal("CodeGen: Unknown Expr Type!");
-      return nullptr;
-    }
   }
+  
 
   // Type
-  fun CodeGen::gen_Type(types::Type *&now) -> std::expected<void, uptr<diagnostic::message>>
-  {
-    l_begin:
+  fun CodeGen::gen_Type(types::Type *&now) -> std::expected<void, uptr<diagnostic::message>> {
     if (now->is<types::PrimitiveType>())
       return {};
 
     ef (now->is<types::StructType>()) return gen_StructType(now);
+    ef (now->is<types::IFaceType>())  return gen_IFaceType(now);
     ef (now->is<types::FuncType>())   return gen_FuncType(now);
     ef (now->is<types::PArrayType>()) {
       auto parray = now->as<types::PArrayType>();
@@ -680,18 +951,28 @@ namespace qw
       now->llvm() = llvm::ArrayType::get(parray->sub->llvm(), parray->size);
       return {};
     }
-    ef (now->is<types::EnumType>() || now->is<types::SetType>()) return {};
+    ef (now->is<types::EnumType>() || now->is<types::SetType>()) {
+      if (now->cgen() == StageStatus::Checked) return {};
+      now->cgen() = StageStatus::Checked;
+
+      if (now->is<types::EnumType>()) {
+        auto enum_t = now->as<types::EnumType>();
+        if (enum_t->decl) {
+          for (auto &F: enum_t->decl->as<decls::EnumDecl>()->func) gen_FuncDecl(F);
+        }
+      }
+      return {};
+    }
     ef (now->is<types::PointerType>() || now->is<types::ReferenceType>() || now->is<types::ZArrayType>()) return {};
 
     diagnostic::fatal(fatals::Internal_UnknownType().error()->msg());
     return {};
   }
 
-  fun CodeGen::gen_StructType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>>
-  {
+  fun CodeGen::gen_StructType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>> {
     if (now->cgen() == StageStatus::Checked) return {};
-    ef (now->cgen() == StageStatus::Checking) std::cerr << "!!!CHECKING" << std::endl;
-
+    now->cgen() = StageStatus::Checking;
+    
     now->cgen() = StageStatus::Checking;
 
     auto strct = now->as<types::StructType>();
@@ -699,20 +980,117 @@ namespace qw
       if_except(gen_Type(X.type));
 
     std::vector<llvm::Type*> LTyps;
+
+
     for (auto &v: strct->vars)
       LTyps.push_back(v.type->llvm());
 
     now->llvm() = llvm::StructType::create(*ctx->llvm(), LTyps, "typerec" + std::to_string(m_counter_typerec++));
     now->cgen() = StageStatus::Checked;
 
+    if (strct->decl) {
+      auto old_insert_point = IR.GetInsertBlock();
+      auto sdecl = strct->decl->as<decls::StructDecl>();
+      for (auto &F: sdecl->func) gen_FuncDecl(F);
+      gen_VMT(now);
+      for (auto &C: sdecl->constructors) gen_ConstructorDecl(C);
+      for (auto &D: sdecl->destructors) gen_DestructorDecl(D);
+      if (old_insert_point) IR.SetInsertPoint(old_insert_point);
+    }
+
     return {};
   }
 
-  fun CodeGen::gen_FuncType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>>
-  {
+  fun CodeGen::gen_VMT(types::Type *recType) -> void {
+    auto rec = recType->as<types::StructType>();
+    bool has_iface = false;
+
+    for (auto &bt: rec->baseTypes) {
+      auto resolved = bt;
+      while (resolved->isReference()) resolved = resolved->as<types::ReferenceType>()->sub;
+      if (resolved->is<types::IFaceType>()) {
+        has_iface = true;
+        break;
+      }
+    }
+
+    if (!has_iface) return;
+
+    std::string mangled = scopemng::mangle_type(recType);
+    if (!mangled.empty() && mangled.front() == 'N' && mangled.back() == 'Z') {
+      mangled = mangled.substr(1, mangled.size() - 2);
+    }
+    std::string vmt_name = "_qw_" + mangled + "@vmt";
+    std::string real_vmt_name = vmt_name + "_data";
+
+    std::vector<llvm::Constant*> header;
+    std::vector<llvm::Constant*> body;
+    auto i8_ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+    auto word_ty = llvm::IntegerType::get(*ctx->llvm(), (u32)ctx->progBits() * 8);
+
+    auto dl = mod->llvm()->getDataLayout();
+    uint64_t size = dl.getTypeAllocSize(recType->llvm());
+    uint64_t align = dl.getABITypeAlign(recType->llvm()).value();
+
+    // Num bases (placeholder for now)
+    header.push_back(llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(word_ty, 0), i8_ptr_ty)); 
+    // Size
+    header.push_back(llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(word_ty, size), i8_ptr_ty));
+    // Align
+    header.push_back(llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(word_ty, align), i8_ptr_ty));
+    
+    // Fini (Destructor)
+    llvm::Constant *fini_ptr = llvm::ConstantPointerNull::get(i8_ptr_ty);
+    if (!rec->decl->as<decls::StructDecl>()->destructors.empty()) {
+        auto d_decl = rec->decl->as<decls::StructDecl>()->destructors[0]->as<decls::DestructorDecl>();
+        if (d_decl->llvm) fini_ptr = d_decl->llvm;
+    }
+    header.push_back(fini_ptr);
+    
+    // Type ID (RTTI)
+    header.push_back(llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(word_ty, 0), i8_ptr_ty)); 
+    
+    // Positive Offsets (Body)
+    for (auto &bt: rec->baseTypes) {
+      auto resolved = bt;
+      while (resolved->isReference()) resolved = resolved->as<types::ReferenceType>()->sub;
+      if (resolved->is<types::IFaceType>()) {
+        auto iface = resolved->as<types::IFaceType>();
+        if (iface->decl) {
+          for (auto &iface_func: iface->decl->as<decls::IFaceDecl>()->func) {
+            llvm::Function *impl_func = nullptr;
+            for (auto &rec_func: rec->decl->as<decls::StructDecl>()->func) {
+              if (rec_func->name() == iface_func->name()) {
+                impl_func = rec_func->as<decls::FuncDecl>()->llvm;
+                break;
+              }
+            }
+            if (impl_func) body.push_back(impl_func);
+            else body.push_back(llvm::ConstantPointerNull::get(i8_ptr_ty));
+          }
+        }
+      }
+    }
+
+    std::vector<llvm::Constant*> all_entries;
+    all_entries.insert(all_entries.end(), header.begin(), header.end());
+    all_entries.insert(all_entries.end(), body.begin(), body.end());
+
+    llvm::ArrayType *vmt_type = llvm::ArrayType::get(i8_ptr_ty, all_entries.size());
+    llvm::Constant *vmt_init = llvm::ConstantArray::get(vmt_type, all_entries);
+    
+    auto global_vmt = new llvm::GlobalVariable(*mod->llvm(), vmt_type, true, llvm::GlobalValue::ExternalLinkage, vmt_init, real_vmt_name);
+    
+    // Create an alias pointing to the anchor (index 0 of body)
+    // Removed because ORC JIT fails to correctly infer the size of the alias, causing execution errors.
+    // gen_Convert now directly applies the GEP to vmt_data.
+  }
+
+  fun CodeGen::gen_FuncType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>> {
     auto ftype = now->as<types::FuncType>();
     for (auto &X: ftype->pars)
       if_except(gen_Type(X.type));
+    
     if_except(gen_Type(ftype->ret));
 
     std::vector<llvm::Type *> llvm_params;
@@ -721,6 +1099,17 @@ namespace qw
       llvm_params.push_back(t->llvm());
     }
     now->llvm() = llvm::FunctionType::get(ftype->ret->llvm(), llvm_params, false);
+
+    return {};
+  }
+
+  fun CodeGen::gen_IFaceType(types::Type *now) -> std::expected<void, uptr<diagnostic::message>> {
+    if (now->cgen() == StageStatus::Checked) return {};
+    now->cgen() = StageStatus::Checking;
+    
+    auto ptr_ty = llvm::PointerType::getUnqual(*ctx->llvm());
+    now->llvm() = llvm::StructType::get(*ctx->llvm(), {ptr_ty, ptr_ty});
+    now->cgen() = StageStatus::Checked;
 
     return {};
   }

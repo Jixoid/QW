@@ -37,8 +37,7 @@ namespace qw
 
     public:
       static fun mangling_abi_qw(identy*) -> std::string;
-
-    public:
+      static fun mangle_type(types::Type *t, const std::string& ctx_type_path = "") -> std::string;
       fun fetch_type(identy*) -> types::Type*;
       fun fetch_expr(identy*) -> exprs::Expr*;
       fun lookup(identy*, std::vector<std::string> names, std::vector<types::Type*> *arg_types = nullptr) -> identy*;
