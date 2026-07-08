@@ -98,7 +98,7 @@ namespace qw::exprs
   struct PostfixOp { Expr *obj{}; std::vector<Expr*> operands; PostfixOpEnum kind; };
   struct MemberOp  { Expr *obj{}, *mem{}; MemberOpEnum kind; };
 
-  struct VarExpr { stmts::Stmt *var{}; };
+  struct VarExpr { identy *var{}; };
   struct ValExpr {};
 
   struct NickExpr { std::vector<std::string> unresolved; };
@@ -135,7 +135,7 @@ namespace qw::exprs
       static fun make_MemberOp(qw::context *ctx, identy *parent, MemberOpEnum kind, Expr *obj, Expr *mem, word pos) -> Expr*;
       static fun make_GenericOp(qw::context *ctx, identy *parent, Expr *obj, std::vector<types::Type*> args, word pos) -> Expr*;
 
-      static fun make_VarExpr(qw::context *ctx, identy *parent, stmts::Stmt *var, word pos) -> Expr*;
+      static fun make_VarExpr(qw::context *ctx, identy *parent, identy *var, word pos) -> Expr*;
       static fun make_ValExpr(qw::context *ctx, identy *parent, types::Type *type, llvm::Value *value, word pos) -> Expr*;
       static fun make_Nick(qw::context *ctx, identy *parent, std::vector<std::string> name, word pos) -> Expr*;
 

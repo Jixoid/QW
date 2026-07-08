@@ -293,7 +293,13 @@ namespace qw
   }
 
   fun Sema::sema_VarDecl(decls::Decl *now) -> std::expected<void, uptr<diagnostic::message>> {
-    return sema_Type(now->as<decls::VarDecl>()->type, now->pos());
+    auto var = now->as<decls::VarDecl>();
+    if_except(sema_Type(var->type, now->pos()));
+    if (var->initer) {
+        if_except(sema_Expr(var->initer));
+        if_except(sema_Convert(var->type, var->initer, var->initer->pos()));
+    }
+    return {};
   }
 
 
@@ -530,9 +536,13 @@ namespace qw
     ef (now->is<exprs::VarExpr>()) {
       auto C = now->as<exprs::VarExpr>();
 
-      if (!now->targetType()) {
-        auto cvar = C->var->as<stmts::CodeVar>();
+      if (C->var->type() == IdentyEnum::Stmt) {
+        auto cvar = static_cast<stmts::Stmt*>(C->var)->as<stmts::CodeVar>();
         now->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+      }
+      ef (C->var->type() == IdentyEnum::Decl) {
+        auto vdecl = static_cast<decls::Decl*>(C->var)->as<decls::VarDecl>();
+        now->targetType() = types::Type::make_Reference(ctx, vdecl->type);
       }
     }
 
@@ -1101,6 +1111,16 @@ namespace qw
 
       auto var_expr = exprs::Expr::make_VarExpr(ctx, now->parent(), stmt, now->pos());
       var_expr->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+
+      return var_expr;
+    }
+
+    if (ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::VarDecl>()) {
+      auto vdecl = static_cast<decls::Decl *>(ret);
+      auto var = vdecl->as<decls::VarDecl>();
+
+      auto var_expr = exprs::Expr::make_VarExpr(ctx, now->parent(), vdecl, now->pos());
+      var_expr->targetType() = types::Type::make_Reference(ctx, var->type);
 
       return var_expr;
     }

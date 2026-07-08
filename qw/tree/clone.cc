@@ -183,9 +183,9 @@ namespace qw::tree {
     }
     else if (e->is<exprs::VarExpr>()) {
       auto p = e->as<exprs::VarExpr>();
-      stmts::Stmt* cloned_var = nullptr;
+      identy *cloned_var = nullptr;
       if (ident_map.count(p->var)) {
-        cloned_var = (stmts::Stmt*)ident_map[p->var];
+        cloned_var = ident_map[p->var];
       } else {
         cloned_var = p->var; // Unresolved variable reference, could be global or self
       }

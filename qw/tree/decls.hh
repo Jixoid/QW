@@ -30,7 +30,7 @@ namespace qw::decls
   struct Attribute { std::string name; std::string value; };
 
   struct NameSpaceDecl   { std::vector<decls::Decl*> decls; };
-  struct VarDecl         { types::Type *type{}; exprs::Expr *initer{}; };
+  struct VarDecl         { types::Type *type{}; exprs::Expr *initer{}; llvm::Value *llvm{}; };
   struct TypeDecl        { types::Type *type{}; };
   struct FuncDecl        { llvm::Function *llvm{}; types::Type *funcType{}; stmts::Stmt *body{}; /* optional */ };
   struct ConstructorDecl { llvm::Function *llvm{}; types::Type *funcType{}; std::vector<std::pair<std::string, exprs::Expr*>> inits{}; stmts::Stmt *body{}; };
