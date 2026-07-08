@@ -60,6 +60,7 @@ namespace qw::errors
   NewMsg(UnknownKeyword, error, _("unknown keyword ‘<blue>{}<reset>‘."), 1);
   NewMsg(InvalidAttribute, error, _("invalid attribute ‘<blue>{}<reset>‘."), 1);
   NewMsg(InvalidAttributeValue, error, _("invalid value ‘<blue>{1}<reset>‘ for attribute ‘<blue>{0}<reset>‘."), 2);
+  NewMsg(AttributeNotSupported, error, _("attribute ‘<blue>{}<reset>‘ is not supported on this declaration."), 1);
 
   NewMsg(NoMatchOperator, error, _("no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ <yellow>{0}<reset> ‘<blue>{2}<reset>’)."), 3);
 
