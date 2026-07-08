@@ -109,7 +109,7 @@ namespace qw::exprs
     return expr;
   }
 
-  fun Expr::make_VarExpr(qw::context *ctx, identy *parent, stmts::Stmt *var, word pos) -> Expr*
+  fun Expr::make_VarExpr(qw::context *ctx, identy *parent, identy *var, word pos) -> Expr*
   {
     auto obj = new Expr(VarExpr{ var }, parent, pos);
     ctx->push(obj);

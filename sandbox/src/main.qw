@@ -1,8 +1,5 @@
+var global_val: usize = 42;
 
 fun main() -> void {
-  // syscall 1 = write
-  // arg1 = 1 (stdout)
-  // arg2 = "Hello from syscall!\n"
-  // arg3 = 20 (length)
-  sys::syscall(1, 1, sys::cast<u64>("Hello from syscall!\n"), 20);
+  sys::syscall(60, global_val);
 }

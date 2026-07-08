@@ -258,7 +258,40 @@ namespace qw
     }
   }
 
-  fun CodeGen::gen_VarDecl(decls::Decl *now) -> void {}
+  fun CodeGen::gen_VarDecl(decls::Decl *now) -> void {
+    auto var = now->as<decls::VarDecl>();
+    if (!var->type->llvm()) {
+        auto res = gen_Type(var->type);
+        if (!res) diagnostic::fatal("Failed to generate type for global variable");
+    }
+    auto ty = var->type->llvm();
+
+    llvm::Constant *init = nullptr;
+    if (var->initer) {
+      if (var->initer->is<exprs::IntegerLiteral>() ||
+          var->initer->is<exprs::FloatingLiteral>() ||
+          var->initer->is<exprs::CharLiteral>() ||
+          var->initer->is<exprs::BoolLiteral>()) {
+         auto val = gen_Expr(var->initer);
+         init = llvm::dyn_cast<llvm::Constant>(val);
+      } else {
+         diagnostic::fatal("Global variable initialization currently only supports simple literals!");
+      }
+    }
+
+    if (!init) {
+      init = llvm::Constant::getNullValue(ty);
+    }
+
+    var->llvm = new llvm::GlobalVariable(
+      *mod->llvm(),
+      ty,
+      false, // isConstant? Let's say false so they are mutable
+      llvm::GlobalValue::ExternalLinkage,
+      init,
+      get_symbol_name(now)
+    );
+  }
 
 
 
@@ -615,12 +648,19 @@ namespace qw
     }
     ef (now->is<exprs::VarExpr>()) {
       auto vexpr = now->as<exprs::VarExpr>();
-      auto cvar  = vexpr->var->as<stmts::CodeVar>();
 
-      if (cvar->targetType && cvar->targetType->isReference())
-        return IR.CreateLoad(llvm::PointerType::getUnqual(*ctx->llvm()), cvar->llvm);
-      
-      return cvar->llvm;
+      if (vexpr->var->type() == IdentyEnum::Stmt) {
+        auto cvar  = static_cast<stmts::Stmt*>(vexpr->var)->as<stmts::CodeVar>();
+        if (cvar->targetType && cvar->targetType->isReference())
+          return IR.CreateLoad(llvm::PointerType::getUnqual(*ctx->llvm()), cvar->llvm);
+        
+        return cvar->llvm;
+      }
+      ef (vexpr->var->type() == IdentyEnum::Decl) {
+        auto vdecl = static_cast<decls::Decl*>(vexpr->var)->as<decls::VarDecl>();
+        return vdecl->llvm;
+      }
+      return nullptr;
     }
     ef (now->is<exprs::ValExpr>()) {
       return now->llvm();
