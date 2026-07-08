@@ -73,6 +73,14 @@ namespace qw
     return scopemng::mangling_abi_qw(now);
   }
 
+  static fun setup_global_attrs(decls::Decl* now, llvm::GlobalVariable* gvar) -> void {
+    for (auto& attr : now->const_attrs()) {
+      if (attr.name == "weak") {
+        gvar->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
+      }
+    }
+  }
+
   static fun setup_function_attrs(decls::Decl* now, llvm::Function* func) -> void {
     for (auto& attr : now->const_attrs()) {
       if (attr.name == "weak") {
@@ -286,11 +294,12 @@ namespace qw
     var->llvm = new llvm::GlobalVariable(
       *mod->llvm(),
       ty,
-      false, // isConstant? Let's say false so they are mutable
+      false,
       llvm::GlobalValue::ExternalLinkage,
       init,
       get_symbol_name(now)
     );
+    setup_global_attrs(now, llvm::cast<llvm::GlobalVariable>(var->llvm));
   }
 
 

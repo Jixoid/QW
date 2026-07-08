@@ -67,6 +67,8 @@ namespace qw
           return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
       }
       ef (attr.name == "rtl") {
+        if (now->is<decls::VarDecl>())
+          return errors::AttributeNotSupported(now->pos(), attr.name);
         if (!attr.value.empty())
           return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
       }
@@ -75,6 +77,8 @@ namespace qw
           return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
       }
       ef (attr.name == "calling") {
+        if (now->is<decls::VarDecl>())
+          return errors::AttributeNotSupported(now->pos(), attr.name);
         if (attr.value != "fast" && attr.value != "cdecl" && attr.value != "cold")
           return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
       }
