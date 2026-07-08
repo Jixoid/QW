@@ -14,7 +14,7 @@ fun alloc(align, size: usize) -> ptr {
 [[rtl]]
 fun dispose(p: ptr; align, size: usize) -> void {
   // 11 = sys_munmap
-  var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size, 0, 0, 0, 0);
+  var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size);
 }
 
 // sys::heap::realloc
@@ -22,7 +22,7 @@ fun dispose(p: ptr; align, size: usize) -> void {
 fun realloc(p: ptr; align, old_size, new_size: usize) -> ptr {
   // 25 = sys_mremap
   // addr=p, old_len=old_size, new_len=new_size, flags=1 (MREMAP_MAYMOVE), new_addr=0
-  var ret_val: usize = sys::syscall(25, sys::cast<usize>(p), old_size, new_size, 1, 0, 0);
+  var ret_val: usize = sys::syscall(25, sys::cast<usize>(p), old_size, new_size, 1, 0);
   if (ret_val > 0xFFFFFFFFFFFFF000) {
     ret null;
   }

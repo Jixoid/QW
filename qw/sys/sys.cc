@@ -61,20 +61,16 @@ namespace qw::sys
     
     
 
-    // sys::syscall(no, a1, a2, a3, a4, a5, a6: u64) -> u64
-    ctx->sys_api.sys_syscall = decls::Decl::make_Func(ctx, sys, "syscall", word{}, types::Type::make_Func(ctx,
-      {
-        {"no", ctx->intU64_t()},
-        {"a1", ctx->intU64_t()},
-        {"a2", ctx->intU64_t()},
-        {"a3", ctx->intU64_t()},
-        {"a4", ctx->intU64_t()},
-        {"a5", ctx->intU64_t()},
-        {"a6", ctx->intU64_t()},
-      },
-      ctx->intU64_t()), Visibility::Public
-    );
-    ctx->gst().add_ident("qwrtl_syscall", ctx->sys_api.sys_syscall);
+    // sys::syscall overloads for 1 to 7 parameters
+    for (int i = 1; i <= 7; ++i) {
+      std::vector<types::FieldType> args;
+      args.push_back({"no", ctx->intU64_t(), Visibility::Public});
+      for (int a = 1; a < i; ++a) {
+        args.push_back({"a" + std::to_string(a), ctx->intU64_t(), Visibility::Public});
+      }
+      auto syscall_func = decls::Decl::make_Func(ctx, sys, "syscall", word{}, types::Type::make_Func(ctx, args, ctx->intU64_t()), Visibility::Public);
+      ctx->gst().add_ident("qwrtl_syscall" + std::to_string(i), syscall_func);
+    }
 
     #pragma region sys::heap
 

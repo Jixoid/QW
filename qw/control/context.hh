@@ -129,7 +129,6 @@ namespace qw
         decls::Decl *heap_alloc{};
         decls::Decl *heap_dispose{};
         decls::Decl *heap_realloc{};
-        decls::Decl *sys_syscall{};
         
         fun call_heap_alloc(context *ctx, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;
         fun call_heap_dispose(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;

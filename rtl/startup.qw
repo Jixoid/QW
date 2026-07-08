@@ -8,5 +8,5 @@ fun _start() -> void {
   qw_entry();
   
   // sys_exit = 60
-  sys::syscall(60, 0, 0, 0, 0, 0, 0);
+  sys::syscall(60, 0);
 }

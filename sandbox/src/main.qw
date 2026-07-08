@@ -4,5 +4,5 @@ fun main() -> void {
   // arg1 = 1 (stdout)
   // arg2 = "Hello from syscall!\n"
   // arg3 = 20 (length)
-  sys::syscall(1, 1, sys::cast<u64>("Hello from syscall!\n"), 20, 0, 0, 0);
+  sys::syscall(1, 1, sys::cast<u64>("Hello from syscall!\n"), 20);
 }

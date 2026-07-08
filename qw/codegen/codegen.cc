@@ -835,7 +835,7 @@ namespace qw
           auto ret  = SMng.lookup(now->parent(), nick->unresolved, &arg_types);
           if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::FuncDecl>()) {
             auto ret_decl = static_cast<decls::Decl *>(ret);
-            if (ret_decl == ctx->sys_api.sys_syscall) {
+            if (ret_decl->name() == "syscall" && ret_decl->parent() == ctx->sys_api.sys_ns) {
               std::vector<llvm::Value *> args;
               auto ftype = M->obj->targetType()->as<types::FuncType>();
               for (size_t i = 0; i < M->operands.size(); ++i) {

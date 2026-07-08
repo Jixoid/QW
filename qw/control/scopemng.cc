@@ -169,6 +169,12 @@ namespace qw
         for (int i = path.size() - 2; i >= 0; i--)
           rtl_name += "_" + path[i];
         
+        if (rtl_name == "qwrtl_syscall") {
+          auto fdecl = d->as<decls::FuncDecl>();
+          if (fdecl->funcType && fdecl->funcType->is<types::FuncType>()) {
+            rtl_name += std::to_string(fdecl->funcType->as<types::FuncType>()->pars.size());
+          }
+        }
         return rtl_name;
       }
 
@@ -427,6 +433,9 @@ namespace qw
       std::string rtl_name = "qwrtl";
       for (int i = 1; i < names.size(); i++) {
         rtl_name += "_" + names[i];
+      }
+      if (rtl_name == "qwrtl_syscall" && arg_types) {
+        rtl_name += std::to_string(arg_types->size());
       }
       for (auto &GST: m_gst) {
         if (auto it = GST->find(rtl_name))
