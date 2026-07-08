@@ -823,7 +823,7 @@ namespace qw
     auto check_sys_nick = [&](exprs::Expr *E) {
       if (E->is<exprs::NickExpr>()) {
         auto nick = E->as<exprs::NickExpr>();
-        if (nick->unresolved.size() == 2 && nick->unresolved[0] == "sys") {
+        if (nick->unresolved.size() == 2 && nick->unresolved[0] == "sys" && nick->unresolved[1] != "syscall") {
           is_sys = true;
           sys_name = nick->unresolved[1];
         }
@@ -1191,8 +1191,8 @@ namespace qw
         (target_type->isFloat() && src_type->isFloat()) ||
         (target_type->isInteger() && src_type->isFloat()) ||
         (target_type->isFloat() && src_type->isInteger()) ||
-        (target_type->isInteger() && src_type->isPointer()) ||
-        (target_type->isPointer() && src_type->isInteger())
+        (target_type->isInteger() && (src_type->isPointer() || src_type == ctx->ptr_t() || src_type == ctx->null_t())) ||
+        ((target_type->isPointer() || target_type == ctx->ptr_t() || target_type == ctx->null_t()) && src_type->isInteger())
       ){
         
         if (target_type->is<types::EnumType>() && val->is<exprs::IntegerLiteral>()) {

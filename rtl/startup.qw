@@ -1,0 +1,12 @@
+// RTL Startup
+
+[[symbol:bare]]
+fun qw_entry() -> void;
+
+[[symbol:bare]]
+fun _start() -> void {
+  qw_entry();
+  
+  // sys_exit = 60
+  sys::syscall(60, 0, 0, 0, 0, 0, 0);
+}

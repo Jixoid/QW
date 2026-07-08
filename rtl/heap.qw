@@ -1,34 +1,30 @@
-
-// C functions
-[[symbol:bare, calling:cdecl]]
-fun aligned_alloc(alignment, size: usize) -> ptr;
-
-[[symbol:bare, calling:cdecl]]
-fun free_aligned_sized(p: ptr; alignment, size: usize) -> void;
-
-
-
 // sys::heap::alloc
 [[rtl]]
 fun alloc(align, size: usize) -> ptr {
-  ret aligned_alloc(align, size);
+  // 9 = sys_mmap
+  // addr=0, length=size, prot=3 (PROT_READ|PROT_WRITE), flags=34 (MAP_PRIVATE|MAP_ANONYMOUS), fd=-1, offset=0
+  var ret_val: usize = sys::syscall(9, 0, size, 3, 34, 0xFFFFFFFFFFFFFFFF, 0);
+  if (ret_val > 0xFFFFFFFFFFFFF000) { // failed
+    ret null;
+  }
+  ret sys::cast<ptr>(ret_val);
 }
 
 // sys::heap::dispose
 [[rtl]]
-fun dispose(p: ptr; align, size: usize) -> bool {
-  free_aligned_sized(p, align, size);
+fun dispose(p: ptr; align, size: usize) -> void {
+  // 11 = sys_munmap
+  var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size, 0, 0, 0, 0);
 }
 
 // sys::heap::realloc
 [[rtl]]
 fun realloc(p: ptr; align, old_size, new_size: usize) -> ptr {
-	free_aligned_sized(p, align, old_size);
-
-	var new_p: ptr = aligned_alloc(align, new_size);
-	if (new_p == null) {
-		ret null;
-	}
-
-	ret new_p;
+  // 25 = sys_mremap
+  // addr=p, old_len=old_size, new_len=new_size, flags=1 (MREMAP_MAYMOVE), new_addr=0
+  var ret_val: usize = sys::syscall(25, sys::cast<usize>(p), old_size, new_size, 1, 0, 0);
+  if (ret_val > 0xFFFFFFFFFFFFF000) {
+    ret null;
+  }
+  ret sys::cast<ptr>(ret_val);
 }

@@ -104,6 +104,30 @@
 
 namespace qw
 {
+  static fun unescape_string(std::string_view s) -> std::string {
+    std::string res;
+    res.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+      if (s[i] == '\\' && i + 1 < s.size()) {
+        ++i;
+        switch (s[i]) {
+          case 'n': res += '\n'; break;
+          case 'r': res += '\r'; break;
+          case 't': res += '\t'; break;
+          case '0': res += '\0'; break;
+          case '\\': res += '\\'; break;
+          case '\"': res += '\"'; break;
+          case '\'': res += '\''; break;
+          default: res += '\\'; res += s[i]; break;
+        }
+      }
+      else {
+        res += s[i];
+      }
+    }
+    return res;
+  }
+
 
   fun frontend::read_File(decls::Decl *self) -> std::expected<void, uptr<diagnostic::message>> {
     while (true) {
@@ -1093,14 +1117,16 @@ namespace qw
     }
     ef (ID->view()[0] == '\'') {
       if (ID->view().size() == 2) return errors::EmptyCharacterConstant(*ID);
-      ef (ID->view().size() > 3)  return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size() - 2));
+      std::string unescaped = unescape_string(ID->view().substr(1, ID->view().size() - 2));
+      if (unescaped.size() == 0) return errors::EmptyCharacterConstant(*ID);
+      if (unescaped.size() > 1)  return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size() - 2));
 
-      ret = exprs::Expr::make_CharLiteral(ctx, parent, ID->view()[1], *ID);
+      ret = exprs::Expr::make_CharLiteral(ctx, parent, unescaped[0], *ID);
     }
     ef (ID->view()[0] == '\"') {
       ret = exprs::Expr::make_StringLiteral(
         ctx, parent, 
-        std::string(ID->view().substr(1, ID->view().size() -2)),
+        unescape_string(ID->view().substr(1, ID->view().size() - 2)),
         *ID
       );
     }

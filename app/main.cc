@@ -59,6 +59,7 @@ fun main(int argc, char** argv) -> int
   std::string rtl_path = "";
   std::string dst = "native";
   std::string path = std::filesystem::current_path().string();
+  std::string out_file;
 
   auto build_cmd = app.add_subcommand("build", "Builds the QW project/module");
   build_cmd->add_flag("-f,--fpic", fpic, "Generate position independent code");
@@ -74,7 +75,7 @@ fun main(int argc, char** argv) -> int
 
   if (build_cmd->parsed() || run_cmd->parsed()) {
     if (run_cmd->parsed())
-      dst = "bytecode";
+      dst = "executable";
 
     auto vfs_file = vfs::__file::get();
 
@@ -212,6 +213,7 @@ fun main(int argc, char** argv) -> int
         auto Sum2 = qw::Sema::pass_ns(rtl_master_mod, sys, {});
         if (Sum2.sumerr()) {
           std::cerr << Sum2;
+          return 1;
         }
         qw::CodeGen::pass_ns(rtl_master_mod, sys, {});
         
@@ -270,7 +272,6 @@ fun main(int argc, char** argv) -> int
       }
 
       std::string base_file = path + "/build/out";
-      std::string out_file;
       
       if (dst == "bytecode")   out_file = base_file + ".bc";
       ef (dst == "llir")       out_file = base_file + ".ll";
@@ -359,10 +360,10 @@ fun main(int argc, char** argv) -> int
     // Final
     l_final:
     if (run_cmd->parsed()) {
-      std::string lli_cmd = "lli -entry-function=qw_entry " + path + "/build/out.bc";
-      int ret = system(lli_cmd.c_str());
+      std::string run_cmd_str = out_file;
+      int ret = system(run_cmd_str.c_str());
       if (ret != 0)
-        std::cerr << "lli execution failed." << std::endl;
+        std::cerr << "execution failed with code: " << ret << std::endl;
     }
   }
 

@@ -129,6 +129,7 @@ namespace qw
         decls::Decl *heap_alloc{};
         decls::Decl *heap_dispose{};
         decls::Decl *heap_realloc{};
+        decls::Decl *sys_syscall{};
         
         fun call_heap_alloc(context *ctx, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;
         fun call_heap_dispose(context *ctx, exprs::Expr *p, exprs::Expr *align, exprs::Expr *size, word pos) -> exprs::Expr*;
@@ -200,8 +201,7 @@ namespace qw
   #pragma endregion
 
     public:
-      fun push(identy *obj)
-      {
+      fun push(identy *obj) {
         switch (obj->type()) {
           case IdentyEnum::Decl: m_decls.push_back((decls::Decl*)obj); break;
           case IdentyEnum::Expr: m_exprs.push_back((exprs::Expr*)obj); break;

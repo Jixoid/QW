@@ -1,29 +1,8 @@
-[[symbol:bare]]
-fun puts(s: char^) -> i32;
-
-iface Animal {
-  fun speak();
-}
-
-struct Dog: Animal {
-  fun speak() {
-    puts("Hav");
-  }
-}
-
-struct Cat: Animal {
-  fun speak() {
-    puts("Miyav");
-  }
-}
 
 fun main() -> void {
-  var d: Dog;
-  var c: Cat;
-  
-  var a1: Animal = d;
-  var a2: Animal = c;
-  
-  a1.speak();
-  a2.speak();
+  // syscall 1 = write
+  // arg1 = 1 (stdout)
+  // arg2 = "Hello from syscall!\n"
+  // arg3 = 20 (length)
+  sys::syscall(1, 1, sys::cast<u64>("Hello from syscall!\n"), 20, 0, 0, 0);
 }

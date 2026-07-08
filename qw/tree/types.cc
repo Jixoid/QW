@@ -37,7 +37,7 @@ namespace qw::types
     if (!is<PrimitiveType>()) return false;
 
     auto kind = as<PrimitiveType>()->kind;
-    return (kind >= PrimitiveEnum::I8 && kind <= PrimitiveEnum::I128) || (kind >= PrimitiveEnum::U8 && kind <= PrimitiveEnum::U128);
+    return (kind >= PrimitiveEnum::I8 && kind <= PrimitiveEnum::ISize) || (kind >= PrimitiveEnum::U8 && kind <= PrimitiveEnum::USize);
   }
 
   fun Type::isFloat() -> bool

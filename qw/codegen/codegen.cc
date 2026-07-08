@@ -23,6 +23,7 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/Type.h>
@@ -833,7 +834,32 @@ namespace qw
             
           auto ret  = SMng.lookup(now->parent(), nick->unresolved, &arg_types);
           if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::FuncDecl>()) {
-            auto fdecl = static_cast<decls::Decl *>(ret)->as<decls::FuncDecl>();
+            auto ret_decl = static_cast<decls::Decl *>(ret);
+            if (ret_decl == ctx->sys_api.sys_syscall) {
+              std::vector<llvm::Value *> args;
+              auto ftype = M->obj->targetType()->as<types::FuncType>();
+              for (size_t i = 0; i < M->operands.size(); ++i) {
+                args.push_back(gen_Convert(ftype->pars[i].type, M->operands[i]));
+              }
+              
+              llvm::Type *int64Ty = llvm::Type::getInt64Ty(*ctx->llvm());
+              std::vector<llvm::Type*> argTys(args.size(), int64Ty);
+              auto fTy = llvm::FunctionType::get(int64Ty, argTys, false);
+              
+              std::string constraints = "={ax},{ax}";
+              if (args.size() > 1) constraints += ",{di}";
+              if (args.size() > 2) constraints += ",{si}";
+              if (args.size() > 3) constraints += ",{dx}";
+              if (args.size() > 4) constraints += ",{r10}";
+              if (args.size() > 5) constraints += ",{r8}";
+              if (args.size() > 6) constraints += ",{r9}";
+              constraints += ",~{rcx},~{r11},~{memory},~{dirflag},~{fpsr},~{flags}";
+              
+              auto inlineAsm = llvm::InlineAsm::get(fTy, "syscall", constraints, true);
+              return IR.CreateCall(inlineAsm, args);
+            }
+            
+            auto fdecl = ret_decl->as<decls::FuncDecl>();
             if (!fdecl->llvm) {
                 auto _r = gen_Type(fdecl->funcType);
                 auto ret_decl = static_cast<decls::Decl *>(ret);

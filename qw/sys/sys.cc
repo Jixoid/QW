@@ -61,6 +61,21 @@ namespace qw::sys
     
     
 
+    // sys::syscall(no, a1, a2, a3, a4, a5, a6: u64) -> u64
+    ctx->sys_api.sys_syscall = decls::Decl::make_Func(ctx, sys, "syscall", word{}, types::Type::make_Func(ctx,
+      {
+        {"no", ctx->intU64_t()},
+        {"a1", ctx->intU64_t()},
+        {"a2", ctx->intU64_t()},
+        {"a3", ctx->intU64_t()},
+        {"a4", ctx->intU64_t()},
+        {"a5", ctx->intU64_t()},
+        {"a6", ctx->intU64_t()},
+      },
+      ctx->intU64_t()), Visibility::Public
+    );
+    ctx->gst().add_ident("qwrtl_syscall", ctx->sys_api.sys_syscall);
+
     #pragma region sys::heap
 
     ctx->sys_api.heap_ns = decls::Decl::make_NameSpace(ctx, sys, "heap", word{});
