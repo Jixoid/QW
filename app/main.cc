@@ -113,8 +113,10 @@ fun main(int argc, char** argv) -> int
     auto sys = qw::sys::build_sys_module(ctx.get());
 
     bool use_no_rtl = false;
-
-
+    llvm::Triple TheTriple(llvm::sys::getDefaultTargetTriple());
+    std::string target_rtl_src = rtl_path + "/" + TheTriple.getOSName().str() + "-" + TheTriple.getArchName().str() + "/src";
+    std::string target_rtl_obj = rtl_path + "/" + TheTriple.getOSName().str() + "-" + TheTriple.getArchName().str() + "/obj";
+    qw::module* rtl_master_mod = nullptr;
     // Front
     l_pass_0: {
       auto Sum = frontend(mod).process();
@@ -145,10 +147,10 @@ fun main(int argc, char** argv) -> int
 
       // Load RTL files if specified and allowed
       if (!rtl_path.empty() && !use_no_rtl) {
-        if (std::filesystem::exists(rtl_path) && std::filesystem::is_directory(rtl_path)) {
-          for (const auto& entry : std::filesystem::recursive_directory_iterator(rtl_path)) {
+        if (std::filesystem::exists(target_rtl_src) && std::filesystem::is_directory(target_rtl_src)) {
+          for (const auto& entry : std::filesystem::recursive_directory_iterator(target_rtl_src)) {
             if (entry.is_regular_file() && entry.path().extension() == ".qw") {
-              std::string rel_path = std::filesystem::relative(entry.path(), rtl_path).string();
+              std::string rel_path = std::filesystem::relative(entry.path(), target_rtl_src).string();
               
               decls::Decl* curr_ns = sys;
               std::filesystem::path p(rel_path);
@@ -189,6 +191,24 @@ fun main(int argc, char** argv) -> int
 
     // Sema
     l_pass_1: {
+      if (!rtl_path.empty() && !use_no_rtl) {
+        std::string first_rtl_file = target_rtl_src;
+        if (std::filesystem::exists(target_rtl_src)) {
+          for (const auto& entry : std::filesystem::recursive_directory_iterator(target_rtl_src)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".qw") {
+              first_rtl_file = entry.path().string();
+              break;
+            }
+          }
+        }
+        rtl_master_mod = ctx->make_module("qwrtl", first_rtl_file);
+        auto Sum2 = qw::Sema::pass_ns(rtl_master_mod, sys, {});
+        if (Sum2.sumerr()) {
+          std::cerr << Sum2;
+          return 1;
+        }
+      }
+
       auto Sum = Sema::pass(mod, { scopemng::mangling_abi_qw(sys) });
 
       if (Sum.sumerr()) {
@@ -201,22 +221,8 @@ fun main(int argc, char** argv) -> int
     l_pass_2: {
       CodeGen::pass(mod, { scopemng::mangling_abi_qw(sys) });
 
-      if (!rtl_path.empty() && !use_no_rtl) {
-        std::string first_rtl_file = rtl_path;
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(rtl_path)) {
-          if (entry.is_regular_file() && entry.path().extension() == ".qw") {
-            first_rtl_file = entry.path().string();
-            break;
-          }
-        }
-        auto rtl_master_mod = ctx->make_module("qwrtl", first_rtl_file);
-        auto Sum2 = qw::Sema::pass_ns(rtl_master_mod, sys, {});
-        if (Sum2.sumerr()) {
-          std::cerr << Sum2;
-          return 1;
-        }
+      if (rtl_master_mod) {
         qw::CodeGen::pass_ns(rtl_master_mod, sys, {});
-        
         
         bool err = llvm::Linker::linkModules(*mod->llvm(), llvm::CloneModule(*rtl_master_mod->llvm()));
         if (err) {
@@ -227,7 +233,6 @@ fun main(int argc, char** argv) -> int
 
     // LLVM
     l_pass_3: {
-      llvm::Triple TheTriple(llvm::sys::getDefaultTargetTriple());
       mod->llvm()->setTargetTriple(TheTriple);
 
       std::string Error;
@@ -339,9 +344,31 @@ fun main(int argc, char** argv) -> int
           std::vector<const char*> args;
           args.push_back("ld.lld");
           if (dst == "shared") args.push_back("-shared");
+          
+          std::string cqrt_o;
+          if (!use_no_rtl && !rtl_path.empty() && dst == "executable") {
+            args.push_back("-dynamic-linker");
+            args.push_back("/lib64/ld-linux-x86-64.so.2");
+            
+            cqrt_o = target_rtl_obj + "/cqrt.o";
+            if (std::filesystem::exists(cqrt_o)) {
+              args.push_back(cqrt_o.c_str());
+            } else {
+              std::cerr << "Warning: " << cqrt_o << " not found!" << std::endl;
+            }
+          }
+
           args.push_back("-o");
           args.push_back(out_file.c_str());
           args.push_back(obj_file.c_str());
+
+          if (!use_no_rtl && !rtl_path.empty() && dst == "executable") {
+            args.push_back("-L/lib/x86_64-linux-gnu");
+            args.push_back("-L/usr/lib/x86_64-linux-gnu");
+            args.push_back("-L/lib64");
+            args.push_back("-L/usr/lib64");
+            args.push_back("-lc");
+          }
           
           bool linkSuccess = false;
           if (TheTriple.isOSWindows())

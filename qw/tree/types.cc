@@ -78,7 +78,7 @@ namespace qw::types
     return as<PrimitiveType>()->kind == PrimitiveEnum::Bool;
   }
 
-  fun Type::intBit() -> u8
+  fun Type::intBit(qw::context *ctx) -> u8
   {
     if (!is<PrimitiveType>()) return 0;
 
@@ -97,7 +97,7 @@ namespace qw::types
       case PrimitiveEnum::U128: return 128;
       case PrimitiveEnum::Bool: return 1;
       case PrimitiveEnum::ISize:
-      case PrimitiveEnum::USize: return 0; // Handled specially or target dependent
+      case PrimitiveEnum::USize: return (u8)ctx->progBits() *8;
       default: return 0;
     }
   }

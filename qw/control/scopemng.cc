@@ -438,8 +438,9 @@ namespace qw
         rtl_name += std::to_string(arg_types->size());
       }
       for (auto &GST: m_gst) {
-        if (auto it = GST->find(rtl_name))
+        if (auto it = GST->find(rtl_name)) {
           return *it;
+        }
       }
     }
 
@@ -468,7 +469,9 @@ namespace qw
                         auto t2 = (*arg_types)[i];
                         if (t1->isReference()) t1 = t1->as<types::ReferenceType>()->sub;
                         if (t2->isReference()) t2 = t2->as<types::ReferenceType>()->sub;
-                        if (t1->typname() != t2->typname()) { match = false; break; }
+                        if (t1->typname() != t2->typname()) {
+                          match = false; break;
+                        }
                       }
                       if (match) { ret = pair.second; goto l_end; }
                     }
@@ -488,6 +491,7 @@ namespace qw
           std::string bI = prefix + "I" + last_part;
           std::string bE = prefix + "E" + last_part;
           std::string bB = prefix + "B" + last_part;
+          std::string bF = prefix + "F" + last_part;
           
           if (auto it = GST->find(bT)) { ret = *it; goto l_end; }
           if (auto it = GST->find(bS)) { ret = *it; goto l_end; }
@@ -496,7 +500,7 @@ namespace qw
           if (auto it = GST->find(bB)) { ret = *it; goto l_end; }
           
           for (const auto &pair : GST->idents()) {
-            if (pair.first.find(bT) == 0 || pair.first == bT) {
+            if (pair.first.find(bT) == 0 || pair.first == bT || pair.first.find(bF) == 0 || pair.first == bF) {
               ret = pair.second;
               goto l_end;
             }

@@ -66,6 +66,12 @@ namespace qw
         if (attr.value != "bare" && attr.value != "qw")
           return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
       }
+      ef (attr.name == "thread_local") {
+        if (!now->is<decls::VarDecl>())
+          return errors::AttributeNotSupported(now->pos(), attr.name);
+        if (!attr.value.empty())
+          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+      }
       ef (attr.name == "rtl") {
         if (now->is<decls::VarDecl>())
           return errors::AttributeNotSupported(now->pos(), attr.name);
@@ -514,8 +520,23 @@ namespace qw
     begin:
 
     if (now->is<exprs::IntegerLiteral>()) {
-      if (!now->targetType())
-        now->targetType() = ctx->intS32_t();
+      if (!now->targetType()) {
+        auto lit = now->as<exprs::IntegerLiteral>();
+        if (std::holds_alternative<u128>(lit->val)) {
+          u128 v = std::get<u128>(lit->val);
+          if (v <= 2147483647) now->targetType() = ctx->intS32_t();
+          ef (v <= 4294967295ULL) now->targetType() = ctx->intU32_t();
+          ef (v <= 9223372036854775807ULL) now->targetType() = ctx->intS64_t();
+          ef (v <= 18446744073709551615ULL) now->targetType() = ctx->intU64_t();
+          else now->targetType() = ctx->intU128_t();
+        }
+        else {
+          i128 v = std::get<i128>(lit->val);
+          if (v >= -2147483648LL && v <= 2147483647LL) now->targetType() = ctx->intS32_t();
+          ef (v >= -9223372036854775807LL - 1 && v <= 9223372036854775807LL) now->targetType() = ctx->intS64_t();
+          else now->targetType() = ctx->intS128_t();
+        }
+      }
     }
     ef (now->is<exprs::FloatingLiteral>()) {
       if (!now->targetType())
@@ -655,7 +676,7 @@ namespace qw
       types::Type *target{};
 
       if (t1 != t2)
-        target = (t1->intBit() != t2->intBit()) ? (t1->intBit() > t2->intBit() ? t1 : t2) : (!t1->isSigned() ? t1 : t2);
+        target = (t1->intBit(ctx) != t2->intBit(ctx)) ? (t1->intBit(ctx) > t2->intBit(ctx) ? t1 : t2) : (!t1->isSigned() ? t1 : t2);
       else
         target = t1;
 
@@ -947,6 +968,8 @@ namespace qw
         arg_types.push_back(op->targetType());
 
       auto ret = SMng.lookup(now->parent(), nick->unresolved, &arg_types);
+      if (!ret) ret = SMng.lookup(now->parent(), nick->unresolved, nullptr);
+      
       if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::FuncDecl>()) {
         auto fdecl = static_cast<decls::Decl *>(ret)->as<decls::FuncDecl>();
         auto ftype = fdecl->funcType->as<types::FuncType>();
@@ -1104,6 +1127,46 @@ namespace qw
     };
 
     auto ret = SMng.lookup(now->parent(), nick->unresolved);
+
+    if (!ret && nick->unresolved.size() > 1) {
+      std::vector<std::string> parent_nick = nick->unresolved;
+      std::string field_name = parent_nick.back();
+      parent_nick.pop_back();
+
+      auto parent_ret = SMng.lookup(now->parent(), parent_nick);
+      if (parent_ret && parent_ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(parent_ret)->is<decls::TypeDecl>()) {
+        auto typeDecl = static_cast<decls::Decl *>(parent_ret)->as<decls::TypeDecl>();
+
+        if (typeDecl->type->is<types::EnumType>()) {
+          auto enum_t = typeDecl->type->as<types::EnumType>();
+          for (auto &v: enum_t->vals)
+            if (v.cons == field_name) {
+              exprs::Expr *lit = nullptr;
+              if (std::holds_alternative<u64>(v.val)) {
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u128)std::get<u64>(v.val), now->pos());
+              } else {
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i128)std::get<i64>(v.val), now->pos());
+              }
+              lit->targetType() = typeDecl->type;
+              return lit;
+            }
+        }
+        ef (typeDecl->type->is<types::SetType>()) {
+          auto set_t = typeDecl->type->as<types::SetType>();
+          for (auto &v: set_t->vals)
+            if (v.cons == field_name) {
+              exprs::Expr *lit = nullptr;
+              if (std::holds_alternative<u64>(v.val)) {
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u128)std::get<u64>(v.val), now->pos());
+              } else {
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i128)std::get<i64>(v.val), now->pos());
+              }
+              lit->targetType() = typeDecl->type;
+              return lit;
+            }
+        }
+      }
+    }
 
     if (!ret)
       return errors::IdentifierNotFound(now->pos(), join_identifier_path(nick->unresolved));
@@ -1522,7 +1585,7 @@ namespace qw
       }
       
       bool is_signed = enumType->baseType->isSigned();
-      u32 bits = enumType->baseType->intBit();
+      u32 bits = enumType->baseType->intBit(ctx);
       
       i128 b_min = is_signed ? -((i128)1 << (bits - 1)) : 0;
       i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
@@ -1582,7 +1645,7 @@ namespace qw
       }
       
       bool is_signed = setType->baseType->isSigned();
-      u32 bits = setType->baseType->intBit();
+      u32 bits = setType->baseType->intBit(ctx);
       
       i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
       

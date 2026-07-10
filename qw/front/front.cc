@@ -1111,8 +1111,25 @@ namespace qw
     }
     ef (isNumber(ID->view()[0])) {
       u128 val;
-      auto eret = std::from_chars(ID->view().begin(), ID->view().end(), val);
-      if (eret.ec != std::errc()) return errors::CantConvertInteger(*ID, ID->str());
+      std::string_view view = ID->view();
+      int base = 10;
+      size_t offset = 0;
+      
+      if (view.size() > 2 && view[0] == '0') {
+        if (view[1] == 'x' || view[1] == 'X') {
+          base = 16;
+          offset = 2;
+        }
+        ef (view[1] == 'b' || view[1] == 'B') {
+          base = 2;
+          offset = 2;
+        }
+      }
+      
+      auto eret = std::from_chars(view.begin() + offset, view.end(), val, base);
+      if (eret.ec != std::errc() || eret.ptr != view.end()) {
+        return errors::CantConvertInteger(*ID, ID->str());
+      }
       ret = exprs::Expr::make_IntegerLiteral(ctx, parent, val, *ID);
     }
     ef (ID->view()[0] == '\'') {
