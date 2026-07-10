@@ -1,9 +1,8 @@
-
-fun print(msg: char^; len: usize) {
-  sys::syscall(1, 1, sys::cast<usize>(msg), len);
-}
+var a = 0x123;
 
 fun main() {
-  print("Hello World!\n", 13);
-  sys::syscall(60, 0);
+  if (a == 0x123) sys::syscall(60, 0);
+  else sys::syscall(60, 1);
+  
+  while (a == 1) a = 2;
 }

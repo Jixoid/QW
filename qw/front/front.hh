@@ -156,6 +156,8 @@ namespace qw
       fun read_StructDestructorDecl(decls::Decl*, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>>;
 
       fun read_CodeBlock(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
+      fun read_SingleStmt(identy*, std::optional<word>) -> std::expected<void, uptr<diagnostic::message>>;
+      fun read_BlockOrStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_ExprStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;
       fun read_GenericParams(decls::Decl *parent) -> std::expected<decls::GenericContext*, uptr<diagnostic::message>>;
       fun read_IfStmt(identy*) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>>;

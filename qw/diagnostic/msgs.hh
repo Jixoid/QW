@@ -53,6 +53,8 @@ namespace qw::fatals
 
 namespace qw::errors
 {
+  NewMsg(TypeCannotBeInferred, error, _("type of variable ‘<blue>{0}<reset>‘ cannot be inferred."), 1);
+  NewMsg(TypeRequiredWithoutAssignment, error, _("variable ‘<blue>{0}<reset>‘ must have a type annotation when declared without an initial value."), 1);
   NewMsg(ExpectedIdentifierBut, error, _("expected ‘<blue>{1}<reset>‘, but found ‘<blue>{0}<reset>‘."), 2);
   NewMsg(ExpectedIdentifierBut2, error, _("expected ‘<blue>{1}<reset>‘ or ‘<blue>{2}<reset>‘, but found ‘<blue>{0}<reset>‘."), 3);
   NewMsg(ExpectedAWord, error, _("expected a word, but found ‘<blue>{}<reset>‘."), 1);

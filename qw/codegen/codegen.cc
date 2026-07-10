@@ -512,6 +512,10 @@ namespace qw
 
   fun CodeGen::gen_VarStmt(stmts::Stmt *now) -> void {
     auto cvar = now->as<stmts::CodeVar>();
+    if (!cvar->targetType) {
+      std::cerr << "CRITICAL: targetType is null for CodeVar " << cvar->name << "\n";
+      abort();
+    }
     auto res   = gen_Type(cvar->targetType);
     cvar->llvm = IR.CreateAlloca(cvar->targetType->llvm());
 

@@ -304,10 +304,18 @@ namespace qw
 
   fun Sema::sema_VarDecl(decls::Decl *now) -> std::expected<void, uptr<diagnostic::message>> {
     auto var = now->as<decls::VarDecl>();
-    if_except(sema_Type(var->type, now->pos()));
+    if (var->type)
+      if_except(sema_Type(var->type, now->pos()));
+    
     if (var->initer) {
         if_except(sema_Expr(var->initer));
-        if_except(sema_Convert(var->type, var->initer, var->initer->pos()));
+        if (!var->type) {
+            var->type = var->initer->targetType();
+            if (!var->type)
+                return std::unexpected(errors::TypeCannotBeInferred(now->pos(), std::string(now->name())));
+        } else {
+            if_except(sema_Convert(var->type, var->initer, var->initer->pos()));
+        }
     }
     return {};
   }
@@ -343,7 +351,7 @@ namespace qw
 
   fun Sema::sema_VarStmt(stmts::Stmt *now) -> std::expected<void, uptr<diagnostic::message>> {
     auto cvar = now->as<stmts::CodeVar>();
-    if_except(sema_Type(cvar->targetType, now->pos()));
+    if (cvar->targetType) if_except(sema_Type(cvar->targetType, now->pos()));
 
     return {};
   }
@@ -563,7 +571,10 @@ namespace qw
 
       if (C->var->type() == IdentyEnum::Stmt) {
         auto cvar = static_cast<stmts::Stmt*>(C->var)->as<stmts::CodeVar>();
-        now->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+        if (cvar->targetType)
+          now->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+        else
+          now->targetType() = nullptr;
       }
       ef (C->var->type() == IdentyEnum::Decl) {
         auto vdecl = static_cast<decls::Decl*>(C->var)->as<decls::VarDecl>();
@@ -639,8 +650,18 @@ namespace qw
     bool is_compound_assign = (C->kind >= exprs::BinaryOpEnum::AddAssign && C->kind <= exprs::BinaryOpEnum::ShrAssign);
 
     if (C->kind == exprs::BinaryOpEnum::Assign || is_compound_assign) {
-      if_except(sema_Expr(C->o1));
       if_except(sema_Expr(C->o2));
+      if_except(sema_Expr(C->o1));
+
+      if (C->kind == exprs::BinaryOpEnum::Assign && C->o1->is<exprs::VarExpr>()) {
+        auto vexpr = C->o1->as<exprs::VarExpr>();
+        if (!C->o1->targetType()) {
+          auto stmt = static_cast<stmts::Stmt*>(vexpr->var);
+          auto cvar = stmt->as<stmts::CodeVar>();
+          cvar->targetType = C->o2->targetType();
+          C->o1->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+        }
+      }
 
       if (!C->o1->targetType()->isReference())
         return errors::NoMatchOperator(now->pos(), is_compound_assign ? "compound assignment" : "=", std::string(C->o1->targetType()->typname()), "left-hand side of assignment must be an lvalue");
@@ -1177,7 +1198,10 @@ namespace qw
       auto cvar = stmt->as<stmts::CodeVar>();
 
       auto var_expr = exprs::Expr::make_VarExpr(ctx, now->parent(), stmt, now->pos());
-      var_expr->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+      if (cvar->targetType)
+        var_expr->targetType() = types::Type::make_Reference(ctx, cvar->targetType);
+      else
+        var_expr->targetType() = nullptr;
 
       return var_expr;
     }

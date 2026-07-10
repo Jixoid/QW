@@ -407,13 +407,20 @@ namespace qw
     auto Colon = Lex();
     Require(Colon);
 
-    if (Colon->view() == ":");
-    ef (Colon->view() == ",") goto re;
-    else
-      return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ":", ",");
+    types::Type *parsedType = nullptr;
 
-    auto Type = read_Type(parent, true);
-    val_error(Type);
+    if (Colon->view() == "=" || Colon->view() == ";") {
+      LexStore(Colon);
+    } else {
+      if (Colon->view() == ":") {}
+      ef (Colon->view() == ",") goto re;
+      else
+        return std::unexpected(errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ":", ","));
+
+      auto Type = read_Type(parent, true);
+      val_error(Type);
+      parsedType = *Type;
+    }
 
     auto Assi = Lex();
     Require(Assi);
@@ -425,14 +432,16 @@ namespace qw
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      auto self = decls::Decl::make_Var(ctx, parent, Names[0].str(), Names[0], *Type, Visibility::Private, *Expr);
+      auto self = decls::Decl::make_Var(ctx, parent, Names[0].str(), Names[0], parsedType, Visibility::Private, *Expr);
       self->attrs() = std::exchange(m_current_attrs, {});
     }
     else {
+      if (!parsedType)
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Names[0].str()));
       LexStore(Assi);
 
       for (size_t i = 0; i < Names.size(); i++) {
-        auto self = decls::Decl::make_Var(ctx, parent, Names[i].str(), Names[i], *Type);
+        auto self = decls::Decl::make_Var(ctx, parent, Names[i].str(), Names[i], parsedType);
         self->attrs() = m_current_attrs;
       }
       m_current_attrs.clear();
@@ -859,6 +868,51 @@ namespace qw
 
 
 
+  fun frontend::read_SingleStmt(identy *self, std::optional<word> predefined_id) -> std::expected<void, uptr<diagnostic::message>> {
+    auto ID = predefined_id ? *predefined_id : *Lex();
+    if (!predefined_id && !ID) return std::unexpected(errors::ExpectedIdentifierBut(*LexLast(), LexLast()->str(), "a statement"));
+
+    if (ID.view() == "ret")   if_error(read_ReturnStmt(self))
+    ef (ID.view() == "var")   if_error(read_VarStmt(self))
+    ef (ID.view() == "let")   if_error(read_LetStmt(self))
+    ef (ID.view() == "if")    if_error(read_IfStmt(self))
+    ef (ID.view() == "while") if_error(read_WhileStmt(self))
+    ef (ID.view() == "break") {
+      stmts::Stmt::make_Break(ctx, self, ID);
+      expected(Lex(), ";");
+    }
+    ef (ID.view() == "continue") {
+      stmts::Stmt::make_Continue(ctx, self, ID);
+      expected(Lex(), ";");
+    }
+    ef (ID.view() == "unsafe") {
+      if_error(read_UnsafeStmt(self, ID));
+    }
+    else {
+      LexStore(ID);
+      auto expr = read_Expr(self, Precedence::Lowest);
+      val_error(expr);
+      stmts::Stmt::make_ExprStmt(ctx, self, *expr, ID);
+      expected(Lex(), ";");
+    }
+
+    return {};
+  }
+
+  fun frontend::read_BlockOrStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
+    auto token = Lex();
+    Require(token);
+    
+    if (token->view() == "{") {
+      return read_CodeBlock(parent);
+    } else {
+      LexStore(token);
+      auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *token);
+      if_error(read_SingleStmt(self, std::nullopt));
+      return self;
+    }
+  }
+
   fun frontend::read_CodeBlock(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
     auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *LexLast());
 
@@ -867,29 +921,8 @@ namespace qw
       Require(ID);
 
       if (ID->view() == "}") break;
-      ef (ID->view() == "ret")   if_error(read_ReturnStmt(self))
-      ef (ID->view() == "var")   if_error(read_VarStmt(self))
-      ef (ID->view() == "let")   if_error(read_LetStmt(self))
-      ef (ID->view() == "if")    if_error(read_IfStmt(self))
-      ef (ID->view() == "while") if_error(read_WhileStmt(self))
-      ef (ID->view() == "break") {
-        stmts::Stmt::make_Break(ctx, self, *ID);
-        expected(Lex(), ";");
-      }
-      ef (ID->view() == "continue") {
-        stmts::Stmt::make_Continue(ctx, self, *ID);
-        expected(Lex(), ";");
-      }
-      ef (ID->view() == "unsafe") {
-        if_error(read_UnsafeStmt(self, *ID));
-      }
-      else {
-        LexStore(ID);
-        auto expr = read_Expr(self, Precedence::Lowest);
-        val_error(expr);
-        stmts::Stmt::make_ExprStmt(ctx, self, *expr, *ID);
-        expected(Lex(), ";");
-      }
+      
+      if_error(read_SingleStmt(self, *ID));
     }
 
     return self;
@@ -901,11 +934,10 @@ namespace qw
     auto cond = read_Expr(parent, Precedence::Lowest);
     val_error(cond);
     expected(Lex(), ")");
-    expected(Lex(), "{");
-    
+
     auto if_stmt = stmts::Stmt::make_IfStmt(ctx, parent, pos, *cond, nullptr, nullptr);
-    
-    auto then_ret = read_CodeBlock(if_stmt);
+
+    auto then_ret = read_BlockOrStmt(if_stmt);
     if (!then_ret) return std::unexpected(std::move(then_ret.error()));
     if_stmt->as<stmts::IfStmt>()->then_block = *then_ret;
 
@@ -921,13 +953,12 @@ namespace qw
         if (!elif_ret) return std::unexpected(std::move(elif_ret.error()));
         if_stmt->as<stmts::IfStmt>()->else_block = *elif_ret;
       }
-      ef (nxt2->view() == "{") {
-        auto else_ret = read_CodeBlock(if_stmt);
+      else {
+        LexStore(nxt2);
+        auto else_ret = read_BlockOrStmt(if_stmt);
         if (!else_ret) return std::unexpected(std::move(else_ret.error()));
         if_stmt->as<stmts::IfStmt>()->else_block = *else_ret;
       }
-      else
-        return errors::ExpectedIdentifierBut2(*nxt2, nxt2->str(), "if", "{");
     }
     ef (nxt->view() == "ef") {
       auto elif_ret = read_IfStmt(if_stmt);
@@ -950,8 +981,7 @@ namespace qw
 
     auto while_stmt = stmts::Stmt::make_WhileStmt(ctx, parent, pos, *cond, nullptr);
 
-    expected(Lex(), "{");
-    auto body_ret = read_CodeBlock(while_stmt);
+    auto body_ret = read_BlockOrStmt(while_stmt);
     if (!body_ret) return std::unexpected(std::move(body_ret.error()));
     while_stmt->as<stmts::WhileStmt>()->body = *body_ret;
 
@@ -970,14 +1000,22 @@ namespace qw
     auto Colon = Lex();
     Require(Colon);
 
-    if (Colon->view() == ",") goto re;
-    ef (Colon->view() == ":");
-    else
-      return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
+    types::Type *Type = nullptr;
 
-    // Type
-    auto Type = read_Type(parent, true);
-    val_error(Type);
+    if (Colon->view() == "=" || Colon->view() == ";") {
+      LexStore(Colon);
+    }
+    else {
+      if (Colon->view() == ",") goto re;
+      ef (Colon->view() == ":");
+      else
+        return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
+
+      // Type
+      auto TypeRes = read_Type(parent, true);
+      val_error(TypeRes);
+      Type = *TypeRes;
+    }
 
     // Value
     auto Assi = Lex();
@@ -990,13 +1028,15 @@ namespace qw
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name, *Expr, Assi);
+      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), Type, *Name, *Expr, Assi);
     }
     else {
+      if (!Type)
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Name->str()));
       LexStore(Assi);
 
-      for (auto &v : Vars)
-        stmts::Stmt::make_CodeVar(ctx, parent, v.str(), *Type, v);
+      for (auto& var : Vars)
+        stmts::Stmt::make_CodeVar(ctx, parent, var.str(), Type, var, nullptr, std::nullopt);
     }
 
     expected(Lex(), ";");
@@ -1016,14 +1056,22 @@ namespace qw
     auto Colon = Lex();
     Require(Colon);
 
-    if (Colon->view() == ",") goto re;
-    ef (Colon->view() == ":");
-    else
-      expected(Colon, ",\", \":");
+    types::Type *Type = nullptr;
 
-    // Type
-    auto Type = read_Type(parent, true);
-    val_error(Type);
+    if (Colon->view() == "=" || Colon->view() == ";") {
+      LexStore(Colon);
+    }
+    else {
+      if (Colon->view() == ",") goto re;
+      ef (Colon->view() == ":");
+      else
+        return std::unexpected(errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":"));
+
+      // Type
+      auto TypeRes = read_Type(parent, true);
+      val_error(TypeRes);
+      Type = *TypeRes;
+    }
 
     // Value
     auto Assi = Lex();
@@ -1036,13 +1084,15 @@ namespace qw
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), *Type, *Name, *Expr, Assi);
+      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), Type, *Name, *Expr, Assi);
     }
     else {
+      if (!Type)
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Name->str()));
       LexStore(Assi);
 
       for (auto &v : Vars)
-        stmts::Stmt::make_CodeVar(ctx, parent, v.str(), *Type, v);
+        stmts::Stmt::make_CodeVar(ctx, parent, v.str(), Type, v, nullptr, std::nullopt);
     }
 
     expected(Lex(), ";");
