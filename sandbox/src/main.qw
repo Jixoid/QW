@@ -1,8 +1,3 @@
-fun assert(cond: bool; exit_code: usize) {
-  if (!cond) {
-    sys::syscall(60, exit_code);
-  }
-}
 
 fun print(msg: char^; len: usize) {
   sys::syscall(1, 1, sys::cast<usize>(msg), len);

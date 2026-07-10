@@ -105,10 +105,10 @@ namespace qw::tree {
       // Wait, we need a new instance because the parent might be different.
       if (e->is<exprs::IntegerLiteral>()) {
         auto p = e->as<exprs::IntegerLiteral>();
-        if (std::holds_alternative<u128>(p->val))
-          ne = exprs::Expr::make_IntegerLiteral(ctx, parent, std::get<u128>(p->val), e->pos());
+        if (std::holds_alternative<u64>(p->val))
+          ne = exprs::Expr::make_IntegerLiteral(ctx, parent, std::get<u64>(p->val), e->pos());
         else
-          ne = exprs::Expr::make_IntegerLiteral(ctx, parent, std::get<i128>(p->val), e->pos());
+          ne = exprs::Expr::make_IntegerLiteral(ctx, parent, std::get<i64>(p->val), e->pos());
       }
       else if (e->is<exprs::FloatingLiteral>()) {
         auto p = e->as<exprs::FloatingLiteral>();

@@ -593,10 +593,10 @@ namespace qw
             return errors::InvalidConstantValue(*AssignOpt, Name->str(), "enum assigned value must be an integer literal");
 
           auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
-          if (std::holds_alternative<u128>(lit->val))
-            current_val = (i64)std::get<u128>(lit->val);
+          if (std::holds_alternative<u64>(lit->val))
+            current_val = (i64)std::get<u64>(lit->val);
           else
-            current_val = (i64)std::get<i128>(lit->val);
+            current_val = (i64)std::get<i64>(lit->val);
       }
       ef (AssignOpt) LexStore(AssignOpt);
 
@@ -689,10 +689,10 @@ namespace qw
             return errors::InvalidConstantValue(*AssignOpt, Name->str(), "set assigned value must be an integer literal");
         
           auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
-        if (std::holds_alternative<u128>(lit->val))
-          current_val = (i64)std::get<u128>(lit->val);
+        if (std::holds_alternative<u64>(lit->val))
+          current_val = (i64)std::get<u64>(lit->val);
         else
-          current_val = (i64)std::get<i128>(lit->val);
+          current_val = (i64)std::get<i64>(lit->val);
       }
       ef (AssignOpt) LexStore(AssignOpt);
 
@@ -1110,17 +1110,19 @@ namespace qw
       ret = exprs::Expr::make_PtrLiteral(ctx, parent, 0, *ID);
     }
     ef (isNumber(ID->view()[0])) {
-      u128 val;
+      u64 val;
       std::string_view view = ID->view();
       int base = 10;
       size_t offset = 0;
       
-      if (view.size() > 2 && view[0] == '0') {
-        if (view[1] == 'x' || view[1] == 'X') {
+      if (view.size() > 1 && view[0] == '0') {
+        if (view[1] == 'x') {
+          if (view.size() == 2) return errors::InvalidConstantValue(*ID, ID->str(), "hexadecimal prefix '0x' requires digits");
           base = 16;
           offset = 2;
         }
-        ef (view[1] == 'b' || view[1] == 'B') {
+        ef (view[1] == 'b') {
+          if (view.size() == 2) return errors::InvalidConstantValue(*ID, ID->str(), "binary prefix '0b' requires digits");
           base = 2;
           offset = 2;
         }

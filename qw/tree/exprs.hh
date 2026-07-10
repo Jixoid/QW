@@ -86,7 +86,7 @@ namespace qw::exprs
     NameS /* "::" */,
   };
 
-  struct IntegerLiteral  { std::variant<u128, i128> val{}; };
+  struct IntegerLiteral  { std::variant<u64, i64> val{}; };
   struct FloatingLiteral { f128 val{}; };
   struct CharLiteral     { u8 val{}; };
   struct BoolLiteral     { bool val{}; };
@@ -121,8 +121,8 @@ namespace qw::exprs
       {}
 
     public:
-      static fun make_IntegerLiteral(qw::context *ctx, identy *parent, u128 val, word pos) -> Expr*;
-      static fun make_IntegerLiteral(qw::context *ctx, identy *parent, i128 val, word pos) -> Expr*;
+      static fun make_IntegerLiteral(qw::context *ctx, identy *parent, u64 val, word pos) -> Expr*;
+      static fun make_IntegerLiteral(qw::context *ctx, identy *parent, i64 val, word pos) -> Expr*;
       static fun make_FloatingLiteral(qw::context *ctx, identy *parent, f128 val, word pos) -> Expr*;
       static fun make_CharLiteral(qw::context *ctx, identy *parent, u8 val, word pos) -> Expr*;
       static fun make_BoolLiteral(qw::context *ctx, identy *parent, bool val, word pos) -> Expr*;

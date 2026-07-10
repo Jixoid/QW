@@ -25,16 +25,16 @@
 namespace qw::exprs
 {
 
-  fun Expr::make_IntegerLiteral(qw::context *ctx, identy *parent, u128 val, word pos) -> Expr*
+  fun Expr::make_IntegerLiteral(qw::context *ctx, identy *parent, u64 val, word pos) -> Expr*
   {
-    auto obj = new Expr(IntegerLiteral{ (u128)val }, parent, pos);
+    auto obj = new Expr(IntegerLiteral{ (u64)val }, parent, pos);
     ctx->push(obj);
     return obj;
   }
 
-  fun Expr::make_IntegerLiteral(qw::context *ctx, identy *parent, i128 val, word pos) -> Expr*
+  fun Expr::make_IntegerLiteral(qw::context *ctx, identy *parent, i64 val, word pos) -> Expr*
   {
-    auto obj = new Expr(IntegerLiteral{ (i128)val }, parent, pos);
+    auto obj = new Expr(IntegerLiteral{ (i64)val }, parent, pos);
     ctx->push(obj);
     return obj;
   }

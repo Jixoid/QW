@@ -634,10 +634,10 @@ namespace qw
       auto lit       = now->as<exprs::IntegerLiteral>();
       types::Type *t = now->targetType() ? now->targetType() : ctx->intS32_t();
 
-      if (std::holds_alternative<u128>(lit->val))
-        return llvm::ConstantInt::get(t->llvm(), std::get<u128>(lit->val), false);
+      if (std::holds_alternative<u64>(lit->val))
+        return llvm::ConstantInt::get(t->llvm(), std::get<u64>(lit->val), false);
       else
-        return llvm::ConstantInt::get(t->llvm(), std::get<i128>(lit->val), true);
+        return llvm::ConstantInt::get(t->llvm(), std::get<i64>(lit->val), true);
     }
     ef (now->is<exprs::FloatingLiteral>()) {
       auto lit       = now->as<exprs::FloatingLiteral>();

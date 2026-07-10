@@ -522,8 +522,8 @@ namespace qw
     if (now->is<exprs::IntegerLiteral>()) {
       if (!now->targetType()) {
         auto lit = now->as<exprs::IntegerLiteral>();
-        if (std::holds_alternative<u128>(lit->val)) {
-          u128 v = std::get<u128>(lit->val);
+        if (std::holds_alternative<u64>(lit->val)) {
+          u64 v = std::get<u64>(lit->val);
           if (v <= 2147483647) now->targetType() = ctx->intS32_t();
           ef (v <= 4294967295ULL) now->targetType() = ctx->intU32_t();
           ef (v <= 9223372036854775807ULL) now->targetType() = ctx->intS64_t();
@@ -531,7 +531,7 @@ namespace qw
           else now->targetType() = ctx->intU128_t();
         }
         else {
-          i128 v = std::get<i128>(lit->val);
+          i64 v = std::get<i64>(lit->val);
           if (v >= -2147483648LL && v <= 2147483647LL) now->targetType() = ctx->intS32_t();
           ef (v >= -9223372036854775807LL - 1 && v <= 9223372036854775807LL) now->targetType() = ctx->intS64_t();
           else now->targetType() = ctx->intS128_t();
@@ -773,9 +773,9 @@ namespace qw
 
           for (auto &v: enum_t->vals)
             if (v.cons == field_name) {
-              std::variant<u128, i128> val128;
-              if (std::holds_alternative<u64>(v.val)) val128 = (u128)std::get<u64>(v.val);
-              else val128 = (i128)std::get<i64>(v.val);
+              std::variant<u64, i64> val128;
+              if (std::holds_alternative<u64>(v.val)) val128 = (u64)std::get<u64>(v.val);
+              else val128 = (i64)std::get<i64>(v.val);
               now->vari() = exprs::IntegerLiteral{ val128 };
               now->targetType() = typeDecl->type;
               return {};
@@ -788,9 +788,9 @@ namespace qw
           auto field_name = M->mem->as<exprs::NickExpr>()->unresolved[0];
           for (auto &v: set_t->vals)
             if (v.cons == field_name) {
-              std::variant<u128, i128> val128;
-              if (std::holds_alternative<u64>(v.val)) val128 = (u128)std::get<u64>(v.val);
-              else val128 = (i128)std::get<i64>(v.val);
+              std::variant<u64, i64> val128;
+              if (std::holds_alternative<u64>(v.val)) val128 = (u64)std::get<u64>(v.val);
+              else val128 = (i64)std::get<i64>(v.val);
               now->vari() = exprs::IntegerLiteral{ val128 };
               now->targetType() = typeDecl->type;
               return {};
@@ -1143,9 +1143,9 @@ namespace qw
             if (v.cons == field_name) {
               exprs::Expr *lit = nullptr;
               if (std::holds_alternative<u64>(v.val)) {
-                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u128)std::get<u64>(v.val), now->pos());
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u64)std::get<u64>(v.val), now->pos());
               } else {
-                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i128)std::get<i64>(v.val), now->pos());
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i64)std::get<i64>(v.val), now->pos());
               }
               lit->targetType() = typeDecl->type;
               return lit;
@@ -1157,9 +1157,9 @@ namespace qw
             if (v.cons == field_name) {
               exprs::Expr *lit = nullptr;
               if (std::holds_alternative<u64>(v.val)) {
-                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u128)std::get<u64>(v.val), now->pos());
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (u64)std::get<u64>(v.val), now->pos());
               } else {
-                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i128)std::get<i64>(v.val), now->pos());
+                lit = exprs::Expr::make_IntegerLiteral(ctx, now->parent(), (i64)std::get<i64>(v.val), now->pos());
               }
               lit->targetType() = typeDecl->type;
               return lit;
@@ -1215,7 +1215,7 @@ namespace qw
 
     if (intrin == "is_size") {
       if (resolved_gargs.size() != 1) return errors::GenericArgumentCountMismatch(now->pos(), "is_size", "1");
-      now->vari() = exprs::IntegerLiteral{ (u128)8 };
+      now->vari() = exprs::IntegerLiteral{ (u64)8 };
       now->targetType() = ctx->intU64_t();
       return {};
     }
@@ -1253,7 +1253,7 @@ namespace qw
     }
     ef (intrin == "is_convertible") {
       if (resolved_gargs.size() != 2) return errors::GenericArgumentCountMismatch(now->pos(), intrin, "2");
-      auto dummy = exprs::Expr::make_IntegerLiteral(ctx, now, (i128)0, now->pos()); // Dummy
+      auto dummy = exprs::Expr::make_IntegerLiteral(ctx, now, (i64)0, now->pos()); // Dummy
       dummy->targetType() = resolved_gargs[0];
       res = sema_Convert(resolved_gargs[1], dummy, now->pos()).has_value();
     }
@@ -1286,18 +1286,18 @@ namespace qw
           auto enum_t = target_type->as<types::EnumType>();
           auto iv = val->as<exprs::IntegerLiteral>();
           
-          i128 target_val = 0;
-          if (std::holds_alternative<u128>(iv->val)) target_val = (i128)std::get<u128>(iv->val);
-          else target_val = std::get<i128>(iv->val);
+          i64 target_val = 0;
+          if (std::holds_alternative<u64>(iv->val)) target_val = (i64)std::get<u64>(iv->val);
+          else target_val = std::get<i64>(iv->val);
 
           bool found = false;
           for (auto &v : enum_t->vals) {
-            i128 enum_v = 0;
+            i64 enum_v = 0;
             
             if (std::holds_alternative<u64>(v.val))
-              enum_v = (i128)std::get<u64>(v.val);
+              enum_v = (i64)std::get<u64>(v.val);
             else
-              enum_v = (i128)std::get<i64>(v.val);
+              enum_v = (i64)std::get<i64>(v.val);
 
             if (target_val == enum_v) { found = true; break; }
           }
@@ -1309,24 +1309,24 @@ namespace qw
           auto set_t = target_type->as<types::SetType>();
           auto iv = val->as<exprs::IntegerLiteral>();
           
-          i128 target_val = 0;
-          if (std::holds_alternative<u128>(iv->val))
-            target_val = (i128)std::get<u128>(iv->val);
+          i64 target_val = 0;
+          if (std::holds_alternative<u64>(iv->val))
+            target_val = (i64)std::get<u64>(iv->val);
           else
-            target_val = std::get<i128>(iv->val);
+            target_val = std::get<i64>(iv->val);
 
-          i128 max_v = 0;
+          i64 max_v = 0;
           for (auto &v : set_t->vals) {
-            i128 set_v = 0;
+            i64 set_v = 0;
             if (std::holds_alternative<u64>(v.val))
-              set_v = (i128)std::get<u64>(v.val);
+              set_v = (i64)std::get<u64>(v.val);
             else
-              set_v = (i128)std::get<i64>(v.val);
+              set_v = (i64)std::get<i64>(v.val);
             
             if (set_v > max_v) max_v = set_v;
           }
           
-          i128 allowed_max = (max_v << 1) - 1;
+          i64 allowed_max = (max_v << 1) - 1;
           if (target_val < 0 || target_val > allowed_max)
             return errors::CastBoundsError(now->pos(), "set cast");
         }
@@ -1335,7 +1335,7 @@ namespace qw
           auto iv = val->as<exprs::IntegerLiteral>();
           auto pt = target_type->as<types::PrimitiveType>();
           
-          u128 max_val = 0;
+          u64 max_val = 0;
           switch(pt->kind) {
             case types::PrimitiveEnum::I8:
             case types::PrimitiveEnum::U8: max_val = 0xFF; break;
@@ -1345,14 +1345,14 @@ namespace qw
             case types::PrimitiveEnum::U32: max_val = 0xFFFFFFFF; break;
             case types::PrimitiveEnum::I64:
             case types::PrimitiveEnum::U64: max_val = 0xFFFFFFFFFFFFFFFF; break;
-            default: max_val = (u128)-1; break;
+            default: max_val = (u64)-1; break;
           }
-          if (std::holds_alternative<u128>(iv->val)) {
-            if (std::get<u128>(iv->val) > max_val)
+          if (std::holds_alternative<u64>(iv->val)) {
+            if (std::get<u64>(iv->val) > max_val)
               return errors::CastBoundsError(now->pos(), "int cast");
           }
           else {
-            if ((u128)std::get<i128>(iv->val) > max_val)
+            if ((u64)std::get<i64>(iv->val) > max_val)
               return errors::CastBoundsError(now->pos(), "int cast");
           }
         }
@@ -1565,14 +1565,14 @@ namespace qw
       }
     }
 
-    i128 min_val = 0, max_val = 0;
+    i64 min_val = 0, max_val = 0;
     if (!enumType->vals.empty()) {
-      min_val = std::holds_alternative<u64>(enumType->vals[0].val) ? (i128)std::get<u64>(enumType->vals[0].val) : (i128)std::get<i64>(enumType->vals[0].val);
+      min_val = std::holds_alternative<u64>(enumType->vals[0].val) ? (i64)std::get<u64>(enumType->vals[0].val) : (i64)std::get<i64>(enumType->vals[0].val);
       max_val = min_val;
     }
 
     for (auto &v: enumType->vals) {
-      i128 cv = std::holds_alternative<u64>(v.val) ? (i128)std::get<u64>(v.val) : (i128)std::get<i64>(v.val);
+      i64 cv = std::holds_alternative<u64>(v.val) ? (i64)std::get<u64>(v.val) : (i64)std::get<i64>(v.val);
       if (cv < min_val) min_val = cv;
       if (cv > max_val) max_val = cv;
     }
@@ -1587,8 +1587,8 @@ namespace qw
       bool is_signed = enumType->baseType->isSigned();
       u32 bits = enumType->baseType->intBit(ctx);
       
-      i128 b_min = is_signed ? -((i128)1 << (bits - 1)) : 0;
-      i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
+      i64 b_min = is_signed ? -((i64)1 << (bits - 1)) : 0;
+      i64 b_max = is_signed ? ((i64)1 << (bits - 1)) - 1 : (bits == 128 ? (i64)-1 : ((i64)1 << bits) - 1);
       
       if (min_val < b_min || max_val > b_max)
         return errors::InvalidConstantValue(base_pos, std::string(now->typname()), "enum values do not fit in the specified base type");
@@ -1627,13 +1627,13 @@ namespace qw
       }
     }
 
-    i128 max_val = 0;
+    i64 max_val = 0;
     if (!setType->vals.empty()) {
-      max_val = std::holds_alternative<u64>(setType->vals[0].val) ? (i128)std::get<u64>(setType->vals[0].val) : (i128)std::get<i64>(setType->vals[0].val);
+      max_val = std::holds_alternative<u64>(setType->vals[0].val) ? (i64)std::get<u64>(setType->vals[0].val) : (i64)std::get<i64>(setType->vals[0].val);
     }
 
     for (auto &v: setType->vals) {
-      i128 cv = std::holds_alternative<u64>(v.val) ? (i128)std::get<u64>(v.val) : (i128)std::get<i64>(v.val);
+      i64 cv = std::holds_alternative<u64>(v.val) ? (i64)std::get<u64>(v.val) : (i64)std::get<i64>(v.val);
       if (cv > max_val) max_val = cv;
     }
 
@@ -1647,7 +1647,7 @@ namespace qw
       bool is_signed = setType->baseType->isSigned();
       u32 bits = setType->baseType->intBit(ctx);
       
-      i128 b_max = is_signed ? ((i128)1 << (bits - 1)) - 1 : (bits == 128 ? (i128)-1 : ((i128)1 << bits) - 1);
+      i64 b_max = is_signed ? ((i64)1 << (bits - 1)) - 1 : (bits == 128 ? (i64)-1 : ((i64)1 << bits) - 1);
       
       if (max_val > b_max)
         return errors::InvalidConstantValue(base_pos, std::string(now->typname()), "set values do not fit in the specified base type");
