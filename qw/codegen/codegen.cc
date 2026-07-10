@@ -1,12 +1,12 @@
 /*
-  This file is part of QAOS
+This file is part of QAOS
 
-  This file is licensed under the GNU General Public License version 3 (GPL3).
+This file is licensed under the GNU General Public License version 3 (GPL3).
 
-  You should have received a copy of the GNU General Public License
-  along with QAOS. If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with QAOS. If not, see <https://www.gnu.org/licenses/>.
 
-  Copyright (c) 2025-2026 by Kadir Aydın.
+Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
 #include "qw/codegen/codegen.hh"
@@ -77,6 +77,9 @@ namespace qw
     for (auto& attr : now->const_attrs()) {
       if (attr.name == "weak") {
         gvar->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
+      }
+      ef (attr.name == "thread_local") {
+        gvar->setThreadLocal(true);
       }
     }
   }
@@ -577,6 +580,9 @@ namespace qw
     ef (typ->is<types::EnumType>() && styp->is<types::EnumType>()) { return IR.CreateIntCast(src, typ->llvm(), false); }
     ef (typ->isChar() && styp->isInteger()) { return IR.CreateIntCast(src, typ->llvm(), false); }
     ef (typ->isInteger() && styp->isChar()) { return IR.CreateIntCast(src, typ->llvm(), false); }
+    ef ((typ->isPointer() || typ == ctx->ptr_t() || typ == ctx->null_t()) && styp->isInteger()) { return IR.CreateIntToPtr(src, typ->llvm()); }
+    ef (typ->isInteger() && (styp->isPointer() || styp == ctx->ptr_t() || styp == ctx->null_t())) { return IR.CreatePtrToInt(src, typ->llvm()); }
+    ef ((typ->isPointer() || typ == ctx->ptr_t() || typ == ctx->null_t()) && (styp->isPointer() || styp == ctx->ptr_t() || styp == ctx->null_t())) { return IR.CreatePointerCast(src, typ->llvm()); }
 
     ef (typ->is<types::IFaceType>() && styp->is<types::StructType>()) {
       auto iface_type = typ->as<types::IFaceType>();
@@ -615,7 +621,7 @@ namespace qw
       
       llvm::Value *fat_ptr = llvm::UndefValue::get(typ->llvm());
       fat_ptr = IR.CreateInsertValue(fat_ptr, data_ptr, 0);
-      fat_ptr = IR.CreateInsertValue(fat_ptr, old_vmt, 1); // Upcast offset logic to be done later
+      fat_ptr = IR.CreateInsertValue(fat_ptr, old_vmt, 1);
       
       return fat_ptr;
     }
@@ -793,7 +799,7 @@ namespace qw
       }
       ef (M->kind == exprs::PostfixOpEnum::Call) {
         llvm::Function *calleeFn = nullptr;
-
+        
         if (M->obj->is<exprs::MemberOp>()) {
           auto memOp    = M->obj->as<exprs::MemberOp>();
           auto obj_type = memOp->obj->targetType();
@@ -877,11 +883,12 @@ namespace qw
         ef (M->obj->is<exprs::NickExpr>()) {
           auto nick = M->obj->as<exprs::NickExpr>();
           
-          std::vector<types::Type *> arg_types;
-          for (auto op : M->operands)
-            arg_types.push_back(op->targetType());
-            
+          std::vector<types::Type*> arg_types;
+          for (auto op : M->operands) arg_types.push_back(op->targetType());
           auto ret  = SMng.lookup(now->parent(), nick->unresolved, &arg_types);
+          if (!ret) {
+            ret = SMng.lookup(now->parent(), nick->unresolved, nullptr);
+          }
           if (ret && ret->type() == IdentyEnum::Decl && static_cast<decls::Decl *>(ret)->is<decls::FuncDecl>()) {
             auto ret_decl = static_cast<decls::Decl *>(ret);
             if (ret_decl->name() == "syscall" && ret_decl->parent() == ctx->sys_api.sys_ns) {
@@ -905,7 +912,7 @@ namespace qw
               constraints += ",~{rcx},~{r11},~{memory},~{dirflag},~{fpsr},~{flags}";
               
               auto inlineAsm = llvm::InlineAsm::get(fTy, "syscall", constraints, true);
-              return IR.CreateCall(inlineAsm, args);
+              return IR.CreateCall(fTy, inlineAsm, args);
             }
             
             auto fdecl = ret_decl->as<decls::FuncDecl>();
@@ -931,6 +938,7 @@ namespace qw
         }
 
         llvm::Value *calleeVal = gen_Expr(M->obj);
+        if (!calleeVal) diagnostic::fatal("CodeGen: calleeVal is null for " + std::string(M->obj->targetType()->typname()));
         auto ftype             = M->obj->targetType()->as<types::FuncType>();
         std::vector<llvm::Value *> args;
         for (size_t i = 0; i < M->operands.size(); ++i) {
@@ -958,12 +966,12 @@ namespace qw
           return IR.CreateInBoundsGEP(sub_type->llvm(), elem_ptr, idx);
         }
         else {
-          diagnostic::fatal("CodeGen: Unknown Expr Type!");
+          diagnostic::fatal("CodeGen: Unknown Expr Type! (MemberOp)");
           return nullptr;
         }
       }
       else {
-        diagnostic::fatal("CodeGen: Unknown Expr Type!");
+        diagnostic::fatal("CodeGen: Unknown Expr Type! (PostfixOp Array)");
         return nullptr;
       }
     }
@@ -1007,8 +1015,22 @@ namespace qw
 
       return IR.CreateInBoundsGEP(obj_type->llvm(), obj_ptr, {zero, idx});
     }
-    else
-      diagnostic::fatal("CodeGen: Unknown Expr Type!");
+    else {
+      if (now->is<exprs::NickExpr>()) {
+        auto nick = now->as<exprs::NickExpr>();
+        std::string name = nick->unresolved[0];
+        for (size_t i = 1; i < nick->unresolved.size(); i++) name += "::" + nick->unresolved[i];
+        diagnostic::fatal("CodeGen: Unknown Expr Type! NickExpr: " + name);
+      }
+      else if (now->is<exprs::GenericOp>()) diagnostic::fatal("CodeGen: Unknown Expr Type! GenericOp");
+      else if (now->is<exprs::StringLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! StringLiteral");
+      else if (now->is<exprs::IntegerLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! IntegerLiteral");
+      else if (now->is<exprs::FloatingLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! FloatingLiteral");
+      else if (now->is<exprs::CharLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! CharLiteral");
+      else if (now->is<exprs::BoolLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! BoolLiteral");
+      else if (now->is<exprs::PtrLiteral>()) diagnostic::fatal("CodeGen: Unknown Expr Type! PtrLiteral");
+      else diagnostic::fatal("CodeGen: Unknown Expr Type! Something Else");
+    }
   }
   
 

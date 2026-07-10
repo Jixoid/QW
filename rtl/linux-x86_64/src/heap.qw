@@ -1,4 +1,4 @@
-// sys::heap::alloc
+
 [[rtl]]
 fun alloc(align, size: usize) -> ptr {
   // 9 = sys_mmap
@@ -10,14 +10,14 @@ fun alloc(align, size: usize) -> ptr {
   ret sys::cast<ptr>(ret_val);
 }
 
-// sys::heap::dispose
+
 [[rtl]]
 fun dispose(p: ptr; align, size: usize) -> void {
   // 11 = sys_munmap
   var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size);
 }
 
-// sys::heap::realloc
+
 [[rtl]]
 fun realloc(p: ptr; align, old_size, new_size: usize) -> ptr {
   // 25 = sys_mremap

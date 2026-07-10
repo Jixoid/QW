@@ -1,0 +1,63 @@
+
+set Prot {
+  None  = 0x0,
+  Read  = 0x1,
+  Write = 0x2,
+  Exec  = 0x4,
+}
+
+set Flag {
+  File      = 0x0,
+  Private   = 0x2,
+  Shared    = 0x3,
+  Droppable = 0x8,
+  Fixed     = 0x10,
+  Anonymous = 0x20,
+  Give32bit = 0x40,
+  Locked    = 0x2000,
+  Populate  = 0x8000,
+}
+
+
+
+[[rtl]]
+fun alloc(size: usize; prot: Prot; flag: Flag) -> ptr {
+  // mmap (9)
+  var ret_val: usize = sys::syscall(9, 0, size, sys::cast<usize>(prot), sys::cast<usize>(flag), sys::cast<usize>(0) - 1, 0);
+  
+  if (ret_val > 0xFFFFFFFFFFFFF000) {
+    ret null;
+  }
+
+  ret sys::cast<ptr>(ret_val);
+}
+
+
+[[rtl]]
+fun dispose(p: ptr; size: usize) -> bool {
+  // munmap (11)
+  var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size);
+  ret ret_val == 0;
+}
+
+
+[[rtl]]
+fun realloc(p: ptr; old_size: usize; new_size: usize) -> ptr {
+  // mremap (25)
+  // MREMAP_MAYMOVE = 1
+  var ret_val: usize = sys::syscall(25, sys::cast<usize>(p), old_size, new_size, 1);
+  
+  if (ret_val > 0xFFFFFFFFFFFFF000) {
+    ret null;
+  }
+
+  ret sys::cast<ptr>(ret_val);
+}
+
+
+[[rtl]]
+fun protect(p: ptr; size: usize; prot: Prot) -> bool {
+  // mprotect (10)
+  var ret_val: usize = sys::syscall(10, sys::cast<usize>(p), size, sys::cast<usize>(prot));
+  ret ret_val == 0;
+}

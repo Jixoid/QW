@@ -1,5 +1,14 @@
-var global_val: usize = 42;
+fun assert(cond: bool; exit_code: usize) {
+  if (!cond) {
+    sys::syscall(60, exit_code);
+  }
+}
 
-fun main() -> void {
-  sys::syscall(60, global_val);
+fun print(msg: char^; len: usize) {
+  sys::syscall(1, 1, sys::cast<usize>(msg), len);
+}
+
+fun main() {
+  print("Hello World!\n", 13);
+  sys::syscall(60, 0);
 }

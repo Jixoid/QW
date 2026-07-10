@@ -132,7 +132,7 @@ namespace qw::types
       fun isBool() -> bool;
       fun isReference() -> bool { return is<ReferenceType>(); }
       fun isPointer() -> bool { return is<PointerType>(); }
-      fun intBit() -> u8;
+      fun intBit(qw::context *ctx) -> u8;
   };
 
 }
