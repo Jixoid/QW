@@ -13,6 +13,7 @@
 #include "qw/basis.hh"
 #include "qw/diagnostic/diagnostic.hh"
 #include "qw/diagnostic/msgs.hh"
+#include "qw/lexer/lexer.hh"
 #include "qw/pretype.hh"
 #include "qw/tree/decls.hh"
 #include "qw/tree/exprs.hh"
@@ -31,14 +32,14 @@
 #define ef else if
 
 #define Require(X) \
-  if (!X.has_value()) \
+  if (!X) \
     return fatals::FileEndedButContextNotFinished();
 
 #define Require_Word(X, C) \
   { \
     Require(X); \
-    if (!isWord(X->view()[0])) { \
-      auto E = errors::ExpectedAWord(*X, X->str()); \
+    if (lexer.kind(X.view()[0]) != CharKind::Word) { \
+      auto E = errors::ExpectedAWord(X, X.str()); \
       sum.add(E.error().get()); \
       std::cerr << E.error(); \
       C; \
@@ -48,13 +49,13 @@
 #define expected(LEX, T) \
   { \
     auto X = LEX; \
-    Require(X) ef(X->view() != T) return errors::ExpectedIdentifierBut(*X, X->str(), T); \
+    Require(X) ef(X.view() != T) return errors::ExpectedIdentifierBut(X, X.str(), T); \
   }
 
 #define expected2(LEX, T, T2) \
   { \
     auto X = LEX; \
-    Require(X) ef(X->view() != T || X->view() != T2) return errors::ExpectedIdentifierBut2(*X, X->str(), T, T2); \
+    Require(X) ef(X.view() != T || X.view() != T2) return errors::ExpectedIdentifierBut2(X, X.str(), T, T2); \
   }
 
 #define if_error(X) \
@@ -104,6 +105,7 @@
 
 namespace qw
 {
+
   static fun unescape_string(std::string_view s) -> std::string {
     std::string res;
     res.reserve(s.size());
@@ -131,16 +133,16 @@ namespace qw
 
   fun frontend::read_File(decls::Decl *self) -> std::expected<void, uptr<diagnostic::message>> {
     while (true) {
-      auto ID = Lex();
+      auto &ID = lexer();
 
-      if (!ID.has_value()) return {};
-      ef (ID->view() == "}") break;
-      ef (ID->view() == "![") {
+      if (!ID) return {};
+      ef (ID.view() == "}") break;
+      ef (ID.view() == "![") {
         if_error(read_FileAttributes(self));
       }
       else
         if_except(read_Route(
-          ID->str(), ID.value(), self,
+          ID.str(), ID, self,
           Visibility::Public | Visibility::Private | Visibility::Crate | Visibility::Group
         ));
     }
@@ -151,10 +153,10 @@ namespace qw
   fun frontend::read_Route(std::string id, word w, decls::Decl *self, VisibilityFlag visflag) -> std::expected<void, uptr<diagnostic::message>> {
     if (id == "[[") {
       if_error(read_Attributes());
-      auto Nx = Lex();
+      auto Nx = lexer();
       Require(Nx);
-      id = Nx->str();
-      w = Nx.value();
+      id = Nx.str();
+      w = Nx;
     }
 
     Visibility vis = Visibility::Private;
@@ -169,11 +171,11 @@ namespace qw
       if (!(visflag & vis))
         return std::unexpected(errors::VisibilitySettingNApplicableInContext(w, id));
 
-      auto Nx = Lex();
+      auto Nx = lexer();
       Require(Nx);
 
-      id = Nx->str();
-      w  = Nx.value();
+      id = Nx.str();
+      w  = Nx;
     }
 
     if (id == "alias")     if_error(read_AliasDecl(self))
@@ -195,62 +197,58 @@ namespace qw
 
   fun frontend::read_Attributes() -> std::expected<void, uptr<diagnostic::message>> {
     while (true) {
-      auto attr_name = Lex();
+      auto attr_name = lexer();
       Require(attr_name);
 
-      if (attr_name->view() == "]]") break;
+      if (attr_name.view() == "]]") break;
 
       decls::Attribute attr;
-      attr.name = attr_name->str();
+      attr.name = attr_name.str();
 
-      auto next = Lex();
+      auto next = lexer();
       Require(next);
 
-      if (next->view() == ":") {
-        auto attr_val = Lex();
+      if (next.view() == ":") {
+        auto attr_val = lexer();
         Require(attr_val);
-        attr.value = attr_val->str();
+        attr.value = attr_val.str();
 
-        next = Lex();
+        next = lexer();
         Require(next);
       }
 
       m_current_attrs.push_back(attr);
 
-      if (next->view() == "]]") break;
-      ef (next->view() == ",") continue;
+      if (next.view() == "]]") break;
+      ef (next.view() == ",") continue;
       else
-        return errors::ExpectedIdentifierBut2(*next, next->str(), "]]", ",");
+        return errors::ExpectedIdentifierBut2(next, next.str(), "]]", ",");
     }
     return {};
   }
 
   fun frontend::read_FileAttributes(decls::Decl *self) -> std::expected<void, uptr<diagnostic::message>> {
     while (true) {
-      auto attr_name = Lex();
+      auto attr_name = lexer();
       Require(attr_name);
 
-      if (attr_name->view() == "]") break;
+      if (attr_name.view() == "]") break;
 
       decls::Attribute attr;
-      attr.name = attr_name->str();
+      attr.name = attr_name.str();
 
-      // "use no rtl" is 3 tokens, let's just collect all words until ] or , as the value?
-      // But wait! QW attributes are single identifier or id:value.
-      // If the user wants `![use no rtl]`, it parses as `use`, `no`, `rtl`?!
-      // Let's just collect everything inside!
-      auto next = Lex();
+      auto next = lexer();
       Require(next);
 
-      while (next->view() != "]" && next->view() != ",") {
-        attr.value += (attr.value.empty() ? "" : " ") + next->str();
-        next = Lex();
+      while (next.view() != "]" && next.view() != ",") {
+        attr.value += (attr.value.empty() ? "" : " ") + next.str();
+        next = lexer();
         Require(next);
       }
 
       self->attrs().push_back(attr);
 
-      if (next->view() == "]") break;
+      if (next.view() == "]") break;
     }
     return {};
   }
@@ -258,11 +256,11 @@ namespace qw
 
 
   fun frontend::read_TypeDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    expected(Lex(), "=");
+    expected(lexer(), "=");
 
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+    auto self = decls::Decl::make_Type(ctx, parent, Name.str(), Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto Type = read_Type(self, true);
@@ -271,7 +269,7 @@ namespace qw
     self->as<decls::TypeDecl>()->type = *Type;
     (*Type)->owner_ident = self;
 
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
     #ifdef _QW_use_verbose_for_frontend
       std::cerr << color::YELLOW << __func__ << " " << self << color::RESET << std::endl;
@@ -284,41 +282,41 @@ namespace qw
     std::vector<types::FieldType> pars;
 
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == ")") break;
+      if (ID.view() == ")") break;
       else
-        LexStore(ID);
+        lexer.store(ID);
 
       // Name
       std::vector<std::string> Names;
       re:
-      auto NameArg = Lex();
+      auto NameArg = lexer();
       Require(NameArg);
-      Names.push_back(NameArg->str());
+      Names.push_back(NameArg.str());
 
       // Colon
-      auto Colon = Lex();
+      auto Colon = lexer();
       Require(Colon);
 
-      if (Colon->view() == ",") goto re;
-      ef (Colon->view() == ":");
+      if (Colon.view() == ",") goto re;
+      ef (Colon.view() == ":");
       else
-        return errors::ExpectedIdentifierBut(*Colon, Colon->str(), ":");
+        return errors::ExpectedIdentifierBut(Colon, Colon.str(), ":");
 
       // Type
       auto Type = read_Type(parent, true);
       val_error(Type);
 
       // End
-      auto End = Lex();
+      auto End = lexer();
       Require(End);
 
-      if (End->view() == ";");
-      ef (End->view() == ")") LexStore(End);
+      if (End.view() == ";");
+      ef (End.view() == ")") lexer.store(End);
       else
-        return errors::ExpectedIdentifierBut2(*End, End->str(), ";", ")");
+        return errors::ExpectedIdentifierBut2(End, End.str(), ";", ")");
 
       // Push
       for (auto &X: Names) pars.push_back({X, *Type});
@@ -328,17 +326,17 @@ namespace qw
   }
 
   fun frontend::read_FuncDecl(decls::Decl *parent) -> std::expected<decls::Decl*, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
 
-    auto self = decls::Decl::make_Func(ctx, parent, Name->str(), *Name, nil);
+    auto self = decls::Decl::make_Func(ctx, parent, Name.str(), Name, nil);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto generic_ctx = read_GenericParams(self);
     if_except_ref(generic_ctx);
     self->set_generic(*generic_ctx);
 
-    expected(Lex(), "(");
+    expected(lexer(), "(");
 
     // Params
     auto parsed_pars = read_FuncParams(self);
@@ -346,17 +344,17 @@ namespace qw
     std::vector<types::FieldType> pars = *parsed_pars;
 
     // Return
-    auto Ret = Lex();
+    auto Ret = lexer();
     Require(Ret)
 
     types::Type *retType = ctx->void_t();
     
-    if (Ret->view() == "->") {
+    if (Ret.view() == "->") {
       auto Type = read_Type(self, true);
       val_error(Type);
       retType = *Type;
 
-      Ret = Lex();
+      Ret = lexer();
       Require(Ret);
     }
 
@@ -364,8 +362,8 @@ namespace qw
     self->as<decls::FuncDecl>()->funcType = FType;
 
     // Code || Decl
-    if (Ret->view() == ";") return self;
-    ef (Ret->view() == "{") {
+    if (Ret.view() == ";") return self;
+    ef (Ret.view() == "{") {
       auto block_ret = read_CodeBlock(self);
       if (!block_ret)
         return std::unexpected(std::move(block_ret.error()));
@@ -373,22 +371,22 @@ namespace qw
         return self;
     }
     else
-      return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
+      return errors::ExpectedIdentifierBut2(Ret, Ret.str(), ";", "{");
   }
 
   fun frontend::read_AliasDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    expected(Lex(), "=");
+    expected(lexer(), "=");
 
-    auto Target = Lex();
+    auto Target = lexer();
     Require(Target);
-    auto Decl = exprs::Expr::make_Nick(ctx, parent, {Target->str()}, *Target);
+    auto Decl = exprs::Expr::make_Nick(ctx, parent, {Target.str()}, Target);
 
-    auto self = decls::Decl::make_Alias(ctx, parent, Name->str(), Decl, *Name);
+    auto self = decls::Decl::make_Alias(ctx, parent, Name.str(), Decl, Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
     #ifdef _QW_use_verbose_for_frontend
       std::cerr << color::YELLOW << __func__ << " " << self << color::RESET << std::endl;
@@ -400,34 +398,35 @@ namespace qw
   fun frontend::read_VarDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
     std::vector<word> Names;
     re:
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    Names.push_back(*Name);
+    Names.push_back(Name);
 
-    auto Colon = Lex();
+    auto Colon = lexer();
     Require(Colon);
 
     types::Type *parsedType = nullptr;
 
-    if (Colon->view() == "=" || Colon->view() == ";") {
-      LexStore(Colon);
-    } else {
-      if (Colon->view() == ":") {}
-      ef (Colon->view() == ",") goto re;
+    if (Colon.view() == "=" || Colon.view() == ";") {
+      lexer.store(Colon);
+    }
+    else {
+      if (Colon.view() == ":") {}
+      ef (Colon.view() == ",") goto re;
       else
-        return std::unexpected(errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ":", ","));
+        return std::unexpected(errors::ExpectedIdentifierBut2(Colon, Colon.str(), ":", ","));
 
       auto Type = read_Type(parent, true);
       val_error(Type);
       parsedType = *Type;
     }
 
-    auto Assi = Lex();
+    auto Assi = lexer();
     Require(Assi);
 
-    if (Assi->view() == "=") {
+    if (Assi.view() == "=") {
       if (Names.size() != 1)
-        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(Assi, Assi.str()));
 
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
@@ -437,8 +436,8 @@ namespace qw
     }
     else {
       if (!parsedType)
-        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Names[0].str()));
-      LexStore(Assi);
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(Assi, Names[0].str()));
+      lexer.store(Assi);
 
       for (size_t i = 0; i < Names.size(); i++) {
         auto self = decls::Decl::make_Var(ctx, parent, Names[i].str(), Names[i], parsedType);
@@ -447,14 +446,14 @@ namespace qw
       m_current_attrs.clear();
     }
 
-    expected(Lex(), ";");
+    expected(lexer(), ";");
     return {};
   }
 
   fun frontend::read_IFaceDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+    auto self = decls::Decl::make_Type(ctx, parent, Name.str(), Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto generic_ctx = read_GenericParams(self);
@@ -463,28 +462,28 @@ namespace qw
 
     std::vector<types::Type*> baseTypes;
     std::vector<word> baseTypePos;
-    auto ColonOpt = Lex();
+    auto ColonOpt = lexer();
 
-    if (ColonOpt && ColonOpt->view() == ":") while (true) {
-      auto Pk = Lex();
-      word pos = Pk ? *Pk : *Name;
-      if (Pk) LexStore(Pk);
+    if (ColonOpt && ColonOpt.view() == ":") while (true) {
+      auto Pk = lexer();
+      word pos = Pk ? Pk : Name;
+      if (Pk) lexer.store(Pk);
 
       auto parsedType = read_Type(parent, true);
       val_error(parsedType);
       baseTypes.push_back(*parsedType);
       baseTypePos.push_back(pos);
 
-      auto CommaOpt = Lex();
+      auto CommaOpt = lexer();
 
-      if (CommaOpt && CommaOpt->view() == ",") continue;
+      if (CommaOpt && CommaOpt.view() == ",") continue;
       ef (CommaOpt) {
-        LexStore(CommaOpt);
+        lexer.store(CommaOpt);
         break;
       }
       else break;
     }
-    ef (ColonOpt) LexStore(ColonOpt);
+    ef (ColonOpt) lexer.store(ColonOpt);
 
     auto Type = read_IFaceType(self, false, baseTypes, baseTypePos);
     val_error(Type);
@@ -496,10 +495,10 @@ namespace qw
   }
 
   fun frontend::read_StructDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
 
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+    auto self = decls::Decl::make_Type(ctx, parent, Name.str(), Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto generic_ctx = read_GenericParams(self);
@@ -508,28 +507,28 @@ namespace qw
 
     std::vector<types::Type*> baseTypes;
     std::vector<word> baseTypePos;
-    auto ColonOpt = Lex();
+    auto ColonOpt = lexer();
 
-    if (ColonOpt && ColonOpt->view() == ":") while (true) {
-      auto Pk = Lex();
-      word pos = Pk ? *Pk : *Name;
-      if (Pk) LexStore(Pk);
+    if (ColonOpt && ColonOpt.view() == ":") while (true) {
+      auto Pk = lexer();
+      word pos = Pk ? Pk : Name;
+      if (Pk) lexer.store(Pk);
 
       auto parsedType = read_Type(parent, true);
       val_error(parsedType);
       baseTypes.push_back(*parsedType);
       baseTypePos.push_back(pos);
 
-      auto CommaOpt = Lex();
-      if (CommaOpt && CommaOpt->view() == ",") continue;
+      auto CommaOpt = lexer();
+      if (CommaOpt && CommaOpt.view() == ",") continue;
       ef (CommaOpt) {
-        LexStore(CommaOpt);
+        lexer.store(CommaOpt);
         break;
       }
       else break;
     }
     ef (ColonOpt)
-      LexStore(ColonOpt);
+      lexer.store(ColonOpt);
 
     auto Type = read_StructType(self, false, baseTypes, baseTypePos);
     val_error(Type);
@@ -541,39 +540,39 @@ namespace qw
   }
 
   fun frontend::read_EnumDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
     
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+    auto self = decls::Decl::make_Type(ctx, parent, Name.str(), Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto generic_ctx = read_GenericParams(self);
     if_except_ref(generic_ctx);
     self->set_generic(*generic_ctx);
 
-    auto ColonOpt = Lex();
+    auto ColonOpt = lexer();
     types::Type *baseType = nullptr;
     word baseTypePos{};
 
-    if (ColonOpt && ColonOpt->view() == ":") {
-      auto Pk = Lex();
-      baseTypePos = Pk ? *Pk : *Name;
-      if (Pk) LexStore(Pk);
+    if (ColonOpt && ColonOpt.view() == ":") {
+      auto Pk = lexer();
+      baseTypePos = Pk ? Pk : Name;
+      if (Pk) lexer.store(Pk);
 
       auto parsedType = read_Type(parent, true);
       val_error(parsedType);
       baseType = *parsedType;
-      auto Bracket = Lex();
+      auto Bracket = lexer();
       expected(Bracket, "{");
     }
     ef (ColonOpt) {
-      if (ColonOpt->view() != "{")
-        return errors::ExpectedIdentifierBut(*ColonOpt, ColonOpt->str(), "{");
+      if (ColonOpt.view() != "{")
+        return errors::ExpectedIdentifierBut(ColonOpt, ColonOpt.str(), "{");
     }
     else
-      return errors::ExpectedIdentifierBut2(*Name, Name->str(), "{", ":");
+      return errors::ExpectedIdentifierBut2(Name, Name.str(), "{", ":");
 
-    auto enumDecl = decls::Decl::make_Enum(ctx, self, "", *Name, Visibility::Public);
+    auto enumDecl = decls::Decl::make_Enum(ctx, self, "", Name, Visibility::Public);
     enumDecl->attrs() = std::exchange(m_current_attrs, {});
     
     std::vector<types::FieldCons> vals;
@@ -582,41 +581,41 @@ namespace qw
     i64 next_val = 1;
     
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == "}") break;
-      else LexStore(ID);
+      if (ID.view() == "}") break;
+      else lexer.store(ID);
 
       // Name
-      auto EnumConst = Lex();
+      auto EnumConst = lexer();
       Require_Word(EnumConst, continue);
       
       i64 current_val = next_val;
 
-      auto AssignOpt = Lex();
-      if (AssignOpt && AssignOpt->view() == "=") {
-          auto val_expr = read_Expr(parent, Precedence::Lowest);
-          val_error(val_expr);
-          if (!(*val_expr)->is<exprs::IntegerLiteral>())
-            return errors::InvalidConstantValue(*AssignOpt, Name->str(), "enum assigned value must be an integer literal");
+      auto AssignOpt = lexer();
+      if (AssignOpt && AssignOpt.view() == "=") {
+        auto val_expr = read_Expr(parent, Precedence::Lowest);
+        val_error(val_expr);
+        if (!(*val_expr)->is<exprs::IntegerLiteral>())
+          return errors::InvalidConstantValue(AssignOpt, Name.str(), "enum assigned value must be an integer literal");
 
-          auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
-          if (std::holds_alternative<u64>(lit->val))
-            current_val = (i64)std::get<u64>(lit->val);
-          else
-            current_val = (i64)std::get<i64>(lit->val);
+        auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
+        if (std::holds_alternative<u64>(lit->val))
+          current_val = (i64)std::get<u64>(lit->val);
+        else
+          current_val = (i64)std::get<i64>(lit->val);
       }
-      ef (AssignOpt) LexStore(AssignOpt);
+      ef (AssignOpt) lexer.store(AssignOpt);
 
-      vals.push_back({EnumConst->str(), current_val});
+      vals.push_back({EnumConst.str(), current_val});
       next_val = current_val + 1;
 
-      auto Comma = Lex();
-      if (Comma && Comma->view() == ",") continue;
-      ef (Comma && Comma->view() == "}") LexStore(Comma);
+      auto Comma = lexer();
+      if (Comma && Comma.view() == ",") continue;
+      ef (Comma && Comma.view() == "}") lexer.store(Comma);
       ef (Comma)
-        return errors::UnexpectedIdentifier(*Comma, Comma->str());
+        return errors::UnexpectedIdentifier(Comma, Comma.str());
     }
 
     std::string tname = self ? std::string(self->name()) : "enum";
@@ -637,39 +636,39 @@ namespace qw
   }
 
   fun frontend::read_SetDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    auto self = decls::Decl::make_Type(ctx, parent, Name->str(), *Name);
+    auto self = decls::Decl::make_Type(ctx, parent, Name.str(), Name);
     self->attrs() = std::exchange(m_current_attrs, {});
 
     auto generic_ctx = read_GenericParams(self);
     if_except_ref(generic_ctx);
     self->set_generic(*generic_ctx);
 
-    auto ColonOpt = Lex();
+    auto ColonOpt = lexer();
     types::Type *baseType = nullptr;
     word baseTypePos{};
 
-    if (ColonOpt && ColonOpt->view() == ":") {
-      auto Pk = Lex();
-      baseTypePos = Pk ? *Pk : *Name;
-      if (Pk) LexStore(Pk);
+    if (ColonOpt && ColonOpt.view() == ":") {
+      auto Pk = lexer();
+      baseTypePos = Pk ? Pk : Name;
+      if (Pk) lexer.store(Pk);
 
       auto parsedType = read_Type(parent, true);
       val_error(parsedType);
       baseType = *parsedType;
-      auto Bracket = Lex();
+      auto Bracket = lexer();
       expected(Bracket, "{");
     }
     ef (ColonOpt) {
-      if (ColonOpt->view() != "{")
-        return errors::ExpectedIdentifierBut(*ColonOpt, ColonOpt->str(), "{");
+      if (ColonOpt.view() != "{")
+        return errors::ExpectedIdentifierBut(ColonOpt, ColonOpt.str(), "{");
     }
     else
-      return errors::ExpectedIdentifierBut2(*Name, Name->str(), "{", ":");
+      return errors::ExpectedIdentifierBut2(Name, Name.str(), "{", ":");
 
     
-    auto setDecl = decls::Decl::make_Set(ctx, self, "", *Name, Visibility::Public);
+    auto setDecl = decls::Decl::make_Set(ctx, self, "", Name, Visibility::Public);
     setDecl->attrs() = std::exchange(m_current_attrs, {});
     
     std::vector<types::FieldCons> vals;
@@ -678,24 +677,24 @@ namespace qw
     i64 next_val = 1;
     
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == "}") break;
-      else LexStore(ID);
+      if (ID.view() == "}") break;
+      else lexer.store(ID);
 
       // Name
-      auto SetConst = Lex();
+      auto SetConst = lexer();
       Require_Word(SetConst, continue);
       
       i64 current_val = next_val;
 
-      auto AssignOpt = Lex();
-      if (AssignOpt && AssignOpt->view() == "=") {
+      auto AssignOpt = lexer();
+      if (AssignOpt && AssignOpt.view() == "=") {
           auto val_expr = read_Expr(parent, Precedence::Lowest);
           val_error(val_expr);
           if (!(*val_expr)->is<exprs::IntegerLiteral>())
-            return errors::InvalidConstantValue(*AssignOpt, Name->str(), "set assigned value must be an integer literal");
+            return errors::InvalidConstantValue(AssignOpt, Name.str(), "set assigned value must be an integer literal");
         
           auto lit = (*val_expr)->as<exprs::IntegerLiteral>();
         if (std::holds_alternative<u64>(lit->val))
@@ -703,16 +702,16 @@ namespace qw
         else
           current_val = (i64)std::get<i64>(lit->val);
       }
-      ef (AssignOpt) LexStore(AssignOpt);
+      ef (AssignOpt) lexer.store(AssignOpt);
 
-      vals.push_back({SetConst->str(), current_val});
+      vals.push_back({SetConst.str(), current_val});
       next_val = (i64)next_pow2((u64)current_val);
 
-      auto Comma = Lex();
-      if (Comma && Comma->view() == ",") continue;
-      ef (Comma && Comma->view() == "}") LexStore(Comma);
+      auto Comma = lexer();
+      if (Comma && Comma.view() == ",") continue;
+      ef (Comma && Comma.view() == "}") lexer.store(Comma);
       ef (Comma)
-        return errors::UnexpectedIdentifier(*Comma, Comma->str());
+        return errors::UnexpectedIdentifier(Comma, Comma.str());
     }
 
     std::string tname = self ? std::string(self->name()) : "set";
@@ -724,11 +723,11 @@ namespace qw
   }
 
   fun frontend::read_ModDecl(decls::Decl *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
-    std::string mod_name = Name->str();
+    std::string mod_name = Name.str();
 
     std::filesystem::path curr_path(m_fpath);
     std::filesystem::path base_dir = curr_path.parent_path();
@@ -738,16 +737,16 @@ namespace qw
 
     std::string target_file = std::filesystem::exists(target_file1) ? target_file1 : target_file2;
     if (!std::filesystem::exists(target_file)) {
-      return errors::ModuleNotFound(*Name, mod_name);
+      return errors::ModuleNotFound(Name, mod_name);
     }
 
     if (ctx->is_parsed(target_file)) {
-      return errors::CyclicImport(*Name, mod_name);
+      return errors::CyclicImport(Name, mod_name);
     }
     ctx->mark_parsed(target_file);
 
     auto sub_mod = ctx->make_module(mod_name, target_file);
-    auto sub_ns = decls::Decl::make_NameSpace(ctx, parent, mod_name, *Name);
+    auto sub_ns = decls::Decl::make_NameSpace(ctx, parent, mod_name, Name);
     sub_ns->attrs() = std::exchange(m_current_attrs, {});
 
     frontend sub_front(sub_mod);
@@ -774,9 +773,9 @@ namespace qw
   }
 
   fun frontend::read_StructConstructorDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>> {
-    auto self = decls::Decl::make_Constructor(ctx, parent, *LexLast(), nil, vis);
+    auto self = decls::Decl::make_Constructor(ctx, parent, lexer.last(), nil, vis);
 
-    expected(Lex(), "(");
+    expected(lexer(), "(");
 
     std::vector<types::FieldType> pars;
     pars.push_back({"self", types::Type::make_Reference(ctx, recType), Visibility::Public});
@@ -789,41 +788,41 @@ namespace qw
     auto FType = types::Type::make_Func(ctx, pars, ctx->void_t());
     self->as<decls::ConstructorDecl>()->funcType = FType;
 
-    auto Ret = Lex();
+    auto Ret = lexer();
     Require(Ret);
 
     // Initializers
-    if (Ret->view() == ":") {
+    if (Ret.view() == ":") {
       while (true) {
-        auto Mem = Lex();
+        auto Mem = lexer();
         Require(Mem);
-        std::string mem_name = Mem->str();
+        std::string mem_name = Mem.str();
 
-        expected(Lex(), "(");
+        expected(lexer(), "(");
         auto InitExpr = read_Expr(self, Precedence::Lowest);
         val_error(InitExpr);
-        expected(Lex(), ")");
+        expected(lexer(), ")");
 
         self->as<decls::ConstructorDecl>()->inits.push_back({mem_name, *InitExpr});
 
-        auto Comma = Lex();
+        auto Comma = lexer();
         Require(Comma);
-        if (Comma->view() == ",") {
+        if (Comma.view() == ",") {
           continue;
         }
         else {
-          LexStore(Comma);
+          lexer.store(Comma);
           break;
         }
       }
 
-      Ret = Lex();
+      Ret = lexer();
       Require(Ret);
     }
 
     // Code & Decl
-    if (Ret->view() == ";") return {};
-    ef (Ret->view() == "{") {
+    if (Ret.view() == ";") return {};
+    ef (Ret.view() == "{") {
       auto block_ret = read_CodeBlock(self);
       if (!block_ret)
         return std::unexpected(std::move(block_ret.error()));
@@ -831,13 +830,13 @@ namespace qw
         return {};
     }
     else
-      return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
+      return errors::ExpectedIdentifierBut2(Ret, Ret.str(), ";", "{");
   }
 
   fun frontend::read_StructDestructorDecl(decls::Decl *parent, types::Type *recType, Visibility vis) -> std::expected<void, uptr<diagnostic::message>> {
-    auto self = decls::Decl::make_Destructor(ctx, parent, *LexLast(), nil, vis);
+    auto self = decls::Decl::make_Destructor(ctx, parent, lexer.last(), nil, vis);
 
-    expected(Lex(), "(");
+    expected(lexer(), "(");
 
     std::vector<types::FieldType> pars;
     pars.push_back({"self", types::Type::make_Reference(ctx, recType), Visibility::Public});
@@ -850,12 +849,12 @@ namespace qw
     auto FType = types::Type::make_Func(ctx, pars, ctx->void_t());
     self->as<decls::DestructorDecl>()->funcType = FType;
 
-    auto Ret = Lex();
+    auto Ret = lexer();
     Require(Ret);
 
     // Code & Decl
-    if (Ret->view() == ";") return {};
-    ef (Ret->view() == "{") {
+    if (Ret.view() == ";") return {};
+    ef (Ret.view() == "{") {
       auto block_ret = read_CodeBlock(self);
       if (!block_ret)
         return std::unexpected(std::move(block_ret.error()));
@@ -863,14 +862,14 @@ namespace qw
         return {};
     }
     else
-      return errors::ExpectedIdentifierBut2(*Ret, Ret->str(), ";", "{");
+      return errors::ExpectedIdentifierBut2(Ret, Ret.str(), ";", "{");
   }
 
 
 
   fun frontend::read_SingleStmt(identy *self, std::optional<word> predefined_id) -> std::expected<void, uptr<diagnostic::message>> {
-    auto ID = predefined_id ? *predefined_id : *Lex();
-    if (!predefined_id && !ID) return std::unexpected(errors::ExpectedIdentifierBut(*LexLast(), LexLast()->str(), "a statement"));
+    auto ID = predefined_id ? *predefined_id : lexer();
+    if (!predefined_id && !ID) return std::unexpected(errors::ExpectedIdentifierBut(lexer.last(), lexer.last().str(), "a statement"));
 
     if (ID.view() == "ret")   if_error(read_ReturnStmt(self))
     ef (ID.view() == "var")   if_error(read_VarStmt(self))
@@ -879,61 +878,62 @@ namespace qw
     ef (ID.view() == "while") if_error(read_WhileStmt(self))
     ef (ID.view() == "break") {
       stmts::Stmt::make_Break(ctx, self, ID);
-      expected(Lex(), ";");
+      expected(lexer(), ";");
     }
     ef (ID.view() == "continue") {
       stmts::Stmt::make_Continue(ctx, self, ID);
-      expected(Lex(), ";");
+      expected(lexer(), ";");
     }
     ef (ID.view() == "unsafe") {
       if_error(read_UnsafeStmt(self, ID));
     }
     else {
-      LexStore(ID);
+      lexer.store(ID);
       auto expr = read_Expr(self, Precedence::Lowest);
       val_error(expr);
       stmts::Stmt::make_ExprStmt(ctx, self, *expr, ID);
-      expected(Lex(), ";");
+      expected(lexer(), ";");
     }
 
     return {};
   }
 
   fun frontend::read_BlockOrStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
-    auto token = Lex();
+    auto token = lexer();
     Require(token);
     
-    if (token->view() == "{") {
+    if (token.view() == "{") {
       return read_CodeBlock(parent);
-    } else {
-      LexStore(token);
-      auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *token);
+    }
+    else {
+      lexer.store(token);
+      auto self = stmts::Stmt::make_CodeBlock(ctx, parent, token);
       if_error(read_SingleStmt(self, std::nullopt));
       return self;
     }
   }
 
   fun frontend::read_CodeBlock(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
-    auto self = stmts::Stmt::make_CodeBlock(ctx, parent, *LexLast());
+    auto self = stmts::Stmt::make_CodeBlock(ctx, parent, lexer.last());
 
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == "}") break;
+      if (ID.view() == "}") break;
       
-      if_error(read_SingleStmt(self, *ID));
+      if_error(read_SingleStmt(self, ID));
     }
 
     return self;
   }
 
   fun frontend::read_IfStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
-    word pos = *LexLast();
-    expected(Lex(), "(");
+    word pos = lexer.last();
+    expected(lexer(), "(");
     auto cond = read_Expr(parent, Precedence::Lowest);
     val_error(cond);
-    expected(Lex(), ")");
+    expected(lexer(), ")");
 
     auto if_stmt = stmts::Stmt::make_IfStmt(ctx, parent, pos, *cond, nullptr, nullptr);
 
@@ -941,43 +941,43 @@ namespace qw
     if (!then_ret) return std::unexpected(std::move(then_ret.error()));
     if_stmt->as<stmts::IfStmt>()->then_block = *then_ret;
 
-    auto nxt = Lex();
+    auto nxt = lexer();
     if (!nxt) return {};
 
-    if (nxt->view() == "else") {
-      auto nxt2 = Lex();
+    if (nxt.view() == "else") {
+      auto nxt2 = lexer();
       Require(nxt2);
 
-      if (nxt2->view() == "if") {
+      if (nxt2.view() == "if") {
         auto elif_ret = read_IfStmt(if_stmt);
         if (!elif_ret) return std::unexpected(std::move(elif_ret.error()));
         if_stmt->as<stmts::IfStmt>()->else_block = *elif_ret;
       }
       else {
-        LexStore(nxt2);
+        lexer.store(nxt2);
         auto else_ret = read_BlockOrStmt(if_stmt);
         if (!else_ret) return std::unexpected(std::move(else_ret.error()));
         if_stmt->as<stmts::IfStmt>()->else_block = *else_ret;
       }
     }
-    ef (nxt->view() == "ef") {
+    ef (nxt.view() == "ef") {
       auto elif_ret = read_IfStmt(if_stmt);
       if (!elif_ret) return std::unexpected(std::move(elif_ret.error()));
       if_stmt->as<stmts::IfStmt>()->else_block = *elif_ret;
     }
     else {
-      LexStore(nxt);
+      lexer.store(nxt);
     }
 
     return if_stmt;
   }
 
   fun frontend::read_WhileStmt(identy *parent) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
-    word pos = *LexLast();
-    expected(Lex(), "(");
+    word pos = lexer.last();
+    expected(lexer(), "(");
     auto cond = read_Expr(parent, Precedence::Lowest);
     val_error(cond);
-    expected(Lex(), ")");
+    expected(lexer(), ")");
 
     auto while_stmt = stmts::Stmt::make_WhileStmt(ctx, parent, pos, *cond, nullptr);
 
@@ -993,23 +993,23 @@ namespace qw
 
     // Name
     re:
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    Vars.push_back(*Name);
+    Vars.push_back(Name);
 
-    auto Colon = Lex();
+    auto Colon = lexer();
     Require(Colon);
 
     types::Type *Type = nullptr;
 
-    if (Colon->view() == "=" || Colon->view() == ";") {
-      LexStore(Colon);
+    if (Colon.view() == "=" || Colon.view() == ";") {
+      lexer.store(Colon);
     }
     else {
-      if (Colon->view() == ",") goto re;
-      ef (Colon->view() == ":");
+      if (Colon.view() == ",") goto re;
+      ef (Colon.view() == ":");
       else
-        return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
+        return errors::ExpectedIdentifierBut2(Colon, Colon.str(), ",", ":");
 
       // Type
       auto TypeRes = read_Type(parent, true);
@@ -1018,28 +1018,28 @@ namespace qw
     }
 
     // Value
-    auto Assi = Lex();
+    auto Assi = lexer();
     Require(Assi);
 
-    if (Assi->view() == "=") {
+    if (Assi.view() == "=") {
       if (Vars.size() != 1)
-        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(Assi, Assi.str()));
 
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), Type, *Name, *Expr, Assi);
+      stmts::Stmt::make_CodeVar(ctx, parent, Name.str(), Type, Name, *Expr, Assi);
     }
     else {
       if (!Type)
-        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Name->str()));
-      LexStore(Assi);
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(Assi, Name.str()));
+      lexer.store(Assi);
 
       for (auto& var : Vars)
         stmts::Stmt::make_CodeVar(ctx, parent, var.str(), Type, var, nullptr, std::nullopt);
     }
 
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
     return {};
   }
@@ -1049,23 +1049,23 @@ namespace qw
 
     // Name
     re:
-    auto Name = Lex();
+    auto Name = lexer();
     Require(Name);
-    Vars.push_back(*Name);
+    Vars.push_back(Name);
 
-    auto Colon = Lex();
+    auto Colon = lexer();
     Require(Colon);
 
     types::Type *Type = nullptr;
 
-    if (Colon->view() == "=" || Colon->view() == ";") {
-      LexStore(Colon);
+    if (Colon.view() == "=" || Colon.view() == ";") {
+      lexer.store(Colon);
     }
     else {
-      if (Colon->view() == ",") goto re;
-      ef (Colon->view() == ":");
+      if (Colon.view() == ",") goto re;
+      ef (Colon.view() == ":");
       else
-        return std::unexpected(errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":"));
+        return std::unexpected(errors::ExpectedIdentifierBut2(Colon, Colon.str(), ",", ":"));
 
       // Type
       auto TypeRes = read_Type(parent, true);
@@ -1074,61 +1074,61 @@ namespace qw
     }
 
     // Value
-    auto Assi = Lex();
+    auto Assi = lexer();
     Require(Assi);
 
-    if (Assi->view() == "=") {
+    if (Assi.view() == "=") {
       if (Vars.size() != 1)
-        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(*Assi, Assi->str()));
+        return std::unexpected(errors::OnlyOneVariableCanBeInitialized(Assi, Assi.str()));
 
       auto Expr = read_Expr(parent, Precedence::Lowest);
       val_error(Expr);
 
-      stmts::Stmt::make_CodeVar(ctx, parent, Name->str(), Type, *Name, *Expr, Assi);
+      stmts::Stmt::make_CodeVar(ctx, parent, Name.str(), Type, Name, *Expr, Assi);
     }
     else {
       if (!Type)
-        return std::unexpected(errors::TypeRequiredWithoutAssignment(*Assi, Name->str()));
-      LexStore(Assi);
+        return std::unexpected(errors::TypeRequiredWithoutAssignment(Assi, Name.str()));
+      lexer.store(Assi);
 
       for (auto &v : Vars)
         stmts::Stmt::make_CodeVar(ctx, parent, v.str(), Type, v, nullptr, std::nullopt);
     }
 
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
     return {};
   }
 
   fun frontend::read_ReturnStmt(identy *parent) -> std::expected<void, uptr<diagnostic::message>> {
-    auto Pos = LexLast();
+    auto Pos = lexer.last();
 
     auto Expr = read_Expr(parent, Precedence::Lowest);
     val_error(Expr);
-    expected(Lex(), ";");
+    expected(lexer(), ";");
 
-    auto self = stmts::Stmt::make_Return(ctx, parent, *Pos, *Expr);
+    auto self = stmts::Stmt::make_Return(ctx, parent, Pos, *Expr);
 
     return {};
   }
 
   fun frontend::read_UnsafeStmt(identy *parent, word pos) -> std::expected<stmts::Stmt*, uptr<diagnostic::message>> {
-    auto next = Lex();
+    auto next = lexer();
     Require(next);
 
     auto obj = stmts::Stmt::make_Unsafe(ctx, parent, pos, nullptr);
 
-    if (next->view() == "{") {
+    if (next.view() == "{") {
       auto blk = read_CodeBlock(obj);
       if (!blk) return std::unexpected(std::move(blk.error()));
       obj->as<stmts::UnsafeStmt>()->stmt = *blk;
     }
     else {
-      LexStore(next);
+      lexer.store(next);
       auto expr = read_Expr(obj, Precedence::Lowest);
       if (!expr) return std::unexpected(std::move(expr.error()));
       obj->as<stmts::UnsafeStmt>()->stmt = stmts::Stmt::make_ExprStmt(ctx, obj, *expr, pos);
-      expected(Lex(), ";");
+      expected(lexer(), ";");
     }
 
     return obj;
@@ -1138,41 +1138,41 @@ namespace qw
 
   fun frontend::read_Expr(identy *parent, Precedence min_prec) -> std::expected<exprs::Expr*, uptr<diagnostic::message>> {
     exprs::Expr *ret{};
-    auto ID = Lex();
+    auto ID = lexer();
     Require(ID);
 
-    if (ID->view() == "@" || ID->view() == "+" || ID->view() == "-" || ID->view() == "!" || ID->view() == "~") {
+    if (ID.view() == "@" || ID.view() == "+" || ID.view() == "-" || ID.view() == "!" || ID.view() == "~") {
       exprs::UnaryOpEnum kind;
-      if (ID->view() == "@") kind = exprs::UnaryOpEnum::AddrOf;
-      ef (ID->view() == "+") kind = exprs::UnaryOpEnum::Plus;
-      ef (ID->view() == "-") kind = exprs::UnaryOpEnum::Minus;
-      ef (ID->view() == "!") kind = exprs::UnaryOpEnum::LNot;
-      ef (ID->view() == "~") kind = exprs::UnaryOpEnum::BitNot;
+      if (ID.view() == "@") kind = exprs::UnaryOpEnum::AddrOf;
+      ef (ID.view() == "+") kind = exprs::UnaryOpEnum::Plus;
+      ef (ID.view() == "-") kind = exprs::UnaryOpEnum::Minus;
+      ef (ID.view() == "!") kind = exprs::UnaryOpEnum::LNot;
+      ef (ID.view() == "~") kind = exprs::UnaryOpEnum::BitNot;
 
       auto sub = read_Expr(parent, Precedence::Unary);
       val_error(sub);
-      ret = exprs::Expr::make_UnaryOp(ctx, parent, kind, *sub, *ID);
+      ret = exprs::Expr::make_UnaryOp(ctx, parent, kind, *sub, ID);
     }
-    ef (ID->view() == "true" || ID->view() == "false") {
-      ret = exprs::Expr::make_BoolLiteral(ctx, parent, ID->view() == "true", *ID);
+    ef (ID.view() == "true" || ID.view() == "false") {
+      ret = exprs::Expr::make_BoolLiteral(ctx, parent, ID.view() == "true", ID);
     }
-    ef (ID->view() == "null") {
-      ret = exprs::Expr::make_PtrLiteral(ctx, parent, 0, *ID);
+    ef (ID.view() == "null") {
+      ret = exprs::Expr::make_PtrLiteral(ctx, parent, 0, ID);
     }
-    ef (isNumber(ID->view()[0])) {
+    ef (lexer.kind(ID.view()[0]) == CharKind::Numeral) {
       u64 val;
-      std::string_view view = ID->view();
+      std::string_view view = ID.view();
       int base = 10;
       size_t offset = 0;
       
       if (view.size() > 1 && view[0] == '0') {
         if (view[1] == 'x') {
-          if (view.size() == 2) return errors::InvalidConstantValue(*ID, ID->str(), "hexadecimal prefix '0x' requires digits");
+          if (view.size() == 2) return errors::InvalidConstantValue(ID, ID.str(), "hexadecimal prefix '0x' requires digits");
           base = 16;
           offset = 2;
         }
         ef (view[1] == 'b') {
-          if (view.size() == 2) return errors::InvalidConstantValue(*ID, ID->str(), "binary prefix '0b' requires digits");
+          if (view.size() == 2) return errors::InvalidConstantValue(ID, ID.str(), "binary prefix '0b' requires digits");
           base = 2;
           offset = 2;
         }
@@ -1180,33 +1180,33 @@ namespace qw
       
       auto eret = std::from_chars(view.begin() + offset, view.end(), val, base);
       if (eret.ec != std::errc() || eret.ptr != view.end()) {
-        return errors::CantConvertInteger(*ID, ID->str());
+        return errors::CantConvertInteger(ID, ID.str());
       }
-      ret = exprs::Expr::make_IntegerLiteral(ctx, parent, val, *ID);
+      ret = exprs::Expr::make_IntegerLiteral(ctx, parent, val, ID);
     }
-    ef (ID->view()[0] == '\'') {
-      if (ID->view().size() == 2) return errors::EmptyCharacterConstant(*ID);
-      std::string unescaped = unescape_string(ID->view().substr(1, ID->view().size() - 2));
-      if (unescaped.size() == 0) return errors::EmptyCharacterConstant(*ID);
-      if (unescaped.size() > 1)  return errors::CharacterConstantTooLong(*ID, (std::string)ID->view().substr(1, ID->view().size() - 2));
+    ef (ID.view()[0] == '\'') {
+      if (ID.view().size() == 2) return errors::EmptyCharacterConstant(ID);
+      std::string unescaped = unescape_string(ID.view().substr(1, ID.view().size() - 2));
+      if (unescaped.size() == 0) return errors::EmptyCharacterConstant(ID);
+      if (unescaped.size() > 1)  return errors::CharacterConstantTooLong(ID, (std::string)ID.view().substr(1, ID.view().size() - 2));
 
-      ret = exprs::Expr::make_CharLiteral(ctx, parent, unescaped[0], *ID);
+      ret = exprs::Expr::make_CharLiteral(ctx, parent, unescaped[0], ID);
     }
-    ef (ID->view()[0] == '\"') {
+    ef (ID.view()[0] == '\"') {
       ret = exprs::Expr::make_StringLiteral(
         ctx, parent, 
-        unescape_string(ID->view().substr(1, ID->view().size() - 2)),
-        *ID
+        unescape_string(ID.view().substr(1, ID.view().size() - 2)),
+        ID
       );
     }
-    ef (isWord(ID->view()[0])) {
-      ret = exprs::Expr::make_Nick(ctx, parent, {ID->str()}, *ID);
+    ef (lexer.kind(ID.view()[0]) == CharKind::Word) {
+      ret = exprs::Expr::make_Nick(ctx, parent, {ID.str()}, ID);
     }
-    ef (ID->view() == "(") {
+    ef (ID.view() == "(") {
       auto expr = read_Expr(parent, Precedence::Lowest);
       val_error(expr);
       ret = *expr;
-      expected(Lex(), ")");
+      expected(lexer(), ")");
     }
     else
       diagnostic::fatal(fatals::Internal_UnknownExpr().error()->msg());
@@ -1224,51 +1224,51 @@ namespace qw
   fun frontend::read_Expr_Postfix(identy *parent, exprs::Expr *ret) -> std::expected<exprs::Expr*, uptr<diagnostic::message>> {
     
     while (true) {
-      auto Op = Lex();
+      auto Op = lexer();
       if (!Op)
         break;
 
-      if (Op->view() == "." || Op->view() == "::") {
-        auto MemName = Lex();
+      if (Op.view() == "." || Op.view() == "::") {
+        auto MemName = lexer();
         Require(MemName);
 
-        auto kind = Op->view() == "." ? exprs::MemberOpEnum::Member : exprs::MemberOpEnum::NameS;
+        auto kind = Op.view() == "." ? exprs::MemberOpEnum::Member : exprs::MemberOpEnum::NameS;
         
         if (kind == exprs::MemberOpEnum::NameS && ret->is<exprs::NickExpr>()) {
-          ret->as<exprs::NickExpr>()->unresolved.push_back(MemName->str());
+          ret->as<exprs::NickExpr>()->unresolved.push_back(MemName.str());
           continue;
         }
 
-        auto MemExpr = exprs::Expr::make_Nick(ctx, parent, { MemName->str() }, *MemName);
-        ret          = exprs::Expr::make_MemberOp(ctx, parent, kind, ret, MemExpr, *Op);
+        auto MemExpr = exprs::Expr::make_Nick(ctx, parent, { MemName.str() }, MemName);
+        ret = exprs::Expr::make_MemberOp(ctx, parent, kind, ret, MemExpr, Op);
       }
-      ef (Op->view() == "(" || Op->view() == "[") {
-        auto kind = Op->view() == "(" ? exprs::PostfixOpEnum::Call : exprs::PostfixOpEnum::Array;
-        auto clsb = Op->view() == "(" ? ")" : "]";
+      ef (Op.view() == "(" || Op.view() == "[") {
+        auto kind = Op.view() == "(" ? exprs::PostfixOpEnum::Call : exprs::PostfixOpEnum::Array;
+        auto clsb = Op.view() == "(" ? ")" : "]";
 
         std::vector<exprs::Expr *> ops;
-        auto Next = Lex();
+        auto Next = lexer();
         Require(Next);
 
-        while (Next->view() != clsb) {
-          LexStore(Next);
+        while (Next.view() != clsb) {
+          lexer.store(Next);
           auto ex = read_Expr(parent, Precedence::Lowest);
           if_except_ref(ex);
           ops.push_back(*ex);
 
-          Next = Lex();
+          Next = lexer();
           Require(Next);
-          if (Next->view() == ",") {
-            Next = Lex();
+          if (Next.view() == ",") {
+            Next = lexer();
             Require(Next);
           }
         }
-        ret = exprs::Expr::make_PostfixOp(ctx, parent, kind, ret, ops, *Next);
+        ret = exprs::Expr::make_PostfixOp(ctx, parent, kind, ret, ops, Next);
       }
-      ef (Op->view() == "?") {
-        ret = exprs::Expr::make_PostfixOp(ctx, parent, exprs::PostfixOpEnum::Deref, ret, {}, *Op);
+      ef (Op.view() == "?") {
+        ret = exprs::Expr::make_PostfixOp(ctx, parent, exprs::PostfixOpEnum::Deref, ret, {}, Op);
       }
-      ef (Op->view() == "<") {
+      ef (Op.view() == "<") {
         u0 old_off = Off;
         
         std::vector<types::Type *> generic_args;
@@ -1282,14 +1282,14 @@ namespace qw
           }
           generic_args.push_back(*type);
           
-          auto Next = Lex();
+          auto Next = lexer();
           if (!Next) {
             success = false;
             break;
           }
           
-          if (Next->view() == ">") break;
-          ef (Next->view() == ",") continue;
+          if (Next.view() == ">") break;
+          ef (Next.view() == ",") continue;
           else {
             success = false;
             break;
@@ -1297,16 +1297,15 @@ namespace qw
         }
         
         if (success)
-          ret = exprs::Expr::make_GenericOp(ctx, parent, ret, std::move(generic_args), *Op);
+          ret = exprs::Expr::make_GenericOp(ctx, parent, ret, std::move(generic_args), Op);
         else {
           Off = old_off;
-          m_lexStore = std::nullopt;
-          LexStore(Op);
+          lexer.store(Op);
           break;
         }
       }
       else {
-        LexStore(Op);
+        lexer.store(Op);
         break;
       }
     }
@@ -1316,80 +1315,80 @@ namespace qw
   fun frontend::read_Expr_Infix(identy *parent, Precedence min_prec, exprs::Expr *ret) -> std::expected<exprs::Expr*, uptr<diagnostic::message>> {
     
     while (true) {
-      auto Op = Lex();
+      auto Op = lexer();
       if (!Op)
         break;
 
       Precedence op_prec = Precedence::Lowest;
       exprs::BinaryOpEnum kind;
 
-      if (Op->view() == "=") {
+      if (Op.view() == "=") {
         op_prec = Precedence::Assign;
         kind    = exprs::BinaryOpEnum::Assign;
       }
-      ef (Op->view() == "+=" || Op->view() == "-=" || Op->view() == "*=" || Op->view() == "/=" || Op->view() == "%=" || Op->view() == "&=" || Op->view() == "|=" || Op->view() == "^=" || Op->view() == "<<=" || Op->view() == ">>=") {
+      ef (Op.view() == "+=" || Op.view() == "-=" || Op.view() == "*=" || Op.view() == "/=" || Op.view() == "%=" || Op.view() == "&=" || Op.view() == "|=" || Op.view() == "^=" || Op.view() == "<<=" || Op.view() == ">>=") {
         op_prec = Precedence::Assign;
-        if (Op->view() == "+=")  kind = exprs::BinaryOpEnum::AddAssign;
-        ef (Op->view() == "-=")  kind = exprs::BinaryOpEnum::SubAssign;
-        ef (Op->view() == "*=")  kind = exprs::BinaryOpEnum::MulAssign;
-        ef (Op->view() == "/=")  kind = exprs::BinaryOpEnum::DivAssign;
-        ef (Op->view() == "%=")  kind = exprs::BinaryOpEnum::RemAssign;
-        ef (Op->view() == "&=")  kind = exprs::BinaryOpEnum::BitAndAssign;
-        ef (Op->view() == "|=")  kind = exprs::BinaryOpEnum::BitOrAssign;
-        ef (Op->view() == "^=")  kind = exprs::BinaryOpEnum::BitXorAssign;
-        ef (Op->view() == "<<=") kind = exprs::BinaryOpEnum::ShlAssign;
-        ef (Op->view() == ">>=") kind = exprs::BinaryOpEnum::ShrAssign;
+        if (Op.view() == "+=")  kind = exprs::BinaryOpEnum::AddAssign;
+        ef (Op.view() == "-=")  kind = exprs::BinaryOpEnum::SubAssign;
+        ef (Op.view() == "*=")  kind = exprs::BinaryOpEnum::MulAssign;
+        ef (Op.view() == "/=")  kind = exprs::BinaryOpEnum::DivAssign;
+        ef (Op.view() == "%=")  kind = exprs::BinaryOpEnum::RemAssign;
+        ef (Op.view() == "&=")  kind = exprs::BinaryOpEnum::BitAndAssign;
+        ef (Op.view() == "|=")  kind = exprs::BinaryOpEnum::BitOrAssign;
+        ef (Op.view() == "^=")  kind = exprs::BinaryOpEnum::BitXorAssign;
+        ef (Op.view() == "<<=") kind = exprs::BinaryOpEnum::ShlAssign;
+        ef (Op.view() == ">>=") kind = exprs::BinaryOpEnum::ShrAssign;
       }
-      ef (Op->view() == "==" || Op->view() == "!=") {
+      ef (Op.view() == "==" || Op.view() == "!=") {
         op_prec = Precedence::Eq;
-        kind    = Op->view() == "==" ? exprs::BinaryOpEnum::Eq : exprs::BinaryOpEnum::NEq;
+        kind    = Op.view() == "==" ? exprs::BinaryOpEnum::Eq : exprs::BinaryOpEnum::NEq;
       }
-      ef (Op->view() == "<" || Op->view() == ">" || Op->view() == "<=" || Op->view() == ">=") {
+      ef (Op.view() == "<" || Op.view() == ">" || Op.view() == "<=" || Op.view() == ">=") {
         op_prec = Precedence::Rel;
-        if (Op->view() == "<") kind = exprs::BinaryOpEnum::Lt;
-        ef (Op->view() == ">") kind = exprs::BinaryOpEnum::Gt;
-        ef (Op->view() == "<=") kind = exprs::BinaryOpEnum::LEq;
-        ef (Op->view() == ">=") kind = exprs::BinaryOpEnum::GEq;
+        if (Op.view() == "<") kind = exprs::BinaryOpEnum::Lt;
+        ef (Op.view() == ">") kind = exprs::BinaryOpEnum::Gt;
+        ef (Op.view() == "<=") kind = exprs::BinaryOpEnum::LEq;
+        ef (Op.view() == ">=") kind = exprs::BinaryOpEnum::GEq;
       }
-      ef (Op->view() == "+" || Op->view() == "-") {
+      ef (Op.view() == "+" || Op.view() == "-") {
         op_prec = Precedence::Add;
-        kind    = Op->view() == "+" ? exprs::BinaryOpEnum::Add : exprs::BinaryOpEnum::Sub;
+        kind    = Op.view() == "+" ? exprs::BinaryOpEnum::Add : exprs::BinaryOpEnum::Sub;
       }
-      ef (Op->view() == "*" || Op->view() == "/" || Op->view() == "%") {
+      ef (Op.view() == "*" || Op.view() == "/" || Op.view() == "%") {
         op_prec = Precedence::Mul;
-        kind    = Op->view() == "*" ? exprs::BinaryOpEnum::Mul : Op->view() == "/" ? exprs::BinaryOpEnum::Div : exprs::BinaryOpEnum::Rem;
+        kind    = Op.view() == "*" ? exprs::BinaryOpEnum::Mul : Op.view() == "/" ? exprs::BinaryOpEnum::Div : exprs::BinaryOpEnum::Rem;
       }
-      ef (Op->view() == "&") {
+      ef (Op.view() == "&") {
         op_prec = Precedence::BitAnd;
         kind    = exprs::BinaryOpEnum::BitAnd;
       }
-      ef (Op->view() == "|") {
+      ef (Op.view() == "|") {
         op_prec = Precedence::BitOr;
         kind    = exprs::BinaryOpEnum::BitOr;
       }
-      ef (Op->view() == "^") {
+      ef (Op.view() == "^") {
         op_prec = Precedence::BitXor;
         kind    = exprs::BinaryOpEnum::BitXor;
       }
-      ef (Op->view() == "<<" || Op->view() == ">>") {
+      ef (Op.view() == "<<" || Op.view() == ">>") {
         op_prec = Precedence::Shift;
-        kind    = Op->view() == "<<" ? exprs::BinaryOpEnum::Shl : exprs::BinaryOpEnum::LShr;
+        kind    = Op.view() == "<<" ? exprs::BinaryOpEnum::Shl : exprs::BinaryOpEnum::LShr;
       }
-      ef (Op->view() == "&&") {
+      ef (Op.view() == "&&") {
         op_prec = Precedence::LogAnd;
         kind    = exprs::BinaryOpEnum::LogAnd;
       }
-      ef (Op->view() == "||") {
+      ef (Op.view() == "||") {
         op_prec = Precedence::LogOr;
         kind    = exprs::BinaryOpEnum::LogOr;
       }
       else {
-        LexStore(Op);
+        lexer.store(Op);
         break;
       }
 
       if (op_prec < min_prec) {
-        LexStore(Op);
+        lexer.store(Op);
         break;
       }
 
@@ -1397,7 +1396,7 @@ namespace qw
       auto r2              = read_Expr(parent, next_prec);
       val_error(r2);
 
-      ret = exprs::Expr::make_BinaryOp(ctx, parent, kind, ret, *r2, *Op);
+      ret = exprs::Expr::make_BinaryOp(ctx, parent, kind, ret, *r2, Op);
     }
 
     return ret;
@@ -1406,75 +1405,75 @@ namespace qw
   
   
   fun frontend::read_Type(identy *parent, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>> {
-    auto ID = Lex();
+    auto ID = lexer();
     Require(ID);
 
     std::expected<types::Type*, uptr<diagnostic::message>> ret;
 
-    if (ID->view() == "struct") {
+    if (ID.view() == "struct") {
       ret = read_StructType(parent, indecl);
       goto fin;
     }
-    ef (ID->view() == "iface") {
+    ef (ID.view() == "iface") {
       ret = read_IFaceType(parent, indecl);
       goto fin;
     }
-    ef (ID->view() == "fun") {
+    ef (ID.view() == "fun") {
       ret = read_FuncType(parent, indecl);
       goto fin;
     }
     ef (indecl) {
-      auto Nick = types::Type::make_Nick(ctx, {ID->str()});
+      auto Nick = types::Type::make_Nick(ctx, {ID.str()});
       Nick->owner_ident = parent;
 
       re:
-      auto S = Lex();
+      auto S = lexer();
       Require(S);
 
-      if (S->view() == "::") {
-        auto N = Lex();
+      if (S.view() == "::") {
+        auto N = lexer();
         Require_Word(N, {ret = Nick; goto fin;});
 
-        Nick->as<types::NickType>()->unresolved.push_back(N->str());
+        Nick->as<types::NickType>()->unresolved.push_back(N.str());
         goto re;
       }
       else
-        LexStore(S);
+        lexer.store(S);
 
       ret = Nick;
       goto fin;
     }
     else
-      return errors::UnknownKeyword(*ID, ID->str());
+      return errors::UnknownKeyword(ID, ID.str());
 
     fin:
     if (ret.has_value()) {
       types::Type *baseType = *ret;
 
       while (true) {
-        auto Op = Lex();
+        auto Op = lexer();
         if (!Op)
           break;
 
-        if (Op->view() == "^") baseType = types::Type::make_Pointer(ctx, baseType);
-        ef (Op->view() == "&") baseType = types::Type::make_Reference(ctx, baseType);
-        ef (Op->view() == "[") {
-          auto SizeOrClose = Lex();
+        if (Op.view() == "^") baseType = types::Type::make_Pointer(ctx, baseType);
+        ef (Op.view() == "&") baseType = types::Type::make_Reference(ctx, baseType);
+        ef (Op.view() == "[") {
+          auto SizeOrClose = lexer();
           Require(SizeOrClose);
 
-          if (SizeOrClose->view() == "]") {
+          if (SizeOrClose.view() == "]") {
             baseType = types::Type::make_ZArray(ctx, baseType);
           }
           else {
-            u32 size = std::stoul(SizeOrClose->str());
+            u32 size = std::stoul(SizeOrClose.str());
 
-            auto Close = Lex();
+            auto Close = lexer();
             Require(Close);
 
             baseType = types::Type::make_PArray(ctx, baseType, size);
           }
         }
-        ef (Op->view() == "<") {
+        ef (Op.view() == "<") {
           u0 old_off = Off;
           
           std::vector<types::Type *> generic_args;
@@ -1488,14 +1487,14 @@ namespace qw
             }
             generic_args.push_back(*type);
             
-            auto Next = Lex();
+            auto Next = lexer();
             if (!Next) {
               success = false;
               break;
             }
             
-            if (Next->view() == ">") break;
-            ef (Next->view() == ",") continue;
+            if (Next.view() == ">") break;
+            ef (Next.view() == ",") continue;
             else {
               success = false;
               break;
@@ -1508,13 +1507,12 @@ namespace qw
           }
           else {
             Off = old_off;
-            m_lexStore = std::nullopt;
-            LexStore(Op);
+            lexer.store(Op);
             break;
           }
         }
         else {
-          LexStore(Op);
+          lexer.store(Op);
           break;
         }
       }
@@ -1526,7 +1524,7 @@ namespace qw
   }
 
   fun frontend::read_StructType(identy *parent, bool indecl, std::vector<types::Type*> baseTypes, std::vector<word> baseTypePos) -> std::expected<types::Type*, uptr<diagnostic::message>> {
-    auto Bracket = Lex();
+    auto Bracket = lexer();
     expected(Bracket, "{");
 
     Visibility visdef = Visibility::Public;
@@ -1543,17 +1541,17 @@ namespace qw
     auto selfType = types::Type::make_Struct(ctx, {}, {}, recDecl ? recDecl : nullptr, baseTypes, baseTypePos, tname);
 
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == "}") break;
-      else LexStore(ID);
+      if (ID.view() == "}") break;
+      else lexer.store(ID);
 
       auto visone = visdef;
 
       // Visibility
-      auto Vis = Lex();
-      if (auto id = Vis->view(); id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
+      auto Vis = lexer();
+      if (auto id = Vis.view(); id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
         auto vis = visone;
 
         if (id == "pub")   vis = Visibility::Public;
@@ -1562,60 +1560,60 @@ namespace qw
         ef (id == "crate") vis = Visibility::Crate;
         ef (id == "group") vis = Visibility::Group;
 
-        auto Colon = Lex();
+        auto Colon = lexer();
         Require(Colon);
 
-        if (Colon->view() == ":") {
+        if (Colon.view() == ":") {
           visdef = vis;
           continue;
         }
         else {
           visone = vis;
-          LexStore(Colon);
+          lexer.store(Colon);
         }
       }
-      else LexStore(Vis);
+      else lexer.store(Vis);
 
       // Is Function
-      auto Kwd = Lex();
+      auto Kwd = lexer();
       Require(Kwd);
-      if (Kwd->view() == "fun") {
+      if (Kwd.view() == "fun") {
         if_error(read_StructFuncDecl(recDecl, selfType, visone));
         continue;
       }
-      ef (Kwd->view() == "init") {
+      ef (Kwd.view() == "init") {
         if_error(read_StructConstructorDecl(recDecl, selfType, visone));
         continue;
       }
-      ef (Kwd->view() == "fini") {
+      ef (Kwd.view() == "fini") {
         if_error(read_StructDestructorDecl(recDecl, selfType, visone));
         continue;
       }
       else {
-        LexStore(Kwd);
+        lexer.store(Kwd);
       }
 
       // Name
       std::vector<std::string> Names;
       re:
-      auto Name = Lex();
+      auto Name = lexer();
       Require_Word(Name, continue);
-      Names.push_back(Name->str());
+      Names.push_back(Name.str());
 
       // , :
-      auto Colon = Lex();
+      auto Colon = lexer();
       Require(Colon);
-      if (Colon->view() == ",") goto re;
-      ef (Colon->view() == ":");
+      if (Colon.view() == ",") goto re;
+      ef (Colon.view() == ":");
       else
-        return errors::ExpectedIdentifierBut2(*Colon, Colon->str(), ",", ":");
+        return errors::ExpectedIdentifierBut2(Colon, Colon.str(), ",", ":");
 
       // Type
       auto Type = read_Type(parent, true);
       val_error(Type);
 
       // End
-      expected(Lex(), ";");
+      expected(lexer(), ";");
 
       // Add
       for (auto &X: Names) vars.push_back({X, *Type, visone});
@@ -1627,7 +1625,7 @@ namespace qw
   }
 
   fun frontend::read_IFaceType(identy *parent, bool indecl, std::vector<types::Type*> baseTypes, std::vector<word> baseTypePos) -> std::expected<types::Type*, uptr<diagnostic::message>> {
-    auto Bracket = Lex();
+    auto Bracket = lexer();
     expected(Bracket, "{");
 
     Visibility visdef = Visibility::Public;
@@ -1643,17 +1641,17 @@ namespace qw
     auto selfType = types::Type::make_IFace(ctx, {}, recDecl ? recDecl : nullptr, baseTypes, baseTypePos, tname);
 
     while (true) {
-      auto ID = Lex();
+      auto ID = lexer();
       Require(ID);
 
-      if (ID->view() == "}") break;
-      else LexStore(ID);
+      if (ID.view() == "}") break;
+      else lexer.store(ID);
 
       auto visone = visdef;
 
       // Visibility
-      auto Vis = Lex();
-      if (auto id = Vis->view(); id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
+      auto Vis = lexer();
+      if (auto id = Vis.view(); id == "pub" || id == "priv" || id == "prot" || id == "crate" || id == "group") {
         auto vis = visone;
 
         if (id == "pub")   vis = Visibility::Public;
@@ -1662,36 +1660,36 @@ namespace qw
         ef (id == "crate") vis = Visibility::Crate;
         ef (id == "group") vis = Visibility::Group;
 
-        auto Colon = Lex();
+        auto Colon = lexer();
         Require(Colon);
 
-        if (Colon->view() == ":") {
+        if (Colon.view() == ":") {
           visdef = vis;
           continue;
         }
         else {
           visone = vis;
-          LexStore(Colon);
+          lexer.store(Colon);
         }
       }
-      else LexStore(Vis);
+      else lexer.store(Vis);
 
       // Must be a Function in an interface
-      auto Kwd = Lex();
+      auto Kwd = lexer();
       Require(Kwd);
-      if (Kwd->view() == "fun") {
+      if (Kwd.view() == "fun") {
         if_error(read_StructFuncDecl(recDecl, selfType, visone));
         continue;
       }
       else
-        return errors::OnlyFunAllowed(*Kwd);
+        return errors::OnlyFunAllowed(Kwd);
     }
 
     return selfType;
   }
 
   fun frontend::read_FuncType(identy *parent, bool indecl) -> std::expected<types::Type*, uptr<diagnostic::message>> {
-    auto Bracket = Lex();
+    auto Bracket = lexer();
     expected(Bracket, "(");
 
     // Params
@@ -1700,21 +1698,21 @@ namespace qw
     std::vector<types::FieldType> pars = *parsed_pars;
 
     // Return
-    auto Ret = Lex();
+    auto Ret = lexer();
     Require(Ret)
 
     types::Type *retType = ctx->void_t();
     
-    if (Ret->view() == "->") {
+    if (Ret.view() == "->") {
       auto Type = read_Type(parent, true);
       val_error(Type);
       retType = *Type;
 
-      Ret = Lex();
+      Ret = lexer();
       Require(Ret);
     }
     else
-      LexStore(Ret);
+      lexer.store(Ret);
 
     
     auto self = types::Type::make_Func(ctx, pars, retType);
@@ -1723,28 +1721,28 @@ namespace qw
   }
 
   fun frontend::read_GenericParams(decls::Decl *parent) -> std::expected<decls::GenericContext*, uptr<diagnostic::message>> {
-    auto OptAngle = Lex();
-    if (!OptAngle || OptAngle->view() != "<") {
-      if (OptAngle) LexStore(OptAngle);
+    auto OptAngle = lexer();
+    if (!OptAngle || OptAngle.view() != "<") {
+      if (OptAngle) lexer.store(OptAngle);
       return nullptr;
     }
     
     auto ctx_obj = new decls::GenericContext{};
     
     while (true) {
-      auto PName = Lex();
+      auto PName = lexer();
       Require(PName);
       
-      auto param_decl = decls::Decl::make_TypeParam(ctx, parent, PName->str(), *PName, Visibility::Public);
+      auto param_decl = decls::Decl::make_TypeParam(ctx, parent, PName.str(), PName, Visibility::Public);
       
       ctx_obj->params.push_back(param_decl);
       
-      auto CommaOrEnd = Lex();
+      auto CommaOrEnd = lexer();
       Require(CommaOrEnd);
-      if (CommaOrEnd->view() == ">") break;
-      ef (CommaOrEnd->view() == ",") continue;
+      if (CommaOrEnd.view() == ">") break;
+      ef (CommaOrEnd.view() == ",") continue;
       else
-        return errors::ExpectedIdentifierBut(*CommaOrEnd, CommaOrEnd->str(), "> veya ,");
+        return errors::ExpectedIdentifierBut(CommaOrEnd, CommaOrEnd.str(), "> veya ,");
     }
     
     return ctx_obj;

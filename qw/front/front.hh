@@ -14,6 +14,7 @@
 #include "qw/basis.hh"
 #include "qw/control/context.hh"
 #include "qw/diagnostic/diagnostic.hh"
+#include "qw/lexer/lexer.hh"
 #include "qw/pretype.hh"
 #include "qw/tree/decls.hh"
 #include "qw/tree/types.hh"
@@ -25,7 +26,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <unordered_map>
 
 #define ef else if
 
@@ -56,6 +56,7 @@ namespace qw
     public:
       inline frontend(qw::module *mod)
         : mod(mod)
+        , lexer(mod)
         , ctx(mod->ctx())
         , m_fpath(mod->fpath())
         , is(mod->mmap()->view())
@@ -72,6 +73,7 @@ namespace qw
       }
 
     protected:
+      qw::lexer lexer;
       qw::context *ctx{};
       qw::module *mod{};
       std::string_view m_fpath{};
@@ -79,58 +81,8 @@ namespace qw
       std::string_view is;
       u0 Off{};
       diagnostic::summary sum;
-
-    protected:
-      // Tokenizer
-      std::vector<char> strings   = {'"', '\''};
-      std::vector<char> Seperater = {
-        /*for comment -->*/ '#', '{', '}', '.', ':', ';', ',', '=', '(', ')', '<', '>', '[', ']', '-', '+', '/', '%', '*', '^', '~', '&', '|', '@', '?', '!'
-      };
-      std::vector<std::string> BigSyms = {
-        /* 3 chars */ "<<=", ">>=", "<<|", "|>>",
-        /* 2 chars */ "//", "->", "<-", "::", "==", "<=", ">=", "!=", "&&", "||", "^^", "<<", ">>", "[[", "]]", "![",
-        "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="
-      };
-      std::vector<char> IgnSyms = {
-        ' ', '\n', '\r', '\0', '\e', '\t'
-      };
-      std::vector<std::string> Operators = {
-        "+", "-", "*", "/", "%", "!", "~", "&", "|", "^", "<<", ">>",
-      };
-      std::unordered_map<char, char> Escapes = {
-        { '\'', '\'' }, { '\"', '\"' }, { '\\', '\\' },
-
-        { '0', '\0' },  { 'a', '\a' },  { 'b', '\b' },  { 'e', '\e' }, { 'f', '\f' }, { 'n', '\n' }, { 'r', '\r' }, { 't', '\t' }, { 'v', '\v' },
-      };
-
-    protected:
-      fun isIgn(char C) -> bool;
-      fun isSeperator(char C) -> bool;
-      fun isNumber(char C) -> bool;
-      fun isString(char C) -> bool;
-      fun isWord(char C) -> bool;
-
-    protected:
-      fun LexStore(std::optional<word>) -> void;
-      fun LexLast() { return m_lexLast; }
-
-      [[gnu::hot]] fun __Lex() -> std::optional<word>;
-      [[gnu::hot]] fun Lex() {
-        if (m_lexStore.has_value()) {
-          auto Cac   = m_lexStore;
-          m_lexStore = std::nullopt;
-          return Cac;
-        }
-
-        m_lexLast = __Lex();
-        return m_lexLast;
-      }
-
-    private:
-      std::optional<word> m_lexLast;
-      std::optional<word> m_lexStore;
       std::vector<decls::Attribute> m_current_attrs;
-
+      
     public:
       fun read_File(decls::Decl*) -> std::expected<void, uptr<diagnostic::message>>;
     

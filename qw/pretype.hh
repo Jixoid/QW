@@ -46,13 +46,13 @@ namespace qw
       fun file() -> std::string_view;
       fun fpath() -> std::string_view;
 
-      fun view() -> std::string_view;
-      [[nodiscard]] fun str() -> std::string;
+      fun view() const -> std::string_view;
+      [[nodiscard]] fun str() const -> std::string;
 
       [[nodiscard]] fun interval() -> std::pair<humanPos, humanPos>;
 
     public:
-      inline operator bool() { return (bool)m_mod; }
+      inline operator bool() const { return (bool)m_mod; }
   };
 
   enum struct Visibility: u8

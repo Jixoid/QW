@@ -24,8 +24,8 @@ namespace qw
 
   auto word::fpath() -> std::string_view { return m_mod->fpath(); };
 
-  auto word::view() -> std::string_view { return m_mod->mmap()->view().substr(m_off, m_size); };
-  auto word::str() -> std::string { return (std::string)m_mod->mmap()->view().substr(m_off, m_size); };
+  auto word::view() const -> std::string_view { return m_mod->mmap()->view().substr(m_off, m_size); };
+  auto word::str() const -> std::string { return (std::string)m_mod->mmap()->view().substr(m_off, m_size); };
 
   auto word::interval() -> std::pair<humanPos, humanPos>
   {
