@@ -24,6 +24,8 @@ namespace qw
   class context;
   class module;
 
+  enum struct WordKind: u32;
+
   struct word
   {
     public:
@@ -32,15 +34,20 @@ namespace qw
     public:
       inline word() {}
       inline word(qw::module *mod, u0 off, u0 size): m_mod(mod), m_off(off), m_size(size) {}
+      inline word(qw::module *mod, u0 off, u0 size, WordKind wknd): m_mod(mod), m_off(off), m_size(size), wkind(wknd) {}
 
     private:
       qw::module *m_mod{};
-      u0 m_off{}, m_size{};
+      u32 m_off{}, m_size{};
+      WordKind wkind{};
     
     public:
       inline fun mod() const { return m_mod; }
       inline fun off() const { return m_off; }
       inline fun size() const { return m_size; }
+      inline fun kind() const { return wkind; }
+
+      inline fun is(WordKind k) const { return wkind == k; }
 
     public:
       fun file() -> std::string_view;

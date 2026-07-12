@@ -51,6 +51,7 @@ namespace qw
   [[gnu::hot]]
   fun lexer::kind(char C) -> CharKind { return CharLUT[static_cast<uint8_t>(C)]; }
 
+  
 
   [[gnu::hot]]
   fun lexer::f_lex() -> word {
@@ -77,7 +78,7 @@ namespace qw
       else
         std::cerr << "fatal: std::string is unterminated" << std::endl;
 
-      return word{mod, legoff, off-legoff};
+      return word{mod, legoff, off-legoff, WordKind::String};
     }
 
     // Whitespace
@@ -94,61 +95,61 @@ namespace qw
         case '<':
           if (off + 1 < is.size()) {
             if (is[off+1] == '<') {
-              if (off + 2 < is.size() && is[off+2] == '=') { off += 3; return word{mod, legoff, 3}; } // "<<="
-              if (off + 2 < is.size() && is[off+2] == '|') { off += 3; return word{mod, legoff, 3}; } // "<<|"
-              off += 2; return word{mod, legoff, 2}; // "<<"
+              if (off + 2 < is.size() && is[off+2] == '=') { off += 3; return word{mod, legoff, 3, WordKind::AssignmentLeftShift}; } // "<<="
+              if (off + 2 < is.size() && is[off+2] == '|') { off += 3; return word{mod, legoff, 3, WordKind::RotateLeft}; } // "<<|"
+              off += 2; return word{mod, legoff, 2, WordKind::ShiftLeft}; // "<<"
             }
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "<="
-            if (is[off+1] == '-') { off += 2; return word{mod, legoff, 2}; } // "<-"
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::SmallerEqual}; } // "<="
+            if (is[off+1] == '-') { off += 2; return word{mod, legoff, 2, WordKind::ArrowLeft}; } // "<-"
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::AngleBeg}; // "<"
 
         case '>':
           if (off + 1 < is.size()) {
             if (is[off+1] == '>') {
-              if (off + 2 < is.size() && is[off+2] == '=') { off += 3; return word{mod, legoff, 3}; } // ">>="
-              off += 2; return word{mod, legoff, 2}; // ">>"
+              if (off + 2 < is.size() && is[off+2] == '=') { off += 3; return word{mod, legoff, 3, WordKind::AssignmentRighShift}; } // ">>="
+              off += 2; return word{mod, legoff, 2, WordKind::ShiftRigh}; // ">>"
             }
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // ">="
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::BiggerEqual}; } // ">="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::AngleEnd}; // ">"
 
         case '|':
           if (off + 1 < is.size()) {
             if (is[off+1] == '>') {
-              if (off + 2 < is.size() && is[off+2] == '>') { off += 3; return word{mod, legoff, 3}; } // "|>>"
+              if (off + 2 < is.size() && is[off+2] == '>') { off += 3; return word{mod, legoff, 3, WordKind::RotateRigh}; } // "|>>"
             }
-            if (is[off+1] == '|') { off += 2; return word{mod, legoff, 2}; } // "||"
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "|="
+            if (is[off+1] == '|') { off += 2; return word{mod, legoff, 2, WordKind::LogicalOr}; } // "||"
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentBitwiseOr}; } // "|="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::BitwiseOr}; // "|"
 
         case '-':
           if (off + 1 < is.size()) {
-            if (is[off+1] == '>') { off += 2; return word{mod, legoff, 2}; } // "->"
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "-="
+            if (is[off+1] == '>') { off += 2; return word{mod, legoff, 2, WordKind::ArrowRigh}; } // "->"
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentSub}; } // "-="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::Sub}; // "-"
 
         case '+':
-          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "+="
-          break;
+          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentAdd}; } // "+="
+          off++; return word{mod, legoff, 1, WordKind::Add}; // "+"
 
         case '*':
-          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "*="
-          break;
+          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentMul}; } // "*="
+          off++; return word{mod, legoff, 1, WordKind::Mul}; // "*"
 
         case '%':
-          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "%="
-          break;
+          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentRem}; } // "%="
+          off++; return word{mod, legoff, 1, WordKind::Rem}; // "%"
 
         case '=':
-          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "=="
-          break;
+          if (off + 1 < is.size() && is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::Equal}; } // "=="
+          off++; return word{mod, legoff, 1, WordKind::Assign}; // "="
 
         case ':':
-          if (off + 1 < is.size() && is[off+1] == ':') { off += 2; return word{mod, legoff, 2}; } // "::"
-          break;
+          if (off + 1 < is.size() && is[off+1] == ':') { off += 2; return word{mod, legoff, 2, WordKind::Scope}; } // "::"
+          off++; return word{mod, legoff, 1, WordKind::Colon}; // ":"
 
         case '/':
           if (off + 1 < is.size()) {
@@ -156,41 +157,53 @@ namespace qw
               while (off < is.size() && is[off] != '\n') off++;
               goto entry;
             }
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "/="
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentDiv}; } // "/="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::Div}; // "/"
 
         case '!':
           if (off + 1 < is.size()) {
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "!="
-            if (is[off+1] == '[') { off += 2; return word{mod, legoff, 2}; } // "!["
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::NotEqual}; } // "!="
+            if (is[off+1] == '[') { off += 2; return word{mod, legoff, 2, WordKind::CompilerDirective}; } // "!["
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::Bang}; // "!"
 
         case '&':
           if (off + 1 < is.size()) {
-            if (is[off+1] == '&') { off += 2; return word{mod, legoff, 2}; } // "&&"
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "&="
+            if (is[off+1] == '&') { off += 2; return word{mod, legoff, 2, WordKind::LogicalAnd}; } // "&&"
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentBitwiseAnd}; } // "&="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::BitwiseAnd}; // "&"
 
         case '^':
           if (off + 1 < is.size()) {
-            if (is[off+1] == '^') { off += 2; return word{mod, legoff, 2}; } // "^^"
-            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2}; } // "^="
+            if (is[off+1] == '^') { off += 2; return word{mod, legoff, 2, WordKind::LogicalXor}; } // "^^"
+            if (is[off+1] == '=') { off += 2; return word{mod, legoff, 2, WordKind::AssignmentBitwiseXor}; } // "^="
           }
-          break;
+          off++; return word{mod, legoff, 1, WordKind::BitwiseXor}; // "^"
 
         case '[':
-          if (off + 1 < is.size() && is[off+1] == '[') { off += 2; return word{mod, legoff, 2}; } // "[["
-          break;
+          if (off + 1 < is.size() && is[off+1] == '[') { off += 2; return word{mod, legoff, 2, WordKind::DoubleSquareBracketBeg}; } // "[["
+          off++; return word{mod, legoff, 1, WordKind::SquareBracketBeg}; // "["
 
-          case ']':
-          if (off + 1 < is.size() && is[off+1] == ']') { off += 2; return word{mod, legoff, 2}; } // "]]"
-          break;
+        case ']':
+          if (off + 1 < is.size() && is[off+1] == ']') { off += 2; return word{mod, legoff, 2, WordKind::DoubleSquareBracketEnd}; } // "]]"
+          off++; return word{mod, legoff, 1, WordKind::SquareBracketEnd}; // "]"
+
+        case '{': off++; return word{mod, legoff, 1, WordKind::CurlyBracketBeg}; // "{"
+        case '}': off++; return word{mod, legoff, 1, WordKind::CurlyBracketEnd}; // "}"
+        case '(': off++; return word{mod, legoff, 1, WordKind::ParenBeg};       // "("
+        case ')': off++; return word{mod, legoff, 1, WordKind::ParenEnd};       // ")"
+        case ';': off++; return word{mod, legoff, 1, WordKind::Semicolon};      // ";"
+        case ',': off++; return word{mod, legoff, 1, WordKind::Comma};          // ","
+        case '.': off++; return word{mod, legoff, 1, WordKind::Dot};            // "."
+        case '#': off++; return word{mod, legoff, 1, WordKind::Hash};           // "#"
+        case '@': off++; return word{mod, legoff, 1, WordKind::At};             // "@"
+        case '?': off++; return word{mod, legoff, 1, WordKind::Question};       // "?"
+        case '~': off++; return word{mod, legoff, 1, WordKind::Tilde};          // "~"
       }
 
-      // Small Symbol
+      // Unknown Symbol (fallback)
       off++;
       return word{mod, legoff, 1};
     }
@@ -206,7 +219,7 @@ namespace qw
       goto entry;
     }
 
-    return word{mod, legoff, off-legoff};
+    return word{mod, legoff, off-legoff, WordKind::Word};
   };
 
 }

@@ -70,7 +70,7 @@ namespace qw::errors
   NewMsg(CharacterConstantTooLong, error, _("character constant too long ‘<blue>{}<reset>‘."), 1);
   NewMsg(CantConvertInteger, error, _("‘<blue>{}<reset>‘ could not be converted to int."), 1);
 
-  NewMsg(UnexpectedIdentifier, error, _("un expected identifier ‘<blue>{}<reset>‘."), 1);
+  NewMsg(UnexpectedIdentifier, error, _("unexpected identifier ‘<blue>{}<reset>‘."), 1);
 
   NewMsg(InvalidEscapeSequence, error, _("invalid escape sequence ‘<blue>{}<reset>‘."), 1);
   NewMsg(ModuleNotFound, error, _("module ‘<blue>{}<reset>‘ not found."), 1);
