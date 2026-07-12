@@ -37,25 +37,147 @@
 namespace qw
 {
 
+  struct MetaCGen;
+  struct TypeCGen;
+  struct DeclCGen;
+  struct ExprCGen;
+  struct StmtCGen;
+
+  struct CGContext {
+    public:
+      CGContext(qw::module *mod, scopemng &SMng, llvm::IRBuilder<> &IR)
+        : mod(mod), ctx(mod->ctx()), SMng(SMng), IR(IR)
+      {}
+
+    public:
+      qw::module *mod{};
+      qw::context *ctx{};
+      scopemng &SMng;
+      llvm::IRBuilder<> &IR;
+
+    public:
+      MetaCGen *meta{};
+      TypeCGen *type{};
+      DeclCGen *decl{};
+      ExprCGen *expr{};
+      StmtCGen *stmt{};
+  };
+
+
+  struct SubCGen {
+    public:
+      SubCGen(CGContext &cctx)
+        : cctx(cctx)
+        , mod(cctx.mod)
+        , ctx(cctx.ctx)
+        , SMng(cctx.SMng)
+        , IR(cctx.IR)
+      {}
+
+    protected:
+      CGContext &cctx;
+      qw::module *mod{};
+      qw::context *ctx{};
+      scopemng &SMng;
+      llvm::IRBuilder<> &IR;
+  };
+
+
+  struct MetaCGen: SubCGen {
+    public:
+      MetaCGen(CGContext &cctx): SubCGen(cctx) {}
+
+    public:
+      u64 m_counter_typerec{};
+      std::vector<stmts::CodeBlock*> active_blocks;
+  };
+
+  struct TypeCGen: SubCGen {
+    public:
+      TypeCGen(CGContext &cctx): SubCGen(cctx) {}
+
+    public:
+      fun gen_Type(types::Type*&) -> std::expected<void, uptr<diagnostic::message>>;
+      fun gen_StructType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun gen_IFaceType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
+      fun gen_FuncType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
+      
+      fun gen_VMT(types::Type *recType) -> void;
+  };
+
+  struct DeclCGen: SubCGen {
+    public:
+      DeclCGen(CGContext &cctx): SubCGen(cctx) {}
+
+    public:
+      fun gen_FuncDecl(decls::Decl *now) -> void;
+      fun gen_ConstructorDecl(decls::Decl *now) -> void;
+      fun gen_DestructorDecl(decls::Decl *now) -> void;
+      fun gen_VarDecl(decls::Decl *now) -> void;
+
+      fun call_destructors(stmts::CodeBlock *target_block = nullptr) -> void;
+  };
+
+  struct ExprCGen: SubCGen {
+    public:
+      ExprCGen(CGContext &cctx): SubCGen(cctx) {}
+
+    public:
+      fun gen_Convert(types::Type *target_typ, exprs::Expr *val) -> llvm::Value*;
+      fun gen_Expr(exprs::Expr *now) -> llvm::Value*;
+  };
+
+  struct StmtCGen: SubCGen {
+    public:
+      StmtCGen(CGContext &cctx): SubCGen(cctx) {}
+
+    public:
+      fun gen_CodeBlock(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_VarStmt(stmts::Stmt *now) -> void;
+      fun gen_ReturnStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
+      fun gen_UnsafeStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
+  };
+
+
+
   class CodeGen
   {
-    private:
-      CodeGen(qw::module *mod, std::vector<std::string> ans = {})
+    public:
+      inline CodeGen(qw::module *mod, std::vector<std::string> ans = {})
         : mod(mod)
         , ctx(mod->ctx())
         , SMng(ctx, { &ctx->gst() }, { "" })
         , IR(*ctx->llvm())
+        , cctx(mod, SMng, IR)
+        , meta(cctx)
+        , type(cctx)
+        , decl(cctx)
+        , expr(cctx)
+        , stmt(cctx)
       {
         SMng.ans().insert(SMng.ans().end(), ans.begin(), ans.end());
+        cctx.meta = &meta;
+        cctx.type = &type;
+        cctx.decl = &decl;
+        cctx.expr = &expr;
+        cctx.stmt = &stmt;
       }
 
-    private:
+    protected:
       qw::module *mod{};
       qw::context *ctx{};
       scopemng SMng;
-
       llvm::IRBuilder<> IR;
-      std::vector<stmts::CodeBlock*> active_blocks;
+      CGContext cctx;
+
+    protected:
+      MetaCGen meta;
+      TypeCGen type;
+      DeclCGen decl;
+      ExprCGen expr;
+      StmtCGen stmt;
 
     public:
       static fun pass(qw::module *mod, std::vector<std::string> ans = {}) -> void {
@@ -76,37 +198,8 @@ namespace qw
         CG.gen_NameSpace(ns);
       }
 
-      u64 m_counter_typerec{};
-
-    private:
-      fun gen_VMT(types::Type *recType) -> void;
-      
-      // Decl
+    public:
       fun gen_NameSpace(decls::Decl *now) -> void;
-      fun gen_FuncDecl(decls::Decl *now) -> void;
-      fun gen_ConstructorDecl(decls::Decl *now) -> void;
-      fun gen_DestructorDecl(decls::Decl *now) -> void;
-      fun gen_VarDecl(decls::Decl *now) -> void;
-
-      // Stat
-      fun gen_CodeBlock(types::Type *expected_ret, stmts::Stmt *now) -> void;
-      fun call_destructors(stmts::CodeBlock *target_block = nullptr) -> void;
-      fun gen_IfStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
-      fun gen_WhileStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
-      fun gen_VarStmt(stmts::Stmt *now) -> void;
-      fun gen_ReturnStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
-      fun gen_UnsafeStmt(types::Type *expected_ret, stmts::Stmt *now) -> void;
-
-      // Expr
-      fun gen_Convert(types::Type *target_typ, exprs::Expr *val) -> llvm::Value*;
-
-      fun gen_Expr(exprs::Expr *now) -> llvm::Value*;
-
-      // Type
-      fun gen_Type(types::Type*&) -> std::expected<void, uptr<diagnostic::message>>;
-      fun gen_StructType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
-      fun gen_IFaceType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
-      fun gen_FuncType(types::Type*) -> std::expected<void, uptr<diagnostic::message>>;
   };
 
 }
