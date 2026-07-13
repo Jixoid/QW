@@ -12,7 +12,7 @@ function activate(context) {
     };
 
     const clientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'plaintext' }]
+        documentSelector: [{ scheme: 'file', language: 'qw' }]
     };
 
     client = new LanguageClient(

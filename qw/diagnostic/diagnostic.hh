@@ -20,6 +20,11 @@
 
 namespace qw::diagnostic
 {
+  extern bool is_lsp_mode;
+
+  fun format_from_vector(const std::string &fmt_str, const std::vector<std::string> &v) -> std::string;
+
+
 
   enum struct MsgType: u8 { Fatal, Error, Warning, Hint, Note };
 
@@ -29,9 +34,20 @@ namespace qw::diagnostic
       inline message(MsgType MsgType, word pos, std::string msg, std::vector<std::string> params)
         : m_msgType(MsgType)
         , m_pos(pos)
-        , m_msg(msg)
-        , m_params(params)
+        , m_msg(std::move(msg))
+        , m_params(std::move(params))
       {}
+
+    public:
+      inline message(const message& other)
+        : m_msgType(other.m_msgType)
+        , m_pos(other.m_pos)
+        , m_ctx(other.m_ctx)
+        , m_msg(other.m_msg)
+        , m_params(other.m_params)
+      {}
+
+
 
     private:
       MsgType m_msgType{};
@@ -50,6 +66,10 @@ namespace qw::diagnostic
       fun& notes() { return m_notes; }
   };
   fun operator<<(std::ostream &os, message *msg) -> std::ostream&;
+  
+  inline fun operator<<(std::ostream &os, const uptr<message> &msg) -> std::ostream& {
+      return os << msg.get();
+  }
 
   struct fatal: message
   {
@@ -100,6 +120,7 @@ namespace qw::diagnostic
   {
     private:
       u32 m_fatal{}, m_error{}, m_warning{}, m_hint{}, m_note{};
+      std::vector<message> m_messages;
 
     public:
       fun fatal() { return m_fatal; }
@@ -107,10 +128,12 @@ namespace qw::diagnostic
       fun warning() { return m_warning; }
       fun hint() { return m_hint; }
       fun note() { return m_note; }
+      fun& messages() { return m_messages; }
 
     public:
       fun add(message *Msg)
       {
+        if (Msg) m_messages.push_back(*Msg);
         switch (Msg->type()) {
           case MsgType::Fatal: m_fatal++; return;
           case MsgType::Error: m_error++; return;

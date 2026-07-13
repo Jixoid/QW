@@ -118,8 +118,31 @@ namespace qw
     ef (ID.view() == "enum")      if_error(read_EnumDecl(parent))
     ef (ID.view() == "set")       if_error(read_SetDecl(parent))
     ef (ID.view() == "mod")       if_error(read_ModDecl(parent))
-    else
+    else {
       print(errors::UnknownKeyword(ID, ID.str()))
+      // Panic mode recovery
+      int brace_depth = 0;
+      while (true) {
+        auto next = lex();
+        if (!next) break;
+
+        if (next.is(WordKind::CurlyBracketBeg)) {
+          brace_depth++;
+        }
+        ef (next.is(WordKind::CurlyBracketEnd)) {
+          if (brace_depth > 0) brace_depth--;
+        }
+
+        if (brace_depth == 0) {
+          auto v = next.view();
+          if (v == "alias" || v == "var" || v == "type" || v == "fun" || 
+              v == "struct" || v == "iface" || v == "enum" || v == "set" || v == "mod") {
+            lex.store(next);
+            break;
+          }
+        }
+      }
+    }
 
     return {};
   }
