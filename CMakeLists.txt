@@ -118,6 +118,7 @@ add_dependencies(qaos_qw_shared update-pot)
 target_link_libraries(qaos_qw_shared PUBLIC
   LLVM
   lldELF lldCOFF lldMachO lldMinGW lldWasm lldCommon
+  nlohmann_json::nlohmann_json
 )
 
 
@@ -127,6 +128,7 @@ add_dependencies(qaos_qw_static update-pot)
 target_link_libraries(qaos_qw_static PUBLIC
   LLVM
   lldELF lldCOFF lldMachO lldMinGW lldWasm lldCommon
+  nlohmann_json::nlohmann_json
 )
 
 
@@ -135,6 +137,11 @@ target_link_libraries(qaos_qw_static PUBLIC
 add_library(CLI11 INTERFACE)
 target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/cli11/include")
 add_library(CLI11::CLI11 ALIAS CLI11)
+
+# nlohmann_json
+add_library(nlohmann_json INTERFACE)
+target_include_directories(nlohmann_json INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/json/include")
+add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
 
 
 # Test App

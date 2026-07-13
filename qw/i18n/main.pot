@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-13 16:36+0300\n"
+"POT-Creation-Date: 2026-07-13 18:03+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,36 +17,36 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:60
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:139
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:63
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:144
 msgid "fatal"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:61
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:140
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:64
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:145
 msgid "error"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:62
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:141
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:65
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:146
 msgid "warning"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:63
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:142
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:66
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:147
 msgid "hint"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:64
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:143
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:67
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:148
 msgid "note"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:145
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:150
 msgid "summary"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:145
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:150
 msgid "generated."
 msgstr ""
 

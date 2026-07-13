@@ -10,6 +10,7 @@
 */
 
 #include <CLI/CLI.hpp>
+#include "qw/lsp/server.hh"
 #include "qw/codegen/codegen.hh"
 #include "qw/sys/sys.hh"
 #include "qw/control/context.hh"
@@ -71,7 +72,13 @@ fun main(int argc, char** argv) -> int
   run_cmd->add_option("path", path, "Path to the project directory");
   run_cmd->add_option("--rtl", rtl_path, "Path to RTL library");
 
+  auto lsp_cmd = app.add_subcommand("lsp", "Starts the QW Language Server");
+
   CLI11_PARSE(app, argc, argv);
+
+  if (lsp_cmd->parsed()) {
+    return qw::lsp::run_server();
+  }
 
   if (build_cmd->parsed() || run_cmd->parsed()) {
     if (run_cmd->parsed())

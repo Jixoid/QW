@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sstream>
+#include <unordered_map>
 #include "qw/basis.hh"
 #include "qw/vfs/vfs.hh"
 
@@ -36,6 +38,25 @@
 
 namespace vfs::__file
 {
+	static std::unordered_map<std::string, std::string> g_file_overrides;
+
+	fun set_override(std::string fpath, std::string content) -> void {
+		g_file_overrides[fpath] = std::move(content);
+	}
+
+	fun remove_override(std::string fpath) -> void {
+		g_file_overrides.erase(fpath);
+	}
+
+	struct mapped_override : mapped
+	{
+		std::string buffer;
+		explicit mapped_override(std::string content) : buffer(std::move(content)) {
+			m_data = (void*)buffer.data();
+			m_size = buffer.size();
+		}
+	};
+
 
 	struct mapped__file: mapped
   {
@@ -140,12 +161,20 @@ namespace vfs::__file
 
 			.open_ro = [](void*, std::string_view fpath) -> sptr<std::istream>
 			{
-				return make_sptr(new std::ifstream(std::string(fpath)));
+				std::string path_str(fpath);
+				if (auto it = g_file_overrides.find(path_str); it != g_file_overrides.end()) {
+					return make_sptr(new std::istringstream(it->second));
+				}
+				return make_sptr(new std::ifstream(path_str));
 			},
 
 			.open_map = [](void*, std::string_view fpath) -> sptr<mapped>
 			{
-				return make_sptr(new mapped__file(std::string(fpath)));
+				std::string path_str(fpath);
+				if (auto it = g_file_overrides.find(path_str); it != g_file_overrides.end()) {
+					return make_sptr(new mapped_override(it->second));
+				}
+				return make_sptr(new mapped__file(path_str));
 			},
 
 			.open_rw = [](void*, std::string_view fpath) -> sptr<std::iostream>

@@ -19,6 +19,10 @@
 
 namespace vfs::__file
 {
+	fun set_override(std::string fpath, std::string content) -> void;
+	fun remove_override(std::string fpath) -> void;
+
+
 	/**
 	 * @brief Gets a RAII wrapper for the "file" VFS provider.
 	 * 

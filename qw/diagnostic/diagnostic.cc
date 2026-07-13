@@ -26,8 +26,9 @@
 
 namespace qw::diagnostic
 {
+  bool is_lsp_mode = false;
 
-  inline fun format_from_vector(const std::string &fmt_str, const std::vector<std::string> &v) -> std::string {
+  fun format_from_vector(const std::string &fmt_str, const std::vector<std::string> &v) -> std::string {
     switch (v.size()) {
       case 0: return fmt_str;
       case 1: return vformat(fmt_str, make_format_args(v[0]));
@@ -40,6 +41,8 @@ namespace qw::diagnostic
 
   fun operator<<(std::ostream &os, message *msg) -> std::ostream &
   {
+    if (is_lsp_mode) return os;
+
     // File
     if (msg->pos()) {
       auto [HR1, HR2] = msg->pos().interval();
@@ -134,6 +137,8 @@ namespace qw::diagnostic
 
   fun operator<<(std::ostream &os, summary &sum) -> std::ostream &
   {
+    if (is_lsp_mode) return os;
+
     std::string out;
 
     if (auto x = sum.fatal())   out += std::to_string(x) + " " + _("fatal")   + ", ";
