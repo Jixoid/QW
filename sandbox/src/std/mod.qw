@@ -1,2 +1,3 @@
 
-mod vector;
+mod __vector;
+type vector = __vector::vector;

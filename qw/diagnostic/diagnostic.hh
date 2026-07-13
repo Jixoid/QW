@@ -36,14 +36,18 @@ namespace qw::diagnostic
     private:
       MsgType m_msgType{};
       word m_pos;
+      word m_ctx;
       std::string m_msg;
       std::vector<std::string> m_params;
+      std::vector<uptr<message>> m_notes;
 
     public:
-      fun type() { return m_msgType; }
-      fun pos() { return m_pos; }
-      fun msg() { return m_msg; }
-      fun params() { return m_params; }
+      fun  type() { return m_msgType; }
+      fun  pos() { return m_pos; }
+      fun& ctx() { return m_ctx; }
+      fun  msg() { return m_msg; }
+      fun  params() { return m_params; }
+      fun& notes() { return m_notes; }
   };
   fun operator<<(std::ostream &os, message *msg) -> std::ostream&;
 

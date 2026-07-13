@@ -27,7 +27,7 @@
 namespace qw::decls
 {
 
-  struct Attribute { std::string name; std::string value; };
+  struct Attribute { std::string name; std::string value; word pos{}; };
 
   struct NameSpaceDecl   { std::vector<decls::Decl*> decls; };
   struct VarDecl         { types::Type *type{}; exprs::Expr *initer{}; llvm::Value *llvm{}; };

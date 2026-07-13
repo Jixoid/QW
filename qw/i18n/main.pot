@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-12 20:59+0300\n"
+"POT-Creation-Date: 2026-07-13 16:36+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,37 +17,41 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:51
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:124
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:60
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:139
 msgid "fatal"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:52
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:125
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:61
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:140
 msgid "error"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:53
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:126
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:62
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:141
 msgid "warning"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:54
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:127
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:63
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:142
 msgid "hint"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:55
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:128
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:64
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:143
 msgid "note"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:130
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:145
 msgid "summary"
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:130
+#: /home/alforce/Projeler/QW/qw/diagnostic/diagnostic.cc:145
 msgid "generated."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/sema/DeclSema.cc:158
+msgid "first definition is here."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:45
@@ -99,142 +103,169 @@ msgstr ""
 msgid "expected a word, but found ‘<blue>{}<reset>‘."
 msgstr ""
 
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:61
+#, c++-format
+msgid ""
+"condition for ‘<blue>{0}<reset>‘ statement must be bool, but found ‘<blue>{1}"
+"<reset>‘."
+msgstr ""
+
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:62
 #, c++-format
-msgid "unknown keyword ‘<blue>{}<reset>‘."
+msgid "‘<blue>{0}<reset>‘ statement not within loop."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:63
-#, c++-format
-msgid "invalid attribute ‘<blue>{}<reset>‘."
-msgstr ""
-
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:64
-#, c++-format
-msgid "invalid value ‘<blue>{1}<reset>‘ for attribute ‘<blue>{0}<reset>‘."
+msgid "‘<blue>rtl<reset>‘ attribute can only be used in rtl modules."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:65
 #, c++-format
-msgid "attribute ‘<blue>{}<reset>‘ is not supported on this declaration."
+msgid "unknown keyword ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:66
+#, c++-format
+msgid "unknown attribute ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:67
+#, c++-format
+msgid "invalid value ‘<blue>{1}<reset>‘ for attribute ‘<blue>{0}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:68
+#, c++-format
+msgid "attribute ‘<blue>{}<reset>‘ is not supported on this declaration."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:70
 #, c++-format
 msgid ""
 "no match for ‘<blue>operator <yellow>{0}<reset>’ (‘<blue>{1}<reset>‘ "
 "<yellow>{0}<reset> ‘<blue>{2}<reset>’)."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:69
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:72
 msgid "empty character constant ‘‘."
-msgstr ""
-
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:70
-#, c++-format
-msgid "character constant too long ‘<blue>{}<reset>‘."
-msgstr ""
-
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:71
-#, c++-format
-msgid "‘<blue>{}<reset>‘ could not be converted to int."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:73
 #, c++-format
-msgid "unexpected identifier ‘<blue>{}<reset>‘."
+msgid "character constant too long ‘<blue>{}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:75
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:74
 #, c++-format
-msgid "invalid escape sequence ‘<blue>{}<reset>‘."
+msgid "‘<blue>{}<reset>‘ could not be converted to int."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:76
 #, c++-format
-msgid "module ‘<blue>{}<reset>‘ not found."
-msgstr ""
-
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:77
-#, c++-format
-msgid "cyclic import detected for module ‘<blue>{}<reset>‘."
+msgid "unexpected identifier ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:78
 #, c++-format
-msgid "identifier not found ‘<blue>{}<reset>‘."
+msgid "invalid escape sequence ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:79
 #, c++-format
-msgid "identifier is not a type ‘<blue>{}<reset>‘."
+msgid "module ‘<blue>{}<reset>‘ not found."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:80
 #, c++-format
-msgid "identifier is not a expr ‘<blue>{}<reset>‘."
+msgid "cyclic import detected for module ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:81
+#, c++-format
+msgid "identifier not found ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:82
-msgid "only one variable can be initialized."
+#, c++-format
+msgid "identifier is not a type ‘<blue>{}<reset>‘."
 msgstr ""
 
 #: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:83
 #, c++-format
+msgid "identifier is not a expr ‘<blue>{}<reset>‘."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:85
+msgid "only one variable can be initialized."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:86
+#, c++-format
 msgid "‘<blue>{}<reset>‘ visibility setting is not applicable in this context."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:84
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:87
 #, c++-format
 msgid "invalid base type for ‘<blue>{0}<reset>‘: {1}."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:85
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:88
 #, c++-format
 msgid "invalid constant value for ‘<blue>{0}<reset>‘: {1}."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:86
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:89
 #, c++-format
 msgid ""
 "struct ‘<blue>{0}<reset>‘ missing implementation for method ‘<yellow>{1}"
 "<reset>‘ from interface ‘<blue>{2}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:87
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:90
 #, c++-format
 msgid "intrinsic ‘<blue>{0}<reset>‘ expects {1} generic argument(s)."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:88
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:91
 #, c++-format
 msgid "type ‘<blue>{0}<reset>‘ is not a generic type."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:89
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:92
 #, c++-format
 msgid "generic type expects {0} parameter(s), but {1} argument(s) provided."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:90
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:93
 #, c++-format
 msgid "intrinsic ‘<blue>{0}<reset>‘ expects {1} argument(s)."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:91
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:94
 msgid "unsupported cast using sys::cast."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:92
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:95
 #, c++-format
 msgid "cast bounds check failed for ‘<blue>{0}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:93
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:96
 #, c++-format
 msgid "unsupported intrinsic ‘<blue>{0}<reset>‘."
 msgstr ""
 
-#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:94
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:97
 msgid "only ‘<blue>fun<reset>‘ declarations are allowed in interfaces."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:98
+#, c++-format
+msgid "rtl function ‘<blue>{}<reset>‘ cannot be overloaded or redefined."
+msgstr ""
+
+#: /home/alforce/Projeler/QW/qw/diagnostic/msgs.hh:99
+msgid ""
+"function with ‘<blue>on<reset>‘ attribute must have 0 parameters and return "
+"‘<blue>void<reset>‘."
 msgstr ""

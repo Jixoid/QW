@@ -13,6 +13,7 @@
 #include "qw/basis.hh"
 #include "qw/diagnostic/i18n.hh"
 #include "qw/pretype.hh"
+#include "qw/control/context.hh"
 #include <format>
 #include <iostream>
 #include <ostream>
@@ -43,7 +44,15 @@ namespace qw::diagnostic
     if (msg->pos()) {
       auto [HR1, HR2] = msg->pos().interval();
 
-      os << color::BLUE << msg->pos().fpath() << color::GRAY << ":" << color::RESET << HR1.y << color::GRAY << ":" << color::RESET << HR1.x << color::GRAY << ": " << color::RESET;
+      std::string fpath = std::string(msg->pos().fpath());
+      if (msg->pos().mod() && msg->pos().mod()->is_rtl()) {
+        auto src_pos = fpath.find("/src/");
+        if (src_pos != std::string::npos) {
+          fpath = "[rtl]/" + fpath.substr(src_pos + 5);
+        }
+      }
+
+      os << color::BLUE << fpath << color::GRAY << ":" << color::RESET << HR1.y << color::GRAY << ":" << color::RESET << HR1.x << color::GRAY << ": " << color::RESET;
     }
 
     // Message
@@ -59,12 +68,14 @@ namespace qw::diagnostic
     // In file
     if (msg->pos()) {
       auto file       = msg->pos().file();
-      auto [HR1, HR2] = msg->pos().interval();
+      
+      word ctx_word = (msg->ctx().size() > 0) ? msg->ctx() : msg->pos();
+      auto [HR1, HR2] = ctx_word.interval();
 
-      u0 Beg = file.rfind('\n', msg->pos().off());
+      u0 Beg = file.rfind('\n', ctx_word.off());
       Beg    = (Beg == std::string_view::npos) ? 0 : Beg + 1;
 
-      u0 End = file.find('\n', msg->pos().off() + msg->pos().size());
+      u0 End = file.find('\n', ctx_word.off() + ctx_word.size());
       if (End == std::string_view::npos)
         End = file.size();
 
@@ -112,6 +123,10 @@ namespace qw::diagnostic
       }
 
       os << '\n';
+    }
+
+    for (auto &n: msg->notes()) {
+      os << n.get();
     }
 
     return os << std::flush;

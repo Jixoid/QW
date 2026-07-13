@@ -42,6 +42,8 @@
 
 namespace qw
 {
+  enum struct ModuleKind { Regular, RTL };
+
   fun operator<<(std::ostream &os, identy *ident)->std::ostream &;
   fun operator<<(std::ostream &os, types::Type *typ)->std::ostream &;
 
@@ -93,8 +95,8 @@ namespace qw
     public:
       static inline fun make(ProgBits pb) { return make_uptr(new context(pb)); }
 
-      fun make_module(std::string name, std::string fpath) -> module *;
-  #pragma endregion
+      fun make_module(std::string name, std::string fpath, ModuleKind kind = ModuleKind::Regular) -> module *;
+      inline fun modules() { return m_modules; }
 
     protected:
       std::vector<module*> m_modules{};
@@ -217,12 +219,17 @@ namespace qw
       }
   };
 
+
+  namespace decls {
+    struct FuncDecl;
+  }
+
   class module
   {
     friend struct context;
 
     protected:
-      module(context *ctx, std::string name, std::string fpath);
+      module(context *ctx, std::string name, std::string fpath, ModuleKind kind = ModuleKind::Regular);
 
     public:
       inline fun write(std::string_view target) {
@@ -244,14 +251,21 @@ namespace qw
       qw::context *m_ctx{};
       uptr<llvm::Module> m_llvm;
       decls::Decl *m_ns{};
+      ModuleKind m_kind{ModuleKind::Regular};
+      std::vector<decls::FuncDecl*> m_global_ctors{};
+      std::vector<decls::FuncDecl*> m_global_dtors{};
 
     public:
       fun  fpath() { return std::string_view(m_fpath); }
       fun& mmap() { return m_mmap; }
+      fun  kind() const { return m_kind; }
+      fun  is_rtl() const { return m_kind == ModuleKind::RTL; }
       fun  nameSpace() { return m_ns; }
       fun  llvm() { return m_llvm.get(); }
       fun  ctx() { return m_ctx; }
       fun  layouter() { return m_llvm->getDataLayout(); }
+      fun& global_ctors() { return m_global_ctors; }
+      fun& global_dtors() { return m_global_dtors; }
   };
 
 }

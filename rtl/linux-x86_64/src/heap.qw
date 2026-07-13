@@ -1,30 +1,29 @@
 
+[[symbol:bare, calling:cdecl]]
+fun malloc(size: usize) -> ptr;
+
+[[symbol:bare, calling:cdecl]]
+fun free(p: ptr);
+
+[[symbol:bare, calling:cdecl]]
+fun realloc(p: ptr; size: usize) -> ptr;
+
+
+
+
 [[rtl]]
 fun alloc(align, size: usize) -> ptr {
-  // 9 = sys_mmap
-  // addr=0, length=size, prot=3 (PROT_READ|PROT_WRITE), flags=34 (MAP_PRIVATE|MAP_ANONYMOUS), fd=-1, offset=0
-  var ret_val: usize = sys::syscall(9, 0, size, 3, 34, 0xFFFFFFFFFFFFFFFF, 0);
-  if (ret_val > 0xFFFFFFFFFFFFF000) { // failed
-    ret null;
-  }
-  ret sys::cast<ptr>(ret_val);
+  ret malloc(size);
 }
 
 
 [[rtl]]
 fun dispose(p: ptr; align, size: usize) -> void {
-  // 11 = sys_munmap
-  var ret_val: usize = sys::syscall(11, sys::cast<usize>(p), size);
+  free(p);
 }
 
 
 [[rtl]]
 fun realloc(p: ptr; align, old_size, new_size: usize) -> ptr {
-  // 25 = sys_mremap
-  // addr=p, old_len=old_size, new_len=new_size, flags=1 (MREMAP_MAYMOVE), new_addr=0
-  var ret_val: usize = sys::syscall(25, sys::cast<usize>(p), old_size, new_size, 1, 0);
-  if (ret_val > 0xFFFFFFFFFFFFF000) {
-    ret null;
-  }
-  ret sys::cast<ptr>(ret_val);
+  ret realloc(p, new_size);
 }

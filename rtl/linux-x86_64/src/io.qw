@@ -1,0 +1,20 @@
+
+[[rtl]]
+fun read(fd: i32; buf: ptr; count: usize) -> usize {
+  ret sys::syscall(0, fd, sys::cast<usize>(buf), count);
+}
+
+[[rtl]]
+fun write(fd: i32; buf: ptr; count: usize) -> usize {
+  ret sys::syscall(1, fd, sys::cast<usize>(buf), count);
+}
+
+[[rtl]]
+fun open(fpath: char^; flags: i32; mode: i32) -> usize {
+  ret sys::syscall(2, sys::cast<usize>(fpath), flags, mode);
+}
+
+[[rtl]]
+fun close(fd: i32) -> usize {
+  ret sys::syscall(3, fd);
+}

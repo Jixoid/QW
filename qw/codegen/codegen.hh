@@ -183,6 +183,7 @@ namespace qw
       static fun pass(qw::module *mod, std::vector<std::string> ans = {}) -> void {
         CodeGen CG(mod, ans);
         CG.gen_NameSpace(mod->nameSpace());
+        CG.gen_GlobalCtorsDtors();
       }
 
       static fun pass_ns(qw::module *mod, decls::Decl *ns, std::vector<std::string> ans = {}) -> void {
@@ -196,10 +197,12 @@ namespace qw
         }
         CodeGen CG(mod, ans);
         CG.gen_NameSpace(ns);
+        CG.gen_GlobalCtorsDtors();
       }
 
     public:
       fun gen_NameSpace(decls::Decl *now) -> void;
+      fun gen_GlobalCtorsDtors() -> void;
   };
 
 }

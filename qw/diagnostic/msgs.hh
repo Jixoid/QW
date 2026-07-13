@@ -58,9 +58,12 @@ namespace qw::errors
   NewMsg(ExpectedIdentifierBut, error, _("expected ‘<blue>{1}<reset>‘, but found ‘<blue>{0}<reset>‘."), 2);
   NewMsg(ExpectedIdentifierBut2, error, _("expected ‘<blue>{1}<reset>‘ or ‘<blue>{2}<reset>‘, but found ‘<blue>{0}<reset>‘."), 3);
   NewMsg(ExpectedAWord, error, _("expected a word, but found ‘<blue>{}<reset>‘."), 1);
+  NewMsg(ConditionMustBeBoolean, error, _("condition for ‘<blue>{0}<reset>‘ statement must be bool, but found ‘<blue>{1}<reset>‘."), 2);
+  NewMsg(StatementNotWithinLoop, error, _("‘<blue>{0}<reset>‘ statement not within loop."), 1);
+  NewMsg(RtlAttributeOnlyInRtlModule, error, _("‘<blue>rtl<reset>‘ attribute can only be used in rtl modules."), 0);
 
   NewMsg(UnknownKeyword, error, _("unknown keyword ‘<blue>{}<reset>‘."), 1);
-  NewMsg(InvalidAttribute, error, _("invalid attribute ‘<blue>{}<reset>‘."), 1);
+  NewMsg(UnknownAttribute, error, _("unknown attribute ‘<blue>{}<reset>‘."), 1);
   NewMsg(InvalidAttributeValue, error, _("invalid value ‘<blue>{1}<reset>‘ for attribute ‘<blue>{0}<reset>‘."), 2);
   NewMsg(AttributeNotSupported, error, _("attribute ‘<blue>{}<reset>‘ is not supported on this declaration."), 1);
 
@@ -92,6 +95,8 @@ namespace qw::errors
   NewMsg(CastBoundsError, error, _("cast bounds check failed for ‘<blue>{0}<reset>‘."), 1);
   NewMsg(UnsupportedIntrinsic, error, _("unsupported intrinsic ‘<blue>{0}<reset>‘."), 1);
   NewMsg(OnlyFunAllowed, error, _("only ‘<blue>fun<reset>‘ declarations are allowed in interfaces."), 0);
+  NewMsg(RtlCannotBeOverloaded, error, _("rtl function ‘<blue>{}<reset>‘ cannot be overloaded or redefined."), 1);
+  NewMsg(InvalidOnAttributeSignature, error, _("function with ‘<blue>on<reset>‘ attribute must have 0 parameters and return ‘<blue>void<reset>‘."), 0);
 }
 
 #undef NewMsg

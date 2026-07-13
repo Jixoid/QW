@@ -165,17 +165,31 @@ namespace qw
       }
       
       if (path.size() >= 2 && path.back() == "sys" && d->is<decls::FuncDecl>()) {
-        std::string rtl_name = "qwrtl";
-        for (int i = path.size() - 2; i >= 0; i--)
-          rtl_name += "_" + path[i];
-        
-        if (rtl_name == "qwrtl_syscall") {
-          auto fdecl = d->as<decls::FuncDecl>();
-          if (fdecl->funcType && fdecl->funcType->is<types::FuncType>()) {
-            rtl_name += std::to_string(fdecl->funcType->as<types::FuncType>()->pars.size());
+        bool has_rtl = false;
+        for (auto &attr: d->const_attrs()) {
+          if (attr.name == "rtl") {
+            has_rtl = true;
+            break;
           }
         }
-        return rtl_name;
+
+        if (!has_rtl && d->pos().size() == 0) {
+          has_rtl = true;
+        }
+        
+        if (has_rtl) {
+          std::string rtl_name = "qwrtl";
+          for (int i = path.size() - 2; i >= 0; i--)
+            rtl_name += "_" + path[i];
+          
+          if (rtl_name == "qwrtl_syscall") {
+            auto fdecl = d->as<decls::FuncDecl>();
+            if (fdecl->funcType && fdecl->funcType->is<types::FuncType>()) {
+              rtl_name += std::to_string(fdecl->funcType->as<types::FuncType>()->pars.size());
+            }
+          }
+          return rtl_name;
+        }
       }
 
       if (d->is<decls::FuncDecl>() || d->is<decls::ConstructorDecl>() || d->is<decls::DestructorDecl>()) {
@@ -185,12 +199,12 @@ namespace qw
           if (fdecl->funcType && fdecl->funcType->is<types::FuncType>())
             ftype = fdecl->funcType->as<types::FuncType>();
         }
-        else if (d->is<decls::ConstructorDecl>()) {
+        ef (d->is<decls::ConstructorDecl>()) {
           auto cdecl = d->as<decls::ConstructorDecl>();
           if (cdecl->funcType && cdecl->funcType->is<types::FuncType>())
             ftype = cdecl->funcType->as<types::FuncType>();
         }
-        else if (d->is<decls::DestructorDecl>()) {
+        ef (d->is<decls::DestructorDecl>()) {
           auto ddecl = d->as<decls::DestructorDecl>();
           if (ddecl->funcType && ddecl->funcType->is<types::FuncType>())
             ftype = ddecl->funcType->as<types::FuncType>();

@@ -56,35 +56,50 @@ namespace qw
 {
 
   fun DeclSema::sema_Attributes(decls::Decl *now) -> std::expected<void, uptr<diagnostic::message>> {
-    for (auto &attr: now->const_attrs())
+    for (auto &attr: now->const_attrs()) {
+      auto make_err = [&](auto err) {
+        u32 start_off = attr.pos.off();
+        u32 end_off = now->pos().off() + now->pos().size();
+        word ctx_pos(now->pos().mod(), start_off, end_off - start_off);
+        err.error()->ctx() = ctx_pos;
+        return err;
+      };
+
       if (attr.name == "symbol") {
         if (attr.value != "bare" && attr.value != "qw")
-          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
       }
       ef (attr.name == "thread_local") {
         if (!now->is<decls::VarDecl>())
-          return errors::AttributeNotSupported(now->pos(), attr.name);
+          return make_err(errors::AttributeNotSupported(attr.pos, attr.name));
         if (!attr.value.empty())
-          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
       }
       ef (attr.name == "rtl") {
         if (now->is<decls::VarDecl>())
-          return errors::AttributeNotSupported(now->pos(), attr.name);
+          return make_err(errors::AttributeNotSupported(attr.pos, attr.name));
         if (!attr.value.empty())
-          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
       }
       ef (attr.name == "weak") {
         if (!attr.value.empty())
-          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
       }
       ef (attr.name == "calling") {
         if (now->is<decls::VarDecl>())
-          return errors::AttributeNotSupported(now->pos(), attr.name);
+          return make_err(errors::AttributeNotSupported(attr.pos, attr.name));
         if (attr.value != "fast" && attr.value != "cdecl" && attr.value != "cold")
-          return errors::InvalidAttributeValue(now->pos(), attr.name, attr.value);
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
+      }
+      ef (attr.name == "on") {
+        if (now->is<decls::VarDecl>())
+          return make_err(errors::AttributeNotSupported(attr.pos, attr.name));
+        if (attr.value != "init" && attr.value != "fini")
+          return make_err(errors::InvalidAttributeValue(attr.pos, attr.name, attr.value));
       }
       else
-        return errors::InvalidAttribute(now->pos(), attr.name);
+        return make_err(errors::UnknownAttribute(attr.pos, attr.name));
+    }
     
     return {};
   }
@@ -102,15 +117,22 @@ namespace qw
     if_except(sctx.type->sema_FuncType(ftype, now->pos()));
     
     bool is_rtl = false;
+    word rtl_pos;
     for (auto &attr: now->const_attrs()) {
       if (attr.name == "rtl") {
         is_rtl = true;
+        rtl_pos = attr.pos;
         break;
       }
     }
 
-    if (is_rtl && now->pos().mod() && !now->pos().mod()->llvm()->getName().starts_with("__qwrtl")) {
-      is_rtl = false;
+    if (is_rtl && now->pos().mod() && !now->pos().mod()->is_rtl()) {
+      u32 start_off = rtl_pos.off();
+      u32 end_off = now->pos().off() + now->pos().size();
+      word ctx_pos(now->pos().mod(), start_off, end_off - start_off);
+      auto err = errors::RtlAttributeOnlyInRtlModule(rtl_pos);
+      err.error()->ctx() = ctx_pos;
+      return err;
     }
 
     bool skip_gst = false;
@@ -122,6 +144,26 @@ namespace qw
           auto parent_ns = parent_decl->as<decls::NameSpaceDecl>();
           for (auto decl : parent_ns->decls) {
             if (decl != now && decl->is<decls::FuncDecl>() && decl->name() == now->name()) {
+              bool is_other_rtl = false;
+              for (auto &attr : decl->const_attrs()) {
+                if (attr.name == "rtl") {
+                  is_other_rtl = true;
+                  break;
+                }
+              }
+
+              if (is_other_rtl) {
+                if (decl->pos().off() < now->pos().off()) {
+                  auto err = errors::RtlCannotBeOverloaded(now->pos(), std::string(now->name()));
+                  err.error()->notes().push_back(diagnostic::note::make(decl->pos(), _("first definition is here.")));
+                  return err;
+                }
+                else
+                  continue;
+              }
+
+              if (decl->as<decls::FuncDecl>()->body != nullptr) continue;
+
               intrinsic_decl = decl;
               break;
             }
@@ -134,8 +176,9 @@ namespace qw
         auto intrinsic_fdecl = intrinsic_decl->as<decls::FuncDecl>();
         intrinsic_fdecl->body = fdecl->body;
         fdecl->body = nullptr;
-        intrinsic_fdecl->body->parent() = intrinsic_decl;
-        
+        if (intrinsic_fdecl->body) {
+          intrinsic_fdecl->body->parent() = intrinsic_decl;
+        }
         if (intrinsic_fdecl->funcType->is<types::FuncType>() && ftype->is<types::FuncType>()) {
           auto int_ftype = intrinsic_fdecl->funcType->as<types::FuncType>();
           auto parsed_ftype = ftype->as<types::FuncType>();
@@ -174,6 +217,34 @@ namespace qw
       }
 
       if_except(sctx.stmt->sema_CodeBlock(fdecl->body, ftype_concrete->ret));
+    }
+
+    for (auto &attr: now->const_attrs()) {
+      if (attr.name == "on") {
+        auto ftype_concrete = ftype->as<types::FuncType>();
+        bool returns_void = false;
+        if (ftype_concrete->ret->is<types::PrimitiveType>()) {
+          returns_void = ftype_concrete->ret->as<types::PrimitiveType>()->kind == types::PrimitiveEnum::Void;
+        }
+
+        if (!ftype_concrete->pars.empty() || !returns_void) {
+          auto make_err = [&](auto err) {
+            u32 start_off = attr.pos.off();
+            u32 end_off = now->pos().off() + now->pos().size();
+            word ctx_pos(now->pos().mod(), start_off, end_off - start_off);
+            err.error()->ctx() = ctx_pos;
+            return err;
+          };
+          return make_err(errors::InvalidOnAttributeSignature(attr.pos));
+        }
+
+        if (attr.value == "init") {
+          now->pos().mod()->global_ctors().push_back(fdecl);
+        }
+        ef (attr.value == "fini") {
+          now->pos().mod()->global_dtors().push_back(fdecl);
+        }
+      }
     }
 
     return {};

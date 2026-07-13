@@ -17,7 +17,6 @@
 #include "qw/tree/stmts.hh"
 #include "qw/tree/types.hh"
 #include "qw/vfs/vfs.hh"
-#include <format>
 #include <llvm/IR/LLVMContext.h>
 #include <ostream>
 #include <string_view>
@@ -172,14 +171,15 @@ namespace qw
       delete X;
   }
 
-  fun context::make_module(std::string name, std::string fpath) -> module *
+  fun context::make_module(std::string name, std::string fpath, ModuleKind kind) -> module *
   {
-    auto obj = new module(this, name, fpath);
+    auto obj = new module(this, name, fpath, kind);
     m_modules.push_back(obj);
     return obj;
   }
 
-  module::module(context *ctx, std::string name, std::string fpath) :m_ctx(ctx), m_fpath(fpath), m_mmap(vfs::resolve_map("file://" + fpath)),
+  module::module(context *ctx, std::string name, std::string fpath, ModuleKind kind) :m_ctx(ctx), m_fpath(fpath), m_mmap(vfs::resolve_map("file://" + fpath)), m_kind(kind),
     m_llvm(new llvm::Module(name, *ctx->llvm())), m_ns(decls::Decl::make_NameSpace(ctx, nil, "", word{}))
   {}
+
 }

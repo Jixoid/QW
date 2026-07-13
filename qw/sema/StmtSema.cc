@@ -103,7 +103,7 @@ namespace qw
       cond_type = cond_type->as<types::ReferenceType>()->sub;
     }
 
-    if (!cond_type->isBool()) return errors::NoMatchOperator(now->pos(), "if", std::string(if_stmt->condition->targetType()->typname()), "condition must be boolean");
+    if (!cond_type->isBool()) return errors::ConditionMustBeBoolean(if_stmt->condition->pos(), "if", std::string(if_stmt->condition->targetType()->typname()));
 
     if (if_stmt->then_block)
       if_except(sctx.stmt->sema_CodeBlock(if_stmt->then_block, expected_ret));
@@ -127,7 +127,7 @@ namespace qw
       cond_type = cond_type->as<types::ReferenceType>()->sub;
     }
 
-    if (!cond_type->isBool()) return errors::NoMatchOperator(now->pos(), "while", std::string(while_stmt->condition->targetType()->typname()), "condition must be boolean");
+    if (!cond_type->isBool()) return errors::ConditionMustBeBoolean(while_stmt->condition->pos(), "while", std::string(while_stmt->condition->targetType()->typname()));
 
     if (while_stmt->body) {
       sctx.meta->loop_stack.push_back(now);
@@ -140,14 +140,14 @@ namespace qw
   }
 
   fun StmtSema::sema_BreakStmt(stmts::Stmt *now, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>> {
-    if (sctx.meta->loop_stack.empty()) return errors::NoMatchOperator(now->pos(), "break", "", "break statement not within loop");
+    if (sctx.meta->loop_stack.empty()) return errors::StatementNotWithinLoop(now->pos(), "break");
   
     now->as<stmts::BreakStmt>()->loop = sctx.meta->loop_stack.back();
     return {};
   }
 
   fun StmtSema::sema_ContinueStmt(stmts::Stmt *now, types::Type *expected_ret) -> std::expected<void, uptr<diagnostic::message>> {
-    if (sctx.meta->loop_stack.empty()) return errors::NoMatchOperator(now->pos(), "continue", "", "continue statement not within loop");
+    if (sctx.meta->loop_stack.empty()) return errors::StatementNotWithinLoop(now->pos(), "continue");
     
     auto cnt = now->as<stmts::ContinueStmt>();
     cnt->loop = sctx.meta->loop_stack.back();

@@ -116,6 +116,7 @@ namespace qw
 
       decls::Attribute attr;
       attr.name = attr_name.str();
+      attr.pos = attr_name;
 
       auto next = lex();
       Require(next);

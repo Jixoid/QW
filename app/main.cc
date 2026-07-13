@@ -178,7 +178,7 @@ fun main(int argc, char** argv) -> int
                 curr_ns = next_ns;
               }
               
-              auto rtl_mod = ctx->make_module("__qwrtl_" + full_ns_name, entry.path().string());
+              auto rtl_mod = ctx->make_module("__qwrtl_" + full_ns_name, entry.path().string(), qw::ModuleKind::RTL);
               frontend rtl_front(rtl_mod);
               if (auto E = rtl_front.read_File(curr_ns); !E.has_value()) {
                 std::cerr << E.error();
@@ -201,7 +201,7 @@ fun main(int argc, char** argv) -> int
             }
           }
         }
-        rtl_master_mod = ctx->make_module("qwrtl", first_rtl_file);
+        rtl_master_mod = ctx->make_module("qwrtl", first_rtl_file, qw::ModuleKind::RTL);
         auto Sum2 = qw::Sema::pass_ns(rtl_master_mod, sys, {});
         if (Sum2.sumerr()) {
           std::cerr << Sum2;

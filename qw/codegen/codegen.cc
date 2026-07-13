@@ -114,4 +114,50 @@ namespace qw
     SMng.ans().pop_back();
   }
 
+  fun CodeGen::gen_GlobalCtorsDtors() -> void {
+    auto emit_array = [&](bool is_ctor, const char* array_name) {
+      std::vector<decls::FuncDecl*> list;
+      for (auto m : ctx->modules()) {
+        auto& mod_list = is_ctor ? m->global_ctors() : m->global_dtors();
+        for (auto fdecl : mod_list) {
+          if (fdecl->llvm && fdecl->llvm->getParent() == mod->llvm()) {
+            list.push_back(fdecl);
+          }
+        }
+      }
+
+      if (list.empty()) return;
+
+      auto i32_t = llvm::Type::getInt32Ty(*ctx->llvm());
+      auto ptr_t = llvm::PointerType::getUnqual(*ctx->llvm());
+      std::vector<llvm::Type*> struct_types = { i32_t, ptr_t, ptr_t };
+      auto struct_t = llvm::StructType::get(*ctx->llvm(), struct_types);
+
+      std::vector<llvm::Constant*> init_list;
+      for (auto fdecl : list) {
+        auto priority = llvm::ConstantInt::get(i32_t, 65535);
+        auto null_ptr = llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(*ctx->llvm()));
+        
+        std::vector<llvm::Constant*> fields = { priority, llvm::cast<llvm::Constant>(fdecl->llvm), null_ptr };
+        auto struct_val = llvm::ConstantStruct::get(struct_t, fields);
+        init_list.push_back(struct_val);
+      }
+
+      auto array_t = llvm::ArrayType::get(struct_t, init_list.size());
+      auto array_val = llvm::ConstantArray::get(array_t, init_list);
+
+      new llvm::GlobalVariable(
+        *mod->llvm(),
+        array_t,
+        false,
+        llvm::GlobalValue::AppendingLinkage,
+        array_val,
+        array_name
+      );
+    };
+
+    emit_array(true, "llvm.global_ctors");
+    emit_array(false, "llvm.global_dtors");
+  }
+
 }
