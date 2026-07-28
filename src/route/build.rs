@@ -13,8 +13,25 @@ pub struct BuildInfo<'a> {
 }
 
 
+pub struct FileArena {
+  files: std::cell::RefCell<Vec<Box<crate::control::module::ModuleFile>>>,
+}
+
+impl FileArena {
+  pub fn new() -> Self { Self { files: std::cell::RefCell::new(Vec::new()) } }
+  
+  pub fn alloc(&self, file: crate::control::module::ModuleFile) -> &crate::control::module::ModuleFile {
+    let b = Box::new(file);
+    let ptr = &*b as *const crate::control::module::ModuleFile;
+    self.files.borrow_mut().push(b);
+    unsafe { &*ptr }
+  }
+}
+
+
 pub struct ModInjection<'a> {
   pub sys: &'a SysFile<'a>,
+  pub farena: &'a FileArena,
 }
 
 
@@ -122,8 +139,9 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>
 
 pub fn build(info: BuildInfo) -> module::Result<()> {
   let sys = SysFile::new()?;
+  let farena = FileArena::new();
 
-  let mi = ModInjection{sys: &sys};
+  let mi = ModInjection{sys: &sys, farena: &farena};
 
   build_mod(&info, info.path.to_string(), &mi)?;
 

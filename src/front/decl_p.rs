@@ -16,6 +16,7 @@ impl DeclParser {
       "struct" => Self::read_struct(ctx, v),
       "let"    => Self::read_var(ctx, v, AccessKind::IMM),
       "var"    => Self::read_var(ctx, v, AccessKind::MUT),
+      "mod"    => Self::read_mod(ctx, v),
       _ => return Err(Message::error(l, String::from("unknown keyword: `{}`"), vec![l.string()])),
     }?;
 
@@ -125,6 +126,61 @@ impl DeclParser {
       comptime: false,
     });
 
+    Ok(Decl::new(name, this, vis))
+  }
+
+  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+    let name = ctx.lex.get()?;
+    MetaParser::expect_equal(ctx, ";")?;
+
+    let mod_name = name.string();
+    let current_dir = std::path::Path::new(&ctx.lex.mol.fpath).parent().unwrap_or(std::path::Path::new(""));
+    let mut mod_path = current_dir.join(format!("{}.qw", mod_name));
+
+    if !mod_path.exists() {
+      mod_path = current_dir.join(&mod_name).join("mod.qw");
+    }
+
+    let mmap = match std::fs::read_to_string(&mod_path) {
+      Ok(s) => s,
+      Err(e) => return Err(Message::error(name, format!("failed to load module {}: {}", mod_name, e), vec![])),
+    };
+
+    let mfd = crate::control::module::ModuleFile {
+      fpath: mod_path.to_str().unwrap().to_string(),
+      mmap,
+      kind: crate::control::module::ModuleKind::Regular,
+    };
+    let mfd_static: &'d crate::control::module::ModuleFile = ctx.mi.farena.alloc(mfd);
+
+    let mut lex = crate::lexer::Lexer::new_module(mfd_static);
+    
+    let mut new_ctx = ParserContext {
+      lex: &mut lex,
+      mol: ctx.mol,
+      sum: ctx.sum,
+      mi: ctx.mi,
+    };
+    
+    let mut decls = Vec::new();
+    let mut defvis = Visibility::Private;
+    
+    loop {
+      let t = new_ctx.lex.lex();
+      if t.kind == crate::lexer::WordKind::EOF { break; }
+      else {
+        new_ctx.lex.store(t);
+        match DeclParser::read_decl(&mut new_ctx, &mut defvis) {
+          Ok(id) => decls.push(id),
+          Err(e) => {
+            new_ctx.sum.add(e);
+            let _ = MetaParser::pmr_global(&mut new_ctx);
+          }
+        }
+      }
+    }
+
+    let this = DeclVari::Module(ModuleDecl { decls });
     Ok(Decl::new(name, this, vis))
   }
 
