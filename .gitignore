@@ -1,7 +1,6 @@
 # Helpers
 /.vscode
-/.remote
 /build
 /.cache
 /.obsidian
-/CONTEXT.md
+/target
