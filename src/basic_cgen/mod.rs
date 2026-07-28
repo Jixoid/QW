@@ -43,6 +43,20 @@ impl<'a> BasicCGen<'a> {
     }
   }
 
+  fn value_to_llvm_str(&self, hir_mol: &crate::hir::module::HirModule, val: &crate::hir::value::HirValue) -> String {
+    match val {
+      crate::hir::value::HirValue::ConstInt(i) => format!("{}", i),
+      crate::hir::value::HirValue::ConstFloat(f) => format!("{:?}", f),
+      crate::hir::value::HirValue::ConstBool(b) => if *b { "true".to_string() } else { "false".to_string() },
+      crate::hir::value::HirValue::Reg(hid) => format!("%{}", hid.index()),
+      crate::hir::value::HirValue::Global(hid) => {
+        let global = hir_mol.get_global(*hid);
+        format!("@{}", global.name)
+      },
+      crate::hir::value::HirValue::Null => "null".to_string(),
+    }
+  }
+
 }
 
 use std::fmt::Write;
@@ -84,7 +98,11 @@ impl<'a> ICGen for BasicCGen<'a> {
       }
 
       let ty_str = self.type_to_llvm_str(hir_mol, g.ty);
-      let init_str = "0"; // TODO: read from init
+      let init_str = if let Some(init_val) = &g.init {
+        self.value_to_llvm_str(hir_mol, init_val)
+      } else {
+        "0".to_string()
+      };
 
       let _ = writeln!(out, "@{} = {}{} {}", g.name, modifiers, ty_str, init_str);
     }
@@ -105,19 +123,66 @@ impl<'a> ICGen for BasicCGen<'a> {
       let weak_str = if f.is_weak { "weak " } else { "" };
       
       let _ = writeln!(out, "define {}{} @{}({}) {{", weak_str, ret_ty_str, f.name, args_str);
-      let _ = writeln!(out, "entry:");
-      
-      // TODO: ret type default fallback. for now hardcoded 0 for ints, false for bools, null for ptrs, void for void.
-      if ret_ty_str == "void" {
-        let _ = writeln!(out, "  ret void");
-      } else if ret_ty_str == "i1" {
-        let _ = writeln!(out, "  ret i1 false");
-      } else if ret_ty_str == "ptr" {
-        let _ = writeln!(out, "  ret ptr null");
-      } else if ret_ty_str == "float" || ret_ty_str == "double" {
-        let _ = writeln!(out, "  ret {} 0.0", ret_ty_str);
+      if f.blocks.is_empty() {
+        let _ = writeln!(out, "entry:");
+
+        if ret_ty_str == "void" {
+          let _ = writeln!(out, "  ret void");
+        } else if ret_ty_str == "i1" {
+          let _ = writeln!(out, "  ret i1 false");
+        } else if ret_ty_str == "ptr" {
+          let _ = writeln!(out, "  ret ptr null");
+        } else if ret_ty_str == "float" || ret_ty_str == "double" {
+          let _ = writeln!(out, "  ret {} 0.0", ret_ty_str);
+        } else {
+          let _ = writeln!(out, "  ret {} 0", ret_ty_str);
+        }
       } else {
-        let _ = writeln!(out, "  ret {} 0", ret_ty_str);
+        for block_id in &f.blocks {
+          let block = hir_mol.get_block(*block_id);
+          let _ = writeln!(out, "{}:", block.name);
+          
+          for instr_id in &block.instrs {
+            let instr = hir_mol.get_instr(*instr_id);
+            match &instr.vari {
+              crate::hir::instr::HirInstrVari::Alloca(ty_id) => {
+                let ty_str = self.type_to_llvm_str(hir_mol, *ty_id);
+                let _ = writeln!(out, "  %{} = alloca {}", instr_id.index(), ty_str);
+              }
+              crate::hir::instr::HirInstrVari::Store(val, ptr) => {
+                let val_str = self.value_to_llvm_str(hir_mol, val);
+                let ptr_str = self.value_to_llvm_str(hir_mol, ptr);
+                
+
+                let val_ty_str = if let crate::hir::value::HirValue::Reg(ptr_hid) = ptr {
+                  let ptr_instr = hir_mol.get_instr(*ptr_hid);
+                  self.type_to_llvm_str(hir_mol, ptr_instr.ty)
+                } else {
+                  "i32".to_string()
+                };
+
+                let _ = writeln!(out, "  store {} {}, ptr {}", val_ty_str, val_str, ptr_str);
+              }
+              crate::hir::instr::HirInstrVari::Load(ty_id, ptr) => {
+                let ty_str = self.type_to_llvm_str(hir_mol, *ty_id);
+                let ptr_str = self.value_to_llvm_str(hir_mol, ptr);
+                let _ = writeln!(out, "  %{} = load {}, ptr {}", instr_id.index(), ty_str, ptr_str);
+              }
+              crate::hir::instr::HirInstrVari::Ret(opt_val) => {
+                if let Some(val) = opt_val {
+
+                  let val_str = self.value_to_llvm_str(hir_mol, val);
+                  let _ = writeln!(out, "  ret {} {}", ret_ty_str, val_str);
+                } else {
+                  let _ = writeln!(out, "  ret void");
+                }
+              }
+              _ => {
+                todo!("cgen: unimplemented instr {:?}", instr.vari);
+              }
+            }
+          }
+        }
       }
       
       let _ = writeln!(out, "}}\n");

@@ -31,7 +31,7 @@ impl<'a> Message<'a> {
 
 impl<'a> fmt::Display for Message<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    // File
+
     let (hr1, _hr2) = self.pos.interval();
     let mut fpath = self.pos.mol.fpath.clone();
     
@@ -51,7 +51,7 @@ impl<'a> fmt::Display for Message<'a> {
     )?;
 
 
-    // Message
+
     match self.kind {
       MsgKind::Fatal => write!(f, "{}", "fatal".bright_red().bold())?,
       MsgKind::Error => write!(f, "{}", "error".bright_red().bold())?,

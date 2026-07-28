@@ -34,7 +34,8 @@ pub struct MatchExpr {
 #[derive(Debug)]
 pub struct NickExpr<'a> {
   pub pos: Word<'a>,
-  pub idx: u32
+  pub idx: u32,
+  pub resolved: Option<IdentyId>,
 }
 
 impl<'a> NickExpr<'a> {
@@ -48,7 +49,7 @@ impl<'a> NickExpr<'a> {
       }
     } as u32;
 
-    NickExpr{pos: p, idx}
+    NickExpr{pos: p, idx, resolved: None}
   }
 }
 

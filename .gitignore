@@ -1,6 +1,4 @@
 # Helpers
 /.vscode
-/build
-/.cache
 /.obsidian
 /target

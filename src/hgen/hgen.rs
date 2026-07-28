@@ -13,6 +13,7 @@ pub struct HGen<'a,'d> {
 
   pub map_decl: HashMap<IdentyId, crate::hir::identy::HirId>,
   pub map_type: HashMap<IdentyId, crate::hir::identy::HirId>,
+  pub local_scope: HashMap<String, crate::hir::identy::HirId>,
 }
 
 impl<'a,'d> HGen<'a,'d> {
@@ -24,6 +25,7 @@ impl<'a,'d> HGen<'a,'d> {
       mangler: Box::new(ItaniumMangler::new()),
       map_decl: HashMap::new(),
       map_type: HashMap::new(),
+      local_scope: HashMap::new(),
     }
   }
 
@@ -33,10 +35,19 @@ impl<'a,'d> HGen<'a,'d> {
   }
 
   fn gen_module(&mut self) {
+    // Global Variables
     for (i,x) in self.ast_mol.list_decl.iter().enumerate() {
+      if let crate::ast::DeclVari::Var(_) = &x.vari {
+        let ast_id = IdentyId::new(IdentyKind::Decl, 0, i as u32);
+        self.gen_decl(ast_id, x);
+      }
+    }
+    
+    // Functions and others
+    for (i,x) in self.ast_mol.list_decl.iter().enumerate() {
+      if let crate::ast::DeclVari::Var(_) = &x.vari { continue; }
       let ast_id = IdentyId::new(IdentyKind::Decl, 0, i as u32);
-      let decl = x;
-      self.gen_decl(ast_id, decl);
+      self.gen_decl(ast_id, x);
     }
   }
 
@@ -113,10 +124,30 @@ impl<'a,'d> HGen<'a,'d> {
         };
 
         let h_func = crate::hir::func::HirFunc::new(final_name, ret_ty, arg_tys, is_weak);
-        let hid = self.hir_mol.new_func(h_func);
-        self.map_decl.insert(ast_id, hid);
+        let func_hid = self.hir_mol.new_func(h_func.clone());
+        self.map_decl.insert(ast_id, func_hid);
+
+
+        self.local_scope.clear();
+
+
+        let mut entry_block = crate::hir::block::HirBlock::new("entry".to_string());
+        
+
+        let block_expr = self.ast_mol.get_expr(f.blok);
+        if let crate::ast::ExprVari::Block(b) = &block_expr.vari {
+          for stmt_id in &b.ctn {
+            let stmt = self.ast_mol.get_stmt(*stmt_id);
+            self.gen_stmt(stmt, &mut entry_block);
+          }
+        }
+        
+        let block_hid = self.hir_mol.new_block(entry_block);
+        
+        let h_func_mut = self.hir_mol.get_func_mut(func_hid);
+        h_func_mut.push_block(block_hid);
       }
-      _ => {}
+      DeclVari::Module(_) => {},
     }
   }
 
@@ -193,5 +224,105 @@ impl<'a,'d> HGen<'a,'d> {
     self.hir_mol.list_type[hid.index() as usize].vari = hir_ty_vari;
     hid
   }
-  
+
+  fn gen_stmt(&mut self, stmt: &crate::ast::stmts::Stmt, block: &mut crate::hir::block::HirBlock) {
+    match &stmt.vari {
+      crate::ast::stmts::StmtVari::Let(l) => {
+        let ty_id = self.gen_type(l.kind);
+        
+
+        let alloca_instr = crate::hir::instr::HirInstr {
+          vari: crate::hir::instr::HirInstrVari::Alloca(ty_id),
+          ty: ty_id,
+        };
+        let alloca_hid = self.hir_mol.new_instr(alloca_instr);
+        block.push_instr(alloca_hid);
+
+        self.local_scope.insert(l.name.string(), alloca_hid);
+
+        if let Some(init_id) = l.init {
+          let init_val = self.gen_expr(init_id, block);
+          let store_instr = crate::hir::instr::HirInstr {
+            vari: crate::hir::instr::HirInstrVari::Store(init_val, crate::hir::value::HirValue::Reg(alloca_hid)),
+            ty: self.hir_mol.new_type(crate::hir::types::HirType{ vari: crate::hir::types::HirTypeVari::Void }),
+          };
+          let store_hid = self.hir_mol.new_instr(store_instr);
+          block.push_instr(store_hid);
+        }
+      }
+      crate::ast::stmts::StmtVari::Ret(r) => {
+        let ret_val = self.gen_expr(r.val, block);
+        let ret_instr = crate::hir::instr::HirInstr {
+          vari: crate::hir::instr::HirInstrVari::Ret(Some(ret_val)),
+          ty: self.hir_mol.new_type(crate::hir::types::HirType{ vari: crate::hir::types::HirTypeVari::Void }),
+        };
+        let ret_hid = self.hir_mol.new_instr(ret_instr);
+        block.push_instr(ret_hid);
+      }
+      crate::ast::stmts::StmtVari::Expr(e) => {
+        self.gen_expr(e.expr, block);
+      }
+    }
+  }
+
+  fn gen_expr(&mut self, expr_id: IdentyId, block: &mut crate::hir::block::HirBlock) -> crate::hir::value::HirValue {
+    let expr = self.ast_mol.get_expr(expr_id);
+    let ty_id = self.gen_type(expr.ty);
+
+    match &expr.vari {
+      crate::ast::ExprVari::Number(n) => {
+
+        let num_str = n.pos.str();
+        if let Ok(i) = num_str.parse::<i64>() {
+          crate::hir::value::HirValue::ConstInt(i)
+        } else if let Ok(f) = num_str.parse::<f64>() {
+          crate::hir::value::HirValue::ConstFloat(f)
+        } else {
+          crate::hir::value::HirValue::ConstInt(0)
+        }
+      }
+      crate::ast::ExprVari::Nick(n) => {
+        let name = self.ast_mol.nick_map[n.idx as usize].clone();
+        if let Some(&local_hid) = self.local_scope.get(&name) {
+
+          let load_instr = crate::hir::instr::HirInstr {
+            vari: crate::hir::instr::HirInstrVari::Load(ty_id, crate::hir::value::HirValue::Reg(local_hid)),
+            ty: ty_id,
+          };
+          let load_hid = self.hir_mol.new_instr(load_instr);
+          block.push_instr(load_hid);
+          crate::hir::value::HirValue::Reg(load_hid)
+        } else {
+          let mut global_ast_id = None;
+          for (i, decl) in self.ast_mol.list_decl.iter().enumerate() {
+            if decl.name.to_string() == name {
+              global_ast_id = Some(crate::control::identy::IdentyId::new(crate::control::IdentyKind::Decl, 0, i as u32));
+              break;
+            }
+          }
+          if let Some(ast_id) = global_ast_id {
+            if let Some(hid) = self.map_decl.get(&ast_id) {
+              let decl = &self.ast_mol.list_decl[ast_id.index() as usize];
+              if let crate::ast::DeclVari::Var(_) = &decl.vari {
+                let global_var = self.hir_mol.get_global(*hid);
+                let ty_id = global_var.ty;
+                let load_instr = crate::hir::instr::HirInstr {
+                  vari: crate::hir::instr::HirInstrVari::Load(ty_id, crate::hir::value::HirValue::Global(*hid)),
+                  ty: ty_id,
+                };
+                let load_hid = self.hir_mol.new_instr(load_instr);
+                block.push_instr(load_hid);
+                return crate::hir::value::HirValue::Reg(load_hid);
+              } else {
+                return crate::hir::value::HirValue::Global(*hid);
+              }
+            }
+          }
+          
+          panic!("Nick {} not found in local_scope or global decls. HIR requires Nicks to be fully resolved.", name);
+        }
+      }
+      _ => todo!("hgen: unimplemented expr: {:?}", expr.vari),
+    }
+  }
 }

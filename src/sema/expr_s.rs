@@ -68,7 +68,7 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           
           if !is_default {
             let pat_ty = self.check_expr(pat)?;
-            if pat_ty.index() != val_ty.index() {} // error
+            if pat_ty.index() != val_ty.index() {}
           }
           let body_ty = self.check_expr(body)?;
           if first_body_ty.is_none() {

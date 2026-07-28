@@ -26,7 +26,7 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           if kind.kind() == crate::control::IdentyKind::Null {
             resolved_type = expr_ty;
           } else {
-            // Future: Type Unification (kind == expr_ty)
+
           }
         }
         

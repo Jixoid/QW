@@ -109,13 +109,13 @@ impl fmt::Display for HirModule {
 
     writeln!(f, "  {}{} {}b", "blocks".purple().bold(), ":".bright_black(), std::mem::size_of::<HirBlock>() * self.list_block.len())?;
     for (i, x) in self.list_block.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {:?}", "[".bright_black(), i, "]".bright_black(), x)?;
+      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
     }
     writeln!(f)?;
 
     writeln!(f, "  {}{} {}b", "instrs".purple().bold(), ":".bright_black(), std::mem::size_of::<HirInstr>() * self.list_instr.len())?;
     for (i, x) in self.list_instr.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {:?}", "[".bright_black(), i, "]".bright_black(), x)?;
+      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
     }
     writeln!(f)?;
 

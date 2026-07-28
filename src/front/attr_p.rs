@@ -10,7 +10,7 @@ impl AttrParser {
     loop {
       let t = ctx.lex.lex();
       if t.kind == WordKind::DoubleSquareBracketBeg {
-        // Parse attributes inside [[ ]]
+
         loop {
           let t2 = ctx.lex.lex();
           if t2.kind == WordKind::DoubleSquareBracketEnd {
@@ -21,21 +21,21 @@ impl AttrParser {
           }
 
           if t2.kind != WordKind::Word {
-            // expected a word for attribute key
+
             continue;
           }
 
           let key = t2;
           let mut val = None;
 
-          // Check for colon
+
           let next_t = ctx.lex.lex();
           if next_t.kind == WordKind::Colon {
             let v = ctx.lex.lex();
             if v.kind == WordKind::Word || v.kind == WordKind::String {
               val = Some(v);
             }
-            // Skip the next comma if present
+
             let t3 = ctx.lex.lex();
             if t3.kind != WordKind::Comma && t3.kind != WordKind::DoubleSquareBracketEnd {
               ctx.lex.store(t3);
@@ -44,7 +44,7 @@ impl AttrParser {
               break;
             }
           } else if next_t.kind == WordKind::Comma {
-            // just a key
+
           } else if next_t.kind == WordKind::DoubleSquareBracketEnd {
             attrs.push(Attribute { key, val });
             break;

@@ -11,7 +11,7 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
       return Some(id);
     }
     
-    // Search in dependencies
+
     for m in self.mol.imod.iter() {
       for decl in &m.list_decl {
         if let crate::ast::Visibility::Public = decl.vis {
@@ -122,6 +122,16 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
       return Some(id);
     }
     
+    // Check current module globals
+    for decl in &self.mol.list_decl {
+      if let crate::ast::DeclVari::Var(v) = &decl.vari {
+        if decl.name.to_string() == name {
+          return Some(v.kind);
+        }
+      }
+    }
+
+    // Check dependencies
     for m in self.mol.imod.iter() {
       for decl in &m.list_decl {
         if let crate::ast::Visibility::Public = decl.vis {

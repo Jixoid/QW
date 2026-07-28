@@ -1,22 +1,26 @@
 use super::identy::HirId;
+use core::fmt;
+use owo_colors::OwoColorize;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HirValue {
-  /// Sabit bir Integer değeri.
   ConstInt(i64),
-  
-  /// Sabit bir Float değeri.
   ConstFloat(f64),
-  
-  /// Sabit Boolean değeri.
   ConstBool(bool),
-  
-  /// Bir SSA Virtual Register (Aslında bir Instr'in ürettiği sonuç referansıdır).
   Reg(HirId),
-  
-  /// Global bir değişkene veya fonksiyona erişim.
   Global(HirId),
-  
-  /// Null pointer veya void durumları.
   Null,
+}
+
+impl fmt::Display for HirValue {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      HirValue::ConstInt(i) => write!(f, "{}", i.yellow()),
+      HirValue::ConstFloat(fl) => write!(f, "{}", fl.yellow()),
+      HirValue::ConstBool(b) => write!(f, "{}", b.yellow()),
+      HirValue::Reg(id) => write!(f, "{}{}", "%".bright_black(), id.index().cyan()),
+      HirValue::Global(id) => write!(f, "{}{}", "@".bright_black(), id.index().cyan()),
+      HirValue::Null => write!(f, "{}", "null".bright_black()),
+    }
+  }
 }

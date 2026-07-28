@@ -87,11 +87,11 @@ impl MetaParser {
       let mut names: Vec<Word> = vec![];
 
       're: loop {
-        // name
+
         let name = ctx.lex.get()?;
         names.push(name);
 
-        // colon
+
         let c = ctx.lex.get()?;
 
         if c.str() == "," { continue 're; }
@@ -101,15 +101,15 @@ impl MetaParser {
         }
       }
 
-      // type
+
       let kind = TypeParser::read_type(ctx, true)?;
 
-      // push args
+
       for x in names { args.push(FieldType{
         name: x, kind: kind, vis: Visibility::Public
       })}
       
-      // End
+
       let e = ctx.lex.get()?;
 
       if e.str() == ";" { continue 'ml; }
