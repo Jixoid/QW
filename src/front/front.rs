@@ -1,4 +1,4 @@
-use crate::{ast::Visibility, control::{Module, ModuleFile, module}, diagnostic::Summary, front::{decl_p::DeclParser, meta_p::MetaParser}, lexer::{Lexer, WordKind}, route::ModInjection};
+use crate::{ast::Visibility, control::{Module, ModuleFile, module}, diagnostic::Summary, front::{decl_p::DeclParser, meta_p::MetaParser}, lexer::{Lexer, WordKind}, route::build::ModInjection};
 
 pub struct ParserContext<'a, 'ctx, 'd:'a> {
   pub lex: &'ctx mut Lexer<'a>,

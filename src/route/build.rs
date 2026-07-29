@@ -10,6 +10,7 @@ pub struct BuildInfo<'a> {
   pub timings: bool,
   pub ast_dump: bool,
   pub hir_dump: bool,
+  pub check_only: bool,
 }
 
 
@@ -81,6 +82,17 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>
     if info.ast_dump {
       println!("{}{} {}", "ast-dump".purple().bold(), ":".bright_black(), mol.name.white().bold());
       println!("{}", mol);
+    }
+
+    if info.check_only {
+      if info.timings {
+        println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front+sema));
+        if info.verbose {
+          println!("  {}{} {:?}", "front".blue().bold(), ":".bright_black(), front);
+          println!("  {}{}  {:?}", "sema".blue().bold(), ":".bright_black(), sema);
+        }
+      }
+      return Ok(());
     }
 
 
