@@ -157,7 +157,7 @@ impl<'a,'d> HGen<'a,'d> {
     }
 
     let ty = self.ast_mol.get_type(ast_id);
-    if let crate::ast::types::TypeVari::Path{path} = &ty.vari {
+    if let crate::ast::types::TypeVari::Path(path) = &ty.vari {
       if path.len() > 0 {
         let resolved_id = path.last().unwrap();
         let hid = self.gen_type(*resolved_id);

@@ -19,10 +19,12 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         self.check_type(ty_id)?;
       }
       DeclVari::Module(m) => {
+        self.scp.push();
         let decls = m.decls.clone();
         for did in decls {
           self.check_decl(did)?;
         }
+        self.scp.pop();
       }
       DeclVari::Fun(f) => {
         let kind = f.kind;

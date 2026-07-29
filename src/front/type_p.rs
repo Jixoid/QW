@@ -38,7 +38,24 @@ impl TypeParser {
         let sub = Self::read_type(ctx, _indecl)?;
         Type{state: crate::ast::TypeState::Unresolved, vari: TypeVari::PointerOf{sub, acc}}
       }
-      _ => Type{state: crate::ast::TypeState::Unresolved, vari: TypeVari::Nick(NickType::new(ctx.mol, n))},
+      _ => {
+        let mut path = vec![NickType::new(ctx.mol, n)];
+        loop {
+          let next = ctx.lex.get()?;
+          if next.str() == "::" {
+            let nxt_word = ctx.lex.get()?;
+            path.push(NickType::new(ctx.mol, nxt_word));
+          } else {
+            ctx.lex.store(next);
+            break;
+          }
+        }
+        if path.len() == 1 {
+          Type{state: crate::ast::TypeState::Unresolved, vari: TypeVari::Nick(path.pop().unwrap())}
+        } else {
+          Type{state: crate::ast::TypeState::Unresolved, vari: TypeVari::UnresolvedPath(path)}
+        }
+      }
     };
 
     let tyid = ctx.mol.new_type(ty);

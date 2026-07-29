@@ -97,7 +97,8 @@ pub enum TypeVari<'a> {
   Null,
 
   Nick(NickType<'a>),
-  Path{path: Vec<IdentyId>},
+  UnresolvedPath(Vec<NickType<'a>>),
+  Path(Vec<IdentyId>),
   
   PointerOf{sub: IdentyId, acc: AccessKind},
   ReferenceOf{sub: IdentyId, acc: AccessKind},
@@ -146,7 +147,7 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
         )?;
       }
 
-      TypeVari::Path{path} => {
+      TypeVari::Path(path) => {
         write!(f, "{} ", "path".blue().bold())?;
 
         for (i, x) in path.iter().enumerate() {

@@ -50,9 +50,66 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         let name_str = self.mol.nick_map[s.idx as usize].clone();
         
         if let Some(res_id) = self.find_type_global(&name_str) {
-          vari = TypeVari::Path { path: vec![res_id] };
+          vari = TypeVari::Path(vec![res_id]);
         } else {
           return Err(Message::new(MsgKind::Error, s.pos, "unknown type".to_string(), vec![name_str]));
+        }
+      }
+      TypeVari::UnresolvedPath(p) => {
+        let mut path_strs = Vec::new();
+        for n in p.iter() {
+          path_strs.push(self.mol.nick_map[n.idx as usize].clone());
+        }
+        
+        let mut current_decls: Vec<IdentyId> = Vec::new();
+        if let crate::ast::DeclVari::Module(m) = &self.mol.list_decl[0].vari {
+          current_decls = m.decls.clone();
+        }
+
+        let mut res_id = None;
+        let mut current_idx = 0;
+        
+        while current_idx < p.len() {
+          let target_name = &path_strs[current_idx];
+          let mut found = false;
+          
+          for d_id in &current_decls {
+            let decl = self.mol.get_decl(*d_id);
+            if decl.name.to_string() == *target_name {
+              if current_idx == p.len() - 1 {
+                if let crate::ast::DeclVari::Using(ty_id) = decl.vari {
+                  res_id = Some(ty_id);
+                  found = true;
+                  break;
+                }
+              } else {
+                if let crate::ast::DeclVari::Module(m) = &decl.vari {
+                  current_decls = m.decls.clone();
+                  found = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if !found {
+            if current_idx == 0 {
+              if let Some(id) = self.find_type_global(target_name) {
+                if p.len() == 1 {
+                  res_id = Some(id);
+                  found = true;
+                }
+              }
+            }
+            if !found { break; }
+          }
+          current_idx += 1;
+        }
+
+        if let Some(id) = res_id {
+          vari = TypeVari::Path(vec![id]);
+        } else {
+          return Err(Message::new(MsgKind::Error, p[0].pos, "unknown type path".to_string(), path_strs));
         }
       }
       TypeVari::PointerOf{sub, ..} | TypeVari::ZArrayOf(sub) => {
@@ -78,7 +135,7 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           self.check_type(v.kind)?;
         }
       }
-      TypeVari::Path { path } => {
+      TypeVari::Path(path) => {
         for p in path {
           self.check_type(*p)?;
         }

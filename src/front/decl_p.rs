@@ -141,6 +141,11 @@ impl DeclParser {
       mod_path = current_dir.join(&mod_name).join("mod.qw");
     }
 
+    let fpath_str = mod_path.to_str().unwrap_or("").to_string();
+    if ctx.mi.farena.is_loaded(&fpath_str) {
+      return Err(Message::error(name, format!("circular dependency or multiple definitions of module: {}", mod_name), vec![]));
+    }
+
     let mmap = match std::fs::read_to_string(&mod_path) {
       Ok(s) => s,
       Err(e) => return Err(Message::error(name, format!("failed to load module {}: {}", mod_name, e), vec![])),

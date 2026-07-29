@@ -15,16 +15,22 @@ pub struct BuildInfo<'a> {
 
 pub struct FileArena {
   files: std::cell::RefCell<Vec<Box<crate::control::module::ModuleFile>>>,
+  loaded_paths: std::cell::RefCell<std::collections::HashSet<String>>,
 }
 
 impl FileArena {
-  pub fn new() -> Self { Self { files: std::cell::RefCell::new(Vec::new()) } }
+  pub fn new() -> Self { Self { files: std::cell::RefCell::new(Vec::new()), loaded_paths: std::cell::RefCell::new(std::collections::HashSet::new()) } }
   
   pub fn alloc(&self, file: crate::control::module::ModuleFile) -> &crate::control::module::ModuleFile {
     let b = Box::new(file);
     let ptr = &*b as *const crate::control::module::ModuleFile;
+    self.loaded_paths.borrow_mut().insert(b.fpath.clone());
     self.files.borrow_mut().push(b);
     unsafe { &*ptr }
+  }
+
+  pub fn is_loaded(&self, fpath: &str) -> bool {
+    self.loaded_paths.borrow().contains(fpath)
   }
 }
 
@@ -115,7 +121,7 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>
     out
   };
 
-  let out_dir = std::path::Path::new(info.path).join("build").join("mod");
+  let out_dir = std::path::Path::new(info.path).join("build").join("mods");
   let _ = std::fs::create_dir_all(&out_dir);
   let out_file = out_dir.join(format!("{}.ll", mangled_name));
   let _ = std::fs::write(&out_file, &bin);
@@ -138,6 +144,11 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>
 
 
 pub fn build(info: BuildInfo) -> module::Result<()> {
+  let conf_path = std::path::Path::new(info.path).join("qw.conf");
+  if !conf_path.exists() {
+    return Err(crate::control::module::CompilerError::Str("could not find `qw.conf`.".to_string()));
+  }
+
   let sys = SysFile::new()?;
   let farena = FileArena::new();
 

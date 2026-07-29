@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use owo_colors::OwoColorize;
 
 use crate::route::init;
 use crate::route::build;
@@ -76,7 +77,13 @@ fn main() {
 
       match init::init(info) {
         Ok(()) => (),
-        Err(e) => panic!("{}", e),
+        Err(e) => {
+          match e {
+            crate::control::module::CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
+            _ => eprintln!("{}{} {:?}", "error".red().bold(), ":".bright_black(), e),
+          }
+          std::process::exit(1);
+        }
       };
     }
     
@@ -91,7 +98,13 @@ fn main() {
 
       match build::build(info) {
         Ok(()) => (),
-        Err(e) => panic!("{}", e),
+        Err(e) => {
+          match e {
+            crate::control::module::CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
+            _ => eprintln!("{}{} {:?}", "error".red().bold(), ":".bright_black(), e),
+          }
+          std::process::exit(1);
+        }
       };
     }
 
