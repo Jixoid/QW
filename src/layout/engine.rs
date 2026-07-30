@@ -110,6 +110,9 @@ impl<'a, 'd> LayoutEngine<'a, 'd> {
 			TypeVari::Enum(..) => {
 				TypeLayout::new(4, 4, false)
 			}
+			TypeVari::Iface(_) => {
+				TypeLayout::new(0, 1, false)
+			}
 			TypeVari::Nick(_) | TypeVari::UnresolvedPath(_) => panic!("Unresolved types cannot be laid out!"),
 			TypeVari::Path { .. } => {
 				return Err("Unresolved Path type".to_string());

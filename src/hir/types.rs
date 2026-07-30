@@ -59,7 +59,13 @@ pub enum HirTypeVari {
 
   Function(HirFunType),
   Struct(HirStructType),
+  Iface(HirIfaceType),
   Enum(HirEnumType),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HirIfaceType {
+  pub funs: Vec<HirFieldType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,6 +129,16 @@ impl fmt::Display for HirTypeVari {
       }
       HirTypeVari::Enum(_) => {
         write!(f, "enum {{ .. }}")?;
+      }
+      HirTypeVari::Iface(s) => {
+        write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
+
+        for (i, v) in s.funs.iter().enumerate() {
+          write!(f, "{}{} {}", v.name.blue().bold(), ":".bright_black(), v.kind)?;
+          if i + 1 < s.funs.len() { write!(f, "{} ", ",".bright_black())?; }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
       }
     };
 

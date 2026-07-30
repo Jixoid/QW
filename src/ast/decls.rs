@@ -73,6 +73,15 @@ impl<'a> fmt::Display for DeclName<'a> {
   }
 }
 
+impl<'a> DeclName<'a> {
+  pub fn pos(&self) -> Option<&Word<'a>> {
+    match self {
+      DeclName::Word(w) => Some(w),
+      _ => None
+    }
+  }
+}
+
 
 #[derive(Debug)]
 pub struct Decl<'a> {

@@ -182,6 +182,12 @@ impl<'a,'d> Module<'a,'d> {
     &modl.list_decl[id.index() as usize]
   }
 
+  pub fn get_mut_decl(&mut self, id: IdentyId) -> &mut Decl<'a> {
+    debug_assert!(id.kind() == IdentyKind::Decl);
+    assert_eq!(id.module(), 0, "Cannot mutate decl from another module");
+    &mut self.list_decl[id.index() as usize]
+  }
+
   pub fn get_mut_expr(&mut self, id: IdentyId) -> &mut Expr<'a> {
     debug_assert!(id.kind() == IdentyKind::Expr);
     debug_assert!(id.module() == 0, "Cannot get mut expr from other modules");

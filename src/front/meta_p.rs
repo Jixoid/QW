@@ -101,14 +101,9 @@ impl MetaParser {
         }
       }
 
-
       let kind = TypeParser::read_type(ctx, true)?;
 
-
-      for x in names { args.push(FieldType{
-        name: x, kind: kind, vis: Visibility::Public
-      })}
-      
+      for x in names { args.push(FieldType{name: x, kind, vis: Visibility::Private, attrs: vec![]}); }
 
       let e = ctx.lex.get()?;
 

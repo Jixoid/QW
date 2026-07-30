@@ -39,6 +39,7 @@ impl<'a> BasicCGen<'a> {
       crate::hir::types::HirTypeVari::ReferenceOf { .. } => "ptr".to_string(),
       crate::hir::types::HirTypeVari::Function(_) => "ptr".to_string(),
       crate::hir::types::HirTypeVari::Struct(_) => format!("%type.{}", ty_id.index()),
+      crate::hir::types::HirTypeVari::Iface(_) => format!("%type.{}", ty_id.index()),
       _ => panic!("unimplemented type in cgen: {:?}", ty.vari),
     }
   }
@@ -80,6 +81,8 @@ impl<'a> ICGen for BasicCGen<'a> {
           }
         }
         let _ = writeln!(out, "%type.{} = type {{ {} }}", i, fields_str);
+      } else if let crate::hir::types::HirTypeVari::Iface(_) = &t.vari {
+        let _ = writeln!(out, "%type.{} = type {{}}", i);
       }
     }
     let _ = writeln!(out, "");

@@ -5,33 +5,57 @@ pub struct DeclParser {}
 
 impl DeclParser {
 
-  pub fn read_decl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<IdentyId,  Message<'a>> {
+  pub fn read_decl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Option<IdentyId>,  Message<'a>> {
     let attrs = crate::front::attr_p::AttrParser::read_attributes(ctx);
     let v = MetaParser::read_visibility(ctx, defvis)?;
     
     let l = ctx.lex.get()?;
     let d = match l.str() {
-      "fun"    => Self::read_fun(ctx, v),
+      "fun"    => Self::read_fun(ctx, v, false),
       "using"  => Self::read_using(ctx, v),
       "struct" => Self::read_struct(ctx, v),
+      "iface"  => Self::read_iface(ctx, v),
       "let"    => Self::read_var(ctx, v, AccessKind::IMM),
       "var"    => Self::read_var(ctx, v, AccessKind::MUT),
-      "mod"    => Self::read_mod(ctx, v),
+      "mod"    => return Self::read_mod(ctx, v),
       _ => return Err(Message::error(l, String::from("unknown keyword: `{}`"), vec![l.string()])),
     }?;
 
     let id = ctx.mol.new_decl(d);
     crate::front::attr_p::AttrParser::attach_attributes(ctx, id, attrs);
-    Ok(id)
+    Ok(Some(id))
   }
 
 
-  pub fn read_fun<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+  pub fn read_fun<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility, in_struct: bool) -> Result<Decl<'a>,  Message<'a>> {
     let name = ctx.lex.get()?;
 
     let args = MetaParser::read_fun_args(ctx)?;
 
-    let _c = ctx.lex.get()?;
+    let mut is_static = false;
+    let mut is_const = false;
+    let mut _c = ctx.lex.get()?;
+    
+    // Parse function modifiers
+    while _c.str() != "->" && _c.str() != "{" && _c.str() != "`" && _c.str() != ";" {
+      if _c.str() == "static" {
+        if !in_struct {
+          return Err(Message::error(_c, String::from("`static` modifier is only allowed inside structs"), vec![]));
+        }
+        is_static = true;
+      } else if _c.str() == "const" {
+        if !in_struct {
+          return Err(Message::error(_c, String::from("`const` modifier is only allowed inside structs"), vec![]));
+        }
+        if is_static {
+          return Err(Message::error(_c, String::from("a function cannot be both `static` and `const`"), vec![]));
+        }
+        is_const = true;
+      } else {
+        return Err(Message::error(_c, String::from("unknown function modifier: `{}`"), vec![_c.string()]));
+      }
+      _c = ctx.lex.get()?;
+    }
     
     let ret = if _c.str() == "->" {
       TypeParser::read_type(ctx, true)?
@@ -57,6 +81,8 @@ impl DeclParser {
 
     let ty = TypeVari::Function(FunType{
       args,
+      is_static,
+      is_const,
       ret
     });
     let kind = ctx.mol.new_type(Type{state: crate::ast::TypeState::Unresolved, vari: ty});
@@ -85,6 +111,64 @@ impl DeclParser {
   pub fn read_struct<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
     let name = ctx.lex.get()?;
     let ty = TypeParser::read_struct(ctx)?;
+
+    let tyid = ctx.mol.new_type(ty);
+
+    if let TypeVari::Struct(s) = &ctx.mol.get_type(tyid).vari {
+      let funs = s.funs.clone();
+      for fun_id in funs {
+        let decl_word = ctx.mol.get_decl(fun_id).name.pos().cloned();
+        let f_kind = {
+          let decl = ctx.mol.get_decl(fun_id);
+          if let DeclVari::Fun(f) = &decl.vari {
+            Some(f.kind)
+          } else { None }
+        };
+
+        if let Some(f_kind) = f_kind {
+          let (is_static, is_const) = {
+            let fun_ty = ctx.mol.get_type(f_kind);
+            if let TypeVari::Function(ft) = &fun_ty.vari {
+              (ft.is_static, ft.is_const)
+            } else { (true, false) }
+          };
+          
+          if !is_static {
+            let acc = if is_const { AccessKind::IMM } else { AccessKind::MUT };
+            let ref_ty = ctx.mol.new_type(Type{
+              state: crate::ast::TypeState::Unresolved,
+              vari: TypeVari::ReferenceOf{sub: tyid, acc}
+            });
+            let self_word = if let Some(w) = decl_word {
+              crate::lexer::Word::new(w.mol, w.off, 4, crate::lexer::WordKind::Word)
+            } else {
+              crate::lexer::Word::new(ctx.lex.mol, 0, 4, crate::lexer::WordKind::Word)
+            };
+            
+            let fun_ty = ctx.mol.get_mut_type(f_kind);
+            if let TypeVari::Function(ft) = &mut fun_ty.vari {
+              ft.args.insert(0, FieldType{
+                name: self_word,
+                kind: ref_ty,
+                vis: Visibility::Private,
+                attrs: vec![],
+              });
+            }
+          }
+        }
+      }
+    }
+
+    let this = DeclVari::Using(
+      tyid
+    );
+
+    Ok(Decl::new(name, this, vis))
+  }
+
+  pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+    let name = ctx.lex.get()?;
+    let ty = TypeParser::read_iface(ctx)?;
 
     let tyid = ctx.mol.new_type(ty);
 
@@ -129,7 +213,7 @@ impl DeclParser {
     Ok(Decl::new(name, this, vis))
   }
 
-  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Option<IdentyId>,  Message<'a>> {
     let name = ctx.lex.get()?;
     MetaParser::expect_equal(ctx, ";")?;
 
@@ -143,7 +227,7 @@ impl DeclParser {
 
     let fpath_str = mod_path.to_str().unwrap_or("").to_string();
     if ctx.mi.farena.is_loaded(&fpath_str) {
-      return Err(Message::error(name, format!("circular dependency or multiple definitions of module: {}", mod_name), vec![]));
+      return Ok(None);
     }
 
     let mmap = match std::fs::read_to_string(&mod_path) {
@@ -176,7 +260,8 @@ impl DeclParser {
       else {
         new_ctx.lex.store(t);
         match DeclParser::read_decl(&mut new_ctx, &mut defvis) {
-          Ok(id) => decls.push(id),
+          Ok(Some(id)) => decls.push(id),
+          Ok(None) => {},
           Err(e) => {
             new_ctx.sum.add(e);
             let _ = MetaParser::pmr_global(&mut new_ctx);
@@ -186,7 +271,12 @@ impl DeclParser {
     }
 
     let this = DeclVari::Module(ModuleDecl { decls });
-    Ok(Decl::new(name, this, vis))
+    let decl = Decl::new(name, this, vis);
+    let mod_id = ctx.mol.new_decl(decl);
+
+    ctx.mol.add_to_module(mod_id);
+
+    Ok(None)
   }
 
 }

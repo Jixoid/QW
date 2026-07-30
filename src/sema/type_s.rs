@@ -119,7 +119,10 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         self.check_type(s.sub)?;
       }
       TypeVari::ReferenceOf{sub, ..} => {
-        self.check_type(*sub)?;
+        let sub_state = self.mol.get_type(*sub).state;
+        if sub_state != TypeState::Resolving {
+          self.check_type(*sub)?;
+        }
       }
       TypeVari::Function(f) => {
         for arg in &f.args {
@@ -132,6 +135,14 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           self.check_type(*b)?;
         }
         for v in &s.vars {
+          self.check_type(v.kind)?;
+        }
+        for f in &s.funs {
+          self.check_decl(*f)?;
+        }
+      }
+      TypeVari::Iface(i) => {
+        for v in &i.funs {
           self.check_type(v.kind)?;
         }
       }

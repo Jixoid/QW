@@ -13,6 +13,7 @@ pub struct FieldType<'a> {
   pub name: Word<'a>,
   pub kind: IdentyId,
   pub vis: Visibility,
+  pub attrs: Vec<crate::ast::Attribute<'a>>,
 }
 
 
@@ -65,6 +66,8 @@ pub struct PArrayType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunType<'a> {
   pub args: Vec<FieldType<'a>>,
+  pub is_static: bool,
+  pub is_const: bool,
   pub ret: IdentyId,
 }
 
@@ -73,6 +76,7 @@ pub struct FunType<'a> {
 pub struct StructType<'a> {
   pub base: Vec<IdentyId>,
   pub vars: Vec<FieldType<'a>>,
+  pub funs: Vec<IdentyId>,
 }
 
 
@@ -82,6 +86,12 @@ pub struct EnumType {
   pub iset: bool,
 }
 
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IfaceType<'a> {
+  pub funs: Vec<FieldType<'a>>,
+}
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +117,7 @@ pub enum TypeVari<'a> {
 
   Function(FunType<'a>),
   Struct(StructType<'a>),
+  Iface(IfaceType<'a>),
   Enum(EnumType),
 }
 
@@ -195,7 +206,17 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
           }
         }
 
-        write!(f, "{}", ") -> ".bright_black())?;
+        write!(f, "{}", ")".bright_black())?;
+        
+        if s.is_static {
+          write!(f, "{}", " static".green().bold())?;
+        }
+        
+        if s.is_const {
+          write!(f, "{}", " const".green().bold())?;
+        }
+
+        write!(f, "{}", " -> ".bright_black())?;
 
         write!(f, "{}", mol.get_type(s.ret).display(mol))?;
       }
@@ -205,7 +226,32 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
 
         for (i, x) in s.vars.iter().enumerate() {
           write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
-          if i + 1 < s.vars.len() {
+          if i + 1 < s.vars.len() || !s.funs.is_empty() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        for (i, x) in s.funs.iter().enumerate() {
+          let fun_decl = mol.get_decl(*x);
+          write!(f, "{} {}{}", fun_decl.vis, "fun ".blue().bold(), fun_decl.name.to_string().blue().bold())?;
+          
+          if let crate::ast::DeclVari::Fun(fdecl) = &fun_decl.vari {
+             write!(f, ": {}", mol.get_type(fdecl.kind).display(mol))?;
+          }
+          if i + 1 < s.funs.len() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+      TypeVari::Iface(s) => {
+        write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
+
+        for (i, x) in s.funs.iter().enumerate() {
+          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < s.funs.len() {
             write!(f, "{} ", ";".bright_black())?;
           }
         }
@@ -218,7 +264,15 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
           AccessKind::IMM => "imm ",
           AccessKind::MUT => "mut ",
         };
-        write!(f, "{}{}{}", "&".blue().bold(), acc_str.blue().bold(), mol.get_type(*sub).display(mol))?;
+        let sub_ty = mol.get_type(*sub);
+        match &sub_ty.vari {
+          TypeVari::Struct(_) | TypeVari::Iface(_) => {
+            write!(f, "{}{}{}", "&".blue().bold(), acc_str.blue().bold(), sub)?;
+          }
+          _ => {
+            write!(f, "{}{}{}", "&".blue().bold(), acc_str.blue().bold(), sub_ty.display(mol))?;
+          }
+        }
       }
 
       TypeVari::PointerOf{sub, acc} => {
@@ -226,7 +280,15 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
           AccessKind::IMM => "imm ",
           AccessKind::MUT => "mut ",
         };
-        write!(f, "{}{}{}", "^".blue().bold(), acc_str.blue().bold(), mol.get_type(*sub).display(mol))?;
+        let sub_ty = mol.get_type(*sub);
+        match &sub_ty.vari {
+          TypeVari::Struct(_) | TypeVari::Iface(_) => {
+            write!(f, "{}{}{}", "^".blue().bold(), acc_str.blue().bold(), sub)?;
+          }
+          _ => {
+            write!(f, "{}{}{}", "^".blue().bold(), acc_str.blue().bold(), sub_ty.display(mol))?;
+          }
+        }
       }
 
       _ => write!(f, "unknown")?,

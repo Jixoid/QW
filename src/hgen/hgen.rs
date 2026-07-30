@@ -14,6 +14,8 @@ pub struct HGen<'a,'d> {
   pub map_decl: HashMap<IdentyId, crate::hir::identy::HirId>,
   pub map_type: HashMap<IdentyId, crate::hir::identy::HirId>,
   pub local_scope: HashMap<String, crate::hir::identy::HirId>,
+  pub parent_path: HashMap<IdentyId, Vec<String>>,
+  pub parent_decl: HashMap<IdentyId, IdentyId>,
 }
 
 impl<'a,'d> HGen<'a,'d> {
@@ -26,12 +28,44 @@ impl<'a,'d> HGen<'a,'d> {
       map_decl: HashMap::new(),
       map_type: HashMap::new(),
       local_scope: HashMap::new(),
+      parent_path: HashMap::new(),
+      parent_decl: HashMap::new(),
     }
   }
 
   pub fn generate(mut self) -> HirModule {
+    let root_id = IdentyId::new(IdentyKind::Decl, 0, 0);
+    self.build_path_map(root_id, vec![]);
+    
     self.gen_module();
     self.hir_mol
+  }
+
+  fn build_path_map(&mut self, decl_id: IdentyId, mut current_path: Vec<String>) {
+    let decl = self.ast_mol.get_decl(decl_id);
+    let name_str = decl.name.to_string();
+    
+    current_path.push(name_str.clone());
+    self.parent_path.insert(decl_id, current_path.clone());
+
+    match &decl.vari {
+      DeclVari::Module(m) => {
+        for child_id in &m.decls {
+          self.parent_decl.insert(*child_id, decl_id);
+          self.build_path_map(*child_id, current_path.clone());
+        }
+      }
+      DeclVari::Using(ty_id) => {
+        let ty = self.ast_mol.get_type(*ty_id);
+        if let crate::ast::TypeVari::Struct(s) = &ty.vari {
+          for fun_id in &s.funs {
+            self.parent_decl.insert(*fun_id, decl_id);
+            self.build_path_map(*fun_id, current_path.clone());
+          }
+        }
+      }
+      _ => {}
+    }
   }
 
   fn gen_module(&mut self) {
@@ -66,7 +100,11 @@ impl<'a,'d> HGen<'a,'d> {
         };
         
         let decl_name_str = decl.name.to_string();
-        let mut final_name = self.mangler.mangle_global(&self.ast_mol.name, &decl_name_str);
+        
+        let path = self.parent_path.get(&ast_id).cloned().unwrap_or_else(|| vec![self.ast_mol.name.clone()]);
+        let parent_path = if path.len() > 1 { &path[0..path.len()-1] } else { &path[..] };
+        
+        let mut final_name = self.mangler.mangle_global(parent_path, &decl_name_str);
         let mut is_weak = false;
 
         if let Some(attrs) = self.ast_mol.map_attr.get(&ast_id) {
@@ -95,24 +133,10 @@ impl<'a,'d> HGen<'a,'d> {
         let ty_id = self.gen_type(f.kind);
         
         let decl_name_str = decl.name.to_string();
-        let mut final_name = self.mangler.mangle_func(&self.ast_mol.name, &decl_name_str);
-        let mut is_weak = false;
-
-        if let Some(attrs) = self.ast_mol.map_attr.get(&ast_id) {
-          for attr in attrs {
-            let key = attr.key.str();
-            if key == "mangle" {
-              if let Some(val) = &attr.val {
-                if val.str() == "bare" {
-                  final_name = decl_name_str.clone();
-                }
-              }
-            } else if key == "weak" {
-              is_weak = true;
-            }
-          }
-        }
-
+        
+        let path = self.parent_path.get(&ast_id).cloned().unwrap_or_else(|| vec![self.ast_mol.name.clone()]);
+        let parent_path = if path.len() > 1 { &path[0..path.len()-1] } else { &path[..] };
+        
         let (ret_ty, arg_tys) = {
           let hir_ty = self.hir_mol.get_type(ty_id);
           if let crate::hir::types::HirTypeVari::Function(fun) = &hir_ty.vari {
@@ -122,6 +146,47 @@ impl<'a,'d> HGen<'a,'d> {
             unreachable!("FunDecl kind must be Function type");
           }
         };
+
+        let mut final_name = self.mangler.mangle_func(parent_path, &decl_name_str, &arg_tys, &self.hir_mol);
+        let mut is_weak = false;
+
+        let mut mangle_bare = false;
+
+        if let Some(parent_id) = self.parent_decl.get(&ast_id) {
+          if let Some(attrs) = self.ast_mol.map_attr.get(parent_id) {
+            for attr in attrs {
+              let key = attr.key.str();
+              if key == "mangle" {
+                if let Some(val) = &attr.val {
+                  if val.str() == "bare" {
+                    mangle_bare = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if let Some(attrs) = self.ast_mol.map_attr.get(&ast_id) {
+          for attr in attrs {
+            let key = attr.key.str();
+            if key == "mangle" {
+              if let Some(val) = &attr.val {
+                if val.str() == "bare" {
+                  mangle_bare = true;
+                } else if val.str() == "itanium" {
+                  mangle_bare = false; // Override parent's bare
+                }
+              }
+            } else if key == "weak" {
+              is_weak = true;
+            }
+          }
+        }
+
+        if mangle_bare {
+          final_name = decl_name_str.clone();
+        }
 
         let h_func = crate::hir::func::HirFunc::new(final_name, ret_ty, arg_tys, is_weak);
         let func_hid = self.hir_mol.new_func(h_func.clone());
@@ -217,6 +282,33 @@ impl<'a,'d> HGen<'a,'d> {
           base: Vec::new(),
           vars,
         })
+      }
+      crate::ast::types::TypeVari::Iface(i) => {
+        let mut funs = Vec::new();
+        for f in &i.funs {
+          let kind = self.gen_type(f.kind);
+          funs.push(crate::hir::types::HirFieldType {
+            name: f.name.string(),
+            kind,
+          });
+        }
+        crate::hir::types::HirTypeVari::Iface(crate::hir::types::HirIfaceType {
+          funs,
+        })
+      }
+      crate::ast::types::TypeVari::ReferenceOf { sub, acc } => {
+        let hir_sub = self.gen_type(*sub);
+        crate::hir::types::HirTypeVari::ReferenceOf {
+          sub: hir_sub,
+          acc: *acc,
+        }
+      }
+      crate::ast::types::TypeVari::PointerOf { sub, acc } => {
+        let hir_sub = self.gen_type(*sub);
+        crate::hir::types::HirTypeVari::PointerOf {
+          sub: hir_sub,
+          acc: *acc,
+        }
       }
       _ => panic!("unimplemented type in hgen: {:?}", ty.vari),
     };

@@ -49,7 +49,8 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
         pctx.lex.store(t);
 
         match DeclParser::read_decl(&mut pctx, &mut defvis) {
-          Ok(r) => { pctx.mol.add_to_module(r); },
+          Ok(Some(r)) => { pctx.mol.add_to_module(r); },
+          Ok(None) => {},
           Err(e) => {
             pctx.sum.add(e);
 

@@ -42,8 +42,12 @@ pub struct ModInjection<'a> {
 }
 
 
-pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>) -> module::Result<()> {
+pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: &'mi ModInjection<'mi>) -> module::Result<()> {
   let (mut mol, mfd) = Module::new(path+"/src/main.qw", ModuleKind::Regular)?;
+  mol.name = project_name.clone();
+  if let Some(root_decl) = mol.list_decl.get_mut(0) {
+    root_decl.name = crate::ast::DeclName::Name(project_name.clone());
+  }
   mol.add_dep(&mi.sys.mol);
 
   let mut now: Instant;
@@ -120,22 +124,9 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, mi: &'mi ModInjection<'mi>
   
     /* time */ let cgen = now.elapsed();
 
-  let mangled_name = {
-    let mut out = String::new();
-    for part in mol.name.split(|c| c == ':' || c == '.' || c == '/') {
-      if !part.is_empty() {
-        out.push_str(&format!("{}{}", part.len(), part));
-      }
-    }
-    if out.is_empty() {
-      out = format!("{}{}", mol.name.len(), mol.name);
-    }
-    out
-  };
-
-  let out_dir = std::path::Path::new(info.path).join("build").join("mods");
+  let out_dir = std::path::Path::new(info.path).join("build");
   let _ = std::fs::create_dir_all(&out_dir);
-  let out_file = out_dir.join(format!("{}.ll", mangled_name));
+  let out_file = out_dir.join("out.ll");
   let _ = std::fs::write(&out_file, &bin);
 
 
@@ -161,12 +152,32 @@ pub fn build(info: BuildInfo) -> module::Result<()> {
     return Err(crate::control::module::CompilerError::Str("could not find `qw.conf`.".to_string()));
   }
 
+  let mmap = std::fs::read_to_string(&conf_path).map_err(|e| crate::control::module::CompilerError::Str(e.to_string()))?;
+  let mfd = crate::control::module::ModuleFile {
+    fpath: conf_path.to_str().unwrap_or("").to_string(),
+    mmap,
+    kind: crate::control::module::ModuleKind::Regular,
+  };
+  
+  let conf = crate::ds::Value::load_file(&mfd).map_err(|e| crate::control::module::CompilerError::Str(format!("{:?}", e)))?;
+
+  let mut project_name = String::from("main");
+  if let crate::ds::Value::Stc(stc) = conf {
+    for field in &stc.subs {
+      if field.name == "name" {
+        if let crate::ds::Value::Str(s) = &field.kind {
+          project_name = s.clone();
+        }
+      }
+    }
+  }
+
   let sys = SysFile::new()?;
   let farena = FileArena::new();
 
   let mi = ModInjection{sys: &sys, farena: &farena};
 
-  build_mod(&info, info.path.to_string(), &mi)?;
+  build_mod(&info, info.path.to_string(), project_name, &mi)?;
 
   Ok(())
 }
