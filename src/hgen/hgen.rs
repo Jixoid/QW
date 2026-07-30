@@ -3,7 +3,7 @@ use crate::hir::module::HirModule;
 use crate::ast::decls::{Decl, DeclVari};
 use crate::hir::global::HirGlobalVar;
 use std::collections::HashMap;
-use crate::hgen::mangle::{Mangler, ItaniumMangler};
+use crate::hgen::mangle::{Mangler, ItaniumMangler, QwMangler};
 
 pub struct HGen<'a,'d> {
   pub ast_mol: &'a Module<'a,'d>,
@@ -24,7 +24,7 @@ impl<'a,'d> HGen<'a,'d> {
     Self {
       ast_mol,
       hir_mol: HirModule::new(ast_mol.name.clone()),
-      mangler: Box::new(ItaniumMangler::new()),
+      mangler: Box::new(QwMangler::new()),
       map_decl: HashMap::new(),
       map_type: HashMap::new(),
       local_scope: HashMap::new(),
@@ -114,6 +114,10 @@ impl<'a,'d> HGen<'a,'d> {
               if let Some(val) = &attr.val {
                 if val.str() == "bare" {
                   final_name = decl_name_str.clone();
+                } else if val.str() == "itanium" {
+                  final_name = ItaniumMangler::new().mangle_global(parent_path, &decl_name_str);
+                } else if val.str() == "qw" {
+                  final_name = QwMangler::new().mangle_global(parent_path, &decl_name_str);
                 }
               }
             } else if key == "weak" {
@@ -137,17 +141,37 @@ impl<'a,'d> HGen<'a,'d> {
         let path = self.parent_path.get(&ast_id).cloned().unwrap_or_else(|| vec![self.ast_mol.name.clone()]);
         let parent_path = if path.len() > 1 { &path[0..path.len()-1] } else { &path[..] };
         
-        let (ret_ty, arg_tys) = {
+        let is_instance_method = {
+          let ast_ty = self.ast_mol.get_type(f.kind);
+          if let crate::ast::types::TypeVari::Function(ast_fun) = &ast_ty.vari {
+            if !ast_fun.is_static {
+               if let Some(parent_id) = self.parent_decl.get(&ast_id) {
+                 let parent_decl = self.ast_mol.get_decl(*parent_id);
+                 matches!(parent_decl.vari, crate::ast::decls::DeclVari::Using(_))
+               } else { false }
+            } else { false }
+          } else { false }
+        };
+
+        let (ret_ty, self_ty, arg_tys) = {
           let hir_ty = self.hir_mol.get_type(ty_id);
           if let crate::hir::types::HirTypeVari::Function(fun) = &hir_ty.vari {
-            let arg_tys: Vec<_> = fun.args.iter().map(|a| a.kind).collect();
-            (fun.ret, arg_tys)
+            let mut args = fun.args.iter();
+            let mut self_ty = None;
+            let mut arg_tys = Vec::new();
+            if is_instance_method {
+              if let Some(first_arg) = args.next() {
+                self_ty = Some(first_arg.kind);
+              }
+            }
+            arg_tys.extend(args.map(|a| a.kind));
+            (fun.ret, self_ty, arg_tys)
           } else {
             unreachable!("FunDecl kind must be Function type");
           }
         };
 
-        let mut final_name = self.mangler.mangle_func(parent_path, &decl_name_str, &arg_tys, &self.hir_mol);
+        let mut final_name = self.mangler.mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
         let mut is_weak = false;
 
         let mut mangle_bare = false;
@@ -160,6 +184,12 @@ impl<'a,'d> HGen<'a,'d> {
                 if let Some(val) = &attr.val {
                   if val.str() == "bare" {
                     mangle_bare = true;
+                  } else if val.str() == "itanium" {
+                    mangle_bare = false;
+                    final_name = ItaniumMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
+                  } else if val.str() == "qw" {
+                    mangle_bare = false;
+                    final_name = QwMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
                   }
                 }
               }
@@ -175,7 +205,11 @@ impl<'a,'d> HGen<'a,'d> {
                 if val.str() == "bare" {
                   mangle_bare = true;
                 } else if val.str() == "itanium" {
-                  mangle_bare = false; // Override parent's bare
+                  mangle_bare = false;
+                  final_name = ItaniumMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
+                } else if val.str() == "qw" {
+                  mangle_bare = false;
+                  final_name = QwMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
                 }
               }
             } else if key == "weak" {

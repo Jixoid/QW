@@ -37,7 +37,7 @@ impl<'f,'a,'d> Sema<'f,'a,'d> {
         if name == "mangle" {
           if let Some(val) = &attr.val {
             let v = val.str();
-            if v != "bare" && v != "itanium" {
+            if v != "bare" && v != "itanium" && v != "qw" {
               return Err(crate::diagnostic::Message::error(attr.key, format!("invalid value for mangle attribute: {}", v), vec![]));
             }
           } else {

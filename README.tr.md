@@ -1,6 +1,6 @@
 ## QW
 
-C++ ile yazılmış minimalistik bir derleyici önyüzü ve altyapısı. 
+Rust ile yazılmış minimalistik bir derleyici önyüzü ve altyapısı. 
 QAOS, düşük seviyeli kod üretimi için LLVM kullanan temiz ve modüler bir mimariye odaklanmaktadır.
 
 Diğer diller: [en](README.md)

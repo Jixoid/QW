@@ -1,8 +1,7 @@
 ## 1. General Principles and Character Set
 
 ### 1.1 Constraints and Linker Compatibility
-
-All mangled symbols produced by the QW compiler must be 100% compatible with the target operating system's linker (GNU ld, LLVM lld, MSVC link.exe). Symbols may only contain the following character set:
+All mangled symbols produced by the QW compiler must be 100% compatible with the target operating system's linker (GNU ld, LLVM lld, MSVC link.exe). Symbols may only contain the following[[Mangling Letters]] character set:
 
 - Alphabetic characters: `A-Z`, `a-z`
 - Numeric characters: `0-9`
@@ -24,21 +23,18 @@ The syntactic structure of symbols is precisely defined by the following Extende
 EBNF
 
 ```
-<mangled-name>      ::= "_qw_" <type-path> [ <interface-bound> ] [ <lifecycle-decl> | <method-decl> ] [ <special-suffix> ]
-<type-path>         ::= <scope>* <type-kind> <source-name> [ <generic-list> ]
+<mangled-name>      ::= "_qw_" [ <special-prefix> ] <type-path> [ <method-decl> ]
+
+<special-prefix>    ::= "vmt_" | "rtti_" | "init_" | "fini_"
+
+<type-path>         ::= <scope>* <source-name> [ <generic-list> ]
 
 <scope>             ::= <length> <identifier>
-<type-kind>         ::= "S" | "I" | "E" | "B"  (* Struct, Interface, Enum, Set *)
 <source-name>       ::= <length> <identifier>
 
-<interface-bound>   ::= "$" <type-path> "$"
-<lifecycle-decl>    ::= <ctor-decl> | <dtor-decl>
-<ctor-decl>         ::= "C" <argument-type>*
-<dtor-decl>         ::= "D"
-<method-decl>       ::= "F" <source-name> <self-type> <return-type> <argument-type>*
+<method-decl>       ::= "F" <source-name> <self-type> <return-type> <type>*
 
-<generic-list>      ::= "G" <type>+
-<special-suffix>    ::= "@vmt" | "@rtti"
+<generic-list>      ::= "G" <length> <type>*
 
 <type>              ::= <primitive-type> | <modifier>* <complex-type>
 <complex-type>      ::= "N" <type-path> "Z" | "x"
@@ -55,10 +51,10 @@ EBNF
 <identifier>        ::= [A-Za-z0-9_]+
 ```
 
-### 2.1 Lifecycle Declarations
+### 2.1 Special Prefixes
 
-- **C (Constructor)**: No naming is required because the struct it belongs to is already specified within `<type-path>`. Since the return type is always the object itself, it does not need a `<return-type>` slot either. It only takes zero or more `<argument-type>` entries to support overloading.
-- **D (Destructor)**: Since a struct can only have one destructor, cannot accept parameters, and cannot return a value, it is represented by a single `D` character.
+- **vmt_ / rtti_**: Generated for Virtual Method Tables and RTTI data associated with a type.
+- **init_ / fini_**: Generated for initialization (e.g. constructors) and finalization (e.g. destructors) routines.
 
 ## 3. Type System and Qualifiers
 
@@ -113,12 +109,9 @@ To optimize symbol sizes and prevent bloat, when a type in a function's argument
 
 ### 4.2 Generic Parsing Rule
 
-Generic lists are opened with the `G` character. If there are multiple generic parameters (`Map<i32, f64>`), the parameters are written consecutively without any separator: `GSi d`.
+Generic lists are opened with the `G` character, followed by the `<length>` (number of generic arguments). For example, if there are two generic parameters (`Map<i32, f64>`), it is encoded as `G2Sid`.
 
-The parser recognizes that a generic argument has ended in the following two scenarios:
-
-1. When the closing `Z` character of an `N...Z` block is encountered.
-2. At structural break points where the type path ends and a method (`F`) or interface bound (`$`) begins.
+The parser relies on this explicitly provided `<length>` to know exactly how many generic arguments to parse, avoiding ambiguity.
 
 ### 4.3 Static and Instance Method Uniformity
 
@@ -130,24 +123,21 @@ There is no special "static" flag in the method formula. The system naturally re
 
 ## 5. Comprehensive and Verified Example Scenarios
 
-### 5.1 Interface Method Overrides
-
-Consider a struct that overrides identically named methods from two different interfaces:
+### 5.1 Struct Method Example
 
 Code snippet
 
 ```
 // Module: std
-iface A { fun draw() -> void; }
-struct C: A { fun [A]draw() -> void {} }
+struct C { fun draw() -> void {} }
 ```
 
-- **Generated Symbol:** `_qw_3stdS1C$3stdI1A$F4drawvMxv`
+- **Generated Symbol:** `_qw_3std1CF4drawMxv`
     
 - **Symbol Breakdown:**
     
-    - `_qw_3stdS1C` $\rightarrow$ Main Struct: `std::C` (Struct)
-    - `$3stdI1A$` $\rightarrow$ Interface Lock: Overridden via `std::A` (Interface).
+    - `_qw_` $\rightarrow$ Standard prefix.
+    - `3std1C` $\rightarrow$ Main Type: `std::C`.
     - `F4draw` $\rightarrow$ 4-character method `draw`.
     - `Mx` $\rightarrow$ `<self>` parameter: mutable reference to the preceding struct (`mut C`).
     - `v` $\rightarrow$ Return type: `void`.
@@ -164,11 +154,12 @@ struct vector<T> {
 type veci = vector<i32>;
 ```
 
-- **Generated Symbol:** `_qw_3stdS6vectorGSiF5dummyvvRx`
+- **Generated Symbol:** `_qw_3std6vectorG1SiF5dummyvvRx`
     
 - **Symbol Breakdown:**
     
-    - `_qw_3stdS6vectorGSi` $\rightarrow$ Main Struct: `std::vector<i32>`
+    - `_qw_` $\rightarrow$ Standard prefix.
+    - `3std6vectorG1Si` $\rightarrow$ Main Type: `std::vector<i32>`, with `G1` indicating 1 generic parameter (`Si` for `i32`).
     - `F5dummy` $\rightarrow$ 5-character function `dummy`.
     - `v` $\rightarrow$ `<self>` field: `void` (Because the function is **static**, it takes no object).
     - `v` $\rightarrow$ Return type: `void`.
