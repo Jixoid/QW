@@ -62,10 +62,12 @@ fn test_ui_fail() {
 				.expect("Failed to execute qw command");
 
 			let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+			let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
+			let output_str = format!("{}\n{}", stdout, stderr);
             
 			// A simple heuristic: if it contains an error or fatal message.
-			if output.status.success() && !stdout.contains("error") && !stdout.contains("fatal") {
-				panic!("Test {:?} was expected to fail but succeeded without error/fatal messages.\nstdout:\n{}", path, stdout);
+			if output.status.success() && !output_str.contains("error") && !output_str.contains("fatal") {
+				panic!("Test {:?} was expected to fail but succeeded without error/fatal messages.\nstdout:\n{}\nstderr:\n{}", path, stdout, stderr);
 			}
 		}
 	}

@@ -62,8 +62,8 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     /* time */ let front = now.elapsed();
     
     // Summary
-    for m in sum.msgs() { println!("{}", m); }
-    if sum.sumall() > 0 { println!("{}", sum); }
+    for m in sum.msgs() { eprintln!("{}", m); }
+    if sum.sumall() > 0 { eprintln!("{}", sum); }
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
 
@@ -77,8 +77,8 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     /* time */ let sema = now.elapsed();
 
     // Summary
-    for m in sum.msgs() { println!("{}", m); }
-    if sum.sumall() > 0 { println!("{}", sum); }
+    for m in sum.msgs() { eprintln!("{}", m); }
+    if sum.sumall() > 0 { eprintln!("{}", sum); }
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
   
