@@ -1,0 +1,2 @@
+fun main() -> void {
+    let x = 10

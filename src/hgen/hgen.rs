@@ -3,13 +3,13 @@ use crate::hir::module::HirModule;
 use crate::ast::decls::{Decl, DeclVari};
 use crate::hir::global::HirGlobalVar;
 use std::collections::HashMap;
-use crate::hgen::mangle::{Mangler, ItaniumMangler, QwMangler};
+use crate::hgen::mangle::{Mangler, ManglerKind};
 
 pub struct HGen<'a,'d> {
   pub ast_mol: &'a Module<'a,'d>,
   pub hir_mol: HirModule,
 
-  pub mangler: Box<dyn Mangler>,
+  pub mangler: ManglerKind,
 
   pub map_decl: HashMap<IdentyId, crate::hir::identy::HirId>,
   pub map_type: HashMap<IdentyId, crate::hir::identy::HirId>,
@@ -20,11 +20,36 @@ pub struct HGen<'a,'d> {
 
 impl<'a,'d> HGen<'a,'d> {
 
+  pub fn get_attr_val(&self, id: IdentyId, name: &str) -> Option<String> {
+    if let Some(attrs) = self.ast_mol.map_attr.get(&id) {
+      for attr in attrs {
+        if attr.key.str() == name {
+          if let Some(val) = &attr.val {
+            return Some(val.str().to_string());
+          }
+        }
+      }
+    }
+    None
+  }
+
+  pub fn has_attr(&self, id: IdentyId, name: &str) -> bool {
+    if let Some(attrs) = self.ast_mol.map_attr.get(&id) {
+      for attr in attrs {
+        if attr.key.str() == name {
+          return true;
+        }
+      }
+    }
+    false
+  }
+
+  
   pub fn new(ast_mol: &'a Module<'a,'d>) -> Self {
     Self {
       ast_mol,
       hir_mol: HirModule::new(ast_mol.name.clone()),
-      mangler: Box::new(QwMangler::new()),
+      mangler: ManglerKind::Qw,
       map_decl: HashMap::new(),
       map_type: HashMap::new(),
       local_scope: HashMap::new(),
@@ -104,27 +129,31 @@ impl<'a,'d> HGen<'a,'d> {
         let path = self.parent_path.get(&ast_id).cloned().unwrap_or_else(|| vec![self.ast_mol.name.clone()]);
         let parent_path = if path.len() > 1 { &path[0..path.len()-1] } else { &path[..] };
         
-        let mut final_name = self.mangler.mangle_global(parent_path, &decl_name_str);
-        let mut is_weak = false;
+        let mut current_mangler = self.mangler;
 
-        if let Some(attrs) = self.ast_mol.map_attr.get(&ast_id) {
-          for attr in attrs {
-            let key = attr.key.str();
-            if key == "mangle" {
-              if let Some(val) = &attr.val {
-                if val.str() == "bare" {
-                  final_name = decl_name_str.clone();
-                } else if val.str() == "itanium" {
-                  final_name = ItaniumMangler::new().mangle_global(parent_path, &decl_name_str);
-                } else if val.str() == "qw" {
-                  final_name = QwMangler::new().mangle_global(parent_path, &decl_name_str);
-                }
-              }
-            } else if key == "weak" {
-              is_weak = true;
+        if let Some(parent_id) = self.parent_decl.get(&ast_id) {
+          if let Some(val) = self.get_attr_val(*parent_id, "mangle") {
+            match val.as_str() {
+              "bare" => current_mangler = ManglerKind::Bare,
+              "itanium" => current_mangler = ManglerKind::Itanium,
+              "qw" => current_mangler = ManglerKind::Qw,
+              _ => {}
             }
           }
         }
+
+        let is_weak = self.has_attr(ast_id, "weak");
+
+        if let Some(val) = self.get_attr_val(ast_id, "mangle") {
+          match val.as_str() {
+            "bare" => current_mangler = ManglerKind::Bare,
+            "itanium" => current_mangler = ManglerKind::Itanium,
+            "qw" => current_mangler = ManglerKind::Qw,
+            _ => {}
+          }
+        }
+        
+        let final_name = current_mangler.mangle_global(parent_path, &decl_name_str);
 
         let g = HirGlobalVar::new(final_name, ty_id, init_val, is_const, is_weak);
         let hid = self.hir_mol.new_global(g);
@@ -171,56 +200,31 @@ impl<'a,'d> HGen<'a,'d> {
           }
         };
 
-        let mut final_name = self.mangler.mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
-        let mut is_weak = false;
-
-        let mut mangle_bare = false;
+        let mut current_mangler = self.mangler;
 
         if let Some(parent_id) = self.parent_decl.get(&ast_id) {
-          if let Some(attrs) = self.ast_mol.map_attr.get(parent_id) {
-            for attr in attrs {
-              let key = attr.key.str();
-              if key == "mangle" {
-                if let Some(val) = &attr.val {
-                  if val.str() == "bare" {
-                    mangle_bare = true;
-                  } else if val.str() == "itanium" {
-                    mangle_bare = false;
-                    final_name = ItaniumMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
-                  } else if val.str() == "qw" {
-                    mangle_bare = false;
-                    final_name = QwMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
-                  }
-                }
-              }
+          if let Some(val) = self.get_attr_val(*parent_id, "mangle") {
+            match val.as_str() {
+              "bare" => current_mangler = ManglerKind::Bare,
+              "itanium" => current_mangler = ManglerKind::Itanium,
+              "qw" => current_mangler = ManglerKind::Qw,
+              _ => {}
             }
           }
         }
 
-        if let Some(attrs) = self.ast_mol.map_attr.get(&ast_id) {
-          for attr in attrs {
-            let key = attr.key.str();
-            if key == "mangle" {
-              if let Some(val) = &attr.val {
-                if val.str() == "bare" {
-                  mangle_bare = true;
-                } else if val.str() == "itanium" {
-                  mangle_bare = false;
-                  final_name = ItaniumMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
-                } else if val.str() == "qw" {
-                  mangle_bare = false;
-                  final_name = QwMangler::new().mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
-                }
-              }
-            } else if key == "weak" {
-              is_weak = true;
-            }
+        let is_weak = self.has_attr(ast_id, "weak");
+
+        if let Some(val) = self.get_attr_val(ast_id, "mangle") {
+          match val.as_str() {
+            "bare" => current_mangler = ManglerKind::Bare,
+            "itanium" => current_mangler = ManglerKind::Itanium,
+            "qw" => current_mangler = ManglerKind::Qw,
+            _ => {}
           }
         }
-
-        if mangle_bare {
-          final_name = decl_name_str.clone();
-        }
+        
+        let final_name = current_mangler.mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
 
         let h_func = crate::hir::func::HirFunc::new(final_name, ret_ty, arg_tys, is_weak);
         let func_hid = self.hir_mol.new_func(h_func.clone());

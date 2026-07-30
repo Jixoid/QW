@@ -56,3 +56,56 @@ impl<'f,'a,'d> Sema<'f,'a,'d> {
   }
 
 }
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::control::module::{ModuleFile, ModuleKind};
+  use crate::front::Front;
+  use crate::sys::SysFile;
+  use crate::route::build::{FileArena, ModInjection};
+
+  #[test]
+  fn test_sema_valid() {
+    let sys = SysFile::new().unwrap();
+    let farena = FileArena::new();
+    let mi = ModInjection { sys: &sys, farena: &farena };
+
+    let mut mol = Module::new_rtl("test".to_string()).unwrap();
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun main() -> void {}".to_string(),
+      kind: ModuleKind::Regular,
+    };
+    
+    mol.add_dep(&sys.mol);
+    let mut front = Front::new(&mut mol, &mfd).unwrap();
+    front.parse(&mi);
+    
+    let sum = Sema::new(&mut mol).check();
+    assert_eq!(sum.sumerr(), 0);
+  }
+
+  #[test]
+  fn test_sema_invalid() {
+    let sys = SysFile::new().unwrap();
+    let farena = FileArena::new();
+    let mi = ModInjection { sys: &sys, farena: &farena };
+
+    let mut mol = Module::new_rtl("test".to_string()).unwrap();
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun main() -> void { unknown_var = 5; }".to_string(), // undeclared variable
+      kind: ModuleKind::Regular,
+    };
+    
+    mol.add_dep(&sys.mol);
+    let mut front = Front::new(&mut mol, &mfd).unwrap();
+    front.parse(&mi);
+    
+    let sum = Sema::new(&mut mol).check();
+    assert!(sum.sumerr() > 0);
+  }
+
+}

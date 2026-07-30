@@ -469,3 +469,62 @@ impl<'a> Lexer<'a> {
   }
 
 }
+
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::control::module::{ModuleFile, ModuleKind};
+
+  #[test]
+  fn test_lexer_valid() {
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun main() -> void {}".to_string(),
+      kind: ModuleKind::Regular,
+    };
+    let mut lexer = Lexer::new_module(&mfd);
+    
+    let t1 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t1.str(), "fun");
+    
+    let t2 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t2.str(), "main");
+    
+    let t3 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t3.kind, WordKind::ParenBeg);
+    
+    let t4 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t4.kind, WordKind::ParenEnd);
+    
+    let t5 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t5.kind, WordKind::ArrowRigh);
+    
+    let t6 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t6.str(), "void");
+    
+    let t7 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t7.kind, WordKind::CurlyBracketBeg);
+    
+    let t8 = lexer.get().unwrap_or_else(|_| panic!());
+    assert_eq!(t8.kind, WordKind::CurlyBracketEnd);
+    
+    let err = match lexer.get() { Err(e) => e, _ => panic!() }; // EOF
+    assert!(err.to_string().contains("file finished"));
+  }
+
+  #[test]
+  fn test_lexer_eof_error() {
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun".to_string(),
+      kind: ModuleKind::Regular,
+    };
+    let mut lexer = Lexer::new_module(&mfd);
+    
+    lexer.get().unwrap_or_else(|_| panic!()); // fun
+    let err = match lexer.get() { Err(e) => e, _ => panic!() }; // EOF
+    assert!(err.to_string().contains("file finished"));
+  }
+}
+

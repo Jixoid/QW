@@ -68,3 +68,49 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
 
 }
 
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::sys::SysFile;
+  use crate::route::build::{FileArena, ModInjection};
+  use crate::control::module::ModuleKind;
+
+  #[test]
+  fn test_parser_valid() {
+    let sys = SysFile::new().unwrap();
+    let farena = FileArena::new();
+    let mi = ModInjection { sys: &sys, farena: &farena };
+
+    let mut mol = Module::new_rtl("test".to_string()).unwrap();
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun main() -> void {}".to_string(),
+      kind: ModuleKind::Regular,
+    };
+    
+    let mut front = Front::new(&mut mol, &mfd).unwrap();
+    let sum = front.parse(&mi);
+    
+    assert_eq!(sum.sumerr(), 0);
+  }
+
+  #[test]
+  fn test_parser_invalid() {
+    let sys = SysFile::new().unwrap();
+    let farena = FileArena::new();
+    let mi = ModInjection { sys: &sys, farena: &farena };
+
+    let mut mol = Module::new_rtl("test".to_string()).unwrap();
+    let mfd = ModuleFile {
+      fpath: "test.qw".to_string(),
+      mmap: "fun main() -> void { let x = 10 }".to_string(), // missing semicolon
+      kind: ModuleKind::Regular,
+    };
+    
+    let mut front = Front::new(&mut mol, &mfd).unwrap();
+    let sum = front.parse(&mi);
+    
+    assert!(sum.sumerr() > 0);
+  }
+}
