@@ -5,7 +5,7 @@ pub struct DeclParser {}
 
 impl DeclParser {
 
-  pub fn read_decl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Option<IdentyId>,  Message<'a>> {
+  pub fn read_decl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Vec<IdentyId>,  Message<'a>> {
     let attrs = crate::front::attr_p::AttrParser::read_attributes(ctx);
     let v = MetaParser::read_visibility(ctx, defvis)?;
     
@@ -15,15 +15,18 @@ impl DeclParser {
       "using"  => Self::read_using(ctx, v),
       "struct" => Self::read_struct(ctx, v),
       "iface"  => Self::read_iface(ctx, v),
+      "enum"   => Self::read_enum(ctx, v),
+      "flags"  => Self::read_flags(ctx, v),
       "let"    => Self::read_var(ctx, v, AccessKind::IMM),
       "var"    => Self::read_var(ctx, v, AccessKind::MUT),
+      "use"    => return Self::read_use(ctx, v),
       "mod"    => return Self::read_mod(ctx, v),
       _ => return Err(Message::error(l, String::from("unknown keyword: `{}`"), vec![l.string()])),
     }?;
 
     let id = ctx.mol.new_decl(d);
     crate::front::attr_p::AttrParser::attach_attributes(ctx, id, attrs);
-    Ok(Some(id))
+    Ok(vec![id])
   }
 
 
@@ -95,7 +98,7 @@ impl DeclParser {
     Ok(Decl::new(name, this, vis))
   }
 
-  pub fn read_using<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+  pub fn read_using<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
     let name = ctx.lex.get()?;
     MetaParser::expect_equal(ctx, "=")?;
     let ty = TypeParser::read_type(ctx, false)?;
@@ -108,73 +111,121 @@ impl DeclParser {
     Ok(Decl::new(name, this, vis))
   }
 
-  pub fn read_struct<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
-    let name = ctx.lex.get()?;
-    let ty = TypeParser::read_struct(ctx)?;
-
-    let tyid = ctx.mol.new_type(ty);
-
-    if let TypeVari::Struct(s) = &ctx.mol.get_type(tyid).vari {
-      let funs = s.funs.clone();
-      for fun_id in funs {
-        let decl_word = ctx.mol.get_decl(fun_id).name.pos().cloned();
-        let f_kind = {
-          let decl = ctx.mol.get_decl(fun_id);
-          if let DeclVari::Fun(f) = &decl.vari {
-            Some(f.kind)
-          } else { None }
-        };
-
-        if let Some(f_kind) = f_kind {
-          let (is_static, is_const) = {
-            let fun_ty = ctx.mol.get_type(f_kind);
-            if let TypeVari::Function(ft) = &fun_ty.vari {
-              (ft.is_static, ft.is_const)
-            } else { (true, false) }
-          };
+  pub fn read_use<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Vec<IdentyId>, Message<'a>> {
+    let mut base_path = Vec::new();
+    let mut w = ctx.lex.get()?;
+    
+    // Parse the base path
+    loop {
+      let is_word = match w.kind {
+        crate::lexer::WordKind::Word => true,
+        _ => false,
+      };
+      
+      if !is_word && w.str() != "*" && w.str() != "{" {
+        return Err(Message::error(w, String::from("expected identifier, `*` or `{` in use path"), vec![]));
+      }
+      
+      if w.str() == "*" {
+        // wildcard import
+        MetaParser::expect_equal(ctx, ";")?;
+        
+        let name = w;
+        let this = DeclVari::ImportWildcard(base_path, None);
+        let decl = Decl::new(name, this, vis);
+        let id = ctx.mol.new_decl(decl);
+        return Ok(vec![id]);
+      }
+      
+      if w.str() == "{" {
+        // multiple imports block
+        let mut ids = Vec::new();
+        loop {
+          let end_w = ctx.lex.get()?;
+          if end_w.str() == "}" { break; }
           
-          if !is_static {
-            let acc = if is_const { AccessKind::IMM } else { AccessKind::MUT };
-            let ref_ty = ctx.mol.new_type(Type{
-              state: crate::ast::TypeState::Unresolved,
-              vari: TypeVari::ReferenceOf{sub: tyid, acc}
-            });
-            let self_word = if let Some(w) = decl_word {
-              crate::lexer::Word::new(w.mol, w.off, 4, crate::lexer::WordKind::Word)
-            } else {
-              crate::lexer::Word::new(ctx.lex.mol, 0, 4, crate::lexer::WordKind::Word)
-            };
-            
-            let fun_ty = ctx.mol.get_mut_type(f_kind);
-            if let TypeVari::Function(ft) = &mut fun_ty.vari {
-              ft.args.insert(0, FieldType{
-                name: self_word,
-                kind: ref_ty,
-                vis: Visibility::Private,
-                attrs: vec![],
-              });
-            }
+          if end_w.kind != crate::lexer::WordKind::Word {
+            return Err(Message::error(end_w, String::from("expected identifier in use block"), vec![]));
+          }
+          
+          let name = end_w;
+          let mut full_path = base_path.clone();
+          let name_idx = ctx.mol.nick_map.iter().position(|r| r == name.str()).unwrap_or_else(|| {
+            ctx.mol.nick_map.push(name.str().to_string());
+            ctx.mol.nick_map.len() - 1
+          }) as u32;
+          
+          full_path.push((name_idx, name));
+          
+          let this = DeclVari::Import(full_path, None);
+          let decl = Decl::new(name, this, vis);
+          ids.push(ctx.mol.new_decl(decl));
+          
+          let next_w = ctx.lex.get()?;
+          if next_w.str() == "}" { break; }
+          if next_w.str() != "," {
+            return Err(Message::error(next_w, String::from("expected `,` or `}`"), vec![]));
           }
         }
+        MetaParser::expect_equal(ctx, ";")?;
+        return Ok(ids);
+      }
+      
+      // it's an identifier
+      let name_idx = ctx.mol.nick_map.iter().position(|r| r == w.str()).unwrap_or_else(|| {
+        ctx.mol.nick_map.push(w.str().to_string());
+        ctx.mol.nick_map.len() - 1
+      }) as u32;
+      
+      base_path.push((name_idx, w));
+      
+      let next_w = ctx.lex.get()?;
+      if next_w.str() == ";" {
+        let name = base_path.last().unwrap().1;
+        let this = DeclVari::Import(base_path, None);
+        let decl = Decl::new(name, this, vis);
+        let id = ctx.mol.new_decl(decl);
+        return Ok(vec![id]);
+      } else if next_w.str() == "::" {
+        w = ctx.lex.get()?;
+      } else {
+        return Err(Message::error(next_w, String::from("expected `::` or `;` in use path"), vec![]));
       }
     }
+  }
 
-    let this = DeclVari::Using(
-      tyid
-    );
+  pub fn read_struct<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
+    let name = ctx.lex.get()?;
+    let tyid = TypeParser::read_struct(ctx)?;
+
+    let this = DeclVari::Using(tyid);
 
     Ok(Decl::new(name, this, vis))
   }
 
-  pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>,  Message<'a>> {
+  pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
     let name = ctx.lex.get()?;
-    let ty = TypeParser::read_iface(ctx)?;
+    let tyid = TypeParser::read_iface(ctx)?;
 
-    let tyid = ctx.mol.new_type(ty);
+    let this = DeclVari::Using(tyid);
 
-    let this = DeclVari::Using(
-      tyid
-    );
+    Ok(Decl::new(name, this, vis))
+  }
+
+  pub fn read_enum<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
+    let name = ctx.lex.get()?;
+    let tyid = TypeParser::read_enum(ctx)?;
+
+    let this = DeclVari::Using(tyid);
+
+    Ok(Decl::new(name, this, vis))
+  }
+
+  pub fn read_flags<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
+    let name = ctx.lex.get()?;
+    let tyid = TypeParser::read_flags(ctx)?;
+
+    let this = DeclVari::Using(tyid);
 
     Ok(Decl::new(name, this, vis))
   }
@@ -213,7 +264,7 @@ impl DeclParser {
     Ok(Decl::new(name, this, vis))
   }
 
-  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Option<IdentyId>,  Message<'a>> {
+  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Vec<IdentyId>,  Message<'a>> {
     let name = ctx.lex.get()?;
     MetaParser::expect_equal(ctx, ";")?;
 
@@ -227,7 +278,7 @@ impl DeclParser {
 
     let fpath_str = mod_path.to_str().unwrap_or("").to_string();
     if ctx.mi.farena.is_loaded(&fpath_str) {
-      return Ok(None);
+      return Ok(vec![]);
     }
 
     let mmap = match std::fs::read_to_string(&mod_path) {
@@ -260,8 +311,11 @@ impl DeclParser {
       else {
         new_ctx.lex.store(t);
         match DeclParser::read_decl(&mut new_ctx, &mut defvis) {
-          Ok(Some(id)) => decls.push(id),
-          Ok(None) => {},
+          Ok(ids) => {
+            for id in ids {
+              decls.push(id);
+            }
+          },
           Err(e) => {
             new_ctx.sum.add(e);
             let _ = MetaParser::pmr_global(&mut new_ctx);
@@ -276,7 +330,7 @@ impl DeclParser {
 
     ctx.mol.add_to_module(mod_id);
 
-    Ok(None)
+    Ok(vec![])
   }
 
 }

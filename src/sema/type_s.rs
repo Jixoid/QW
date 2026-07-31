@@ -1,30 +1,12 @@
 use crate::diagnostic::{Message, MsgKind};
+use crate::sema::scopemng::ScopeManager;
 use super::Sema;
 use crate::control::identy::IdentyId;
 use crate::ast::{TypeVari, TypeState};
 use std::mem;
 
+
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
-
-  pub fn find_type_global(&mut self, name: &str) -> Option<IdentyId> {
-    if let Some(id) = self.scp.find_type(name) {
-      return Some(id);
-    }
-    
-
-    for m in self.mol.imod.iter() {
-      for decl in &m.list_decl {
-        if let crate::ast::Visibility::Public = decl.vis {
-          if let crate::ast::DeclVari::Using(ty_id) = decl.vari {
-            if decl.name.to_string() == name {
-              return Some(self.mol.localize(m, ty_id));
-            }
-          }
-        }
-      }
-    }
-    None
-  }
 
   pub fn check_type(&mut self, id: IdentyId) -> Result<(), Message<'a>> {
     self.check_attributes(id)?;
@@ -49,87 +31,48 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
       TypeVari::Nick(s) => {
         let name_str = self.mol.nick_map[s.idx as usize].clone();
         
-        if let Some(res_id) = self.find_type_global(&name_str) {
+        if let Some(res_id) = ScopeManager::find(self.mol, self.mol.get_mod(), &vec![name_str.clone()]) {
           vari = TypeVari::Path(vec![res_id]);
         } else {
           return Err(Message::new(MsgKind::Error, s.pos, "unknown type".to_string(), vec![name_str]));
         }
       }
+      
       TypeVari::UnresolvedPath(p) => {
         let mut path_strs = Vec::new();
         for n in p.iter() {
           path_strs.push(self.mol.nick_map[n.idx as usize].clone());
         }
         
-        let mut current_decls: Vec<IdentyId> = Vec::new();
-        if let crate::ast::DeclVari::Module(m) = &self.mol.list_decl[0].vari {
-          current_decls = m.decls.clone();
-        }
-
-        let mut res_id = None;
-        let mut current_idx = 0;
-        
-        while current_idx < p.len() {
-          let target_name = &path_strs[current_idx];
-          let mut found = false;
-          
-          for d_id in &current_decls {
-            let decl = self.mol.get_decl(*d_id);
-            if decl.name.to_string() == *target_name {
-              if current_idx == p.len() - 1 {
-                if let crate::ast::DeclVari::Using(ty_id) = decl.vari {
-                  res_id = Some(ty_id);
-                  found = true;
-                  break;
-                }
-              } else {
-                if let crate::ast::DeclVari::Module(m) = &decl.vari {
-                  current_decls = m.decls.clone();
-                  found = true;
-                  break;
-                }
-              }
-            }
-          }
-          
-          if !found {
-            if current_idx == 0 {
-              if let Some(id) = self.find_type_global(target_name) {
-                if p.len() == 1 {
-                  res_id = Some(id);
-                  found = true;
-                }
-              }
-            }
-            if !found { break; }
-          }
-          current_idx += 1;
-        }
-
-        if let Some(id) = res_id {
-          vari = TypeVari::Path(vec![id]);
+        if let Some(res_id) = ScopeManager::find(self.mol, self.mol.get_mod(), &path_strs) {
+          vari = TypeVari::Path(vec![res_id]);
         } else {
           return Err(Message::new(MsgKind::Error, p[0].pos, "unknown type path".to_string(), path_strs));
         }
       }
+      
       TypeVari::PointerOf{sub, ..} | TypeVari::ZArrayOf(sub) => {
         self.check_type(*sub)?;
       }
+      
       TypeVari::PArrayOf(s) => {
         self.check_type(s.sub)?;
       }
+      
       TypeVari::ReferenceOf{sub, ..} => {
         let sub_state = self.mol.get_type(*sub).state;
         if sub_state != TypeState::Resolving {
           self.check_type(*sub)?;
         }
       }
+      
       TypeVari::Function(f) => {
         for arg in &f.args {
           self.check_type(arg.kind)?;
         }
         self.check_type(f.ret)?;
       }
+      
       TypeVari::Struct(s) => {
         for b in &s.base {
           self.check_type(*b)?;
@@ -141,17 +84,46 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           self.check_decl(*f)?;
         }
       }
+      
       TypeVari::Iface(i) => {
         for v in &i.funs {
           self.check_type(v.kind)?;
         }
       }
+      
       TypeVari::Path(path) => {
         for p in path {
           self.check_type(*p)?;
         }
       }
-      _ => {}
+      
+      TypeVari::Enum(e) => {
+        let mut names = std::collections::HashSet::new();
+        for v in &e.vals {
+          if !names.insert(v.name.str()) {
+            return Err(Message::error(v.name, format!("enum variants must be unique, found duplicate `{}`", v.name.str()), vec![]));
+          }
+        }
+      }
+
+      TypeVari::Flags(e) => {
+        let mut names = std::collections::HashSet::new();
+        for v in &e.vals {
+          if !names.insert(v.name.str()) {
+            return Err(Message::error(v.name, format!("enum variants must be unique, found duplicate `{}`", v.name.str()), vec![]));
+          }
+        }
+      }
+
+      TypeVari::ISize | TypeVari::USize |
+      TypeVari::I8 | TypeVari::I16 | TypeVari::I32 | TypeVari::I64 | TypeVari::I128 |
+      TypeVari::U8 | TypeVari::U16 | TypeVari::U32 | TypeVari::U64 | TypeVari::U128 |
+      TypeVari::F16 | TypeVari::F32 | TypeVari::F64 | TypeVari::F128 |
+      TypeVari::Bool |
+      TypeVari::Char |
+      TypeVari::Ptr |
+      TypeVari::Void |
+      TypeVari::Null => {}
     }
 
     let ty = self.mol.get_mut_type(id);
@@ -178,40 +150,11 @@ fn get_word_from_type<'a>(mol: &crate::control::Module<'a, '_>, id: IdentyId) ->
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
   pub fn get_ty_void(&mut self) -> IdentyId {
-    self.find_type_global("void").expect("void type missing")
+    ScopeManager::find(self.mol, self.mol.get_mod(), &["sys".to_string(), "void".to_string()]).expect("void type missing")
   }
   
   pub fn get_ty_bool(&mut self) -> IdentyId {
-    self.find_type_global("bool").expect("bool type missing")
-  }
-
-  pub fn find_var_global(&mut self, name: &str) -> Option<IdentyId> {
-    if let Some(id) = self.scp.find_var(name) {
-      return Some(id);
-    }
-    
-    // Check current module globals
-    for decl in &self.mol.list_decl {
-      if let crate::ast::DeclVari::Var(v) = &decl.vari {
-        if decl.name.to_string() == name {
-          return Some(v.kind);
-        }
-      }
-    }
-
-    // Check dependencies
-    for m in self.mol.imod.iter() {
-      for decl in &m.list_decl {
-        if let crate::ast::Visibility::Public = decl.vis {
-          if let crate::ast::DeclVari::Var(v) = &decl.vari {
-            if decl.name.to_string() == name {
-              return Some(self.mol.localize(m, v.kind));
-            }
-          }
-        }
-      }
-    }
-    None
+    ScopeManager::find(self.mol, self.mol.get_mod(), &["sys".to_string(), "bool".to_string()]).expect("bool type missing")
   }
 
 }

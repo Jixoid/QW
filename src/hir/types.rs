@@ -37,7 +37,6 @@ pub struct HirStructType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirEnumType {
   pub vals: Vec<HirFieldCons>,
-  pub iset: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

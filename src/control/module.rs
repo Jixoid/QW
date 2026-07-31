@@ -119,6 +119,7 @@ impl<'a,'d> Module<'a,'d> {
     Ok(mol)
   }
 
+
   pub fn add_to_module(&mut self, id: IdentyId) {
     if let DeclVari::Module(ref mut m) = self.list_decl[0].vari {
       m.decls.push(id);
@@ -161,11 +162,6 @@ impl<'a,'d> Module<'a,'d> {
   }
 
 
-  pub fn get_mut_type(&mut self, id: IdentyId) -> &mut Type<'a> {
-    assert_eq!(id.module(), 0, "Cannot mutate types from another module");
-    &mut self.list_type[id.index() as usize]
-  }
-
   pub fn get_type(&self, id: IdentyId) -> &Type<'a> {
     debug_assert!(id.kind() == IdentyKind::Type);
     
@@ -182,18 +178,6 @@ impl<'a,'d> Module<'a,'d> {
     &modl.list_decl[id.index() as usize]
   }
 
-  pub fn get_mut_decl(&mut self, id: IdentyId) -> &mut Decl<'a> {
-    debug_assert!(id.kind() == IdentyKind::Decl);
-    assert_eq!(id.module(), 0, "Cannot mutate decl from another module");
-    &mut self.list_decl[id.index() as usize]
-  }
-
-  pub fn get_mut_expr(&mut self, id: IdentyId) -> &mut Expr<'a> {
-    debug_assert!(id.kind() == IdentyKind::Expr);
-    debug_assert!(id.module() == 0, "Cannot get mut expr from other modules");
-    &mut self.list_expr[id.index() as usize]
-  }
-
   pub fn get_expr(&self, id: IdentyId) -> &Expr<'a> {
     debug_assert!(id.kind() == IdentyKind::Expr);
     
@@ -208,6 +192,30 @@ impl<'a,'d> Module<'a,'d> {
     let modl: &Module<'a,'a> = if id.module() == 0 { self } else { &self.imod[(id.module()-1) as usize] };
 
     &modl.list_stmt[id.index() as usize]
+  }
+
+
+  pub fn get_mut_type(&mut self, id: IdentyId) -> &mut Type<'a> {
+    assert_eq!(id.module(), 0, "Cannot mutate types from another module");
+    &mut self.list_type[id.index() as usize]
+  }
+
+  pub fn get_mut_decl(&mut self, id: IdentyId) -> &mut Decl<'a> {
+    debug_assert!(id.kind() == IdentyKind::Decl);
+    assert_eq!(id.module(), 0, "Cannot mutate decl from another module");
+    &mut self.list_decl[id.index() as usize]
+  }
+
+  pub fn get_mut_expr(&mut self, id: IdentyId) -> &mut Expr<'a> {
+    debug_assert!(id.kind() == IdentyKind::Expr);
+    debug_assert!(id.module() == 0, "Cannot get mut expr from other modules");
+    &mut self.list_expr[id.index() as usize]
+  }
+
+  pub fn get_mut_stmt(&mut self, id: IdentyId) -> &mut Stmt<'a> {
+    debug_assert!(id.kind() == IdentyKind::Stmt);
+    debug_assert!(id.module() == 0, "Cannot mutate stmt from another module");
+    &mut self.list_stmt[id.index() as usize]
   }
 
 
@@ -246,7 +254,6 @@ impl<'a,'d> Module<'a,'d> {
 
     return IdentyId::new(IdentyKind::Stmt, 0, idx);
   }
-
 
 }
 

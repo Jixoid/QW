@@ -14,7 +14,6 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
       StmtVari::Let(l) => {
         let kind = l.kind;
         let init = l.init;
-        let name = l.name.str().to_string();
         
         let mut resolved_type = kind;
 
@@ -30,7 +29,9 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
           }
         }
         
-        self.scp.add_var(name, resolved_type);
+        if let StmtVari::Let(ml) = &mut self.mol.get_mut_stmt(id).vari {
+          ml.kind = resolved_type;
+        }
       },
       StmtVari::Ret(r) => {
         let val = r.val;

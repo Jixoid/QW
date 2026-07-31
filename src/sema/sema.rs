@@ -1,11 +1,11 @@
-use crate::{control::Module, diagnostic::Summary};
+use crate::{control::{IdentyId, Module}, diagnostic::Summary};
 
 
 
 pub struct Sema<'f, 'a, 'd:'a> {
   pub mol: &'f mut Module<'a,'d>,
   pub sum: Summary<'a>,
-  pub scp: super::scopemng::ScopeManager,
+  pub visitors: Vec<IdentyId>,
 }
 
 
@@ -13,9 +13,8 @@ impl<'f,'a,'d> Sema<'f,'a,'d> {
 
   pub fn new(mol: &'f mut Module<'a,'d>) -> Self {
     let sum = Summary::new();
-    let scp = super::scopemng::ScopeManager::new();
 
-    Self{mol, sum, scp}
+    Self{mol, sum, visitors: Vec::new()}
   }
 
 
@@ -75,7 +74,7 @@ mod tests {
     let mut mol = Module::new_rtl("test".to_string()).unwrap();
     let mfd = ModuleFile {
       fpath: "test.qw".to_string(),
-      mmap: "fun main() -> void {}".to_string(),
+      mmap: "fun main() -> sys::void {}".to_string(),
       kind: ModuleKind::Regular,
     };
     
@@ -84,7 +83,7 @@ mod tests {
     front.parse(&mi);
     
     let sum = Sema::new(&mut mol).check();
-    assert_eq!(sum.sumerr(), 0);
+    for m in sum.msgs() { println!("{}", m); } assert_eq!(sum.sumerr(), 0);
   }
 
   #[test]
@@ -96,7 +95,7 @@ mod tests {
     let mut mol = Module::new_rtl("test".to_string()).unwrap();
     let mfd = ModuleFile {
       fpath: "test.qw".to_string(),
-      mmap: "fun main() -> void { unknown_var = 5; }".to_string(), // undeclared variable
+      mmap: "fun main() -> sys::void { unknown_var = 5; }".to_string(), // undeclared variable
       kind: ModuleKind::Regular,
     };
     

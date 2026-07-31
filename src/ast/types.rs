@@ -25,11 +25,10 @@ pub enum IntegerValue {
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FieldCons {
+pub struct FieldCons<'a> {
   pub val: IntegerValue,
-  pub name: String,
+  pub name: Word<'a>,
 }
-
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,9 +80,14 @@ pub struct StructType<'a> {
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnumType {
-  pub vals: Vec<FieldCons>,
-  pub iset: bool,
+pub struct EnumType<'a> {
+  pub vals: Vec<FieldCons<'a>>,
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlagsType<'a> {
+  pub vals: Vec<FieldCons<'a>>,
 }
 
 
@@ -118,7 +122,8 @@ pub enum TypeVari<'a> {
   Function(FunType<'a>),
   Struct(StructType<'a>),
   Iface(IfaceType<'a>),
-  Enum(EnumType),
+  Enum(EnumType<'a>),
+  Flags(FlagsType<'a>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -291,10 +296,41 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
         }
       }
 
+      TypeVari::Enum(e) => {
+        write!(f, "{}{}", "enum".blue().bold(), "{".bright_black())?;
+        for (i, x) in e.vals.iter().enumerate() {
+          write!(f, "{}", x.name.str().blue().bold())?;
+          let val_str = match x.val {
+            IntegerValue::SIG(v) => format!("{}", v),
+            IntegerValue::USG(v) => format!("{}", v),
+          };
+          write!(f, " {} {}", "=".bright_black(), val_str.green())?;
+          if i + 1 < e.vals.len() {
+            write!(f, "{} ", ",".bright_black())?;
+          }
+        }
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+      TypeVari::Flags(e) => {
+        write!(f, "{}{}", "flags".blue().bold(), "{".bright_black())?;
+        for (i, x) in e.vals.iter().enumerate() {
+          write!(f, "{}", x.name.str().blue().bold())?;
+          let val_str = match x.val {
+            IntegerValue::SIG(v) => format!("{}", v),
+            IntegerValue::USG(v) => format!("{}", v),
+          };
+          write!(f, " {} {}", "=".bright_black(), val_str.green())?;
+          if i + 1 < e.vals.len() {
+            write!(f, "{} ", ",".bright_black())?;
+          }
+        }
+        write!(f, "{}", "}".bright_black())?;
+      }
+
       _ => write!(f, "unknown")?,
     }
 
     Ok(())
   }
 }
-

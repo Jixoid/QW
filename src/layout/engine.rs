@@ -110,6 +110,9 @@ impl<'a, 'd> LayoutEngine<'a, 'd> {
 			TypeVari::Enum(..) => {
 				TypeLayout::new(4, 4, false)
 			}
+			TypeVari::Flags(..) => {
+				TypeLayout::new(4, 4, false)
+			}
 			TypeVari::Iface(_) => {
 				TypeLayout::new(0, 1, false)
 			}

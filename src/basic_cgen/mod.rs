@@ -42,6 +42,7 @@ impl<'a> BasicCGen<'a> {
 			crate::hir::types::HirTypeVari::PointerOf { .. } => ctx.ptr_type(AddressSpace::default()).into(),
 			crate::hir::types::HirTypeVari::ReferenceOf { .. } => ctx.ptr_type(AddressSpace::default()).into(),
 			crate::hir::types::HirTypeVari::Function(_) => ctx.ptr_type(AddressSpace::default()).into(),
+			crate::hir::types::HirTypeVari::Enum(_) => ctx.i64_type().into(),
 			crate::hir::types::HirTypeVari::Struct(_) | crate::hir::types::HirTypeVari::Iface(_) => structs.get(&ty_id).unwrap().clone().into(),
 			_ => panic!("unimplemented type in cgen: {:?}", ty.vari),
 		}

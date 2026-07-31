@@ -80,6 +80,7 @@ pub enum ExprVari<'a> {
   If(IfExpr),
   Match(MatchExpr),
   Nick(NickExpr<'a>),
+  Path(Vec<NickExpr<'a>>),
   Binary(BinaryExpr),
   Unary(UnaryExpr),
   Number(NumberExpr<'a>),
@@ -167,6 +168,20 @@ impl<'a,'m> fmt::Display for ExprDisplay<'a,'m> {
           "\"".yellow().bold(),
           s.idx
         )?;
+      }
+      ExprVari::Path(p) => {
+        write!(f, "{} ", "path".blue().bold())?;
+        for (i, x) in p.iter().enumerate() {
+          write!(f, "{}{}{}{:x}",
+            "\"".yellow().bold(),
+            mol.nick_map[x.idx as usize].yellow().bold(),
+            "\"".yellow().bold(),
+            x.idx
+          )?;
+          if i + 1 < p.len() {
+            write!(f, "{}", "::".bright_black())?;
+          }
+        }
       }
       ExprVari::Binary(s) => {
         write!(f, "{} {} {:?} {}",

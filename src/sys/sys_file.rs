@@ -34,7 +34,8 @@ impl<'a> SysFile<'a> {
 
     let mut add_prim = |name: &str, vari: TypeVari<'a>| -> IdentyId {
       let id = mol.new_type(Type{state: TypeState::Resolved, vari});
-      mol.new_decl(Decl::new_str(name.to_string(), DeclVari::Using(id), Visibility::Public));
+      let did = mol.new_decl(Decl::new_str(name.to_string(), DeclVari::Using(id), Visibility::Public));
+      mol.add_to_module(did);
       id
     };
 
@@ -62,10 +63,14 @@ impl<'a> SysFile<'a> {
     let ty_ptr = add_prim("ptr", TypeVari::Ptr);
     drop(add_prim);
 
-    mol.new_decl(Decl::new_str("true".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
-    mol.new_decl(Decl::new_str("false".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
-    mol.new_decl(Decl::new_str("null".to_string(), DeclVari::Var(VarDecl{kind: ty_null, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
-    mol.new_decl(Decl::new_str("is_debug".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    let d1 = mol.new_decl(Decl::new_str("true".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    mol.add_to_module(d1);
+    let d2 = mol.new_decl(Decl::new_str("false".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    mol.add_to_module(d2);
+    let d3 = mol.new_decl(Decl::new_str("null".to_string(), DeclVari::Var(VarDecl{kind: ty_null, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    mol.add_to_module(d3);
+    let d4 = mol.new_decl(Decl::new_str("is_debug".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    mol.add_to_module(d4);
 
 
     Ok(SysFile{

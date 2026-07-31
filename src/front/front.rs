@@ -41,6 +41,19 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
     let mut pctx = ParserContext::new(self, mi);
     let mut defvis = Visibility::Private;
 
+    if pctx.mol.name != "sys" {
+      let sys_idx = pctx.mol.nick_map.iter().position(|r| r == "sys").unwrap_or_else(|| {
+        pctx.mol.nick_map.push("sys".to_string());
+        pctx.mol.nick_map.len() - 1
+      }) as u32;
+
+      let dummy_word = crate::lexer::Word::new(pctx.lex.mol, 0, 0, crate::lexer::WordKind::Word);
+      let path = vec![(sys_idx, dummy_word)];
+      let decl = crate::ast::Decl::new_str(String::new(), crate::ast::DeclVari::ImportWildcard(path, None), Visibility::Private);
+      let id = pctx.mol.new_decl(decl);
+      pctx.mol.add_to_module(id);
+    }
+
     loop {
       let t = pctx.lex.lex();
 
@@ -49,8 +62,11 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
         pctx.lex.store(t);
 
         match DeclParser::read_decl(&mut pctx, &mut defvis) {
-          Ok(Some(r)) => { pctx.mol.add_to_module(r); },
-          Ok(None) => {},
+          Ok(ids) => {
+            for r in ids {
+              pctx.mol.add_to_module(r);
+            }
+          },
           Err(e) => {
             pctx.sum.add(e);
 

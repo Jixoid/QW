@@ -87,7 +87,22 @@ impl ExprParser {
         }
 
         if t.kind == crate::lexer::WordKind::Word {
-          let expr = ExprVari::Nick(NickExpr::new(ctx.mol, t));
+          let mut path = vec![NickExpr::new(ctx.mol, t)];
+          loop {
+            let next = ctx.lex.get()?;
+            if next.str() == "::" {
+              let nxt_word = ctx.lex.get()?;
+              path.push(NickExpr::new(ctx.mol, nxt_word));
+            } else {
+              ctx.lex.store(next);
+              break;
+            }
+          }
+          let expr = if path.len() == 1 {
+            ExprVari::Nick(path.pop().unwrap())
+          } else {
+            ExprVari::Path(path)
+          };
           return Ok(ctx.mol.new_expr(Expr { vari: expr, ty: crate::control::IdentyId::new(crate::control::IdentyKind::Null, 0, 0) }));
         }
 

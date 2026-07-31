@@ -50,11 +50,13 @@ pub struct FunDecl {
 
 
 #[derive(Debug)]
-pub enum DeclVari {
+pub enum DeclVari<'a> {
   Module(ModuleDecl),
   Var(VarDecl),
   Fun(FunDecl),
   Using(IdentyId),
+  Import(Vec<(u32, Word<'a>)>, Option<IdentyId>),
+  ImportWildcard(Vec<(u32, Word<'a>)>, Option<IdentyId>),
 }
 
 
@@ -86,15 +88,15 @@ impl<'a> DeclName<'a> {
 #[derive(Debug)]
 pub struct Decl<'a> {
   pub name: DeclName<'a>,
-  pub vari: DeclVari,
+  pub vari: DeclVari<'a>,
   pub vis: Visibility,
 }
 
 impl<'a> Decl<'a> {
 
-  pub fn new(name: Word<'a>, vari: DeclVari, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Word(name), vari, vis} }
+  pub fn new(name: Word<'a>, vari: DeclVari<'a>, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Word(name), vari, vis} }
   
-  pub fn new_str(name: String, vari: DeclVari, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Name(name), vari, vis} }
+  pub fn new_str(name: String, vari: DeclVari<'a>, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Name(name), vari, vis} }
 
 }
 
@@ -119,8 +121,12 @@ impl<'a> fmt::Display for Decl<'a> {
 
         write!(f, "{}", "]".bright_black())?;
       }
-      DeclVari::Var(_s)       => write!(f, "{} {} {}", self.vis, "var".blue().bold(), self.name.white().bold())?,
-      DeclVari::Fun(s)   => {
+      
+      DeclVari::Var(_s) => {
+        write!(f, "{} {} {}", self.vis, "var".blue().bold(), self.name.white().bold())?;
+      }
+      
+      DeclVari::Fun(s) => {
         write!(f, "{} {} {}{} {} {} {}",
           self.vis,
           "fun".blue().bold(),
@@ -131,7 +137,8 @@ impl<'a> fmt::Display for Decl<'a> {
           s.blok,
         )?;
       }
-      DeclVari::Using(s)    => {
+      
+      DeclVari::Using(s) => {
         write!(f, "{} {} {} {} {}",
           self.vis,
           "using".blue().bold(),
@@ -139,6 +146,14 @@ impl<'a> fmt::Display for Decl<'a> {
           "=".bright_black(),
           s
         )?;
+      }
+      
+      DeclVari::Import(_path, _) => {
+        write!(f, "{} {} {}", self.vis, "use".blue().bold(), self.name.white().bold())?;
+      }
+      
+      DeclVari::ImportWildcard(_path, _) => {
+        write!(f, "{} {} {}::*", self.vis, "use".blue().bold(), self.name.white().bold())?;
       }
     };
     

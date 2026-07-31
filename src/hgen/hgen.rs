@@ -68,6 +68,7 @@ impl<'a,'d> HGen<'a,'d> {
     self.hir_mol
   }
 
+  
   fn build_path_map(&mut self, decl_id: IdentyId, mut current_path: Vec<String>) {
     let decl = self.ast_mol.get_decl(decl_id);
     let name_str = decl.name.to_string();
@@ -250,7 +251,7 @@ impl<'a,'d> HGen<'a,'d> {
           }
         }
       }
-      DeclVari::Module(_) => {},
+      DeclVari::Module(_) | DeclVari::Import(_, _) | DeclVari::ImportWildcard(_, _) => {},
     }
   }
 
@@ -294,6 +295,7 @@ impl<'a,'d> HGen<'a,'d> {
       crate::ast::types::TypeVari::Ptr => crate::hir::types::HirTypeVari::Ptr,
       crate::ast::types::TypeVari::Void => crate::hir::types::HirTypeVari::Void,
       crate::ast::types::TypeVari::Null => crate::hir::types::HirTypeVari::Null,
+      
       crate::ast::types::TypeVari::Function(fun) => {
         let mut args = Vec::new();
         for arg in &fun.args {
@@ -307,6 +309,7 @@ impl<'a,'d> HGen<'a,'d> {
           ret: self.gen_type(fun.ret),
         })
       }
+      
       crate::ast::types::TypeVari::Struct(s) => {
         let mut vars = Vec::new();
         for f in &s.vars {
@@ -321,6 +324,7 @@ impl<'a,'d> HGen<'a,'d> {
           vars,
         })
       }
+      
       crate::ast::types::TypeVari::Iface(i) => {
         let mut funs = Vec::new();
         for f in &i.funs {
@@ -334,6 +338,39 @@ impl<'a,'d> HGen<'a,'d> {
           funs,
         })
       }
+      
+      crate::ast::types::TypeVari::Enum(e) => {
+        let mut vals = Vec::new();
+        for v in &e.vals {
+          vals.push(crate::hir::types::HirFieldCons {
+            val: match v.val {
+              crate::ast::types::IntegerValue::SIG(i) => i as i128,
+              crate::ast::types::IntegerValue::USG(u) => u as i128,
+            },
+            name: v.name.string(),
+          });
+        }
+        crate::hir::types::HirTypeVari::Enum(crate::hir::types::HirEnumType {
+          vals,
+        })
+      }
+      
+      crate::ast::types::TypeVari::Flags(e) => {
+        let mut vals = Vec::new();
+        for v in &e.vals {
+          vals.push(crate::hir::types::HirFieldCons {
+            val: match v.val {
+              crate::ast::types::IntegerValue::SIG(i) => i as i128,
+              crate::ast::types::IntegerValue::USG(u) => u as i128,
+            },
+            name: v.name.string(),
+          });
+        }
+        crate::hir::types::HirTypeVari::Enum(crate::hir::types::HirEnumType {
+          vals,
+        })
+      }
+      
       crate::ast::types::TypeVari::ReferenceOf { sub, acc } => {
         let hir_sub = self.gen_type(*sub);
         crate::hir::types::HirTypeVari::ReferenceOf {
@@ -341,6 +378,7 @@ impl<'a,'d> HGen<'a,'d> {
           acc: *acc,
         }
       }
+      
       crate::ast::types::TypeVari::PointerOf { sub, acc } => {
         let hir_sub = self.gen_type(*sub);
         crate::hir::types::HirTypeVari::PointerOf {
@@ -348,6 +386,7 @@ impl<'a,'d> HGen<'a,'d> {
           acc: *acc,
         }
       }
+      
       _ => panic!("unimplemented type in hgen: {:?}", ty.vari),
     };
 
@@ -401,7 +440,6 @@ impl<'a,'d> HGen<'a,'d> {
 
     match &expr.vari {
       crate::ast::ExprVari::Number(n) => {
-
         let num_str = n.pos.str();
         if let Ok(i) = num_str.parse::<i64>() {
           crate::hir::value::HirValue::ConstInt(i)
@@ -411,6 +449,25 @@ impl<'a,'d> HGen<'a,'d> {
           crate::hir::value::HirValue::ConstInt(0)
         }
       }
+
+      crate::ast::ExprVari::Path(p) => {
+        if p.len() == 2 {
+          let variant_name = self.ast_mol.nick_map[p[1].idx as usize].clone();
+          let ty = self.ast_mol.get_type(expr.ty);
+
+          if let crate::ast::types::TypeVari::Enum(e) = &ty.vari {
+            if let Some(val) = e.vals.iter().find(|v| v.name.str() == variant_name) {
+              let val_int = match val.val {
+                crate::ast::types::IntegerValue::SIG(i) => i,
+                crate::ast::types::IntegerValue::USG(u) => u as i64,
+              };
+              return crate::hir::value::HirValue::ConstInt(val_int);
+            }
+          }
+        }
+        crate::hir::value::HirValue::ConstInt(0)
+      }
+
       crate::ast::ExprVari::Nick(n) => {
         let name = self.ast_mol.nick_map[n.idx as usize].clone();
 
@@ -459,6 +516,7 @@ impl<'a,'d> HGen<'a,'d> {
           panic!("Nick {} not found in local_scope or global decls. HIR requires Nicks to be fully resolved.", name);
         }
       }
+      
       crate::ast::ExprVari::Block(b) => {
         let mut last_val = crate::hir::value::HirValue::Null;
         for (i, stmt_id) in b.ctn.iter().enumerate() {
@@ -473,6 +531,7 @@ impl<'a,'d> HGen<'a,'d> {
         }
         last_val
       }
+      
       crate::ast::ExprVari::If(i) => {
         let cond_val = self.gen_expr(i.cond, func_hid, current_block);
 
@@ -560,6 +619,7 @@ impl<'a,'d> HGen<'a,'d> {
           crate::hir::value::HirValue::Null
         }
       }
+      
       crate::ast::ExprVari::Binary(b) => {
         let lhs_val = self.gen_expr(b.lhs, func_hid, current_block);
         let rhs_val = self.gen_expr(b.rhs, func_hid, current_block);
@@ -584,7 +644,9 @@ impl<'a,'d> HGen<'a,'d> {
         self.hir_mol.get_block_mut(*current_block).push_instr(instr_hid);
         crate::hir::value::HirValue::Reg(instr_hid)
       }
+      
       _ => todo!("hgen: unimplemented expr: {:?}", expr.vari),
     }
   }
+  
 }
