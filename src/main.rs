@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use owo_colors::OwoColorize;
 
@@ -31,6 +31,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum MainCommands {
   /// Create a new qw package
+  #[command(alias = "i")]
   Init {
     /// Directory to initialize
     #[arg(long, default_value = ".")]
@@ -49,11 +50,16 @@ pub enum MainCommands {
     no_git: bool,
   },
 
+  #[command(alias = "b")]
   /// Compile the package
   Build {
     /// Directory to build
     #[arg(long, default_value = ".")]
     path: PathBuf,
+
+    /// Target build destination
+    #[arg(long, default_value = "debug")]
+    variant: BuildVariant,
 
     /// Display execution times for each compiler phase
     #[arg(long)]
@@ -72,6 +78,7 @@ pub enum MainCommands {
     hir_dump: bool,
   },
 
+  #[command(alias = "c")]
   /// Check the package for errors
   Check {
     /// Directory to check
@@ -91,16 +98,25 @@ pub enum MainCommands {
     ast_dump: bool,
   },
 
+  #[command(alias = "d")]
   /// Manage project dependencies
   Deps {
     #[command(subcommand)]
     command: DepsCommands,
+  },
+  
+  #[command(alias = "p")]
+  /// Project package tool
+  Pkg {
+    #[command(subcommand)]
+    command: PkgCommands,
   },
 }
 
 
 #[derive(Subcommand)]
 pub enum DepsCommands {
+  #[command(alias = "s")]
   /// Sync dependencies
   Sync {
     /// Project path
@@ -108,6 +124,7 @@ pub enum DepsCommands {
     path: PathBuf,
   },
 
+  #[command(alias = "a")]
   /// Add a new dependency 
   Add {
     /// Project path
@@ -121,6 +138,7 @@ pub enum DepsCommands {
     url: String,
   },
 
+  #[command(alias = "r")]
   /// Remove a dependency
   Rm {
     /// Project path
@@ -130,6 +148,31 @@ pub enum DepsCommands {
     /// Name of the dependency to remove
     name: String,
   },
+}
+
+
+#[derive(Subcommand)]
+pub enum PkgCommands {
+  #[command(alias = "i")]
+  /// Install to system
+  Install {
+    /// Project path
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Install to user local
+    #[arg(short, long)]
+    force: bool
+  }
+}
+
+
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum BuildVariant {
+  Debug,
+  Release,
+  RelWithDebInfo,
 }
 
 
@@ -164,9 +207,10 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Build{path, verbose, timings, ast_dump, hir_dump} => {
+    MainCommands::Build{path, variant, verbose, timings, ast_dump, hir_dump} => {
       let info = build::BuildInfo {
         path: path.to_str().unwrap_or(""),
+        variant,
         verbose,
         timings,
         ast_dump,
@@ -189,6 +233,7 @@ fn main_cmd(cmd: MainCommands) {
     MainCommands::Check{path, verbose, timings, ast_dump} => {
       let info = route::build::BuildInfo {
         path: path.to_str().unwrap_or(""),
+        variant: BuildVariant::Debug,
         verbose,
         timings,
         ast_dump,
@@ -208,10 +253,8 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Deps{command} => {
-      deps_cmd(command);
-    }
-
+    MainCommands::Deps{command} => { deps_cmd(command); }
+    MainCommands::Pkg {command } => { pkg_cmd(command); }
   }
 }
 
@@ -223,6 +266,7 @@ fn deps_cmd(cmd: DepsCommands) {
       let info = route::deps::sync::SyncInfo {
         path: path.to_str().unwrap_or("").to_string(),
       };
+
       match route::deps::sync::sync(info) {
         Ok(()) => (),
         Err(e) => {
@@ -238,6 +282,7 @@ fn deps_cmd(cmd: DepsCommands) {
         name,
         url,
       };
+
       match route::deps::add::add(info) {
         Ok(()) => (),
         Err(e) => {
@@ -252,6 +297,7 @@ fn deps_cmd(cmd: DepsCommands) {
         path: path.to_str().unwrap_or("").to_string(),
         name,
       };
+
       match route::deps::rm::rm(info) {
         Ok(()) => (),
         Err(e) => {
@@ -261,5 +307,27 @@ fn deps_cmd(cmd: DepsCommands) {
       }
     }
   
+  }
+}
+
+
+fn pkg_cmd(cmd: PkgCommands) {
+  match cmd {
+
+    PkgCommands::Install{path, force} => {
+      let info = route::pkg::install::InstallInfo {
+        path: path.to_str().unwrap_or("").to_string(),
+        force,
+      };
+
+      match route::pkg::install::install(info) {
+        Ok(()) => (),
+        Err(e) => {
+          eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), e);
+          std::process::exit(1);
+        }
+      }
+    }
+
   }
 }

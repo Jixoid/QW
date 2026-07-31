@@ -1,11 +1,12 @@
 use std::time::Instant;
 
 use owo_colors::OwoColorize;
-use crate::{control::module::{self, Module, ModuleKind}, front::Front, sema::Sema, sys::SysFile};
+use crate::{BuildVariant, control::module::{self, Module, ModuleKind}, front::Front, sema::Sema, sys::SysFile};
 
 
 pub struct BuildInfo<'a> {
   pub path: &'a str,
+  pub variant: BuildVariant,
   pub verbose: bool,
   pub timings: bool,
   pub ast_dump: bool,
@@ -104,7 +105,8 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
     
-    let hir = crate::hgen::HGen::new(&mol).generate();
+    let is_debug = matches!(info.variant, crate::BuildVariant::Debug);
+    let hir = crate::hgen::HGen::new(&mol, is_debug).generate();
     
     /* time */ let hgen = now.elapsed();
 

@@ -12,6 +12,22 @@ fn get_qw_binary() -> PathBuf {
 	path
 }
 
+
+#[test]
+fn test_ui_cli() {
+	println!("Testing PASS");
+	let output = Command::new(get_qw_binary())
+		.arg("--help")
+		.output()
+		.expect("Failed to execute qw command");
+
+	if !output.status.success() {
+		let stdout = String::from_utf8_lossy(&output.stdout);
+		let stderr = String::from_utf8_lossy(&output.stderr);
+		panic!("Test was expected to pass but failed.\nstdout:\n{}\nstderr:\n{}", stdout, stderr);
+	}
+}
+
 #[test]
 fn test_ui_pass() {
 	let pass_dir = PathBuf::from("tests/ui/pass");

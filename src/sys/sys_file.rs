@@ -65,6 +65,7 @@ impl<'a> SysFile<'a> {
     mol.new_decl(Decl::new_str("true".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
     mol.new_decl(Decl::new_str("false".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
     mol.new_decl(Decl::new_str("null".to_string(), DeclVari::Var(VarDecl{kind: ty_null, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
+    mol.new_decl(Decl::new_str("is_debug".to_string(), DeclVari::Var(VarDecl{kind: ty_bool, comptime: true, init: None, acck: crate::ast::types::AccessKind::IMM}), Visibility::Public));
 
 
     Ok(SysFile{
