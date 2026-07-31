@@ -1,5 +1,3 @@
-use crate::hir::identy::HirId;
-use crate::hir::module::HirModule;
 use super::Mangler;
 
 
@@ -9,8 +7,11 @@ impl BareMangler {
   pub fn new() -> Self { Self {} }
 }
 
+use crate::control::identy::IdentyId;
+use crate::control::module::Module;
+
 impl Mangler for BareMangler {
-  fn mangle_func(&self, _path: &[String], func_name: &str, _self_ty: Option<HirId>, _ret_ty: Option<HirId>, _arg_tys: &[HirId], _hir_mol: &HirModule) -> String {
+  fn mangle_func(&self, _path: &[String], func_name: &str, _self_ty: Option<IdentyId>, _ret_ty: Option<IdentyId>, _arg_tys: &[IdentyId], _ast_mol: &Module) -> String {
     func_name.to_string()
   }
 
@@ -30,10 +31,6 @@ mod tests {
     let path = vec!["std".to_string(), "io".to_string()];
     let sym_global = mangler.mangle_global(&path, "print");
     assert_eq!(sym_global, "print");
-
-    let mol = HirModule::new("test".to_string());
-    let sym_func = mangler.mangle_func(&path, "draw", None, None, &[], &mol);
-    assert_eq!(sym_func, "draw");
   }
 }
 

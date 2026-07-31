@@ -1,5 +1,4 @@
 use super::identy::HirId;
-use crate::ast::types::AccessKind;
 
 use owo_colors::OwoColorize;
 
@@ -34,32 +33,30 @@ pub struct HirStructType {
   pub vars: Vec<HirFieldType>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HirEnumType {
-  pub vals: Vec<HirFieldCons>,
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum HirFloatSize {
+  F16, F32, F64, F128,
 }
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirTypeVari {
-  ISize, USize,
-  I8, I16, I32, I64, I128,
-  U8, U16, U32, U64, U128,
-  F16, F32, F64, F128,
+  Int{bit: u32, sig: bool},
+  Float{bit: HirFloatSize},
   Bool,
   Char,
   Ptr,
   Void,
   Null,
 
-  PointerOf{ sub: HirId, acc: AccessKind },
-  ReferenceOf{ sub: HirId, acc: AccessKind },
   ZArrayOf(HirId),
   PArrayOf(HirPArrayType),
 
   Function(HirFunType),
   Struct(HirStructType),
   Iface(HirIfaceType),
-  Enum(HirEnumType),
+  SelfType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,37 +74,24 @@ use core::fmt;
 impl fmt::Display for HirTypeVari {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      HirTypeVari::ISize => write!(f, "{}", "isize".blue().bold())?,
-      HirTypeVari::USize => write!(f, "{}", "usize".blue().bold())?,
-      HirTypeVari::I8 => write!(f, "{}", "i8".blue().bold())?,
-      HirTypeVari::I16 => write!(f, "{}", "i16".blue().bold())?,
-      HirTypeVari::I32 => write!(f, "{}", "i32".blue().bold())?,
-      HirTypeVari::I64 => write!(f, "{}", "i64".blue().bold())?,
-      HirTypeVari::I128 => write!(f, "{}", "i128".blue().bold())?,
-      HirTypeVari::U8 => write!(f, "{}", "u8".blue().bold())?,
-      HirTypeVari::U16 => write!(f, "{}", "u16".blue().bold())?,
-      HirTypeVari::U32 => write!(f, "{}", "u32".blue().bold())?,
-      HirTypeVari::U64 => write!(f, "{}", "u64".blue().bold())?,
-      HirTypeVari::U128 => write!(f, "{}", "u128".blue().bold())?,
-      HirTypeVari::F16 => write!(f, "{}", "f16".blue().bold())?,
-      HirTypeVari::F32 => write!(f, "{}", "f32".blue().bold())?,
-      HirTypeVari::F64 => write!(f, "{}", "f64".blue().bold())?,
-      HirTypeVari::F128 => write!(f, "{}", "f128".blue().bold())?,
+      HirTypeVari::Int{bit, sig} => write!(f, "{}", format!("{}{}", if *sig {"i"} else {"u"}, *bit).blue().bold())?,
+      HirTypeVari::Float{bit} => {
+        write!(f, "{}", match *bit {
+          HirFloatSize::F16  => "f16",
+          HirFloatSize::F32  => "f32",
+          HirFloatSize::F64  => "f64",
+          HirFloatSize::F128 => "f128",
+        }.blue().bold())?;
+      }
+
       HirTypeVari::Bool => write!(f, "{}", "bool".blue().bold())?,
       HirTypeVari::Char => write!(f, "{}", "char".blue().bold())?,
       HirTypeVari::Ptr => write!(f, "{}", "ptr".blue().bold())?,
       HirTypeVari::Void => write!(f, "{}", "void".blue().bold())?,
       HirTypeVari::Null => write!(f, "{}", "null".blue().bold())?,
-      HirTypeVari::PointerOf{sub, acc} => {
-        let acc_str = match acc { AccessKind::IMM => "imm", AccessKind::MUT => "mut" };
-        write!(f, "^{} {}", acc_str.green().bold(), sub)?;
-      }
-      HirTypeVari::ReferenceOf{sub, acc} => {
-        let acc_str = match acc { AccessKind::IMM => "imm", AccessKind::MUT => "mut" };
-        write!(f, "&{} {}", acc_str.green().bold(), sub)?;
-      }
       HirTypeVari::ZArrayOf(sub) => write!(f, "[{}]", sub)?,
       HirTypeVari::PArrayOf(p) => write!(f, "[{},{}]", p.size, p.sub)?,
+      
       HirTypeVari::Function(fun) => {
         write!(f, "{}{}", "fun".blue().bold(), "(".bright_black())?;
         for (i, arg) in fun.args.iter().enumerate() {
@@ -116,6 +100,7 @@ impl fmt::Display for HirTypeVari {
         }
         write!(f, "{} {}", ") ->".bright_black(), fun.ret)?;
       }
+      
       HirTypeVari::Struct(s) => {
         write!(f, "{}{}", "struct".blue().bold(), "{".bright_black())?;
 
@@ -126,9 +111,7 @@ impl fmt::Display for HirTypeVari {
 
         write!(f, "{}", "}".bright_black())?;
       }
-      HirTypeVari::Enum(_) => {
-        write!(f, "enum {{ .. }}")?;
-      }
+      
       HirTypeVari::Iface(s) => {
         write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
 
@@ -139,6 +122,8 @@ impl fmt::Display for HirTypeVari {
 
         write!(f, "{}", "}".bright_black())?;
       }
+      
+      HirTypeVari::SelfType => write!(f, "{}", "Self".blue().bold().underline())?,
     };
 
     Ok(())

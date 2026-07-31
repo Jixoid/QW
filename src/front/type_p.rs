@@ -13,6 +13,7 @@ impl TypeParser {
       "fun"    => Self::read_fun(ctx)?,
       "struct" => Self::read_struct(ctx)?,
       "iface"  => Self::read_iface(ctx)?,
+      "trait"  => Self::read_trait(ctx)?,
       "enum"   => Self::read_enum(ctx)?,
       "flags"  => Self::read_flags(ctx)?,
       "&" => {
@@ -46,6 +47,9 @@ impl TypeParser {
         let ty = Type{state: crate::ast::TypeState::Unresolved, vari: TypeVari::PointerOf{sub, acc}};
 
         ctx.mol.new_type(ty)
+      }
+      "Self" => {
+        ctx.mol.new_type(Type{state: crate::ast::TypeState::Resolved, vari: TypeVari::SelfType})
       }
       _ => {
         let mut path = vec![NickType::new(ctx.mol, n)];
@@ -245,6 +249,45 @@ impl TypeParser {
     }
 
     let this = TypeVari::Iface(IfaceType{ funs });
+    let ty = Type{state: crate::ast::TypeState::Unresolved, vari: this};
+
+    Ok(ctx.mol.new_type(ty))
+  }
+
+  pub fn read_trait<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<IdentyId, Message<'a>> {
+    MetaParser::expect_equal(ctx, "{")?;
+
+    let mut funs: Vec<FieldType<'a>> = Vec::new();
+
+    'ml: loop {
+      let t = ctx.lex.get()?;
+      if t.str() == "}" { break 'ml; } else { ctx.lex.store(t); }
+      
+      let fn_kw = ctx.lex.get()?;
+      if fn_kw.str() != "fun" {
+        return Err(Message::error(fn_kw, String::from("expected `fun` keyword in iface, found `{}`"), vec![fn_kw.string()]));
+      }
+
+      let name = ctx.lex.get()?;
+      let args = MetaParser::read_fun_args(ctx)?;
+      
+      let _c = ctx.lex.get()?;
+      let ret = if _c.str() == "->" {
+        TypeParser::read_type(ctx, true)?
+      } else {
+        ctx.lex.store(_c);
+        ctx.mol.localize(&ctx.mi.sys.mol, ctx.mi.sys.ty_void)
+      };
+
+      MetaParser::expect_equal(ctx, ";")?;
+
+      let ty = TypeVari::Function(FunType{ args, is_static: false, is_const: false, ret });
+      let kind = ctx.mol.new_type(Type{state: crate::ast::TypeState::Unresolved, vari: ty});
+
+      funs.push(FieldType{name, kind, vis: Visibility::Public, attrs: vec![]});
+    }
+
+    let this = TypeVari::Trait(TraitType{ funs });
     let ty = Type{state: crate::ast::TypeState::Unresolved, vari: this};
 
     Ok(ctx.mol.new_type(ty))

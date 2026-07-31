@@ -57,14 +57,14 @@ impl<'a, 'd> LayoutEngine<'a, 'd> {
 		let ty = self.module.get_type(ty_id);
 		
 		let layout = match &ty.vari {
-			TypeVari::Void | TypeVari::Null => TypeLayout::new(0, 1, false),
-			TypeVari::Bool | TypeVari::I8 | TypeVari::U8 | TypeVari::Char => TypeLayout::new(1, 1, false),
-			TypeVari::I16 | TypeVari::U16 | TypeVari::F16 => TypeLayout::new(2, 2, false),
-			TypeVari::I32 | TypeVari::U32 | TypeVari::F32 => TypeLayout::new(4, 4, false),
-			TypeVari::I64 | TypeVari::U64 | TypeVari::F64 => TypeLayout::new(8, 8, false),
-			TypeVari::I128 | TypeVari::U128 | TypeVari::F128 => TypeLayout::new(16, 16, false),
-			
-			TypeVari::ISize | TypeVari::USize | TypeVari::Ptr | 
+			TypeVari::Void | TypeVari::Null | TypeVari::SelfType => TypeLayout::new(0, 1, false),
+			TypeVari::Bool | TypeVari::Char => TypeLayout::new(1, 1, false),
+
+			TypeVari::Int{bit, ..} => TypeLayout::new(*bit as u64, *bit as u64, false),
+			TypeVari::Float{bit} => TypeLayout::new(*bit as u64, *bit as u64, false),
+
+
+			TypeVari::ArchSize{..} | TypeVari::Ptr | 
 			TypeVari::PointerOf{..} | TypeVari::ReferenceOf { .. } |
 			TypeVari::Function(_) => {
 				TypeLayout::new(self.target.pointer_size, self.target.pointer_size, false)
@@ -114,6 +114,9 @@ impl<'a, 'd> LayoutEngine<'a, 'd> {
 				TypeLayout::new(4, 4, false)
 			}
 			TypeVari::Iface(_) => {
+				TypeLayout::new(0, 1, false)
+			}
+			TypeVari::Trait(_) => {
 				TypeLayout::new(0, 1, false)
 			}
 			TypeVari::Nick(_) | TypeVari::UnresolvedPath(_) => panic!("Unresolved types cannot be laid out!"),

@@ -1,12 +1,13 @@
-use crate::control::{Module, identy::{IdentyId, IdentyKind}};
+use crate::{control::{Module, identy::{IdentyId, IdentyKind}}, hir::types::{HirFloatSize, HirTypeVari}};
 use crate::hir::module::HirModule;
 use crate::ast::decls::{Decl, DeclVari};
 use crate::hir::global::HirGlobalVar;
 use std::collections::HashMap;
 use crate::hgen::mangle::{Mangler, ManglerKind};
 
-pub struct HGen<'a,'d> {
-  pub ast_mol: &'a Module<'a,'d>,
+pub struct HGen<'a, 'd: 'a> {
+  pub ast_mol: &'a Module<'a, 'd>,
+  pub target: &'a crate::layout::Target,
   pub hir_mol: HirModule,
 
   pub mangler: ManglerKind,
@@ -46,9 +47,10 @@ impl<'a,'d> HGen<'a,'d> {
   }
 
   
-  pub fn new(ast_mol: &'a Module<'a,'d>, is_debug: bool) -> Self {
+  pub fn new(ast_mol: &'a Module<'a,'d>, is_debug: bool, target: &'a crate::layout::Target) -> Self {
     Self {
       ast_mol,
+      target,
       hir_mol: HirModule::new(ast_mol.name.clone()),
       mangler: ManglerKind::Qw,
       is_debug,
@@ -185,7 +187,25 @@ impl<'a,'d> HGen<'a,'d> {
           } else { false }
         };
 
-        let (ret_ty, self_ty, arg_tys) = {
+        let (ast_ret_ty, ast_self_ty, ast_arg_tys) = {
+          let ast_ty = self.ast_mol.get_type(f.kind);
+          if let crate::ast::types::TypeVari::Function(fun) = &ast_ty.vari {
+            let mut args = fun.args.iter();
+            let mut ast_self_ty = None;
+            let mut ast_arg_tys = Vec::new();
+            if is_instance_method {
+              if let Some(first_arg) = args.next() {
+                ast_self_ty = Some(first_arg.kind);
+              }
+            }
+            ast_arg_tys.extend(args.map(|a| a.kind));
+            (fun.ret, ast_self_ty, ast_arg_tys)
+          } else {
+            unreachable!("FunDecl kind must be Function type");
+          }
+        };
+
+        let (ret_ty, _self_ty, arg_tys) = {
           let hir_ty = self.hir_mol.get_type(ty_id);
           if let crate::hir::types::HirTypeVari::Function(fun) = &hir_ty.vari {
             let mut args = fun.args.iter();
@@ -227,7 +247,7 @@ impl<'a,'d> HGen<'a,'d> {
           }
         }
         
-        let final_name = current_mangler.mangle_func(parent_path, &decl_name_str, self_ty, Some(ret_ty), &arg_tys, &self.hir_mol);
+        let final_name = current_mangler.mangle_func(parent_path, &decl_name_str, ast_self_ty, Some(ast_ret_ty), &ast_arg_tys, &self.ast_mol);
 
         let h_func = crate::hir::func::HirFunc::new(final_name, ret_ty, arg_tys, is_weak);
         let func_hid = self.hir_mol.new_func(h_func.clone());
@@ -274,27 +294,30 @@ impl<'a,'d> HGen<'a,'d> {
     self.map_type.insert(ast_id, hid);
     
     let hir_ty_vari = match &ty.vari {
-      crate::ast::types::TypeVari::ISize => crate::hir::types::HirTypeVari::ISize,
-      crate::ast::types::TypeVari::USize => crate::hir::types::HirTypeVari::USize,
-      crate::ast::types::TypeVari::I8 => crate::hir::types::HirTypeVari::I8,
-      crate::ast::types::TypeVari::I16 => crate::hir::types::HirTypeVari::I16,
-      crate::ast::types::TypeVari::I32 => crate::hir::types::HirTypeVari::I32,
-      crate::ast::types::TypeVari::I64 => crate::hir::types::HirTypeVari::I64,
-      crate::ast::types::TypeVari::I128 => crate::hir::types::HirTypeVari::I128,
-      crate::ast::types::TypeVari::U8 => crate::hir::types::HirTypeVari::U8,
-      crate::ast::types::TypeVari::U16 => crate::hir::types::HirTypeVari::U16,
-      crate::ast::types::TypeVari::U32 => crate::hir::types::HirTypeVari::U32,
-      crate::ast::types::TypeVari::U64 => crate::hir::types::HirTypeVari::U64,
-      crate::ast::types::TypeVari::U128 => crate::hir::types::HirTypeVari::U128,
-      crate::ast::types::TypeVari::F16 => crate::hir::types::HirTypeVari::F16,
-      crate::ast::types::TypeVari::F32 => crate::hir::types::HirTypeVari::F32,
-      crate::ast::types::TypeVari::F64 => crate::hir::types::HirTypeVari::F64,
-      crate::ast::types::TypeVari::F128 => crate::hir::types::HirTypeVari::F128,
-      crate::ast::types::TypeVari::Bool => crate::hir::types::HirTypeVari::Bool,
-      crate::ast::types::TypeVari::Char => crate::hir::types::HirTypeVari::Char,
-      crate::ast::types::TypeVari::Ptr => crate::hir::types::HirTypeVari::Ptr,
-      crate::ast::types::TypeVari::Void => crate::hir::types::HirTypeVari::Void,
-      crate::ast::types::TypeVari::Null => crate::hir::types::HirTypeVari::Null,
+      crate::ast::TypeVari::ArchSize{sig} => HirTypeVari::Int{bit: (self.target.pointer_size*8) as u32, sig: *sig},
+      crate::ast::TypeVari::Int{bit, sig} => HirTypeVari::Int{bit: *bit, sig: *sig},
+      crate::ast::TypeVari::Float{bit} => {
+        HirTypeVari::Float{bit: match *bit {
+          16  => HirFloatSize::F16,
+          32  => HirFloatSize::F32,
+          64  => HirFloatSize::F64,
+          128 => HirFloatSize::F128,
+          _ => panic!("unknown float size"),
+        }}
+      }
+
+      crate::ast::types::TypeVari::Bool => HirTypeVari::Bool,
+      crate::ast::types::TypeVari::Char => HirTypeVari::Char,
+      crate::ast::types::TypeVari::Ptr  => HirTypeVari::Ptr,
+      crate::ast::types::TypeVari::Void => HirTypeVari::Void,
+      crate::ast::types::TypeVari::Null => HirTypeVari::Null,
+
+      crate::ast::types::TypeVari::ReferenceOf{..} => HirTypeVari::Ptr,
+      crate::ast::types::TypeVari::PointerOf{..}   => HirTypeVari::Ptr,
+
+      crate::ast::types::TypeVari::Enum(..)  => HirTypeVari::Int{bit: 32, sig: true},
+      crate::ast::types::TypeVari::Flags(..) => HirTypeVari::Int{bit: 32, sig: true},
+
       
       crate::ast::types::TypeVari::Function(fun) => {
         let mut args = Vec::new();
@@ -338,53 +361,19 @@ impl<'a,'d> HGen<'a,'d> {
           funs,
         })
       }
-      
-      crate::ast::types::TypeVari::Enum(e) => {
-        let mut vals = Vec::new();
-        for v in &e.vals {
-          vals.push(crate::hir::types::HirFieldCons {
-            val: match v.val {
-              crate::ast::types::IntegerValue::SIG(i) => i as i128,
-              crate::ast::types::IntegerValue::USG(u) => u as i128,
-            },
-            name: v.name.string(),
+
+      crate::ast::types::TypeVari::Trait(i) => {
+        let mut funs = Vec::new();
+        for f in &i.funs {
+          let kind = self.gen_type(f.kind);
+          funs.push(crate::hir::types::HirFieldType {
+            name: f.name.string(),
+            kind,
           });
         }
-        crate::hir::types::HirTypeVari::Enum(crate::hir::types::HirEnumType {
-          vals,
+        crate::hir::types::HirTypeVari::Iface(crate::hir::types::HirIfaceType {
+          funs,
         })
-      }
-      
-      crate::ast::types::TypeVari::Flags(e) => {
-        let mut vals = Vec::new();
-        for v in &e.vals {
-          vals.push(crate::hir::types::HirFieldCons {
-            val: match v.val {
-              crate::ast::types::IntegerValue::SIG(i) => i as i128,
-              crate::ast::types::IntegerValue::USG(u) => u as i128,
-            },
-            name: v.name.string(),
-          });
-        }
-        crate::hir::types::HirTypeVari::Enum(crate::hir::types::HirEnumType {
-          vals,
-        })
-      }
-      
-      crate::ast::types::TypeVari::ReferenceOf { sub, acc } => {
-        let hir_sub = self.gen_type(*sub);
-        crate::hir::types::HirTypeVari::ReferenceOf {
-          sub: hir_sub,
-          acc: *acc,
-        }
-      }
-      
-      crate::ast::types::TypeVari::PointerOf { sub, acc } => {
-        let hir_sub = self.gen_type(*sub);
-        crate::hir::types::HirTypeVari::PointerOf {
-          sub: hir_sub,
-          acc: *acc,
-        }
       }
       
       _ => panic!("unimplemented type in hgen: {:?}", ty.vari),

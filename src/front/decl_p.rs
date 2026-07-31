@@ -15,6 +15,7 @@ impl DeclParser {
       "using"  => Self::read_using(ctx, v),
       "struct" => Self::read_struct(ctx, v),
       "iface"  => Self::read_iface(ctx, v),
+      "trait"  => Self::read_trait(ctx, v),
       "enum"   => Self::read_enum(ctx, v),
       "flags"  => Self::read_flags(ctx, v),
       "let"    => Self::read_var(ctx, v, AccessKind::IMM),
@@ -206,6 +207,15 @@ impl DeclParser {
   pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
     let name = ctx.lex.get()?;
     let tyid = TypeParser::read_iface(ctx)?;
+
+    let this = DeclVari::Using(tyid);
+
+    Ok(Decl::new(name, this, vis))
+  }
+
+  pub fn read_trait<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Decl<'a>, Message<'a>> {
+    let name = ctx.lex.get()?;
+    let tyid = TypeParser::read_trait(ctx)?;
 
     let this = DeclVari::Using(tyid);
 

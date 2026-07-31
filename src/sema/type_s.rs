@@ -91,6 +91,12 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         }
       }
       
+      TypeVari::Trait(i) => {
+        for v in &i.funs {
+          self.check_type(v.kind)?;
+        }
+      }
+      
       TypeVari::Path(path) => {
         for p in path {
           self.check_type(*p)?;
@@ -115,15 +121,15 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         }
       }
 
-      TypeVari::ISize | TypeVari::USize |
-      TypeVari::I8 | TypeVari::I16 | TypeVari::I32 | TypeVari::I64 | TypeVari::I128 |
-      TypeVari::U8 | TypeVari::U16 | TypeVari::U32 | TypeVari::U64 | TypeVari::U128 |
-      TypeVari::F16 | TypeVari::F32 | TypeVari::F64 | TypeVari::F128 |
+      TypeVari::ArchSize{..} |
+      TypeVari::Int{..} |
+      TypeVari::Float{..} |
       TypeVari::Bool |
       TypeVari::Char |
       TypeVari::Ptr |
       TypeVari::Void |
-      TypeVari::Null => {}
+      TypeVari::Null |
+      TypeVari::SelfType => {}
     }
 
     let ty = self.mol.get_mut_type(id);

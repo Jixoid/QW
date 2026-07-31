@@ -97,13 +97,18 @@ pub struct IfaceType<'a> {
   pub funs: Vec<FieldType<'a>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraitType<'a> {
+  pub funs: Vec<FieldType<'a>>,
+}
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeVari<'a> {
-  ISize, USize,
-  I8, I16, I32, I64, I128,
-  U8, U16, U32, U64, U128,
-  F16, F32, F64, F128,
+  Int{bit: u32, sig: bool},
+  Float{bit: u32},
+  ArchSize{sig: bool},
   Bool,
   Char,
   Ptr,
@@ -111,6 +116,7 @@ pub enum TypeVari<'a> {
   Null,
 
   Nick(NickType<'a>),
+  SelfType,
   UnresolvedPath(Vec<NickType<'a>>),
   Path(Vec<IdentyId>),
   
@@ -122,6 +128,7 @@ pub enum TypeVari<'a> {
   Function(FunType<'a>),
   Struct(StructType<'a>),
   Iface(IfaceType<'a>),
+  Trait(TraitType<'a>),
   Enum(EnumType<'a>),
   Flags(FlagsType<'a>),
 }
@@ -181,25 +188,10 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
       TypeVari::Char => write!(f, "{}", "char".blue().bold())?,
       TypeVari::Ptr  => write!(f, "{}", "ptr".blue().bold())?,
 
-      TypeVari::ISize => write!(f, "{}", "isize".blue().bold())?,
-      TypeVari::USize => write!(f, "{}", "usize".blue().bold())?,
+      TypeVari::ArchSize{sig} => write!(f, "{}", format!("{}{}", if *sig {"i"} else {"u"}, "size").blue().bold())?,
 
-      TypeVari::I8   => write!(f, "{}", "i8".blue().bold())?,
-      TypeVari::I16  => write!(f, "{}", "i16".blue().bold())?,
-      TypeVari::I32  => write!(f, "{}", "i32".blue().bold())?,
-      TypeVari::I64  => write!(f, "{}", "i64".blue().bold())?,
-      TypeVari::I128 => write!(f, "{}", "i128".blue().bold())?,
-
-      TypeVari::U8   => write!(f, "{}", "u8".blue().bold())?,
-      TypeVari::U16  => write!(f, "{}", "u16".blue().bold())?,
-      TypeVari::U32  => write!(f, "{}", "u32".blue().bold())?,
-      TypeVari::U64  => write!(f, "{}", "u64".blue().bold())?,
-      TypeVari::U128 => write!(f, "{}", "u128".blue().bold())?,
-
-      TypeVari::F16  => write!(f, "{}", "f16".blue().bold())?,
-      TypeVari::F32  => write!(f, "{}", "f32".blue().bold())?,
-      TypeVari::F64  => write!(f, "{}", "f64".blue().bold())?,
-      TypeVari::F128 => write!(f, "{}", "f128".blue().bold())?,
+      TypeVari::Int{bit, sig} => write!(f, "{}", format!("{}{}", if *sig {"i"} else {"u"}, *bit).blue().bold())?,
+      TypeVari::Float{bit} => write!(f, "{}", format!("f{}", *bit).blue().bold())?,
 
       TypeVari::Function(s) => {
         write!(f, "{}{}", "fun".blue().bold(), "(".bright_black())?;
@@ -253,6 +245,19 @@ impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
 
       TypeVari::Iface(s) => {
         write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
+
+        for (i, x) in s.funs.iter().enumerate() {
+          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < s.funs.len() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+      TypeVari::Trait(s) => {
+        write!(f, "{}{}", "trait".blue().bold(), "{".bright_black())?;
 
         for (i, x) in s.funs.iter().enumerate() {
           write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;

@@ -105,8 +105,9 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
     
+    let target = crate::layout::Target::new_64bit();
     let is_debug = matches!(info.variant, crate::BuildVariant::Debug);
-    let hir = crate::hgen::HGen::new(&mol, is_debug).generate();
+    let hir = crate::hgen::HGen::new(&mol, is_debug, &target).generate();
     
     /* time */ let hgen = now.elapsed();
 
@@ -121,7 +122,6 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "cgen".red().bold(), ":".bright_black(), mol.name) }
     
-    let target = crate::layout::Target::new_64bit();
     let bin = crate::cgen::CGen::new(&hir, crate::basic_cgen::BasicCGen::new(&target)).generate();
   
     /* time */ let cgen = now.elapsed();
