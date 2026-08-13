@@ -2,11 +2,11 @@ pub mod bare;
 pub mod itanium;
 pub mod qw;
 
-use crate::control::identy::IdentyId;
+use crate::control::identy::AstId;
 use crate::control::module::Module;
 
 pub trait Mangler {
-  fn mangle_func(&self, path: &[String], func_name: &str, self_ty: Option<IdentyId>, ret_ty: Option<IdentyId>, arg_tys: &[IdentyId], ast_mol: &Module) -> String;
+  fn mangle_func(&self, path: &[String], func_name: &str, self_ty: Option<AstId>, ret_ty: Option<AstId>, arg_tys: &[AstId], ast_mol: &Module) -> String;
   fn mangle_global(&self, path: &[String], var_name: &str) -> String;
 }
 
@@ -28,7 +28,7 @@ impl ManglerKind {
 }
 
 impl Mangler for ManglerKind {
-  fn mangle_func(&self, path: &[String], func_name: &str, self_ty: Option<IdentyId>, ret_ty: Option<IdentyId>, arg_tys: &[IdentyId], ast_mol: &Module) -> String {
+  fn mangle_func(&self, path: &[String], func_name: &str, self_ty: Option<AstId>, ret_ty: Option<AstId>, arg_tys: &[AstId], ast_mol: &Module) -> String {
     self.get_mangler().mangle_func(path, func_name, self_ty, ret_ty, arg_tys, ast_mol)
   }
 

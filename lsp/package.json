@@ -1,0 +1,37 @@
+{
+  "name": "qw-vscode",
+  "displayName": "QW Lang",
+  "description": "Word mapping based syntax highlighter and language support for QW programming language.",
+  "version": "0.1.0",
+  "publisher": "qaos",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:qw"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "qw",
+        "aliases": ["QW", "qw"],
+        "extensions": [".qw"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "qw",
+        "scopeName": "source.qw",
+        "path": "./syntaxes/qw.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node test.js"
+  }
+}

@@ -5,6 +5,7 @@ pub mod meta_p;
 pub mod decl_p;
 pub mod expr_p;
 pub mod type_p;
-pub mod stmt_p;
+pub mod item_p;
+pub mod patt_p;
 
 pub use front::*;

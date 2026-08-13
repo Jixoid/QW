@@ -1,0 +1,64 @@
+
+generic <T: type> {
+
+  ![lang = "PartialEq"]
+  pub trait PartialEq {
+  
+    ![lang = "PartialEq:eq"]
+    pub fun eq(it: &T) -> bool;
+
+    pub fun ne(it: &T) -> bool { !self.eq(other) }
+  }
+
+
+  ![lang = "Eq"]
+  pub trait Eq: PartialEq<T> {}
+
+
+  ![lang = "PartialOrd"]
+  pub trait PartialOrd: PartialEq<T> {
+
+    ![lang = "PartialOrd:partial_cmp"]
+    pub fun partial_cmp(it: &T) -> ?Ordering;
+
+    
+    pub fun lt(it: &T) -> bool { self.partial_cmp(it).is_some_and(|x| x == Ordering::Less) }
+    pub fun le(it: &T) -> bool { self.partial_cmp(it).is_some_and(|x| x == Ordering::Less || x == Ordering::Equal) }
+
+    pub fun gt(it: &T) -> bool { self.partial_cmp(it).is_some_and(|x| x == Ordering::Greater) }
+    pub fun ge(it: &T) -> bool { self.partial_cmp(it).is_some_and(|x| x == Ordering::Greater || x == Ordering::Equal) }
+  }
+
+
+  ![lang = "Ord"]
+  pub trait Ord: Eq<T> + PartialOrd<T> {
+    
+    ![lang = "Ord:cmp"]
+    pub fun cmp(it: &T) -> Ordering;
+
+    
+    pub fun max(it: &Self) -> &Self { if self > it { self } else { it } }
+    pub fun min(it: &Self) -> &Self { if self < it { self } else { it } }
+
+    pub fun clamp(min,max: &Self) -> &Self {
+      assert!(min <= max);
+
+      if self < min { min } else if self > max { max } else { self }
+    }
+  }
+
+}
+
+
+![lang = "Ordering"]
+pub enum Ordering: i8 {
+  ![lang = "Ordering:Less"]
+  Less,
+  
+  ![lang = "Ordering:Equal"]
+  Equal,
+  
+  ![lang = "Ordering:Greater"]
+  Greater,
+}
+

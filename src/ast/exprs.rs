@@ -1,158 +1,175 @@
 use core::fmt;
 use owo_colors::OwoColorize;
 
-use crate::{control::{IdentyId, Module}, lexer::{Word, WordKind}};
+use crate::{ast::{self, AccessKind, Crate, ExprId, PattId, Rng, TypeId}, lexer::Word};
 
 
 
-#[derive(Debug)]
-pub struct BlockExpr<'a> {
-  pub label: Option<Word<'a>>,
-  pub ctn: Vec<IdentyId>,
-}
-
-#[derive(Debug)]
-pub struct IfExpr {
-  pub cond: IdentyId,
-  pub then_block: IdentyId,
-  pub else_block: Option<IdentyId>,
-}
-
-#[derive(Debug)]
 pub struct MatchArm {
-  pub pat: IdentyId,
-  pub body: IdentyId,
+  pub pat: ast::ExprId,
+  pub body: ast::ExprId,
 }
 
 #[derive(Debug)]
-pub struct MatchExpr {
-  pub val: IdentyId,
-  pub arms: Vec<MatchArm>,
-}
-
-
-#[derive(Debug)]
-pub struct NickExpr<'a> {
-  pub pos: Word<'a>,
-  pub idx: u32,
-  pub resolved: Option<IdentyId>,
-}
-
-impl<'a> NickExpr<'a> {
-  pub fn new(mol: &mut Module, p: Word<'a>) -> NickExpr<'a> {
-    let idx = match mol.nick_map.iter().position(|x| x == p.str()) {
-      Some(r) => r,
-      None => {
-        let a = mol.nick_map.len();
-        mol.nick_map.push(p.string());
-        a
-      }
-    } as u32;
-
-    NickExpr{pos: p, idx, resolved: None}
-  }
-}
-
-
-#[derive(Debug)]
-pub struct BinaryExpr {
-  pub lhs: IdentyId,
-  pub rhs: IdentyId,
-  pub op: WordKind,
+pub enum BinaryOp {
+  Add, Sub,
+  Mul, Div, Mod,
+  Eq, Neq,
+  Lt, Gt,
+  Lte, Gte,
+  And, Or,
+  Assign,
 }
 
 #[derive(Debug)]
-pub struct UnaryExpr {
-  pub op: WordKind,
-  pub val: IdentyId,
+pub enum UnaryOp {
+  Neg, Poz,
+  Not,
+  Deref,
+  Ref,
+  BitNot,
 }
 
 
-#[derive(Debug)]
+pub enum NumberConst {
+  I64(i64),
+  U64(u64),
+  F64(f64),
+}
+
 pub struct NumberExpr<'a> {
   pub pos: Word<'a>,
+  pub num: NumberConst,
 }
 
+pub enum Expr<'a> {
+  Nick{pos: Word<'a>, idx: u32},
+  Path(Vec<ExprId>),
+  Member(Vec<ExprId>),
 
-#[derive(Debug)]
-pub enum ExprVari<'a> {
-  Block(BlockExpr<'a>),
-  If(IfExpr),
-  Match(MatchExpr),
-  Nick(NickExpr<'a>),
-  Path(Vec<NickExpr<'a>>),
-  Binary(BinaryExpr),
-  Unary(UnaryExpr),
+  Tuple(Vec<ExprId>),
+
   Number(NumberExpr<'a>),
+  String(Word<'a>),
+
+  Block{label: Option<Word<'a>>, rng: Rng, expr: Option<ExprId>},
+
+  If   {cond: ExprId, then: ExprId, elsb: Option<ExprId>},
+  Match{cond: ExprId, arms: Vec<MatchArm>},
+  While{cond: ExprId, blok: ExprId, elsb: Option<ExprId>},
+  Loop {blok: ExprId, elsb: Option<ExprId>},
+  ForIn{vars: PattId, iter: ExprId, blok: ExprId, elsb: Option<ExprId>},
+  
+  Binary{op: BinaryOp, lhs: ExprId, rhs: ExprId},
+  Unary {op: UnaryOp, val: ExprId},
+  
+  Call {callee: ExprId, args: Vec<ExprId>},
+  Index{callee: ExprId, args: Vec<ExprId>},
+
+  Let{item: PattId, kind: Option<TypeId>, init: Option<ExprId>, acck: AccessKind},
+
+  Return  {label: Option<Word<'a>>, val: Option<ExprId>},
+  Break   {label: Option<Word<'a>>, val: Option<ExprId>},
+  Continue{label: Option<Word<'a>>},
+
+  Try(ExprId),
+  Unwrap(ExprId),
 }
 
-#[derive(Debug)]
-pub struct Expr<'a> {
-  pub vari: ExprVari<'a>,
-  pub ty: IdentyId,
-}
 
 impl<'a> Expr<'a> {
-  pub fn display<'m>(&'a self, module: &'m Module<'m,'m>) -> ExprDisplay<'a, 'm> {
+  pub fn display<'m>(&'a self, module: &'m Crate<'m,'m>) -> ExprDisplay<'a, 'm> {
     ExprDisplay(self, module)
   }
 
-  pub fn vari_is_if(&self) -> bool {
-    matches!(self.vari, ExprVari::If(_) | ExprVari::Match(_))
-  }
+  pub fn vari_is_if(&self) -> bool { matches!(self, Expr::If{..} | Expr::Match{..}) }
 }
 
 
-pub struct ExprDisplay<'a,'m>(pub &'a Expr<'a>, pub &'m Module<'m,'m>);
+pub struct ExprDisplay<'a,'m>(pub &'a Expr<'a>, pub &'m Crate<'m,'m>);
 
 impl<'a,'m> fmt::Display for ExprDisplay<'a,'m> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let expr = self.0;
     let mol = self.1;
 
-    match &expr.vari {
-      ExprVari::Block(s) => {
+    match &expr {
+      Expr::Nick{pos, ..} => {
+        write!(f, "{}", pos.str())?;
+      }
+
+      Expr::Path(p) => {
+        for (i, x) in p.iter().enumerate() {
+          write!(f, "{}", mol.get_expr(*x).display(mol))?;
+          
+          if i + 1 < p.len() { write!(f, "{}", "::".bright_black())?; }
+        }
+      }
+
+      Expr::Member(p) => {
+        for (i, x) in p.iter().enumerate() {
+          write!(f, "{}", mol.get_expr(*x).display(mol))?;
+          
+          if i + 1 < p.len() { write!(f, "{}", ".".bright_black())?; }
+        }
+      }
+
+
+      Expr::Tuple(s) => {
+        write!(f, "{}", "(".bright_black())?;
+
+        for (i, x) in s.iter().enumerate() {
+          write!(f, "{}", mol.get_expr(*x).display(mol))?;
+
+          if i +1 < s.len() { write!(f, "{}", ", ".bright_black())?; }
+        }
+
+        write!(f, "{}", ")".bright_black())?;
+      }
+      
+      
+      Expr::Number(s) => {
+        write!(f, "{}", s.pos.str().yellow().bold())?;
+      }
+      
+      Expr::String(s) => {
+        write!(f, "\"{}\"", s.str().yellow().bold())?;
+      }
+      
+
+      Expr::Block{label, rng, expr} => {
         write!(f, "{}", "block".blue().bold())?;
         
-        if let Some(lbl) = s.label {
+        if let Some(lbl) = label {
           write!(f, " {}{}", lbl.str().white().bold(), ":".bright_black())?;
         }
 
-        write!(f, "{}", " [".bright_black())?;
+        write!(f, "{}{:?}", " [".bright_black(), rng)?;
 
-        for (i, x) in s.ctn.iter().enumerate() {
-          write!(f, "{}", x)?;
-          if i + 1 < s.ctn.len() {
-            write!(f, "{}", ", ".bright_black())?;
-          }
+        if let Some(e) = expr {
+          write!(f, "{} {}", "ret".yellow().bold(), e)?;
         }
 
         write!(f, "{}", "]".bright_black())?;
       }
-      ExprVari::If(s) => {
-        write!(f, "{} {} {} {}",
-          "if".blue().bold(),
-          s.cond,
-          "then".blue().bold(),
-          s.then_block
-        )?;
+      
+      
+      Expr::If{cond, then, elsb} => {
+        write!(f, "{} {} {} {}", "if".blue().bold(), cond, "then".blue().bold(), then)?;
 
-        if let Some(eb) = s.else_block {
-          if mol.get_expr(eb).vari_is_if() {
+        if let Some(eb) = elsb {
+          if mol.get_expr(*eb).vari_is_if() {
             write!(f, " {} {}", "ef".blue().bold(), eb)?;
           } else {
             write!(f, " {} {}", "else".blue().bold(), eb)?;
           }
         }
       }
-      ExprVari::Match(s) => {
-        write!(f, "{} {} {}",
-          "match".blue().bold(),
-          s.val,
-          "{".bright_black()
-        )?;
+
+      Expr::Match{cond, arms} => {
+        write!(f, "{} {} {}", "match".blue().bold(), cond, "{".bright_black())?;
         
-        for arm in &s.arms {
+        for arm in arms {
           write!(f, " {} {} {},", 
             arm.pat,
             "=>".bright_black(),
@@ -161,46 +178,130 @@ impl<'a,'m> fmt::Display for ExprDisplay<'a,'m> {
         }
         write!(f, " {}", "}".bright_black())?;
       }
-      ExprVari::Nick(s) => { 
-        write!(f, "{}{}{}{:x}",
-          "\"".yellow().bold(),
-          mol.nick_map[s.idx as usize].yellow().bold(),
-          "\"".yellow().bold(),
-          s.idx
-        )?;
-      }
-      ExprVari::Path(p) => {
-        write!(f, "{} ", "path".blue().bold())?;
-        for (i, x) in p.iter().enumerate() {
-          write!(f, "{}{}{}{:x}",
-            "\"".yellow().bold(),
-            mol.nick_map[x.idx as usize].yellow().bold(),
-            "\"".yellow().bold(),
-            x.idx
-          )?;
-          if i + 1 < p.len() {
-            write!(f, "{}", "::".bright_black())?;
-          }
+
+      Expr::While{cond, blok, elsb} => {
+        write!(f, "{} {} {}", "while".blue().bold(), cond, blok)?;
+
+        if let Some(elsb) = elsb {
+          write!(f, " {} {}", "else".blue().bold(), elsb)?;
         }
       }
-      ExprVari::Binary(s) => {
-        write!(f, "{} {} {:?} {}",
-          "binary".blue().bold(),
-          s.lhs,
-          s.op,
-          s.rhs,
+
+      Expr::Loop{blok, elsb} => {
+        write!(f, "{} {}", "loop".blue().bold(), blok)?;
+
+        if let Some(elsb) = elsb {
+          write!(f, " {} {}", "else".blue().bold(), elsb)?;
+        }
+      }
+
+      Expr::ForIn{vars, iter, blok, elsb} => {
+        write!(f, "{} {} {} {} {}",
+          "for".blue().bold(),
+          vars,
+          "in".blue().bold(),
+          iter,
+          blok
         )?;
+
+        if let Some(elsb) = elsb {
+          write!(f, " {} {}", "else".blue().bold(), elsb)?;
+        }
       }
-      ExprVari::Unary(s) => {
-        write!(f, "{} {:?} {}",
-          "unary".blue().bold(),
-          s.op,
-          s.val,
+
+
+      Expr::Binary{op, lhs, rhs} => {
+        write!(f, "{} {} {:?} {}", "binary".blue().bold(), lhs, op, rhs)?;
+      }
+      
+      Expr::Unary{op, val} => {
+        write!(f, "{} {:?} {}", "unary".blue().bold(), op, val )?;
+      }
+      
+
+      Expr::Call{callee, args} => {
+        write!(f, "{} {}(", "call".blue().bold(), callee)?;
+        for (i, arg) in args.iter().enumerate() {
+          write!(f, "{}", arg)?;
+          
+          if i + 1 < args.len() { write!(f, ", ")?; }
+        }
+        write!(f, ")")?;
+      }
+      
+      Expr::Index{callee, args} => {
+        write!(f, "{} {}[", "index".blue().bold(), callee)?;
+        for (i, arg) in args.iter().enumerate() {
+          write!(f, "{}", arg)?;
+          
+          if i + 1 < args.len() { write!(f, ", ")?; }
+        }
+        write!(f, "]")?;
+      }
+    
+
+      Expr::Let{item, kind, init, acck} => {
+        write!(f, "{} {} {}",
+          "let".blue().bold(),
+          match acck {
+            AccessKind::IMM => "imm",
+            AccessKind::MUT => "mut",
+          }.green().bold(),
+          
+          item
         )?;
+
+        if let Some(kind) = kind {
+          write!(f, "{} {}", ":".bright_black(), kind)?;
+        }
+
+        if let Some(init) = init {
+          write!(f, " {} {}", "=".bright_black(), init)?;
+        }
       }
-      ExprVari::Number(s) => {
-        write!(f, "{}", s.pos.str().yellow().bold())?;
+
+
+      Expr::Return{label, val} => {
+        write!(f, "{}", "ret".blue().bold())?;
+
+        if let Some(lab) = label {
+          write!(f, " `{}", lab.str())?;
+        }
+
+        if let Some(val) = val {
+          write!(f, " {}", mol.get_expr(*val).display(mol))?;
+        }
       }
+
+      Expr::Break{label, val} => {
+        write!(f, "{}", "break".blue().bold())?;
+
+        if let Some(lab) = label {
+          write!(f, " `{}", lab.str())?;
+        }
+
+        if let Some(val) = val {
+          write!(f, " {}", mol.get_expr(*val).display(mol))?;
+        }
+      }
+
+      Expr::Continue{label} => {
+        write!(f, "{}", "continue".blue().bold())?;
+
+        if let Some(lab) = label {
+          write!(f, " `{}", lab.str())?;
+        }
+      }
+
+
+      Expr::Try(s) => {
+        write!(f, "{}?", mol.get_expr(*s).display(mol))?;
+      }
+
+      Expr::Unwrap(s) => {
+        write!(f, "{}!", mol.get_expr(*s).display(mol))?;
+      }
+
     };
     
     Ok(())

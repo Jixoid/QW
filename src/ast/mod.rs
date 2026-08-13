@@ -1,11 +1,19 @@
 pub mod types;
 pub mod exprs;
-pub mod stmts;
 pub mod decls;
-pub mod attr;
+pub mod attrs;
+pub mod dircs;
+pub mod items;
+pub mod patts;
+pub mod identy;
+pub mod control;
 
 pub use types::*;
 pub use decls::*;
 pub use exprs::*;
-pub use stmts::*;
-pub use attr::*;
+pub use attrs::*;
+pub use dircs::*;
+pub use items::*;
+pub use patts::*;
+pub use identy::*;
+pub use control::*;

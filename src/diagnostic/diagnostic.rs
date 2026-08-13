@@ -33,13 +33,7 @@ impl<'a> fmt::Display for Message<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
     let (hr1, _hr2) = self.pos.interval();
-    let mut fpath = self.pos.mol.fpath.clone();
-    
-    if let crate::control::module::ModuleKind::RTL = self.pos.mol.kind {
-      if let Some(src_pos) = fpath.find("/src/") {
-        fpath = format!("[rtl]/{}", &fpath[src_pos + 5..]);
-      }
-    }
+    let fpath = self.pos.mol.fpath.clone();
 
     write!(f, "{}{}{}{}{}{} ", 
       fpath.blue().bold(),
@@ -64,21 +58,23 @@ impl<'a> fmt::Display for Message<'a> {
     writeln!(f, "{}{}{}", ":".bright_black(), " ", formatted_msg)?;
 
 
-    let file = self.pos.mol.mmap.as_str();
+    let file = match str::from_utf8(&self.pos.mol.mmap[..]) {
+      Ok(r) => r,
+      Err(..) => panic!("utf8 fail!"),
+    };
+
     let ctx_word = self.pos;
     let (hr1, hr2) = ctx_word.interval();
 
-    let off = ctx_word.off;
-    let size = ctx_word.size;
-    let end_off = off + size;
+    let rng = ((ctx_word.off as usize), ((ctx_word.off as usize)+(ctx_word.size as usize)));
 
-    let beg = match file[..off].rfind('\n') {
+    let beg = match file[..rng.0].rfind('\n') {
       Some(idx) => idx + 1,
       None => 0,
     };
 
-    let end = match file[end_off..].find('\n') {
-      Some(idx) => end_off + idx,
+    let end = match file[rng.1..].find('\n') {
+      Some(idx) => rng.1 + idx,
       None => file.len(),
     };
 
@@ -97,10 +93,10 @@ impl<'a> fmt::Display for Message<'a> {
       if c != '\n' && i != end {
         line_buf.push(c);
 
-        if i == off {
+        if i == rng.0 {
           under_buf.push('^');
           has_underline = true;
-        } else if i > off && i < end_off {
+        } else if i > rng.0 && i < rng.1 {
           under_buf.push('~');
           has_underline = true;
         } else {

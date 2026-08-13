@@ -7,11 +7,11 @@ impl BareMangler {
   pub fn new() -> Self { Self {} }
 }
 
-use crate::control::identy::IdentyId;
+use crate::control::identy::AstId;
 use crate::control::module::Module;
 
 impl Mangler for BareMangler {
-  fn mangle_func(&self, _path: &[String], func_name: &str, _self_ty: Option<IdentyId>, _ret_ty: Option<IdentyId>, _arg_tys: &[IdentyId], _ast_mol: &Module) -> String {
+  fn mangle_func(&self, _path: &[String], func_name: &str, _self_ty: Option<AstId>, _ret_ty: Option<AstId>, _arg_tys: &[AstId], _ast_mol: &Module) -> String {
     func_name.to_string()
   }
 

@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use owo_colors::OwoColorize;
-use crate::{BuildVariant, control::module::{self, Module, ModuleKind}, front::Front, sema::Sema, sys::SysFile};
+use crate::{BuildVariant, ast::{self, Crate, Module}, error::{CompilerError, Result}, front::Front};
 
 
 pub struct BuildInfo<'a> {
@@ -9,6 +9,7 @@ pub struct BuildInfo<'a> {
   pub variant: BuildVariant,
   pub verbose: bool,
   pub timings: bool,
+  pub usages: bool,
   pub ast_dump: bool,
   pub hir_dump: bool,
   pub check_only: bool,
@@ -16,16 +17,16 @@ pub struct BuildInfo<'a> {
 
 
 pub struct FileArena {
-  files: std::cell::RefCell<Vec<Box<crate::control::module::ModuleFile>>>,
+  files: std::cell::RefCell<Vec<Box<ast::Module>>>,
   loaded_paths: std::cell::RefCell<std::collections::HashSet<String>>,
 }
 
 impl FileArena {
   pub fn new() -> Self { Self { files: std::cell::RefCell::new(Vec::new()), loaded_paths: std::cell::RefCell::new(std::collections::HashSet::new()) } }
   
-  pub fn alloc(&self, file: crate::control::module::ModuleFile) -> &crate::control::module::ModuleFile {
+  pub fn alloc(&self, file: ast::Module) -> &ast::Module {
     let b = Box::new(file);
-    let ptr = &*b as *const crate::control::module::ModuleFile;
+    let ptr = &*b as *const ast::Module;
     self.loaded_paths.borrow_mut().insert(b.fpath.clone());
     self.files.borrow_mut().push(b);
     unsafe { &*ptr }
@@ -37,30 +38,46 @@ impl FileArena {
 }
 
 
-pub struct ModInjection<'a> {
-  pub sys: &'a SysFile<'a>,
-  pub farena: &'a FileArena,
+fn humanize_size(size: usize) -> String {
+  let set = 'a: {
+    let mut i = 0;
+    let mut size = size as f64;
+
+    loop {
+      if size > 1024.0 { size /= 1024.0; i += 1; }
+      else { break 'a (size, i); }
+    }
+  };
+
+  let letter = match set.1 {
+    0 => "b",
+    1 => "kb",
+    2 => "mb",
+    3 => "gb",
+    4 => "tb",
+    _ => todo!()
+  };
+
+  format!("{:.2}{}", set.0, letter)
 }
 
 
-pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: &'mi ModInjection<'mi>) -> module::Result<()> {
-  let (mut mol, mfd) = Module::new(path+"/src/main.qw", ModuleKind::Regular)?;
-  mol.name = project_name.clone();
-  if let Some(root_decl) = mol.list_decl.get_mut(0) {
-    root_decl.name = crate::ast::DeclName::Name(project_name.clone());
-  }
-  mol.add_dep(&mi.sys.mol);
 
-  let mut now: Instant;
+pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a,'_>, farena: &'a FileArena, fpath: String) -> Result<()> {
+  let mol = farena.alloc(ast::Module::new(&fpath)?);
   
+  let mut anys = Vec::new();
+  
+  let now: Instant;
   
   // Front
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "front".red().bold(), ":".bright_black(), mol.name) }
     
-    let sum = Front::new(&mut mol, &mfd)?.parse(mi);
+    let sum = Front::new(cre, &mol, farena)?.parse(&mut anys);
     
-    /* time */ let front = now.elapsed();
+    /* time */ let front_time = now.elapsed();
+    /* usag */ let front_usag = cre.storage_size();
     
     // Summary
     for m in sum.msgs() { eprintln!("{}", m); }
@@ -68,7 +85,18 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
 
+    // Root
+    let moro = ast::ModuleItem{name: mol.name.clone(), ctn: anys};
+    let this = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module(moro)};
+    cre.root_exec = cre.new_item(this);
 
+    // AST dump
+    if info.ast_dump {
+      println!("{}{} {}", "ast-dump".purple().bold(), ":".bright_black(), mol.name.white().bold());
+      println!("{}", cre);
+    }
+
+  /*
   // Sema
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "sema".red().bold(), ":".bright_black(), mol.name) }
@@ -83,12 +111,6 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
   
-    // AST dump
-    if info.ast_dump {
-      println!("{}{} {}", "ast-dump".purple().bold(), ":".bright_black(), mol.name.white().bold());
-      println!("{}", mol);
-    }
-
     if info.check_only {
       if info.timings {
         println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front+sema));
@@ -130,56 +152,63 @@ pub fn build_mod<'mi>(info: &BuildInfo, path: String, project_name: String, mi: 
   let _ = std::fs::create_dir_all(&out_dir);
   let out_file = out_dir.join("out.ll");
   let _ = std::fs::write(&out_file, &bin);
-
+  */
 
   // Time
   if info.timings {
-    println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front+sema+hgen+cgen));
+    println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front_time/*+sema+hgen+cgen*/));
     
     if info.verbose {
-      println!("  {}{} {:?}", "front".blue().bold(), ":".bright_black(), front);
+      println!("  {}{} {:?}", "front".blue().bold(), ":".bright_black(), front_time);
+      /*
       println!("  {}{}  {:?}", "sema".blue().bold(), ":".bright_black(), sema);
       println!("  {}{}  {:?}", "hgen".blue().bold(), ":".bright_black(), hgen);
       println!("  {}{}  {:?}", "cgen".blue().bold(), ":".bright_black(), cgen);
+      */
     }
+  }
+
+  // Usage
+  if info.usages {
+    println!("{}{} {}", "total-usage".yellow().bold(), ":".bright_black(), humanize_size(front_usag));
+
   }
 
   Ok(())
 }
 
 
-pub fn build(info: BuildInfo) -> module::Result<()> {
+pub fn build(info: BuildInfo) -> Result<()> {
   let conf_path = std::path::Path::new(info.path).join("qw.conf");
   if !conf_path.exists() {
-    return Err(crate::control::module::CompilerError::Str("could not find `qw.conf`.".to_string()));
+    return Err(CompilerError::Str("could not find `qw.conf`.".to_string()));
   }
 
-  let mmap = std::fs::read_to_string(&conf_path).map_err(|e| crate::control::module::CompilerError::Str(e.to_string()))?;
-  let mfd = crate::control::module::ModuleFile {
-    fpath: conf_path.to_str().unwrap_or("").to_string(),
-    mmap,
-    kind: crate::control::module::ModuleKind::Regular,
-  };
-  
-  let conf = crate::ds::Value::load_file(&mfd).map_err(|e| crate::control::module::CompilerError::Str(format!("{:?}", e)))?;
+  let mfd = Module::new(conf_path.to_str().unwrap_or(""))?;
 
-  let mut project_name = String::from("main");
-  if let crate::ds::Value::Stc(stc) = conf {
-    for field in &stc.subs {
-      if field.name == "name" {
-        if let crate::ds::Value::Str(s) = &field.kind {
-          project_name = s.clone();
+  let conf = crate::ds::Value::load_file(&mfd).map_err(|e| CompilerError::Str(format!("{:?}", e)))?;
+
+  let crate_name = || -> String {
+    if let crate::ds::Value::Stc(stc) = conf {
+      for field in &stc.subs {
+        if field.name == "name" {
+          if let crate::ds::Value::Str(s) = &field.kind {
+            return s.clone();
+          }
         }
       }
     }
-  }
+    
+    String::from("main")
+  }();
 
-  let sys = SysFile::new()?;
+  //: qw.conf readed
+
+  let mut cre = Crate::new(crate_name);
+
   let farena = FileArena::new();
 
-  let mi = ModInjection{sys: &sys, farena: &farena};
-
-  build_mod(&info, info.path.to_string(), project_name, &mi)?;
+  build_mod(&info, &mut cre, &farena, std::path::Path::new(info.path).join("src").join("main.qw").to_str().unwrap().to_string())?;
 
   Ok(())
 }

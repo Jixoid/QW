@@ -1,84 +1,158 @@
-use crate::{ast::*, control::IdentyId, diagnostic::Message, front::{ParserContext, expr_p::ExprParser, meta_p::MetaParser, type_p::TypeParser}};
+use crate::front::patt_p::PattParser;
+use crate::lexer::WK;
+use crate::{ast::*, diagnostic::Message, front::{ParserContext, attr_p::AttrParser, expr_p::ExprParser, type_p::TypeParser}};
 
 
 pub struct StmtParser {}
 
 impl StmtParser {
 
-  pub fn read_stmt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<IdentyId,  Message<'a>> {
-    let attrs = crate::front::attr_p::AttrParser::read_attributes(ctx);
+  pub fn read_stmt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId,  Message<'a>> {
+    let attrs = AttrParser::read_attr(ctx)?;
+
     let l = ctx.lex.get()?;
-    let d = match l.str() {
-      "let"    => Self::read_let(ctx, AccessKind::IMM),
-      "var"    => Self::read_let(ctx, AccessKind::MUT),
-      "ret"    => Self::read_ret(ctx),
+    let id = match l.str() {
+      "let"      => Self::read_let(ctx, AccessKind::IMM),
+      "var"      => Self::read_let(ctx, AccessKind::MUT),
+      "ret"      => Self::read_ret(ctx),
+      "break"    => Self::read_break(ctx),
+      "continue" => Self::read_continue(ctx),
+
       _ => {
         ctx.lex.store(l);
-        let expr = ExprParser::read_expr(ctx)?;
+        let expr = ExprParser::read_expr(ctx, 0)?;
 
-        let is_block_like = matches!(ctx.mol.get_expr(expr).vari, ExprVari::If(_) | ExprVari::Block(_) | ExprVari::Match(_));
+        let is_block_like = matches!(ctx.cre.get_expr(expr), Expr::If{..} | Expr::Block{..} | Expr::Match{..} | Expr::Loop{..} | Expr::While{..} | Expr::ForIn{..});
         if is_block_like {
           let end = ctx.lex.lex();
-          if end.str() != ";" {
+          if end.kind != WK::Semicolon {
             ctx.lex.store(end);
           }
         } else {
-          MetaParser::expect_equal(ctx, ";")?;
+          ctx.lex.get()?.expect_equal_str(";")?;
         }
 
-        Ok(Stmt{vari: StmtVari::Expr(ExprStmt{expr})})
+        let st = Stmt{vari: StmtVari::Expr(ExprStmt{expr})};
+        
+        Ok(ctx.cre.new_stmt(st))
       }
     }?;
 
-    let id = ctx.mol.new_stmt(d);
-    crate::front::attr_p::AttrParser::attach_attributes(ctx, id, attrs);
+    AttrParser::attach_attr(ctx, id, attrs);
     Ok(id)
   }
 
 
-  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<Stmt<'a>, Message<'a>> {
-    let name = ctx.lex.get()?;
+  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<StmtId, Message<'a>> {
+    let item = PattParser::read_patt(ctx)?;
 
     let t1 = ctx.lex.get()?;
-    let mut ty = IdentyId::new(crate::control::IdentyKind::Null, 0, 0);
-
-    if t1.str() == ":" {
-      ty = TypeParser::read_type(ctx, true)?;
+    let ty = if t1.kind == WK::Colon {
+      Some(TypeParser::read_type(ctx, true)?)
     } else {
       ctx.lex.store(t1);
-    }
+      None
+    };
 
     let mut init = None;
     let t2 = ctx.lex.get()?;
 
-    if t2.str() == "=" {
-      init = Some(ExprParser::read_expr(ctx)?);
-      MetaParser::expect_equal(ctx, ";")?;
+    if t2.kind == WK::Assign {
+      init = Some(ExprParser::read_expr(ctx, 0)?);
+      ctx.lex.get()?.expect_equal_str(";")?;
     }
-    else if t2.str() == ";" { /* no init */ }
+    else if t2.kind == WK::Semicolon { /* no init */ }
     else {
-      MetaParser::expect_equal2_w(t2, "=", ";")?;
+      t2.expect_equal_str2("=", ";")?;
     }
 
     let this = StmtVari::Let(LetStmt{
-      name,
+      item,
       kind: ty,
       init,
       acck
     });
 
-    Ok(Stmt{vari: this})
+    let st = Stmt{vari: this};
+
+    Ok(ctx.cre.new_stmt(st))
   }
 
-  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Stmt<'a>, Message<'a>> {
-    let exp = ExprParser::read_expr(ctx)?;
-    MetaParser::expect_equal(ctx, ";")?;
+  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+    let mut _c = ctx.lex.get()?;
 
+    let label = if _c.kind == WK::Backtick {
+      let a = Some(ctx.lex.get()?.expect_word()?);
+      _c = ctx.lex.get()?;
+      a
+    } else { None };
+
+    let val = if _c.kind != WK::Semicolon {
+      ctx.lex.store(_c);
+      let a = Some(ExprParser::read_expr(ctx, 0)?);
+      _c = ctx.lex.get()?;
+      a
+    } else { None };
+
+    _c.expect_equal_str(";")?;
+    
+  
     let this = StmtVari::Ret(RetStmt{
-      val: exp
+      label, val
     });
 
-    Ok(Stmt{vari: this})
+    let st = Stmt{vari: this};
+
+    Ok(ctx.cre.new_stmt(st))
+  }
+  
+  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+    let mut _c = ctx.lex.get()?;
+
+    let label = if _c.kind == WK::Backtick {
+      let a = Some(ctx.lex.get()?.expect_word()?);
+      _c = ctx.lex.get()?;
+      a
+    } else { None };
+
+    let val = if _c.kind != WK::Semicolon {
+      ctx.lex.store(_c);
+      let a = Some(ExprParser::read_expr(ctx, 0)?);
+      _c = ctx.lex.get()?;
+      a
+    } else { None };
+    
+    _c.expect_equal_str(";")?;
+    
+  
+    let this = StmtVari::Break(BreakStmt{
+      label, val
+    });
+
+    let st = Stmt{vari: this};
+
+    Ok(ctx.cre.new_stmt(st))
+  }
+
+  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+    let mut _c = ctx.lex.get()?;
+
+    let label = if _c.kind == WK::Backtick {
+      let a = Some(ctx.lex.get()?.expect_word()?);
+      _c = ctx.lex.get()?;
+      a
+    } else { None };
+
+    _c.expect_equal_str(";")?;
+
+  
+    let this = StmtVari::Continue(ContinueStmt{
+      label
+    });
+
+    let st = Stmt{vari: this};
+
+    Ok(ctx.cre.new_stmt(st))
   }
 
 }

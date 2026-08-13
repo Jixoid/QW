@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{control::ModuleFile, ds::Value};
+use crate::{ast, ds::Value};
 
 
 pub struct AddInfo {
@@ -25,11 +25,9 @@ pub fn add(info: AddInfo) -> Result<(), String> {
     return Err("could not find `qw.conf`.".to_string());
   }
 
-  let mmap = std::fs::read_to_string(&conf_path).map_err(|e| e.to_string())?;
-  let mfd = ModuleFile {
-    fpath: conf_path.to_str().unwrap_or("").to_string(),
-    mmap,
-    kind: crate::control::module::ModuleKind::Regular,
+  let mfd = match ast::Module::new(conf_path.to_str().unwrap()) {
+    Ok(r) => r,
+    Err(e) => return Err(format!("{}", e)),
   };
   
   let mut conf = Value::load_file(&mfd)?;

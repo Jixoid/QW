@@ -16,9 +16,9 @@ pub struct HirFieldCons {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HirPArrayType {
+pub struct HirArrayType {
   pub sub: HirId,
-  pub size: u64,
+  pub len: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,19 +50,13 @@ pub enum HirTypeVari {
   Void,
   Null,
 
-  ZArrayOf(HirId),
-  PArrayOf(HirPArrayType),
+  ArrayOf(HirArrayType),
 
   Function(HirFunType),
   Struct(HirStructType),
-  Iface(HirIfaceType),
   SelfType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HirIfaceType {
-  pub funs: Vec<HirFieldType>,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HirType {
@@ -89,8 +83,13 @@ impl fmt::Display for HirTypeVari {
       HirTypeVari::Ptr => write!(f, "{}", "ptr".blue().bold())?,
       HirTypeVari::Void => write!(f, "{}", "void".blue().bold())?,
       HirTypeVari::Null => write!(f, "{}", "null".blue().bold())?,
-      HirTypeVari::ZArrayOf(sub) => write!(f, "[{}]", sub)?,
-      HirTypeVari::PArrayOf(p) => write!(f, "[{},{}]", p.size, p.sub)?,
+      HirTypeVari::ArrayOf(arr) => {
+        if let Some(len) = arr.len {
+          write!(f, "[{}, {}]", arr.sub, len)?
+        } else {
+          write!(f, "[{}]", arr.sub)?
+        }
+      }
       
       HirTypeVari::Function(fun) => {
         write!(f, "{}{}", "fun".blue().bold(), "(".bright_black())?;
@@ -107,17 +106,6 @@ impl fmt::Display for HirTypeVari {
         for (i, v) in s.vars.iter().enumerate() {
           write!(f, "{}{} {}", v.name.blue().bold(), ":".bright_black(), v.kind)?;
           if i + 1 < s.vars.len() { write!(f, "{} ", ",".bright_black())?; }
-        }
-
-        write!(f, "{}", "}".bright_black())?;
-      }
-      
-      HirTypeVari::Iface(s) => {
-        write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
-
-        for (i, v) in s.funs.iter().enumerate() {
-          write!(f, "{}{} {}", v.name.blue().bold(), ":".bright_black(), v.kind)?;
-          if i + 1 < s.funs.len() { write!(f, "{} ", ",".bright_black())?; }
         }
 
         write!(f, "{}", "}".bright_black())?;

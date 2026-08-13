@@ -1,14 +1,14 @@
 use crate::diagnostic::{Message, MsgKind};
 use crate::sema::scopemng::ScopeManager;
 use super::Sema;
-use crate::control::identy::IdentyId;
+use crate::control::identy::AstId;
 use crate::ast::{TypeVari, TypeState};
 use std::mem;
 
 
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
-  pub fn check_type(&mut self, id: IdentyId) -> Result<(), Message<'a>> {
+  pub fn check_type(&mut self, id: AstId) -> Result<(), Message<'a>> {
     self.check_attributes(id)?;
     let state = self.mol.get_type(id).state;
     
@@ -51,12 +51,12 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
         }
       }
       
-      TypeVari::PointerOf{sub, ..} | TypeVari::ZArrayOf(sub) => {
+      TypeVari::PointerOf{sub, ..} => {
         self.check_type(*sub)?;
       }
       
-      TypeVari::PArrayOf(s) => {
-        self.check_type(s.sub)?;
+      TypeVari::ArrayOf{sub, ..} => {
+        self.check_type(*sub)?;
       }
       
       TypeVari::ReferenceOf{sub, ..} => {
@@ -130,6 +130,82 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
       TypeVari::Void |
       TypeVari::Null |
       TypeVari::SelfType => {}
+      
+      TypeVari::GenericInstance{base, args} => {
+        self.check_type(*base)?;
+        for arg in args.iter() {
+          self.check_type(*arg)?;
+        }
+        
+        let base_ty = self.mol.get_type(*base).vari.clone();
+        if let TypeVari::Path(p) = base_ty {
+          let base_decl_id = p[0];
+          
+          let inst_key = (base_decl_id, args.clone());
+          
+          if let Some(inst_decl_id) = self.mol.map_inst.get(&inst_key).copied() {
+            let inst_decl = self.mol.get_decl(inst_decl_id);
+            let type_id = if let crate::ast::DeclVari::Using(uid) = &inst_decl.vari {
+              *uid
+            } else {
+              inst_decl_id
+            };
+            vari = TypeVari::Path(vec![type_id]);
+          } else {
+            let (params_clone, inner_decls) = {
+              let base_decl = self.mol.get_decl(base_decl_id);
+              if let crate::ast::DeclVari::Generic(g) = &base_decl.vari {
+                (g.params.clone(), g.decls.clone())
+              } else {
+                let pos = crate::sema::type_s::get_word_from_type(self.mol, id).unwrap();
+                return Err(Message::error(pos, "expected generic type".to_string(), vec![]));
+              }
+            };
+            
+            let mut sub_map = std::collections::HashMap::new();
+            for (i, param) in params_clone.iter().enumerate() {
+              let param_name = param.name.str().to_string();
+              if i < args.len() {
+                sub_map.insert(param_name, args[i]);
+              }
+            }
+            
+            let mut specializer = crate::sema::specialize::Specializer::new(self.mol, sub_map);
+            
+            let inst_decl_id = specializer.clone_decl(inner_decls[0]);
+            let old_name = specializer.mol.get_decl(inst_decl_id).name.to_string();
+            let mut new_name = format!("{}G{}", old_name, args.len());
+            for arg in args.iter() {
+              new_name.push_str(&crate::hgen::mangle::qw::QwMangler::mangle_type(*arg, specializer.mol));
+            }
+            {
+              let inst_decl = specializer.mol.get_mut_decl(inst_decl_id);
+              inst_decl.name = crate::ast::DeclName::Name(new_name);
+            }
+
+            let root_id = crate::control::identy::AstId::new(crate::control::identy::IdentyKind::Decl, 0, 0);
+            if let crate::ast::DeclVari::Module(m) = &mut specializer.mol.get_mut_decl(root_id).vari {
+              m.decls.push(inst_decl_id);
+            }
+
+            let inst_decl = specializer.mol.get_decl(inst_decl_id);
+            let type_id = if let crate::ast::DeclVari::Using(uid) = &inst_decl.vari {
+              *uid
+            } else {
+              inst_decl_id // Fallback, though shouldn't happen for structs
+            };
+
+            specializer.mol.map_inst.insert(inst_key, inst_decl_id);
+            
+            vari = TypeVari::Path(vec![type_id]);
+            
+            self.check_decl(inst_decl_id)?;
+          }
+        } else {
+          let pos = crate::sema::type_s::get_word_from_type(self.mol, id).unwrap();
+          return Err(Message::error(pos, "expected valid path for generic base".to_string(), vec![]));
+        }
+      }
     }
 
     let ty = self.mol.get_mut_type(id);
@@ -142,12 +218,12 @@ impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 }
 
 
-fn get_word_from_type<'a>(mol: &crate::control::Module<'a, '_>, id: IdentyId) -> Option<crate::lexer::Word<'a>> {
+fn get_word_from_type<'a>(mol: &crate::control::Module<'a, '_>, id: AstId) -> Option<crate::lexer::Word<'a>> {
   let ty = mol.get_type(id);
   match &ty.vari {
     TypeVari::Nick(n) => Some(n.pos),
-    TypeVari::PointerOf{sub, ..} | TypeVari::ZArrayOf(sub) | TypeVari::ReferenceOf { sub, .. } => get_word_from_type(mol, *sub),
-    TypeVari::PArrayOf(s) => get_word_from_type(mol, s.sub),
+    TypeVari::PointerOf{sub, ..} | TypeVari::ReferenceOf { sub, .. } => get_word_from_type(mol, *sub),
+    TypeVari::ArrayOf{sub, ..} => get_word_from_type(mol, *sub),
     TypeVari::Function(f) => get_word_from_type(mol, f.ret),
     _ => None
   }
@@ -155,11 +231,11 @@ fn get_word_from_type<'a>(mol: &crate::control::Module<'a, '_>, id: IdentyId) ->
 
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
-  pub fn get_ty_void(&mut self) -> IdentyId {
+  pub fn get_ty_void(&mut self) -> AstId {
     ScopeManager::find(self.mol, self.mol.get_mod(), &["sys".to_string(), "void".to_string()]).expect("void type missing")
   }
   
-  pub fn get_ty_bool(&mut self) -> IdentyId {
+  pub fn get_ty_bool(&mut self) -> AstId {
     ScopeManager::find(self.mol, self.mol.get_mod(), &["sys".to_string(), "bool".to_string()]).expect("bool type missing")
   }
 

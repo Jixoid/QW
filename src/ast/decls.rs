@@ -1,7 +1,7 @@
 use core::fmt;
 use owo_colors::OwoColorize;
 
-use crate::{control::identy::IdentyId, lexer::Word};
+use crate::{ast, lexer::Word};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -29,108 +29,54 @@ impl fmt::Display for Visibility {
 }
 
 
-#[derive(Debug)]
-pub struct ModuleDecl {
-  pub decls: Vec<IdentyId>,
-}
-
-#[derive(Debug)]
 pub struct VarDecl {
-  pub kind: IdentyId,
+  pub kind: ast::TypeId,
   pub comptime: bool,
-  pub init: Option<IdentyId>,
-  pub acck: crate::ast::types::AccessKind,
+  pub init: Option<ast::ExprId>,
+  pub acck: ast::AccessKind,
 }
 
-#[derive(Debug)]
 pub struct FunDecl {
-  pub kind: IdentyId,
-  pub blok: IdentyId,
+  pub kind: ast::TypeId,
+  pub blok: ast::ExprId,
 }
 
 
-#[derive(Debug)]
-pub enum DeclVari<'a> {
-  Module(ModuleDecl),
+pub enum DeclVari {
   Var(VarDecl),
   Fun(FunDecl),
-  Using(IdentyId),
-  Import(Vec<(u32, Word<'a>)>, Option<IdentyId>),
-  ImportWildcard(Vec<(u32, Word<'a>)>, Option<IdentyId>),
+  Using(ast::TypeId),
 }
 
 
-#[derive(Debug)]
-pub enum DeclName<'a> {
-  Name(String),
-  Word(Word<'a>)
-}
-
-impl<'a> fmt::Display for DeclName<'a> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match &self {
-      DeclName::Name(s) => write!(f, "{}", s),
-      DeclName::Word(s) => write!(f, "{}", s.str()),
-    }
-  }
-}
-
-impl<'a> DeclName<'a> {
-  pub fn pos(&self) -> Option<&Word<'a>> {
-    match self {
-      DeclName::Word(w) => Some(w),
-      _ => None
-    }
-  }
-}
-
-
-#[derive(Debug)]
 pub struct Decl<'a> {
-  pub name: DeclName<'a>,
-  pub vari: DeclVari<'a>,
+  pub name: Word<'a>,
+  pub vari: DeclVari,
   pub vis: Visibility,
 }
 
 impl<'a> Decl<'a> {
 
-  pub fn new(name: Word<'a>, vari: DeclVari<'a>, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Word(name), vari, vis} }
+  pub fn new(name: Word<'a>, vari: DeclVari, vis: Visibility) -> Decl<'a> {
+    Decl {name, vari, vis}
+  }
   
-  pub fn new_str(name: String, vari: DeclVari<'a>, vis: Visibility) -> Decl<'a> { Decl{name: DeclName::Name(name), vari, vis} }
-
 }
 
 
 impl<'a> fmt::Display for Decl<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{} ", self.vis)?;
+    
     match &self.vari {
-      DeclVari::Module(s) => {
-        write!(f, "{} {} {} {}",
-          self.vis,
-          "module".blue().bold(),
-          self.name.white().bold(),
-          "[".bright_black(),
-        )?;
-
-        for (i, x) in s.decls.iter().enumerate() {
-          write!(f, "{}", x)?;
-          if i + 1 < s.decls.len() {
-            write!(f, "{}", ", ".bright_black())?;
-          }
-        }
-
-        write!(f, "{}", "]".bright_black())?;
-      }
-      
       DeclVari::Var(_s) => {
-        write!(f, "{} {} {}", self.vis, "var".blue().bold(), self.name.white().bold())?;
+        write!(f, "{} {}", "var".blue().bold(), self.name.str().white().bold())?;
       }
       
       DeclVari::Fun(s) => {
-        write!(f, "{} {} {}{} {} {} {}",
-          self.vis,
+        write!(f, "{} {}{} {} {} {}",
           "fun".blue().bold(),
-          self.name.white().bold(),
+          self.name.str().white().bold(),
           ":".bright_black(),
           s.kind,
           "=".bright_black(),
@@ -139,22 +85,14 @@ impl<'a> fmt::Display for Decl<'a> {
       }
       
       DeclVari::Using(s) => {
-        write!(f, "{} {} {} {} {}",
-          self.vis,
+        write!(f, "{} {} {} {}",
           "using".blue().bold(),
-          self.name.white().bold(),
+          self.name.str().white().bold(),
           "=".bright_black(),
           s
         )?;
       }
       
-      DeclVari::Import(_path, _) => {
-        write!(f, "{} {} {}", self.vis, "use".blue().bold(), self.name.white().bold())?;
-      }
-      
-      DeclVari::ImportWildcard(_path, _) => {
-        write!(f, "{} {} {}::*", self.vis, "use".blue().bold(), self.name.white().bold())?;
-      }
     };
     
     Ok(())

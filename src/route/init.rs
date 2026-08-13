@@ -1,7 +1,7 @@
 use std::{env, fs, path::PathBuf};
 use uuid::Uuid;
 
-use crate::{control::module::{self}, ds::Value};
+use crate::{ds::Value, error::{CompilerError, Result}};
 
 
 
@@ -10,10 +10,11 @@ pub struct InitInfo {
   pub name: String,
   pub desc: String,
   pub no_git: bool,
+  pub force: bool,
 }
 
 
-pub fn init(info: InitInfo) -> module::Result<()> {
+pub fn init(info: InitInfo) -> Result<()> {
 
   let path = if info.path.is_empty() {
     env::current_dir()?
@@ -21,13 +22,13 @@ pub fn init(info: InitInfo) -> module::Result<()> {
     PathBuf::from(&info.path)
   };
 
-  if !path.exists() { return Err(module::CompilerError::Str(format!("the path does not exist: {}", path.display()))); }
+  if !path.exists() { return Err(CompilerError::Str(format!("the path does not exist: {}", path.display()))); }
 
-  if !path.is_dir() { return Err(module::CompilerError::Str(format!("the path is not a directory: {}", path.display()))); }
+  if !path.is_dir() { return Err(CompilerError::Str(format!("the path is not a directory: {}", path.display()))); }
 
   let is_not_empty = fs::read_dir(&path)?.next().is_some();
 
-  if is_not_empty { return Err(module::CompilerError::Str("the directory is not empty".to_string())); }
+  if is_not_empty && !info.force { return Err(CompilerError::Str("the directory is not empty".to_string())); }
   
   //: Path Configured
 
@@ -50,7 +51,7 @@ pub fn init(info: InitInfo) -> module::Result<()> {
 
   conf.save_file(String::from(match path.join("qw.conf").to_str() {
     Some(r) => r,
-    None => return Err(module::CompilerError::Str("cannot write: qw.conf".to_string())),
+    None => return Err(CompilerError::Str("cannot write: qw.conf".to_string())),
   }))?;
 
   //: Manifest Writed
@@ -71,10 +72,10 @@ pub fn init(info: InitInfo) -> module::Result<()> {
       .arg(&path)
       .args(["init", "-q"])
       .status()
-      .map_err(|e| module::CompilerError::Str(format!("Git çalıştırılamadı: {e}")))?;
+      .map_err(|e| CompilerError::Str(format!("Git çalıştırılamadı: {e}")))?;
 
     if !status.success() {
-      return Err(module::CompilerError::Str("git repo cannot be initialized".to_string()));
+      return Err(CompilerError::Str("git repo cannot be initialized".to_string()));
     }
   };
 

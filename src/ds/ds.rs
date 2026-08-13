@@ -1,5 +1,7 @@
 use std::fs;
-use crate::{control::module::{self, CompilerError, ModuleFile}, lexer::{Lexer, Word, WordKind}};
+
+use crate::{ast, error::CompilerError, lexer::{Lexer, Word, WordKind}};
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeArr {
@@ -52,7 +54,7 @@ impl Value {
   pub fn make_array() -> Value { return Value::Arr(TypeArr::new()); }
   pub fn make_tuple() -> Value { return Value::Tup(TypeArr::new()); }
 
-  pub fn push_array(&mut self, v: Value) -> module::Result<()> {
+  pub fn push_array(&mut self, v: Value) -> crate::error::Result<()> {
     match self {
       Self::Arr(subs) => subs.subs.push(v),
       _ => return Err(CompilerError::Ds(String::from("type is not array"))),
@@ -61,7 +63,7 @@ impl Value {
     Ok(())
   }
 
-  pub fn push_struct(&mut self, s: &str, v: Value) -> module::Result<()> {
+  pub fn push_struct(&mut self, s: &str, v: Value) -> crate::error::Result<()> {
     match self {
       Self::Stc(subs) => subs.subs.push(SubTypeStc {kind: v, name: String::from(s) }),
       _ => return Err(CompilerError::Ds(String::from("type is not struct"))),
@@ -71,7 +73,7 @@ impl Value {
   }
 
 
-  pub fn load_file(m: &ModuleFile) -> Result<Value, String> {
+  pub fn load_file(m: &ast::Module) -> Result<Value, String> {
     let mut lexer = Lexer::new_module(m);
     let mut parser = Parser::new(&mut lexer);
     parser.parse()
@@ -191,7 +193,12 @@ impl<'a, 'c> Parser<'a, 'c> {
   }
 
   fn text(&self, w: &Word<'a>) -> String {
-    self.lexer.mol.mmap[w.off .. w.off + w.size].to_string()
+    let rng = (w.off as usize)..((w.off as usize)+(w.size as usize));
+
+    match str::from_utf8(&self.lexer.mol.mmap[rng]) {
+      Ok(r) => r,
+      Err(..) => panic!("utf8 fail!"),
+    }.to_string()
   }
 
   fn unquote(s: &str) -> String {

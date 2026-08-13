@@ -39,8 +39,35 @@ impl<'a> BasicCGen<'a> {
 			crate::hir::types::HirTypeVari::Void => ctx.void_type().into(),
 			crate::hir::types::HirTypeVari::Null => ctx.ptr_type(AddressSpace::default()).into(),
 			crate::hir::types::HirTypeVari::Function(_) => ctx.ptr_type(AddressSpace::default()).into(),
-			crate::hir::types::HirTypeVari::Struct(_) | crate::hir::types::HirTypeVari::Iface(_) => structs.get(&ty_id).unwrap().clone().into(),
+			crate::hir::types::HirTypeVari::Struct(_) => structs.get(&ty_id).unwrap().clone().into(),
+			crate::hir::types::HirTypeVari::ArrayOf(arr) => {
+				if let Some(len) = arr.len {
+					let elem_any_ty = self.type_to_llvm(ctx, hir_mol, arr.sub, structs);
+					let elem_basic_ty = self.any_type_to_basic(elem_any_ty);
+					elem_basic_ty.array_type(len as u32).into()
+				} else {
+					// Dynamic slice fat pointer: { ptr, len (usize) }
+					let ptr_ty = ctx.ptr_type(AddressSpace::default()).as_basic_type_enum();
+					let usize_ty = if self.target.pointer_size == 4 {
+						ctx.i32_type().as_basic_type_enum()
+					} else {
+						ctx.i64_type().as_basic_type_enum()
+					};
+					ctx.struct_type(&[ptr_ty, usize_ty], false).into()
+				}
+			}
 			_ => panic!("unimplemented type in cgen: {:?}", ty.vari),
+		}
+	}
+
+	fn any_type_to_basic<'ctx>(&self, any_ty: AnyTypeEnum<'ctx>) -> inkwell::types::BasicTypeEnum<'ctx> {
+		match any_ty {
+			AnyTypeEnum::IntType(t) => t.into(),
+			AnyTypeEnum::FloatType(t) => t.into(),
+			AnyTypeEnum::PointerType(t) => t.into(),
+			AnyTypeEnum::StructType(t) => t.into(),
+			AnyTypeEnum::ArrayType(t) => t.into(),
+			_ => panic!("Expected basic type, found {:?}", any_ty),
 		}
 	}
 }
@@ -59,10 +86,6 @@ impl<'a> ICGen for BasicCGen<'a> {
 			if let crate::hir::types::HirTypeVari::Struct(_) = &t.vari {
 				let st = context.opaque_struct_type(&format!("type.{}", i));
 				structs.insert(id, st);
-			} else if let crate::hir::types::HirTypeVari::Iface(_) = &t.vari {
-				let st = context.opaque_struct_type(&format!("type.{}", i));
-				st.set_body(&[], false);
-				structs.insert(id, st);
 			}
 		}
 
@@ -73,15 +96,7 @@ impl<'a> ICGen for BasicCGen<'a> {
 				let mut field_types = Vec::new();
 				for f in &s.vars {
 					let field_ty = self.type_to_llvm(&context, hir_mol, f.kind, &structs);
-					if field_ty.is_int_type() {
-						field_types.push(field_ty.into_int_type().as_basic_type_enum());
-					} else if field_ty.is_float_type() {
-						field_types.push(field_ty.into_float_type().as_basic_type_enum());
-					} else if field_ty.is_pointer_type() {
-						field_types.push(field_ty.into_pointer_type().as_basic_type_enum());
-					} else if field_ty.is_struct_type() {
-						field_types.push(field_ty.into_struct_type().as_basic_type_enum());
-					}
+					field_types.push(self.any_type_to_basic(field_ty));
 				}
 				structs.get(&id).unwrap().set_body(&field_types, false);
 			}
@@ -91,7 +106,7 @@ impl<'a> ICGen for BasicCGen<'a> {
 		for (i, g) in hir_mol.list_global.iter().enumerate() {
 			let id = crate::hir::identy::HirId::new(crate::hir::identy::HirKind::Global, 0, i as u32);
 			let ty = self.type_to_llvm(&context, hir_mol, g.ty, &structs);
-			let basic_ty = if ty.is_int_type() { ty.into_int_type().as_basic_type_enum() } else if ty.is_float_type() { ty.into_float_type().as_basic_type_enum() } else if ty.is_struct_type() { ty.into_struct_type().as_basic_type_enum() } else { ty.into_pointer_type().as_basic_type_enum() };
+			let basic_ty = self.any_type_to_basic(ty);
 			let global_val = module.add_global(basic_ty, None, &g.name);
 			global_val.set_constant(g.is_const);
 			if g.is_weak {
@@ -109,17 +124,13 @@ impl<'a> ICGen for BasicCGen<'a> {
 			let mut arg_types: Vec<inkwell::types::BasicMetadataTypeEnum> = Vec::new();
 			for arg_ty_id in &f.arg_tys {
 				let ty = self.type_to_llvm(&context, hir_mol, *arg_ty_id, &structs);
-				let basic_ty = if ty.is_int_type() { ty.into_int_type().as_basic_type_enum() } else if ty.is_float_type() { ty.into_float_type().as_basic_type_enum() } else if ty.is_struct_type() { ty.into_struct_type().as_basic_type_enum() } else { ty.into_pointer_type().as_basic_type_enum() };
+				let basic_ty = self.any_type_to_basic(ty);
 				arg_types.push(basic_ty.into());
 			}
 			let fn_type = if ret_ty.is_void_type() {
 				ret_ty.into_void_type().fn_type(&arg_types, false)
-			} else if ret_ty.is_int_type() {
-				ret_ty.into_int_type().fn_type(&arg_types, false)
-			} else if ret_ty.is_float_type() {
-				ret_ty.into_float_type().fn_type(&arg_types, false)
 			} else {
-				ret_ty.into_pointer_type().fn_type(&arg_types, false)
+				self.any_type_to_basic(ret_ty).fn_type(&arg_types, false)
 			};
 			
 			let fn_val = module.add_function(&f.name, fn_type, if f.is_weak { Some(Linkage::WeakAny) } else { None });
@@ -136,12 +147,9 @@ impl<'a> ICGen for BasicCGen<'a> {
 				let ret_ty = self.type_to_llvm(&context, hir_mol, f.ret_ty, &structs);
 				if ret_ty.is_void_type() {
 					builder.build_return(None).unwrap();
-				} else if ret_ty.is_int_type() {
-					builder.build_return(Some(&ret_ty.into_int_type().const_zero())).unwrap();
-				} else if ret_ty.is_float_type() {
-					builder.build_return(Some(&ret_ty.into_float_type().const_zero())).unwrap();
 				} else {
-					builder.build_return(Some(&ret_ty.into_pointer_type().const_null())).unwrap();
+					let basic_ret = self.any_type_to_basic(ret_ty);
+					builder.build_return(Some(&basic_ret.const_zero())).unwrap();
 				}
 			} else {
 				let mut blocks = HashMap::new();
@@ -161,7 +169,7 @@ impl<'a> ICGen for BasicCGen<'a> {
 						match &instr.vari {
 							crate::hir::instr::HirInstrVari::Alloca(ty_id) => {
 								let ty = self.type_to_llvm(&context, hir_mol, *ty_id, &structs);
-								let basic_ty = if ty.is_int_type() { ty.into_int_type().as_basic_type_enum() } else if ty.is_float_type() { ty.into_float_type().as_basic_type_enum() } else if ty.is_struct_type() { ty.into_struct_type().as_basic_type_enum() } else { ty.into_pointer_type().as_basic_type_enum() };
+								let basic_ty = self.any_type_to_basic(ty);
 								let ptr = builder.build_alloca(basic_ty, &format!("alloca_{}", instr_id.index())).unwrap();
 								vals.insert(*instr_id, ptr.into());
 							}
@@ -188,7 +196,7 @@ impl<'a> ICGen for BasicCGen<'a> {
 										_ => panic!("Invalid pointer for load"),
 								}.into_pointer_value();
 								let ty = self.type_to_llvm(&context, hir_mol, *ty_id, &structs);
-								let basic_ty = if ty.is_int_type() { ty.into_int_type().as_basic_type_enum() } else if ty.is_float_type() { ty.into_float_type().as_basic_type_enum() } else if ty.is_struct_type() { ty.into_struct_type().as_basic_type_enum() } else { ty.into_pointer_type().as_basic_type_enum() };
+								let basic_ty = self.any_type_to_basic(ty);
 								let loaded = builder.build_load(basic_ty, p, &format!("load_{}", instr_id.index())).unwrap();
 								vals.insert(*instr_id, loaded);
 							}
@@ -249,6 +257,24 @@ impl<'a> ICGen for BasicCGen<'a> {
 								let cmp = builder.build_int_compare(pred, l, r, &format!("icmp_{}", instr_id.index())).unwrap();
 								vals.insert(*instr_id, cmp.into());
 							}
+							crate::hir::instr::HirInstrVari::GetElementPtr(elem_ty_id, ptr, indices) => {
+								let get_val = |v: &crate::hir::value::HirValue| -> BasicValueEnum {
+									match v {
+										crate::hir::value::HirValue::ConstInt(i) => context.i64_type().const_int(*i as u64, false).into(),
+										crate::hir::value::HirValue::ConstFloat(f) => context.f64_type().const_float(*f).into(),
+										crate::hir::value::HirValue::ConstBool(b) => context.bool_type().const_int(if *b { 1 } else { 0 }, false).into(),
+										crate::hir::value::HirValue::Reg(id) => *vals.get(id).unwrap(),
+										crate::hir::value::HirValue::Global(id) => global_vars.get(id).unwrap().as_pointer_value().into(),
+										crate::hir::value::HirValue::Null => context.ptr_type(AddressSpace::default()).const_null().into(),
+									}
+								};
+								let p = get_val(ptr).into_pointer_value();
+								let elem_any_ty = self.type_to_llvm(&context, hir_mol, *elem_ty_id, &structs);
+								let elem_basic_ty = self.any_type_to_basic(elem_any_ty);
+								let llvm_indices: Vec<inkwell::values::IntValue> = indices.iter().map(|&idx| context.i32_type().const_int(idx as u64, false)).collect();
+								let gep = unsafe { builder.build_gep(elem_basic_ty, p, &llvm_indices, &format!("gep_{}", instr_id.index())).unwrap() };
+								vals.insert(*instr_id, gep.into());
+							}
 							_ => todo!("cgen: unimplemented instr {:?}", instr.vari),
 						}
 					}
@@ -257,5 +283,54 @@ impl<'a> ICGen for BasicCGen<'a> {
 		}
 
 		module.print_to_string().to_string()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::hir::types::{HirType, HirTypeVari};
+	use crate::hir::module::HirModule;
+	use crate::layout::Target;
+
+	#[test]
+	fn test_cgen_parray() {
+		let mut hir_mol = HirModule::new("test_parray".to_string());
+		let target = Target::new_64bit();
+		
+		let i32_id = hir_mol.new_type(HirType { vari: HirTypeVari::Int { bit: 32, sig: true } });
+		let arr_id = hir_mol.new_type(HirType {
+			vari: HirTypeVari::ArrayOf(crate::hir::types::HirArrayType { sub: i32_id, len: Some(8) }),
+		});
+
+		let cgen = BasicCGen::new(&target);
+		let context = Context::create();
+		let structs = HashMap::new();
+		
+		let llvm_ty = cgen.type_to_llvm(&context, &hir_mol, arr_id, &structs);
+		assert!(llvm_ty.is_array_type());
+		assert_eq!(llvm_ty.into_array_type().len(), 8);
+	}
+
+	#[test]
+	fn test_cgen_slice_fat_pointer() {
+		let mut hir_mol = HirModule::new("test_slice".to_string());
+		let target = Target::new_64bit();
+		
+		let u32_id = hir_mol.new_type(HirType { vari: HirTypeVari::Int { bit: 32, sig: false } });
+		let slice_id = hir_mol.new_type(HirType {
+			vari: HirTypeVari::ArrayOf(crate::hir::types::HirArrayType { sub: u32_id, len: None }),
+		});
+
+		let cgen = BasicCGen::new(&target);
+		let context = Context::create();
+		let structs = HashMap::new();
+		
+		let llvm_ty = cgen.type_to_llvm(&context, &hir_mol, slice_id, &structs);
+		assert!(llvm_ty.is_struct_type());
+		let st = llvm_ty.into_struct_type();
+		assert_eq!(st.count_fields(), 2);
+		assert!(st.get_field_type_at_index(0).unwrap().is_pointer_type());
+		assert!(st.get_field_type_at_index(1).unwrap().is_int_type());
 	}
 }

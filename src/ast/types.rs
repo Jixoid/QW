@@ -1,339 +1,274 @@
 use core::fmt;
 use owo_colors::OwoColorize;
 
-use crate::{ast::Visibility, control::{identy::IdentyId, module::Module}, lexer::Word};
+use crate::{ast::{self, ExprId, Rng, TypeId, Visibility}, lexer::Word};
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AccessKind { IMM, MUT }
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct FieldType<'a> {
   pub name: Word<'a>,
-  pub kind: IdentyId,
+  pub kind: TypeId,
   pub vis: Visibility,
-  pub attrs: Vec<crate::ast::Attribute<'a>>,
+  pub attrs: Vec<crate::ast::Attr<'a>>,
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum IntegerValue {
-  SIG(i64),
-  USG(u64),
-}
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum IntegerValue { SIG(i64), USG(u64) }
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct FieldCons<'a> {
   pub val: IntegerValue,
   pub name: Word<'a>,
 }
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct NickType<'a> {
   pub pos: Word<'a>,
   pub idx: u32
 }
 
-impl<'a> NickType<'a> {
 
-  pub fn new(mol: &mut Module, p: Word<'a>) -> NickType<'a> {
-    let idx = match mol.nick_map.iter().position(|x| x == p.str()) {
-      Some(r) => r,
-      None => {
-        let a = mol.nick_map.len();
-        mol.nick_map.push(p.string());
-        a
-      }
-    } as u32;
-
-    NickType{pos: p, idx}
-  }
-
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PArrayType {
-  pub sub: IdentyId,
-  pub size: u64,
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunType<'a> {
-  pub args: Vec<FieldType<'a>>,
-  pub is_static: bool,
-  pub is_const: bool,
-  pub ret: IdentyId,
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StructType<'a> {
-  pub base: Vec<IdentyId>,
-  pub vars: Vec<FieldType<'a>>,
-  pub funs: Vec<IdentyId>,
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnumType<'a> {
-  pub vals: Vec<FieldCons<'a>>,
-}
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FlagsType<'a> {
-  pub vals: Vec<FieldCons<'a>>,
-}
-
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IfaceType<'a> {
-  pub funs: Vec<FieldType<'a>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TraitType<'a> {
-  pub funs: Vec<FieldType<'a>>,
-}
-
-
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeVari<'a> {
-  Int{bit: u32, sig: bool},
-  Float{bit: u32},
-  ArchSize{sig: bool},
-  Bool,
-  Char,
-  Ptr,
-  Void,
-  Null,
-
+pub enum Type<'a> {
   Nick(NickType<'a>),
-  SelfType,
-  UnresolvedPath(Vec<NickType<'a>>),
-  Path(Vec<IdentyId>),
+  Path(Vec<TypeId>),
+
+  InitParam{name: Word<'a>, expr: ExprId},
   
-  PointerOf{sub: IdentyId, acc: AccessKind},
-  ReferenceOf{sub: IdentyId, acc: AccessKind},
-  ZArrayOf(IdentyId),
-  PArrayOf(PArrayType),
+  Ptr   {sub: TypeId, acc: AccessKind},
+  Ref   {sub: TypeId, acc: AccessKind},
+  Array {sub: TypeId, ext: Vec<u32>},
+  Vector{sub: TypeId, ext: u32},
+  Range {sub: TypeId},
+  Option{sub: TypeId},
+  Result{sub: TypeId, err: TypeId},
+  
+  Struct{vars: Vec<FieldType<'a>>},
+  Tuple {vars: Vec<TypeId>},
 
-  Function(FunType<'a>),
-  Struct(StructType<'a>),
-  Iface(IfaceType<'a>),
-  Trait(TraitType<'a>),
-  Enum(EnumType<'a>),
-  Flags(FlagsType<'a>),
-}
+  Iface{funs: Vec<FieldType<'a>>},
+  Trait{funs: Vec<FieldType<'a>>},
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TypeState {
-  Unresolved,
-  Resolving,
-  Resolved,
-}
+  Fun {args: Vec<FieldType<'a>>, ret: Option<TypeId>},
+  Init{args: Vec<FieldType<'a>>, ils: Option<Rng>},
 
-#[derive(Debug)]
-pub struct Type<'a> {
-  pub vari: TypeVari<'a>,
-  pub state: TypeState,
+  Enum {vals: Vec<FieldCons<'a>>},
+  Flags{vals: Vec<FieldCons<'a>>},
+
+  Specialize{base: TypeId, args: Vec<TypeId>},
 }
 
 impl<'a> Type<'a> {
-  pub fn display<'m>(&'a self, module: &'m Module) -> TypeDisplay<'a, 'm> {
+  pub fn display<'m>(&'a self, module: &'m ast::Crate) -> TypeDisplay<'a, 'm> {
     TypeDisplay(self, module)
   }
 }
 
-
-pub struct TypeDisplay<'a, 'm>(pub &'a Type<'a>, pub &'m Module<'m,'m>);
+pub struct TypeDisplay<'a, 'm>(pub &'a Type<'a>, pub &'m ast::Crate<'m,'m>);
 
 impl<'a, 'm> fmt::Display for TypeDisplay<'a, 'm> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let ty = self.0;
     let mol = self.1;
 
-    match &ty.vari {
-      TypeVari::Nick(s) => {
-        write!(f, "{}{}{}{:x}",
-          "\"".yellow().bold(),
-          mol.nick_map[s.idx as usize].yellow().bold(),
-          "\"".yellow().bold(),
-          s.idx
-        )?;
+    match &ty {
+      Type::Nick(s) => {
+        write!(f, "{}", mol.str_pool[s.idx as usize].yellow().bold())?;
       }
 
-      TypeVari::Path(path) => {
-        write!(f, "{} ", "path".blue().bold())?;
-
-        for (i, x) in path.iter().enumerate() {
-          write!(f, "{x}", )?;
-          if i + 1 < path.len() {
-            write!(f, "{}", "::".bright_black())?;
-          }
+      Type::Path(s) => {
+        for (i, x) in s.iter().enumerate() {
+          write!(f, "{}", mol.get_type(*x).display(mol))?;
+          
+          if i +1 < s.len() { write!(f, "{}", "::".bright_black())?; }
         }
       }
 
-      TypeVari::Void => write!(f, "{}", "void".blue().bold())?,
-      TypeVari::Null => write!(f, "{}", "null_t".blue().bold())?,
 
-      TypeVari::Bool => write!(f, "{}", "bool".blue().bold())?,
-      TypeVari::Char => write!(f, "{}", "char".blue().bold())?,
-      TypeVari::Ptr  => write!(f, "{}", "ptr".blue().bold())?,
+      Type::InitParam{name, expr} => {
+        write!(f, "{}({})", name.str(), expr)?;
+      }
 
-      TypeVari::ArchSize{sig} => write!(f, "{}", format!("{}{}", if *sig {"i"} else {"u"}, "size").blue().bold())?,
 
-      TypeVari::Int{bit, sig} => write!(f, "{}", format!("{}{}", if *sig {"i"} else {"u"}, *bit).blue().bold())?,
-      TypeVari::Float{bit} => write!(f, "{}", format!("f{}", *bit).blue().bold())?,
+      Type::Ptr{sub, acc} => {
+        let acc = match acc { AccessKind::IMM => "imm", AccessKind::MUT => "mut" };
 
-      TypeVari::Function(s) => {
+        write!(f, "{}{} {}", "^".blue().bold(), acc.green().bold(), mol.get_type(*sub).display(mol))?;
+      }
+
+      Type::Ref{sub, acc} => {
+        let acc = match acc { AccessKind::IMM => "imm", AccessKind::MUT => "mut" };
+
+        write!(f, "{}{} {}", "&".blue().bold(), acc.green().bold(), mol.get_type(*sub).display(mol))?;
+      }
+
+      Type::Array{sub, ext} => {
+        let mut str: String = format!("{}", mol.get_type(*sub).display(mol));
+        
+        for x in ext { str += &format!("{} {}", ",".bright_black(), x.white().bold()); }
+
+        write!(f, "{}{}{}", "[".bright_black(), str, "]".bright_black())?;
+      }
+
+      Type::Vector{sub, ext} => {
+        write!(f, "{}{} x {}{}", "[".bright_black(), mol.get_type(*sub).display(mol), ext, "]".bright_black())?;
+      }
+
+      Type::Range{sub} => {
+        write!(f, "{}{}", "..".bright_black(), mol.get_type(*sub).display(mol))?;
+      }
+
+      Type::Option{sub} => {
+        write!(f, "{}{}", "?".bright_black(), mol.get_type(*sub).display(mol))?;
+      }
+      
+      Type::Result{sub, err} => {
+        write!(f, "{}{}{}", mol.get_type(*sub).display(mol), "?".bright_black(), mol.get_type(*err).display(mol))?;
+      }
+
+
+      Type::Struct{vars} => {
+        write!(f, "{}{}", "struct".blue().bold(), "{".bright_black())?;
+
+        for (i, x) in vars.iter().enumerate() {
+          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < vars.len() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+      Type::Tuple{vars} => {
+        let mut str = String::new();
+        
+        for (i, x) in vars.iter().enumerate() {
+          str += &format!("{}", mol.get_type(*x).display(mol).white().bold());
+        
+          if i +1 < vars.len() { str += &format!("{}", ", ".bright_black()); }
+        }
+        
+        write!(f, "{}{}{}", "(".bright_black(), str, ")".bright_black())?;
+      }
+      
+
+      Type::Iface{funs} => {
+        write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
+
+        for (i, x) in funs.iter().enumerate() {
+          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < funs.len() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+      Type::Trait{funs} => {
+        write!(f, "{}{}", "trait".blue().bold(), "{".bright_black())?;
+
+        for (i, x) in funs.iter().enumerate() {
+          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < funs.len() {
+            write!(f, "{} ", ";".bright_black())?;
+          }
+        }
+
+        write!(f, "{}", "}".bright_black())?;
+      }
+
+
+      Type::Fun{args, ret} => {
         write!(f, "{}{}", "fun".blue().bold(), "(".bright_black())?;
         
-        for (i, x) in s.args.iter().enumerate() {
+        for (i, x) in args.iter().enumerate() {
           write!(f, "{}{} {}", x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
-          if i + 1 < s.args.len() {
-            write!(f, "{} ", ";".bright_black())?;
+          if i + 1 < args.len() {
+            write!(f, "{} ", ",".bright_black())?;
           }
         }
 
         write!(f, "{}", ")".bright_black())?;
+
+        if let Some(ret) = ret {
+          write!(f, "{}", " -> ".bright_black())?;
+
+          write!(f, "{}", mol.get_type(*ret).display(mol))?;
+        }
+      }
+
+      Type::Init{args, ils} => {
+        write!(f, "{}{}", "init".blue().bold(), "(".bright_black())?;
         
-        if s.is_static {
-          write!(f, "{}", " static".green().bold())?;
-        }
-        
-        if s.is_const {
-          write!(f, "{}", " const".green().bold())?;
-        }
-
-        write!(f, "{}", " -> ".bright_black())?;
-
-        write!(f, "{}", mol.get_type(s.ret).display(mol))?;
-      }
-
-      TypeVari::Struct(s) => {
-        write!(f, "{}{}", "struct".blue().bold(), "{".bright_black())?;
-
-        for (i, x) in s.vars.iter().enumerate() {
-          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
-          if i + 1 < s.vars.len() || !s.funs.is_empty() {
-            write!(f, "{} ", ";".bright_black())?;
+        for (i, x) in args.iter().enumerate() {
+          write!(f, "{}{} {}", x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
+          if i + 1 < args.len() {
+            write!(f, "{} ", ",".bright_black())?;
           }
         }
 
-        for (i, x) in s.funs.iter().enumerate() {
-          let fun_decl = mol.get_decl(*x);
-          write!(f, "{} {}{}", fun_decl.vis, "fun ".blue().bold(), fun_decl.name.to_string().blue().bold())?;
-          
-          if let crate::ast::DeclVari::Fun(fdecl) = &fun_decl.vari {
-             write!(f, ": {}", mol.get_type(fdecl.kind).display(mol))?;
-          }
-          if i + 1 < s.funs.len() {
-            write!(f, "{} ", ";".bright_black())?;
-          }
-        }
+        write!(f, "{}", ")".bright_black())?;
 
-        write!(f, "{}", "}".bright_black())?;
-      }
 
-      TypeVari::Iface(s) => {
-        write!(f, "{}{}", "iface".blue().bold(), "{".bright_black())?;
-
-        for (i, x) in s.funs.iter().enumerate() {
-          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
-          if i + 1 < s.funs.len() {
-            write!(f, "{} ", ";".bright_black())?;
-          }
-        }
-
-        write!(f, "{}", "}".bright_black())?;
-      }
-
-      TypeVari::Trait(s) => {
-        write!(f, "{}{}", "trait".blue().bold(), "{".bright_black())?;
-
-        for (i, x) in s.funs.iter().enumerate() {
-          write!(f, "{} {}{} {}", x.vis, x.name.str().blue().bold(), ":".bright_black(), mol.get_type(x.kind).display(mol))?;
-          if i + 1 < s.funs.len() {
-            write!(f, "{} ", ";".bright_black())?;
-          }
-        }
-
-        write!(f, "{}", "}".bright_black())?;
-      }
-
-      TypeVari::ReferenceOf{sub, acc} => {
-        let acc_str = match acc {
-          AccessKind::IMM => "imm ",
-          AccessKind::MUT => "mut ",
-        };
-        let sub_ty = mol.get_type(*sub);
-        match &sub_ty.vari {
-          TypeVari::Struct(_) | TypeVari::Iface(_) => {
-            write!(f, "{}{}{}", "&".blue().bold(), acc_str.blue().bold(), sub)?;
-          }
-          _ => {
-            write!(f, "{}{}{}", "&".blue().bold(), acc_str.blue().bold(), sub_ty.display(mol))?;
-          }
+        if let Some(ils) = ils {
+          write!(f, "{} {:?}", ":".bright_black(), ils)?;
         }
       }
 
-      TypeVari::PointerOf{sub, acc} => {
-        let acc_str = match acc {
-          AccessKind::IMM => "imm ",
-          AccessKind::MUT => "mut ",
-        };
-        let sub_ty = mol.get_type(*sub);
-        match &sub_ty.vari {
-          TypeVari::Struct(_) | TypeVari::Iface(_) => {
-            write!(f, "{}{}{}", "^".blue().bold(), acc_str.blue().bold(), sub)?;
-          }
-          _ => {
-            write!(f, "{}{}{}", "^".blue().bold(), acc_str.blue().bold(), sub_ty.display(mol))?;
-          }
-        }
-      }
 
-      TypeVari::Enum(e) => {
+      Type::Enum{vals} => {
         write!(f, "{}{}", "enum".blue().bold(), "{".bright_black())?;
-        for (i, x) in e.vals.iter().enumerate() {
+        for (i, x) in vals.iter().enumerate() {
           write!(f, "{}", x.name.str().blue().bold())?;
           let val_str = match x.val {
             IntegerValue::SIG(v) => format!("{}", v),
             IntegerValue::USG(v) => format!("{}", v),
           };
           write!(f, " {} {}", "=".bright_black(), val_str.green())?;
-          if i + 1 < e.vals.len() {
+          if i + 1 < vals.len() {
             write!(f, "{} ", ",".bright_black())?;
           }
         }
         write!(f, "{}", "}".bright_black())?;
       }
 
-      TypeVari::Flags(e) => {
+      Type::Flags{vals} => {
         write!(f, "{}{}", "flags".blue().bold(), "{".bright_black())?;
-        for (i, x) in e.vals.iter().enumerate() {
+        for (i, x) in vals.iter().enumerate() {
           write!(f, "{}", x.name.str().blue().bold())?;
           let val_str = match x.val {
             IntegerValue::SIG(v) => format!("{}", v),
             IntegerValue::USG(v) => format!("{}", v),
           };
           write!(f, " {} {}", "=".bright_black(), val_str.green())?;
-          if i + 1 < e.vals.len() {
+          if i + 1 < vals.len() {
             write!(f, "{} ", ",".bright_black())?;
           }
         }
         write!(f, "{}", "}".bright_black())?;
       }
 
-      _ => write!(f, "unknown")?,
+
+      Type::Specialize{base, args} => {
+        write!(f, "{} {}<", "generic".blue().bold(), mol.get_type(*base).display(mol))?;
+        
+        for (i, x) in args.iter().enumerate() {
+          write!(f, "{}", mol.get_type(*x).display(mol))?;
+          
+          if i+1 < args.len() { write!(f, ", ")? }
+        }
+
+        write!(f, ">")?;
+      }
+
     }
 
     Ok(())

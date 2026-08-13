@@ -1,4 +1,4 @@
-use crate::control::identy::IdentyId;
+use crate::control::identy::AstId;
 use crate::control::module::Module;
 use super::Mangler;
 
@@ -8,7 +8,7 @@ impl ItaniumMangler {
   
   pub fn new() -> Self { Self {} }
 
-  pub fn mangle_type(arg: IdentyId, ast_mol: &Module) -> String {
+  pub fn mangle_type(arg: AstId, ast_mol: &Module) -> String {
     let ty = ast_mol.get_type(arg);
     use crate::ast::types::TypeVari;
     match &ty.vari {
@@ -72,7 +72,7 @@ impl ItaniumMangler {
 
 impl Mangler for ItaniumMangler {
 
-  fn mangle_func(&self, path: &[String], func_name: &str, _self_ty: Option<IdentyId>, _ret_ty: Option<IdentyId>, arg_tys: &[IdentyId], ast_mol: &Module) -> String {
+  fn mangle_func(&self, path: &[String], func_name: &str, _self_ty: Option<AstId>, _ret_ty: Option<AstId>, arg_tys: &[AstId], ast_mol: &Module) -> String {
     let mut s = String::from("_ZN");
     for p in path {
       s.push_str(&format!("{}{}", p.len(), p));

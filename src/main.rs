@@ -2,22 +2,23 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use owo_colors::OwoColorize;
 
+use crate::error::CompilerError;
 use crate::route::init;
 use crate::route::build;
-mod route;
-mod control;
+pub mod route;
+pub mod error;
 pub mod ast;
 pub mod diagnostic;
 pub mod lexer;
 pub mod front;
-pub mod sema;
-pub mod layout;
-pub mod cgen;
-pub mod basic_cgen;
-pub mod sys;
+pub mod arena;
+//pub mod sema;
+//pub mod layout;
+//pub mod cgen;
+//pub mod basic_cgen;
 pub mod ds;
-pub mod hir;
-pub mod hgen;
+//pub mod hir;
+//pub mod hgen;
 
 
 #[derive(Parser)]
@@ -48,6 +49,10 @@ pub enum MainCommands {
     /// Do not initialize a new git repository
     #[arg(long)]
     no_git: bool,
+
+    /// Force init overwrite
+    #[arg(short, long)]
+    force: bool,
   },
 
   #[command(alias = "b")]
@@ -64,6 +69,10 @@ pub enum MainCommands {
     /// Display execution times for each compiler phase
     #[arg(long)]
     timings: bool,
+
+    /// Display memory storage for each compiler phase
+    #[arg(long)]
+    usages: bool,
 
     /// Use verbose output
     #[arg(short, long)]
@@ -89,6 +98,10 @@ pub enum MainCommands {
     #[arg(long)]
     timings: bool,
 
+    /// Display memory storage for each compiler phase
+    #[arg(long)]
+    usages: bool,
+
     /// Use verbose output
     #[arg(short, long)]
     verbose: bool,
@@ -98,14 +111,12 @@ pub enum MainCommands {
     ast_dump: bool,
   },
 
-  #[command(alias = "d")]
   /// Manage project dependencies
   Deps {
     #[command(subcommand)]
     command: DepsCommands,
   },
   
-  #[command(alias = "p")]
   /// Project package tool
   Pkg {
     #[command(subcommand)]
@@ -187,19 +198,20 @@ fn main() {
 fn main_cmd(cmd: MainCommands) {
   match cmd {
 
-    MainCommands::Init{path, name, desc, no_git} => {
+    MainCommands::Init{path, name, desc, no_git, force} => {
       let info = init::InitInfo {
         path: path.to_str().unwrap_or("").to_string(),
         name: name.unwrap_or(String::new()),
         desc: desc.unwrap_or(String::new()),
         no_git,
+        force,
       };
 
       match route::init::init(info) {
         Ok(()) => (),
         Err(e) => {
           match e {
-            crate::control::module::CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
+            CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
             _ => eprintln!("{}{} {:?}", "error".red().bold(), ":".bright_black(), e),
           }
           std::process::exit(1);
@@ -207,12 +219,13 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Build{path, variant, verbose, timings, ast_dump, hir_dump} => {
+    MainCommands::Build{path, variant, verbose, timings, usages, ast_dump, hir_dump} => {
       let info = build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant,
         verbose,
         timings,
+        usages,
         ast_dump,
         hir_dump,
         check_only: false,
@@ -222,7 +235,7 @@ fn main_cmd(cmd: MainCommands) {
         Ok(()) => (),
         Err(e) => {
           match e {
-            crate::control::module::CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
+            CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
             _ => eprintln!("{}{} {:?}", "error".red().bold(), ":".bright_black(), e),
           }
           std::process::exit(1);
@@ -230,12 +243,13 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Check{path, verbose, timings, ast_dump} => {
+    MainCommands::Check{path, verbose, timings, usages, ast_dump} => {
       let info = route::build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant: BuildVariant::Debug,
         verbose,
         timings,
+        usages,
         ast_dump,
         hir_dump: false,
         check_only: true,
@@ -245,7 +259,7 @@ fn main_cmd(cmd: MainCommands) {
         Ok(()) => (),
         Err(e) => {
           match e {
-            crate::control::module::CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
+            CompilerError::Str(msg) => eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), msg),
             _ => eprintln!("{}{} {:?}", "error".red().bold(), ":".bright_black(), e),
           }
           std::process::exit(1);

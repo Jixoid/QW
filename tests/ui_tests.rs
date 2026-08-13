@@ -3,13 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn get_qw_binary() -> PathBuf {
-	let mut path = std::env::current_exe().unwrap();
-	path.pop();
-	if path.ends_with("deps") {
-		path.pop();
-	}
-	path.push("QW"); // The binary is QW
-	path
+	PathBuf::from(env!("CARGO_BIN_EXE_QW"))
 }
 
 
