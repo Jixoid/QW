@@ -1,20 +1,4 @@
 
-## Type
-```
-"&" X => Reference
-"^" X => Pointer
-"?" X => Optional
-".." X => Range
-
-"[" X ("," NUM)* "]" => Array
-"[" X "x" NUM "]" => Simd
-"(" X ("," X)* ")" => Tuple
-"<" X ("," X)* ">" => Variant
-"{" X ("," X)* "}" => Struct
-
-```
-
-
 ## AST
 **Visitor:**
 + Scope Based Name Hashing `in scope things: HashMap<String, AstId>`

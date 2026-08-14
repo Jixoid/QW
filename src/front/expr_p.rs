@@ -66,7 +66,7 @@ impl ExprParser {
   }
 
 
-  fn read_arg_list<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<ExprId>, Message> {
+  fn read_arg_list(ctx: &mut ParserContext) -> Result<Vec<ExprId>, Message> {
     let mut args = Vec::new();
     
     let first = ctx.lex.get()?;
@@ -101,7 +101,7 @@ impl ExprParser {
     Ok(args)
   }
 
-  fn read_atom<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> { loop {
+  fn read_atom(ctx: &mut ParserContext) -> Result<ExprId, Message> { loop {
     let tok = ctx.lex.get()?;
     
     if tok.str(ctx.far).chars().next().map_or(false, |c| c.is_ascii_digit()) {
@@ -120,7 +120,7 @@ impl ExprParser {
   }}
 
 
-  pub fn read_expr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, min_bp: u8) -> Result<ExprId, Message> {
+  pub fn read_expr(ctx: &mut ParserContext, min_bp: u8) -> Result<ExprId, Message> {
     let tok = ctx.lex.get()?;
 
     let mut lhs = match tok.kind {
@@ -293,7 +293,7 @@ impl ExprParser {
   }
 
 
-  pub fn read_block<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_block(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let mut label = None;
     let mut t = ctx.lex.get()?;
 
@@ -355,7 +355,7 @@ impl ExprParser {
   }
 
 
-  pub fn read_if<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_if(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     
     let then = Self::read_block(ctx)?;
@@ -381,7 +381,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_match<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_match(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
@@ -415,7 +415,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_loop<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_loop(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let blok = Self::read_block(ctx)?;
 
     let _c = ctx.lex.get()?;
@@ -431,7 +431,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_while<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_while(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     let blok = Self::read_block(ctx)?;
 
@@ -449,7 +449,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_for<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_for(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let vars = PattParser::read_patt(ctx)?;
 
     ctx.lex.get()?.expect_kind(WK::In)?;
@@ -473,7 +473,7 @@ impl ExprParser {
   }
 
 
-  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<ExprId, Message> {
+  pub fn read_let(ctx: &mut ParserContext, acck: AccessKind) -> Result<ExprId, Message> {
     let item = PattParser::read_patt(ctx)?;
 
     let _c = ctx.lex.get()?;
@@ -500,7 +500,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_ret(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
       Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
@@ -522,7 +522,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_break(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
       Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
@@ -544,7 +544,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
+  pub fn read_continue(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
       Some(ctx.lex.get()?.expect_word(ctx.far)?.save())

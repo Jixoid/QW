@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use owo_colors::OwoColorize;
-use crate::{BuildVariant, ast::{self, Crate, Module}, error::{CompilerError, Result}, front::Front};
+use crate::{BuildVariant, ast, error::{CompilerError, Result}, front::Front, hgen::HGen};
 
 
 pub struct BuildInfo<'a> {
@@ -10,8 +10,6 @@ pub struct BuildInfo<'a> {
   pub verbose: bool,
   pub timings: bool,
   pub usages: bool,
-  pub ast_dump: bool,
-  pub hir_dump: bool,
   pub check_only: bool,
 }
 
@@ -74,21 +72,26 @@ fn humanize_size(size: usize) -> String {
 
 
 
-pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a FileArena, fpath: String) -> Result<()> {
+pub fn build_cre<'a>(info: &BuildInfo, farena: &'a FileArena, fpath: String) -> Result<()> {
+  let mut ast_cre = ast::Crate::new();
+
   let mol = farena.alloc(ast::Module::new(&fpath)?);
   
-  let mut anys = Vec::new();
+  let mut anys = vec![];
   
-  let now: Instant;
+  let mut now: Instant;
   
   // Front
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "front".red().bold(), ":".bright_black(), mol.name) }
     
-    let sum = Front::new(cre, &mol, farena)?.parse(&mut anys);
-    
+    let sum = Front::new(&mut ast_cre, &mol, farena)?.parse(&mut anys);
+
+    let root = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{ name: "".to_string(), ctn: ast_cre.new_extra(anys) }};
+    ast_cre.root = ast_cre.new_item(root);
+
     /* time */ let front_time = now.elapsed();
-    /* usag */ let ast_usage = cre.storage_size();
+    /* usag */ let ast_usage = ast_cre.storage_size();
     
     // Summary
     for m in sum.msgs() { eprintln!("{}", m.display(farena)); }
@@ -96,9 +99,15 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a Fil
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
 
-    // Root
-    let this = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{name: mol.name.clone(), ctn: cre.new_extra(anys)}};
-    cre.root_exec = cre.new_item(this);
+
+  // HGen
+    /* time */ now = Instant::now();
+    /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
+    
+    let hir_cre = HGen::lower(&ast_cre);
+    
+    /* time */ let hgen_time = now.elapsed();
+    /* usag */ let hir_usage = hir_cre.storage_size();
 
   /*
   // Sema
@@ -127,23 +136,6 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a Fil
     }
 
 
-  // HGen
-    /* time */ now = Instant::now();
-    /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
-    
-    let target = crate::layout::Target::new_64bit();
-    let is_debug = matches!(info.variant, crate::BuildVariant::Debug);
-    let hir = crate::hgen::HGen::new(&mol, is_debug, &target).generate();
-    
-    /* time */ let hgen = now.elapsed();
-
-    // HIR dump
-    if info.hir_dump {
-      println!("{}{} {}", "hir-dump".purple().bold(), ":".bright_black(), mol.name.white().bold());
-      println!("{}", hir);
-    }
-
-
   // CGen
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "cgen".red().bold(), ":".bright_black(), mol.name) }
@@ -160,13 +152,13 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a Fil
 
   // Time
   if info.timings {
-    println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front_time/*+sema+hgen+cgen*/));
+    println!("{}{} {:?}", "total-time".yellow().bold(), ":".bright_black(), (front_time+hgen_time/*+sema+cgen*/));
     
     if info.verbose {
       println!("  {}{} {:?}", "front".blue().bold(), ":".bright_black(), front_time);
+      println!("  {}{}  {:?}", "hgen".blue().bold(), ":".bright_black(), hgen_time);
       /*
       println!("  {}{}  {:?}", "sema".blue().bold(), ":".bright_black(), sema);
-      println!("  {}{}  {:?}", "hgen".blue().bold(), ":".bright_black(), hgen);
       println!("  {}{}  {:?}", "cgen".blue().bold(), ":".bright_black(), cgen);
       */
     }
@@ -174,10 +166,11 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a Fil
 
   // Usage
   if info.usages {
-    println!("{}{} {}", "mem-usage".yellow().bold(), ":".bright_black(), humanize_size(ast_usage));
+    println!("{}{} {}", "mem-usage".yellow().bold(), ":".bright_black(), humanize_size(ast_usage+hir_usage));
 
     if info.verbose {
       println!("  {}{} {}", "ast".blue().bold(), ":".bright_black(), humanize_size(ast_usage));
+      println!("  {}{} {}", "hir".blue().bold(), ":".bright_black(), humanize_size(hir_usage));
     }
   }
 
@@ -191,31 +184,29 @@ pub fn build(info: BuildInfo) -> Result<()> {
     return Err(CompilerError::Str("could not find `qw.conf`.".to_string()));
   }
 
-  let mfd = Module::new(conf_path.to_str().unwrap_or(""))?;
+  //let mfd = Module::new(conf_path.to_str().unwrap_or(""))?;
 
-  let conf = crate::ds::Value::load_file(&mfd).map_err(|e| CompilerError::Str(format!("{:?}", e)))?;
+  //let conf = crate::ds::Value::load_file(&mfd).map_err(|e| CompilerError::Str(format!("{:?}", e)))?;
 
-  let crate_name = || -> String {
-    if let crate::ds::Value::Stc(stc) = conf {
-      for field in &stc.subs {
-        if field.name == "name" {
-          if let crate::ds::Value::Str(s) = &field.kind {
-            return s.clone();
-          }
-        }
-      }
-    }
-    
-    String::from("main")
-  }();
+  //let crate_name = || -> String {
+  //  if let crate::ds::Value::Stc(stc) = conf {
+  //    for field in &stc.subs {
+  //      if field.name == "name" {
+  //        if let crate::ds::Value::Str(s) = &field.kind {
+  //          return s.clone();
+  //        }
+  //      }
+  //    }
+  //  }
+  //  
+  //  String::from("main")
+  //}();
 
   //: qw.conf readed
 
-  let mut cre = Crate::new(crate_name);
-
   let farena = FileArena::new();
 
-  build_mod(&info, &mut cre, &farena, std::path::Path::new(info.path).join("src").join("main.qw").to_str().unwrap().to_string())?;
+  build_cre(&info, &farena, std::path::Path::new(info.path).join("src").join("main.qw").to_str().unwrap().to_string())?;
 
   Ok(())
 }

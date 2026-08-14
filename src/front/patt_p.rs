@@ -5,7 +5,7 @@ pub struct PattParser {}
 
 impl PattParser {
 
-  pub fn read_patt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<PattId, Message> {
+  pub fn read_patt(ctx: &mut ParserContext) -> Result<PattId, Message> {
     let _c = ctx.lex.get()?;
 
     match _c.kind {

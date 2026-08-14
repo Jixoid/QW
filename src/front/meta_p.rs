@@ -7,7 +7,7 @@ pub struct MetaParser {}
 
 impl MetaParser {
 
-  pub fn pmr_global<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<(),  Message> {
+  pub fn pmr_global(ctx: &mut ParserContext) -> Result<(),  Message> {
     let mut level: isize = 0;
 
     loop {
@@ -26,7 +26,7 @@ impl MetaParser {
   }
 
 
-  pub fn read_visibility<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Visibility, Message> {
+  pub fn read_visibility(ctx: &mut ParserContext, defvis: &mut Visibility) -> Result<Visibility, Message> {
     loop {
       let t = ctx.lex.get()?;
       
@@ -53,7 +53,7 @@ impl MetaParser {
     }
   }
   
-  pub fn read_fun_args<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<FieldType>, Message> {
+  pub fn read_fun_args(ctx: &mut ParserContext) -> Result<Vec<FieldType>, Message> {
     let mut args = vec![];
     
     ctx.lex.get()?.expect_kind(WK::ParenBeg)?;

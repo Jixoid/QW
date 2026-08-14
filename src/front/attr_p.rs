@@ -6,7 +6,7 @@ pub struct AttrParser {}
 
 impl AttrParser {
 
-  pub fn read_attr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<AttrId>, Message> {
+  pub fn read_attr(ctx: &mut ParserContext) -> Result<Vec<AttrId>, Message> {
     let mut attrs = Vec::new();
 
     loop {
@@ -37,7 +37,7 @@ impl AttrParser {
   }
 
 
-  fn read_attr_sub<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<AttrId, Message> {
+  fn read_attr_sub(ctx: &mut ParserContext) -> Result<AttrId, Message> {
     let key = ctx.lex.get()?;
     
     let _c = ctx.lex.get()?;
@@ -95,7 +95,7 @@ impl AttrParser {
   }
 
 
-  pub fn attach_attr<'a, 'ctx, 'd, T>(ctx: &mut ParserContext<'a, 'ctx, 'd>, id: AstId<T>, attrs: Vec<AttrId>) {
+  pub fn attach_attr<T>(ctx: &mut ParserContext, id: AstId<T>, attrs: Vec<AttrId>) {
     if !attrs.is_empty() {
       ctx.cre.map_attr.insert(AnyId::new_from(id), attrs);
     }

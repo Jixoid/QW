@@ -20,7 +20,6 @@ pub type ThingId = AstId<SpecThing>;
 
 
 
-#[repr(u8)]
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum AstKind {
   Null  = 0,
@@ -38,7 +37,6 @@ pub enum AstKind {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct AstId<T> {
   pub kind: AstKind,
-  pub krate: u16,
   pub index: u32,
 
   spec: Option<T>,
@@ -46,19 +44,18 @@ pub struct AstId<T> {
 
 impl<T> AstId<T> {
 
-  pub fn new(kind: AstKind, krate: u16, index: u32) -> Self {
-    Self{ kind, krate, index, spec: None }
+  pub fn new(kind: AstKind, index: u32) -> Self {
+    Self{ kind, index, spec: None }
   }
 
   pub fn null() -> Self {
-    Self{ kind: AstKind::Null, krate: 0, index: 0, spec: None }
+    Self{ kind: AstKind::Null, index: 0, spec: None }
   }
 
   pub fn is_null(&self) -> bool {
     let res = self.kind == AstKind::Null;
     
     if res {
-      debug_assert_eq!(self.krate, 0);
       debug_assert_eq!(self.index, 0);
     }
 
@@ -66,15 +63,16 @@ impl<T> AstId<T> {
   }
 
   pub fn to_any(&self) -> AnyId {
-    AnyId{ kind: self.kind, krate: self.krate, index: self.index, spec: None }
+    AnyId{ kind: self.kind, index: self.index, spec: None }
   }
 
 }
 
+
 impl<T> AstId<T> {
   
   pub fn new_from<J>(id: AstId<J>) -> Self {
-    Self{ kind: id.kind, krate: id.krate, index: id.index, spec: None }
+    Self{ kind: id.kind, index: id.index, spec: None }
   }
 
 }

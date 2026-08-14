@@ -8,7 +8,7 @@ pub struct TypeParser {}
 
 impl TypeParser {
 
-  pub fn read_type<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, indecl: bool) -> Result<TypeId, Message> {
+  pub fn read_type(ctx: &mut ParserContext, indecl: bool) -> Result<TypeId, Message> {
     let attrs = AttrParser::read_attr(ctx)?;
     let _n = ctx.lex.get()?;
 
@@ -189,7 +189,7 @@ impl TypeParser {
   }
 
 
-  pub fn read_fun<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_fun(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     let args = MetaParser::read_fun_args(ctx)?;
 
     let _c = ctx.lex.get()?;
@@ -206,7 +206,7 @@ impl TypeParser {
     Ok(ctx.cre.new_type(this))
   }
 
-  pub fn read_struct<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_struct(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut vars = vec![];
@@ -358,7 +358,7 @@ impl TypeParser {
     Ok(ty)
   }
 
-  pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_iface(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut funs = vec![];
@@ -396,7 +396,7 @@ impl TypeParser {
     Ok(ctx.cre.new_type(this))
   }
 
-  pub fn read_trait<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_trait(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut funs = vec![];
@@ -434,7 +434,7 @@ impl TypeParser {
     Ok(ctx.cre.new_type(this))
   }
 
-  pub fn read_enum<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_enum(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut vals = vec![];
@@ -469,7 +469,7 @@ impl TypeParser {
     Ok(ctx.cre.new_type(this))
   }
 
-  pub fn read_flags<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<TypeId, Message> {
+  pub fn read_flags(ctx: &mut ParserContext) -> Result<TypeId, Message> {
     ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut vals = vec![];

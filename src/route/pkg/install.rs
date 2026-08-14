@@ -61,8 +61,6 @@ pub fn install(info: InstallInfo) -> Result<(), String> {
     verbose: false,
     timings: false,
     usages: false,
-    ast_dump: false,
-    hir_dump: false,
     check_only: false,
   };
 

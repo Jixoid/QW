@@ -5,7 +5,7 @@ pub struct DeclParser {}
 
 impl DeclParser {
 
-  pub fn read_fun<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility, in_struct: bool) -> Result<DeclId,  Message> {
+  pub fn read_fun(ctx: &mut ParserContext, vis: Visibility, in_struct: bool) -> Result<DeclId,  Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
 
     let args = MetaParser::read_fun_args(ctx)?;
@@ -70,7 +70,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_init<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId,  Message> {
+  pub fn read_init(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
 
     let args = MetaParser::read_fun_args(ctx)?;
@@ -138,7 +138,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_using<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_using(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     
     ctx.lex.get()?.expect_kind(WK::Assign)?;
@@ -152,7 +152,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_struct<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_struct(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     let kind = TypeParser::read_struct(ctx)?;
 
@@ -163,7 +163,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_iface<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_iface(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     let kind = TypeParser::read_iface(ctx)?;
 
@@ -174,7 +174,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_trait<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_trait(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     let kind = TypeParser::read_trait(ctx)?;
 
@@ -185,7 +185,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_enum<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_enum(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     let kind = TypeParser::read_enum(ctx)?;
 
@@ -196,7 +196,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_flags<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<DeclId, Message> {
+  pub fn read_flags(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
     let kind = TypeParser::read_flags(ctx)?;
 
@@ -207,7 +207,7 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_var<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility, acck: AccessKind) -> Result<DeclId,  Message> {
+  pub fn read_var(ctx: &mut ParserContext, vis: Visibility, acck: AccessKind) -> Result<DeclId,  Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
 
     let t1 = ctx.lex.get()?;

@@ -12,13 +12,13 @@ pub mod diagnostic;
 pub mod lexer;
 pub mod front;
 pub mod arena;
+pub mod ds;
+pub mod hir;
+pub mod hgen;
 //pub mod sema;
 //pub mod layout;
 //pub mod cgen;
 //pub mod basic_cgen;
-pub mod ds;
-//pub mod hir;
-//pub mod hgen;
 
 
 #[derive(Parser)]
@@ -77,14 +77,6 @@ pub enum MainCommands {
     /// Use verbose output
     #[arg(short, long)]
     verbose: bool,
-
-    /// Dump the parsed Abstract Syntax Tree to stdout
-    #[arg(long)]
-    ast_dump: bool,
-    
-    /// Dump the High-level Intermediate Representation to stdout
-    #[arg(long)]
-    hir_dump: bool,
   },
 
   #[command(alias = "c")]
@@ -105,10 +97,6 @@ pub enum MainCommands {
     /// Use verbose output
     #[arg(short, long)]
     verbose: bool,
-
-    /// Dump the parsed Abstract Syntax Tree to stdout
-    #[arg(long)]
-    ast_dump: bool,
   },
 
   /// Manage project dependencies
@@ -219,15 +207,13 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Build{path, variant, verbose, timings, usages, ast_dump, hir_dump} => {
+    MainCommands::Build{path, variant, verbose, timings, usages} => {
       let info = build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant,
         verbose,
         timings,
         usages,
-        ast_dump,
-        hir_dump,
         check_only: false,
       };
 
@@ -243,15 +229,13 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Check{path, verbose, timings, usages, ast_dump} => {
+    MainCommands::Check{path, verbose, timings, usages} => {
       let info = route::build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant: BuildVariant::Debug,
         verbose,
         timings,
         usages,
-        ast_dump,
-        hir_dump: false,
         check_only: true,
       };
 

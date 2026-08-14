@@ -7,7 +7,7 @@ pub struct ItemParser {}
 
 impl ItemParser {
 
-  pub fn read_generic<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message> {
+  pub fn read_generic(ctx: &mut ParserContext, vis: Visibility) -> Result<ItemId, Message> {
     ctx.lex.get()?.expect_kind(WK::AngleBeg)?;
     
     let mut params = Vec::new();
@@ -107,7 +107,7 @@ impl ItemParser {
     Ok(ctx.cre.new_item(it))
   }
 
-  pub fn read_impl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message> {
+  pub fn read_impl(ctx: &mut ParserContext, vis: Visibility) -> Result<ItemId, Message> {
     let type_ty = TypeParser::read_type(ctx, false)?;
     
     let _c = ctx.lex.get()?;
@@ -159,7 +159,7 @@ impl ItemParser {
     Ok(ctx.cre.new_item(it))
   }
   
-  pub fn read_use<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Vec<ItemId>, Message> {
+  pub fn read_use(ctx: &mut ParserContext, vis: Visibility) -> Result<Vec<ItemId>, Message> {
     let mut base_path = Vec::new();
     let mut w = ctx.lex.get()?;
     
@@ -228,7 +228,7 @@ impl ItemParser {
     }
   }
 
-  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Option<ItemId>, Message> {
+  pub fn read_mod(ctx: &mut ParserContext, vis: Visibility) -> Result<Option<ItemId>, Message> {
     let name = ctx.lex.get()?;
     ctx.lex.get()?.expect_kind(WK::Semicolon)?;
 

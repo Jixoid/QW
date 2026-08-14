@@ -3,17 +3,17 @@ use crate::{
   front::{attr_p::AttrParser, decl_p::DeclParser, item_p::ItemParser, meta_p::MetaParser}, route::build::FileArena
 };
 
-pub struct ParserContext<'a, 'ctx, 'd:'a> {
+pub struct ParserContext<'a, 'ctx> {
   pub lex: &'ctx mut Lexer<'a>,
-  pub cre: &'ctx mut Crate<'d>,
+  pub cre: &'ctx mut Crate,
   pub sum: &'ctx mut Summary,
   pub far: &'a FileArena,
   pub sides: Vec<ast::AnyId>,
 }
 
-impl<'a, 'ctx, 'd> ParserContext<'a, 'ctx, 'd> {
+impl<'a,'ctx> ParserContext<'a,'ctx> {
   
-  pub fn new<'f>(front: &'ctx mut Front<'f, 'a, 'd>) -> ParserContext<'a, 'ctx, 'd> {
+  pub fn new<'f>(front: &'ctx mut Front<'f,'a>) -> ParserContext<'a,'ctx> {
     ParserContext{
       lex: &mut front.lex,
       cre: &mut front.cre,
@@ -27,16 +27,16 @@ impl<'a, 'ctx, 'd> ParserContext<'a, 'ctx, 'd> {
 
 
 
-pub struct Front<'f, 'a, 'd:'a> {
-  pub cre: &'f mut Crate<'d>,
+pub struct Front<'f, 'a> {
+  pub cre: &'f mut Crate,
   pub far: &'a FileArena,
   pub lex: Lexer<'a>,
   pub sum: Summary,
 }
 
-impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
+impl<'f,'a,'d> Front<'f,'a> {
 
-  pub fn new(cre: &'f mut Crate<'d>, mol: &'a Module, farena: &'a FileArena) -> error::Result<Front<'f, 'a, 'd>> {
+  pub fn new(cre: &'f mut Crate, mol: &'a Module, farena: &'a FileArena) -> error::Result<Front<'f,'a>> {
     let lex = Lexer::new(mol);
     let sum = Summary::new();
 
@@ -44,7 +44,7 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
   }
 
 
-  pub fn read<'ctx>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<ast::AnyId, Message> { loop {
+  pub fn read<'ctx>(ctx: &mut ParserContext<'a, 'ctx>, defvis: &mut Visibility) -> Result<ast::AnyId, Message> { loop {
     let attrs = AttrParser::read_attr(ctx)?;
     let v = MetaParser::read_visibility(ctx, defvis)?;
 
