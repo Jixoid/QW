@@ -1,45 +1,45 @@
-use crate::{ast::{Patt, PattId}, diagnostic::Message, front::ParserContext, lexer::WordKind};
+use crate::{ast::{Patt, PattId}, diagnostic::Message, front::ParserContext, lexer::WK};
 
 
 pub struct PattParser {}
 
 impl PattParser {
 
-  pub fn read_patt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<PattId, Message<'a>> {
+  pub fn read_patt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<PattId, Message> {
     let _c = ctx.lex.get()?;
 
     match _c.kind {
-      WordKind::Word => {
-        _c.expect_word()?;
+      WK::Word => {
+        _c.expect_word(ctx.far)?;
 
-        let this = Patt::One(_c);
+        let this = Patt::One(_c.save());
         Ok(ctx.cre.new_patt(this))
       }
 
-      WordKind::Underscore => { // `_`
+      WK::Underscore => { // `_`
         let this = Patt::Wildcard{};
         Ok(ctx.cre.new_patt(this))
       }
 
-      WordKind::Dot2 => { // `..`
+      WK::Dot2 => { // `..`
         let this = Patt::Rest{};
         Ok(ctx.cre.new_patt(this))
       }
 
-      WordKind::ParenBeg => { // `(`
+      WK::ParenBeg => { // `(`
         let mut subs = vec![];
 
         loop {
           let _c = ctx.lex.get()?;
 
-          if _c.kind == WordKind::ParenEnd { break; }
+          if _c.kind == WK::ParenEnd { break; }
           else { ctx.lex.store(_c);}
           
           subs.push(Self::read_patt(ctx)?.to_any());
           
           let next_c = ctx.lex.get()?;
-          if next_c.kind == WordKind::ParenEnd { break; }
-          else if next_c.kind == WordKind::Comma { continue; }
+          if next_c.kind == WK::ParenEnd { break; }
+          else if next_c.kind == WK::Comma { continue; }
           else {
             return Err(Message::error(next_c, "expected ',' or ')' in tuple pattern".to_string(), vec![]));
           }
@@ -51,20 +51,20 @@ impl PattParser {
         Ok(ctx.cre.new_patt(this))
       }
 
-      WordKind::SquareBracketBeg => { // `[`
+      WK::SquareBracketBeg => { // `[`
         let mut subs = vec![];
 
         loop {
           let _c = ctx.lex.get()?;
 
-          if _c.kind == WordKind::SquareBracketEnd { break; }
+          if _c.kind == WK::SquareBracketEnd { break; }
           else { ctx.lex.store(_c);}
           
           subs.push(Self::read_patt(ctx)?.to_any());
           
           let next_c = ctx.lex.get()?;
-          if next_c.kind == WordKind::SquareBracketEnd { break; }
-          else if next_c.kind == WordKind::Comma { continue; }
+          if next_c.kind == WK::SquareBracketEnd { break; }
+          else if next_c.kind == WK::Comma { continue; }
           else {
             return Err(Message::error(next_c, "expected ',' or ']' in array pattern".to_string(), vec![]));
           }

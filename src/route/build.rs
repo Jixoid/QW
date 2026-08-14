@@ -24,11 +24,22 @@ pub struct FileArena {
 impl FileArena {
   pub fn new() -> Self { Self { files: std::cell::RefCell::new(Vec::new()), loaded_paths: std::cell::RefCell::new(std::collections::HashSet::new()) } }
   
-  pub fn alloc(&self, file: ast::Module) -> &ast::Module {
+  pub fn alloc(&self, mut file: ast::Module) -> &ast::Module {
+    let fid = self.files.borrow().len();
+    assert!(fid < 0xFFFF_FFFF);
+
+    file.fid = fid as u16;
+
     let b = Box::new(file);
     let ptr = &*b as *const ast::Module;
     self.loaded_paths.borrow_mut().insert(b.fpath.clone());
+    
     self.files.borrow_mut().push(b);
+    unsafe { &*ptr }
+  }
+
+  pub fn get<'a>(&'a self, fid: u16) -> &'a ast::Module {
+    let ptr = &*self.files.borrow()[fid as usize] as &ast::Module as *const ast::Module;
     unsafe { &*ptr }
   }
 
@@ -63,7 +74,7 @@ fn humanize_size(size: usize) -> String {
 
 
 
-pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a,'_>, farena: &'a FileArena, fpath: String) -> Result<()> {
+pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a>, farena: &'a FileArena, fpath: String) -> Result<()> {
   let mol = farena.alloc(ast::Module::new(&fpath)?);
   
   let mut anys = Vec::new();
@@ -77,24 +88,17 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a,'_>, farena: &'a 
     let sum = Front::new(cre, &mol, farena)?.parse(&mut anys);
     
     /* time */ let front_time = now.elapsed();
-    /* usag */ let front_usag = cre.storage_size();
+    /* usag */ let ast_usage = cre.storage_size();
     
     // Summary
-    for m in sum.msgs() { eprintln!("{}", m); }
+    for m in sum.msgs() { eprintln!("{}", m.display(farena)); }
     if sum.sumall() > 0 { eprintln!("{}", sum); }
     if sum.sumerr() > 0 { return Ok(()); }
     drop(sum);
 
     // Root
-    let moro = ast::ModuleItem{name: mol.name.clone(), ctn: anys};
-    let this = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module(moro)};
+    let this = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{name: mol.name.clone(), ctn: cre.new_extra(anys)}};
     cre.root_exec = cre.new_item(this);
-
-    // AST dump
-    if info.ast_dump {
-      println!("{}{} {}", "ast-dump".purple().bold(), ":".bright_black(), mol.name.white().bold());
-      println!("{}", cre);
-    }
 
   /*
   // Sema
@@ -170,8 +174,11 @@ pub fn build_mod<'a>(info: &BuildInfo, cre: &mut ast::Crate<'a,'_>, farena: &'a 
 
   // Usage
   if info.usages {
-    println!("{}{} {}", "total-usage".yellow().bold(), ":".bright_black(), humanize_size(front_usag));
+    println!("{}{} {}", "mem-usage".yellow().bold(), ":".bright_black(), humanize_size(ast_usage));
 
+    if info.verbose {
+      println!("  {}{} {}", "ast".blue().bold(), ":".bright_black(), humanize_size(ast_usage));
+    }
   }
 
   Ok(())

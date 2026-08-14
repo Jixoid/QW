@@ -6,7 +6,7 @@ use crate::ast::DeclVari;
 
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
-  pub fn check_decl(&mut self, id: AstId) -> Result<(), Message<'a>> {
+  pub fn check_decl(&mut self, id: AstId) -> Result<(), Message> {
     self.check_attributes(id)?;
     let decl = self.mol.get_decl(id);
     let vari = &decl.vari;

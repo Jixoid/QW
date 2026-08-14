@@ -7,7 +7,7 @@ use crate::ast::ExprVari;
 
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
-  pub fn check_expr(&mut self, id: AstId) -> Result<AstId, Message<'a>> {
+  pub fn check_expr(&mut self, id: AstId) -> Result<AstId, Message> {
     self.check_attributes(id)?;
     let mut computed_ty = self.get_ty_void();
 

@@ -29,7 +29,7 @@ impl<'f,'a,'d> Sema<'f,'a,'d> {
     self.sum.clone()
   }
 
-  pub fn check_attributes(&mut self, id: crate::control::identy::AstId) -> Result<(), crate::diagnostic::Message<'a>> {
+  pub fn check_attributes(&mut self, id: crate::control::identy::AstId) -> Result<(), crate::diagnostic::Message> {
     if let Some(attrs) = self.mol.map_attr.get(&id) {
       for attr in attrs {
         let name = attr.key.str();

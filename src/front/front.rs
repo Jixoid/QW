@@ -1,9 +1,12 @@
-use crate::{ast::{self, AccessKind, Crate, Module, Visibility}, diagnostic::{Message, Summary}, error, front::{attr_p::AttrParser, decl_p::DeclParser, item_p::ItemParser, meta_p::MetaParser}, lexer::{Lexer, WK, WordKind}, route::build::FileArena};
+use crate::{
+  ast::{self, AccessKind, Crate, Module, Visibility}, diagnostic::{Message, Summary}, error, lexer::{Lexer, WK},
+  front::{attr_p::AttrParser, decl_p::DeclParser, item_p::ItemParser, meta_p::MetaParser}, route::build::FileArena
+};
 
 pub struct ParserContext<'a, 'ctx, 'd:'a> {
   pub lex: &'ctx mut Lexer<'a>,
-  pub cre: &'ctx mut Crate<'a, 'd>,
-  pub sum: &'ctx mut Summary<'a>,
+  pub cre: &'ctx mut Crate<'d>,
+  pub sum: &'ctx mut Summary,
   pub far: &'a FileArena,
   pub sides: Vec<ast::AnyId>,
 }
@@ -25,23 +28,23 @@ impl<'a, 'ctx, 'd> ParserContext<'a, 'ctx, 'd> {
 
 
 pub struct Front<'f, 'a, 'd:'a> {
-  pub cre: &'f mut Crate<'a,'d>,
+  pub cre: &'f mut Crate<'d>,
   pub far: &'a FileArena,
   pub lex: Lexer<'a>,
-  pub sum: Summary<'a>,
+  pub sum: Summary,
 }
 
 impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
 
-  pub fn new(cre: &'f mut Crate<'a,'d>, mol: &'a Module, farena: &'a FileArena) -> error::Result<Front<'f, 'a, 'd>> {
-    let lex = Lexer::new_module(mol);
+  pub fn new(cre: &'f mut Crate<'d>, mol: &'a Module, farena: &'a FileArena) -> error::Result<Front<'f, 'a, 'd>> {
+    let lex = Lexer::new(mol);
     let sum = Summary::new();
 
     Ok(Front{cre, far: farena, lex, sum})
   }
 
 
-  pub fn read<'ctx>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<ast::AnyId, Message<'a>> { loop {
+  pub fn read<'ctx>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<ast::AnyId, Message> { loop {
     let attrs = AttrParser::read_attr(ctx)?;
     let v = MetaParser::read_visibility(ctx, defvis)?;
 
@@ -64,9 +67,9 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
       WK::Mod     => match ItemParser::read_mod(ctx, v)? {
         Some(r) => r.to_any(),
         None => continue,
-      },
+      }
 
-      _ => return Err(Message::error(l, String::from("unknown keyword: `{}`"), vec![l.string()])),
+      _ => return Err(Message::error(l, String::from("unknown keyword: `{}`"), vec![l.string(ctx.far)])),
     };
 
     AttrParser::attach_attr(ctx, id, attrs);
@@ -74,14 +77,15 @@ impl<'f, 'a, 'd> Front<'f, 'a, 'd> {
   }}
 
 
-  pub fn parse(&mut self, av: &mut Vec<ast::AnyId>) -> Summary<'a> {
+  pub fn parse(&mut self, av: &mut Vec<ast::AnyId>) -> Summary {
     let mut pctx = ParserContext::new(self);
     let mut defvis = Visibility::Private;
 
     loop {
-      let t = pctx.lex.lex();
-
-      if t.kind == WordKind::EOF { break; } else { pctx.lex.store(t); }
+      match pctx.lex.lex() {
+        None => break,
+        Some(r) => pctx.lex.store(r),
+      }
 
       // Any
       match Self::read(&mut pctx, &mut defvis) {

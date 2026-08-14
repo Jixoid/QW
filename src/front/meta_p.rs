@@ -1,4 +1,5 @@
 use crate::lexer::WK;
+use crate::route::build::FileArena;
 use crate::{ast::*, diagnostic::Message, front::{ParserContext, type_p::TypeParser}, lexer::{Word, WordKind}};
 
 
@@ -6,11 +7,14 @@ pub struct MetaParser {}
 
 impl MetaParser {
 
-  pub fn pmr_global<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<(),  Message<'a>> {
+  pub fn pmr_global<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<(),  Message> {
     let mut level: isize = 0;
 
     loop {
-      let t = ctx.lex.get()?;
+      let t = match ctx.lex.get() {
+        Ok(t) => t,
+        Err(..) => return Ok(()),
+      };
 
       if t.kind == WK::CurlyBracketBeg { level += 1; continue; }
       if t.kind == WK::CurlyBracketEnd {
@@ -22,7 +26,7 @@ impl MetaParser {
   }
 
 
-  pub fn read_visibility<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Visibility, Message<'a>> {
+  pub fn read_visibility<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, defvis: &mut Visibility) -> Result<Visibility, Message> {
     loop {
       let t = ctx.lex.get()?;
       
@@ -49,10 +53,10 @@ impl MetaParser {
     }
   }
   
-  pub fn read_fun_args<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<FieldType<'a>>, Message<'a>> {
+  pub fn read_fun_args<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<FieldType>, Message> {
     let mut args = vec![];
     
-    ctx.lex.get()?.expect_equal_str("(")?;
+    ctx.lex.get()?.expect_kind(WK::ParenBeg)?;
 
     'ml: loop {
       let t = ctx.lex.get()?;
@@ -71,20 +75,20 @@ impl MetaParser {
         if c.kind == WK::Comma { continue 're; }
         else if c.kind == WK::Colon { break 're; }
         else {
-          c.expect_equal_str2(":", ",")?;
+          c.expect_kind2(WK::Colon, WK::Comma)?;
         }
       }
 
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { args.push(FieldType{name: x, kind, vis: Visibility::Private, attrs: vec![]}); }
+      for x in names { args.push(FieldType{name: x.save(), kind, vis: Visibility::Private, attrs: vec![]}); }
 
       let e = ctx.lex.get()?;
 
       if e.kind == WK::Comma { continue 'ml; }
       else if e.kind == WK::ParenEnd { break 'ml; }
       else {
-        e.expect_equal_str2(",", ")")?;
+        e.expect_kind2(WK::Comma, WK::ParenBeg)?;
       }
     }
 
@@ -94,46 +98,48 @@ impl MetaParser {
 }
 
 
-impl<'a> Word<'a> {
+impl<'a> Word {
 
-  pub fn expect_word(self) -> Result<Self, Message<'a>> {
-    if self.kind == WordKind::Word {
-      Ok(self)
-    } else {
-      Err(Message::error(self, String::from("expected identifier, but found `{}`"), vec![self.string()]))
+  pub fn expect_word(self, far: &FileArena) -> Result<Self, Message> {
+    match self.kind == WordKind::Word {
+      true  => Ok(self),
+      false => Err(Message::error(self, String::from("expected identifier, but found `{}`"), vec![
+        self.string(far),
+      ]))
     }
   }
   
-  pub fn expect_kind(self, kind: WordKind) -> Result<Self, Message<'a>> {
-    if self.kind == kind {
-      Ok(self)
-    } else {
-      Err(Message::error(self, String::from("expected {}, but found {}"), vec![format!("{:?}", kind), format!("{:?}", self.kind)]))
+
+  pub fn expect_kind(self, k1: WK) -> Result<Self, Message> {
+    match self.kind == k1 {
+      true  => Ok(self),
+      false => Err(Message::error(self, String::from("expected {}, but found {}"), vec![
+        format!("{:?}", k1),
+        format!("{:?}", self.kind),
+      ]))
     }
   }
 
-
-  pub fn expect_equal_str(self, s: &str) -> Result<Self, Message<'a>> {
-    if self.str() == s {
-      Ok(self)
-    } else {
-      Err(Message::error(self, String::from("expected `{}`, but found `{}`"), vec![s.to_string(), self.string()]))
-    }
-  }
-
-  pub fn expect_equal_str2(self, s1: &str, s2: &str) -> Result<Self, Message<'a>> {
-    if self.str() == s1 || self.str() == s2 {
-      Ok(self)
-    } else {
-      Err(Message::error(self, String::from("expected `{}` or `{}`, but found `{}`"), vec![s1.to_string(), s2.to_string(), self.string()]))
+  pub fn expect_kind2(self, k1: WK, k2: WK) -> Result<Self, Message> {
+    match self.kind == k1 || self.kind == k2 {
+      true  => Ok(self),
+      false => Err(Message::error(self, String::from("expected `{}` or `{}`, but found `{}`"), vec![
+        format!("{:?}", k1),
+        format!("{:?}", k2),
+        format!("{:?}", self.kind),
+      ]))
     }
   }
   
-  pub fn expect_equal_str3(self, s1: &str, s2: &str, s3: &str) -> Result<Self, Message<'a>> {
-    if self.str() == s1 || self.str() == s2 || self.str() == s3 {
-      Ok(self)
-    } else {
-      Err(Message::error(self, String::from("expected `{}`, `{}` or `{}`, but found `{}`"), vec![s1.to_string(), s2.to_string(), s3.to_string(), self.string()]))
+  pub fn expect_kind3(self, k1: WK, k2: WK, k3: WK) -> Result<Self, Message> {
+    match self.kind == k1 || self.kind == k2 || self.kind == k3 {
+      true  => Ok(self),
+      false => Err(Message::error(self, String::from("expected `{}`, `{}` or `{}`, but found `{}`"), vec![
+        format!("{:?}", k1),
+        format!("{:?}", k2),
+        format!("{:?}", k3),
+        format!("{:?}", self.kind),
+      ]))
     }
   }
 

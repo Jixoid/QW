@@ -1,7 +1,7 @@
 use crate::ast::AccessKind;
 use crate::front::type_p::TypeParser;
 use crate::lexer::WK;
-use crate::{ast::{BinaryOp, Expr, ExprId, MatchArm, NumberConst, NumberExpr, UnaryOp}, diagnostic::*, front::{ParserContext, patt_p::PattParser}, lexer::WordKind};
+use crate::{ast::{BinaryOp, Expr, ExprId, MatchArm, NumberConst, NumberExpr, UnaryOp}, diagnostic::*, front::{ParserContext, patt_p::PattParser}};
 
 
 pub struct ExprParser {}
@@ -34,40 +34,39 @@ impl ExprParser {
     }
   }
 
-  fn parse_unary_op(op: &str) -> UnaryOp {
+  fn parse_unary_op(op: WK) -> UnaryOp {
     match op {
-      "-" => UnaryOp::Neg,
-      "+" => UnaryOp::Poz,
-      "!" => UnaryOp::Not,
-      "*" => UnaryOp::Deref,
-      "&" => UnaryOp::Ref,
-      "^" => UnaryOp::BitNot,
-      _ => unreachable!("Unknown unary operator: {}", op),
+      WK::Sub  => UnaryOp::Neg,
+      WK::Add  => UnaryOp::Poz,
+      WK::Bang => UnaryOp::Not,
+      WK::BitwiseAnd => UnaryOp::Ref,
+      WK::At => UnaryOp::Addr,
+      _ => unreachable!("Unknown unary operator: {:?}", op),
     }
   }
 
-  fn parse_binary_op(op: &str) -> BinaryOp {
+  fn parse_binary_op(op: WK) -> BinaryOp {
     match op {
-      "+" => BinaryOp::Add,
-      "-" => BinaryOp::Sub,
-      "*" => BinaryOp::Mul,
-      "/" => BinaryOp::Div,
-      "%" => BinaryOp::Mod,
-      "==" => BinaryOp::Eq,
-      "!=" => BinaryOp::Neq,
-      "<" => BinaryOp::Lt,
-      ">" => BinaryOp::Gt,
-      "<=" => BinaryOp::Lte,
-      ">=" => BinaryOp::Gte,
-      "&&" => BinaryOp::And,
-      "||" => BinaryOp::Or,
-      "=" => BinaryOp::Assign,
-      _ => unreachable!("Unknown binary operator: {}", op),
+      WK::Add => BinaryOp::Add,
+      WK::Sub => BinaryOp::Sub,
+      WK::Mul => BinaryOp::Mul,
+      WK::Div => BinaryOp::Div,
+      WK::Rem => BinaryOp::Mod,
+      WK::Equal => BinaryOp::Eq,
+      WK::NotEqual => BinaryOp::Neq,
+      WK::AngleBeg => BinaryOp::Lt,
+      WK::AngleEnd => BinaryOp::Gt,
+      WK::SmallerEqual => BinaryOp::Lte,
+      WK::BiggerEqual => BinaryOp::Gte,
+      WK::LogicalAnd => BinaryOp::And,
+      WK::LogicalOr => BinaryOp::Or,
+      WK::Assign => BinaryOp::Assign,
+      _ => unreachable!("Unknown binary operator: {:?}", op),
     }
   }
 
 
-  fn read_arg_list<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<ExprId>, Message<'a>> {
+  fn read_arg_list<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<ExprId>, Message> {
     let mut args = Vec::new();
     
     let first = ctx.lex.get()?;
@@ -81,8 +80,12 @@ impl ExprParser {
       args.push(Self::read_expr(ctx, 0)?);
 
       let separator = ctx.lex.get()?;
-      match separator.str() {
-        "," => {
+      match separator.kind {
+        WK::ParenEnd => {
+          break;
+        }
+        
+        WK::Comma => {
           let next = ctx.lex.get()?;
           if next.kind == WK::ParenEnd {
             break;
@@ -91,56 +94,54 @@ impl ExprParser {
           ctx.lex.store(next);
         }
 
-        ")" => { break; }
-
-        _ => return Err(Message::error(separator, format!("expected `,` or `)` in argument list, found `{}`", separator.str()), vec![])),
+        _ => return Err(Message::error(separator, format!("expected `,` or `)` in argument list, found `{}`", separator.str(ctx.far)), vec![])),
       }
     }
 
     Ok(args)
   }
 
-  fn read_atom<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> { loop {
+  fn read_atom<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> { loop {
     let tok = ctx.lex.get()?;
     
-    if tok.str().chars().next().map_or(false, |c| c.is_ascii_digit()) {
-      if let Ok(num) = tok.str().parse::<i64>() {
-        return Ok(ctx.cre.new_expr(Expr::Number(NumberExpr{pos: tok, num: NumberConst::I64(num)}) ));
+    if tok.str(ctx.far).chars().next().map_or(false, |c| c.is_ascii_digit()) {
+      if let Ok(num) = tok.str(ctx.far).parse::<i64>() {
+        return Ok(ctx.cre.new_expr(Expr::Number(NumberExpr{pos: tok.save(), num: NumberConst::I64(num)}) ));
       }
     }
 
-    if tok.str().starts_with('"') {
-      return Ok(ctx.cre.new_expr(Expr::String(tok)));
+    if tok.kind == WK::String {
+      return Ok(ctx.cre.new_expr(Expr::String(tok.save())));
     }
 
-    tok.expect_word()?;
-    let ident = ctx.cre.get_str(tok.str());
-    return Ok(ctx.cre.new_expr(Expr::Nick{pos: tok, idx: ident}));
+    tok.expect_word(ctx.far)?;
+    let ident = ctx.cre.get_str(tok.str(ctx.far));
+    return Ok(ctx.cre.new_expr(Expr::Nick{pos: tok.save(), idx: ident}));
   }}
 
 
-  pub fn read_expr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, min_bp: u8) -> Result<ExprId, Message<'a>> {
+  pub fn read_expr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, min_bp: u8) -> Result<ExprId, Message> {
     let tok = ctx.lex.get()?;
 
-    let mut lhs = match tok.str() {
-      "-" | "+" | "!" | "*" | "&" | "^" => {
+    let mut lhs = match tok.kind {
+      WK::Sub | WK::Add | WK::Bang | WK::BitwiseAnd | WK::At => {
         let r_bp = 85;
         let val = Self::read_expr(ctx, r_bp)?;
         
-        let op = Self::parse_unary_op(tok.str()); 
+        let op = Self::parse_unary_op(tok.kind); 
         
         ctx.cre.new_expr(Expr::Unary{op, val})
       }
 
-      "(" => {
+      WK::ParenBeg => {
         let expr = Self::read_expr(ctx, 0)?;
         
         let _c = ctx.lex.get()?;
 
-        if _c.kind == WordKind::ParenEnd { // (X)
+        if _c.kind == WK::ParenEnd { // (X)
           expr
         }
-        else if _c.kind == WordKind::Comma { // (X, ...)
+        else if _c.kind == WK::Comma { // (X, ...)
           let mut vals = vec![ expr ];
           let mut is_tuple = false;
           
@@ -156,7 +157,7 @@ impl ExprParser {
             if _c.kind == WK::ParenEnd { break; }
             else if _c.kind == WK::Comma { is_tuple = true; continue; }
             else {
-              _c.expect_equal_str2(",", ")")?;
+              _c.expect_kind2(WK::Comma, WK::ParenEnd)?;
             }
           }
 
@@ -168,31 +169,34 @@ impl ExprParser {
           }
         }
         else {
-          _c.expect_equal_str2(")", ",")?;
+          _c.expect_kind2(WK::ParenEnd, WK::Comma)?;
           panic!()
         }
       }
 
-      "{" | "`" => {
+      WK::CurlyBracketBeg | WK::Backtick => {
         ctx.lex.store(tok);
         Self::read_block(ctx)?
       }
 
-      "if"    => Self::read_if(ctx)?,
-      "match" => Self::read_match(ctx)?,
-      "while" => Self::read_while(ctx)?,
-      "loop"  => Self::read_loop(ctx)?,
-      "for"   => Self::read_for(ctx)?,
+      WK::If    => Self::read_if(ctx)?,
+      WK::Match => Self::read_match(ctx)?,
+      WK::While => Self::read_while(ctx)?,
+      WK::Loop  => Self::read_loop(ctx)?,
+      WK::For   => Self::read_for(ctx)?,
 
-      "let"      => Self::read_let(ctx, AccessKind::IMM)?,
-      "var"      => Self::read_let(ctx, AccessKind::MUT)?,
-      "ret"      => Self::read_ret(ctx)?,
-      "break"    => Self::read_break(ctx)?,
-      "continue" => Self::read_continue(ctx)?,
-
-      _ => {
-        ctx.lex.store(tok);
-        Self::read_atom(ctx)? 
+      WK::Let      => Self::read_let(ctx, AccessKind::IMM)?,
+      WK::Var      => Self::read_let(ctx, AccessKind::MUT)?,
+      
+      _ => match tok.str(ctx.far) {
+        "ret"      => Self::read_ret(ctx)?,
+        "break"    => Self::read_break(ctx)?,
+        "continue" => Self::read_continue(ctx)?,
+        
+        _ => {
+          ctx.lex.store(tok);
+          Self::read_atom(ctx)? 
+        }
       }
     };
 
@@ -200,12 +204,12 @@ impl ExprParser {
     loop {
       let next = ctx.lex.get()?;
       
-      match next.str() {
-        "." => {
-          let field_tok = ctx.lex.get()?.expect_word()?;
-          let field_idx = ctx.cre.get_str(field_tok.str());
+      match next.kind {
+        WK::Dot => {
+          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?;
+          let field_idx = ctx.cre.get_str(field_tok.str(ctx.far));
 
-          let sub = Expr::Nick{pos: field_tok, idx: field_idx};
+          let sub = Expr::Nick{pos: field_tok.save(), idx: field_idx};
           let sub_id = ctx.cre.new_expr(sub);
 
           let lookahead = ctx.lex.get()?;
@@ -217,23 +221,23 @@ impl ExprParser {
           lhs = ctx.cre.new_expr(Expr::Member(vec![lhs, sub_id]));
         }
 
-        "::" => {
-          let field_tok = ctx.lex.get()?.expect_word()?;
-          let field_idx = ctx.cre.get_str(field_tok.str());
+        WK::Scope => {
+          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?;
+          let field_idx = ctx.cre.get_str(field_tok.str(ctx.far));
 
-          let sub = Expr::Nick{pos: field_tok, idx: field_idx};
+          let sub = Expr::Nick{pos: field_tok.save(), idx: field_idx};
           let sub_id = ctx.cre.new_expr(sub);
 
           lhs = ctx.cre.new_expr(Expr::Path(vec![lhs, sub_id]));
         }
 
-        "(" => {
+        WK::ParenBeg => {
           let args = Self::read_arg_list(ctx)?;
           
           lhs = ctx.cre.new_expr(Expr::Call{callee: lhs, args});
         }
 
-        "[" => {
+        WK::SquareBracketBeg => {
           let mut args = Vec::new();
           
           loop {
@@ -241,31 +245,26 @@ impl ExprParser {
             args.push(sub);
             
             let sep = ctx.lex.get()?;
-            match sep.str() {
-              "]" => break,
-              "," => {
+            match sep.kind {
+              WK::SquareBracketEnd => break,
+              
+              WK::Comma => {
                 let next = ctx.lex.get()?;
                 if next.kind == WK::SquareBracketEnd {
                   break;
                 }
                 ctx.lex.store(next);
               }
-              _ => return Err(Message::error(sep, format!("expected `,` or `]` in index expression, found `{}`", sep.str()), vec![])),
+              _ => return Err(Message::error(sep, format!("expected `,` or `]` in index expression, found `{}`", sep.str(ctx.far)), vec![])),
             }
           }
 
           lhs = ctx.cre.new_expr(Expr::Index{callee: lhs, args});
         }
 
-        "?" | "!" => {
-          let this = match next.str() {
-            "?" => Expr::Try(lhs),
-            "!" => Expr::Unwrap(lhs),
-            _ => panic!()
-          };
-          
-          lhs = ctx.cre.new_expr(this);
-        }
+        WK::Bang => lhs = ctx.cre.new_expr(Expr::Unwrap(lhs)),
+        
+        WK::Question => lhs = ctx.cre.new_expr(Expr::Try(lhs)),
 
         _ => {
           ctx.lex.store(next);
@@ -274,11 +273,10 @@ impl ExprParser {
       }
     }
 
-    
     loop {
       let op_tok = ctx.lex.get()?;
       
-      let (_l_bp, r_bp) = match Self::get_infix_bp(op_tok.str()) {
+      let (_l_bp, r_bp) = match Self::get_infix_bp(op_tok.str(ctx.far)) {
         Some((l, r)) if l >= min_bp => (l, r),
         
         _ => { ctx.lex.store(op_tok); break; }
@@ -286,7 +284,7 @@ impl ExprParser {
 
       let rhs = Self::read_expr(ctx, r_bp)?;
       
-      let op = Self::parse_binary_op(op_tok.str());
+      let op = Self::parse_binary_op(op_tok.kind);
 
       lhs = ctx.cre.new_expr(Expr::Binary{op, lhs, rhs});
     }
@@ -295,21 +293,21 @@ impl ExprParser {
   }
 
 
-  pub fn read_block<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_block<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let mut label = None;
     let mut t = ctx.lex.get()?;
 
-    if t.kind == crate::lexer::WordKind::Backtick {
+    if t.kind == WK::Backtick {
       let lbl = ctx.lex.get()?;
-      if lbl.kind != crate::lexer::WordKind::Word {
+      if lbl.kind != WK::Word {
         return Err(Message::error(lbl, String::from("expected identifier after backtick"), vec![]));
       }
-      ctx.lex.get()?.expect_equal_str(":")?;
-      label = Some(lbl);
+      ctx.lex.get()?.expect_kind(WK::Colon)?;
+      label = Some(lbl.save());
       t = ctx.lex.get()?;
     }
 
-    t.expect_equal_str("{")?;
+    t.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut ctn = vec![];
     let mut expr = None;
@@ -338,7 +336,7 @@ impl ExprParser {
           ctx.lex.store(end);
           ctn.push(ex_id.to_any());
         } else {
-          end.expect_equal_str(";")?;
+          end.expect_kind(WK::Semicolon)?;
           unreachable!()
         }
       }
@@ -357,12 +355,12 @@ impl ExprParser {
   }
 
 
-  pub fn read_if<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_if<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     
     let then = Self::read_block(ctx)?;
 
-    let t: crate::lexer::Word<'_> = ctx.lex.lex();
+    let t = ctx.lex.get()?;
 
     let elsb = if t.kind == WK::Else {
       let t_else = ctx.lex.get()?;
@@ -383,10 +381,10 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_match<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_match<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     
-    ctx.lex.get()?.expect_equal_str("{")?;
+    ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
     let mut arms = Vec::new();
 
     loop {
@@ -398,7 +396,7 @@ impl ExprParser {
       }
       
       let pat = Self::read_expr(ctx, 0)?;
-      ctx.lex.get()?.expect_equal_str("=>")?;
+      ctx.lex.get()?.expect_kind(WK::FatArrow)?;
       let body = Self::read_expr(ctx, 0)?;
       arms.push(MatchArm{ pat, body });
 
@@ -417,7 +415,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_loop<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_loop<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let blok = Self::read_block(ctx)?;
 
     let _c = ctx.lex.get()?;
@@ -433,7 +431,7 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_while<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_while<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let cond = Self::read_expr(ctx, 0)?;
     let blok = Self::read_block(ctx)?;
 
@@ -451,10 +449,10 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_for<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_for<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let vars = PattParser::read_patt(ctx)?;
 
-    ctx.lex.get()?.expect_equal_str("in")?;
+    ctx.lex.get()?.expect_kind(WK::In)?;
     
     let iter = Self::read_expr(ctx, 0)?;
 
@@ -475,7 +473,7 @@ impl ExprParser {
   }
 
 
-  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<ExprId, Message<'a>> {
+  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<ExprId, Message> {
     let item = PattParser::read_patt(ctx)?;
 
     let _c = ctx.lex.get()?;
@@ -502,10 +500,10 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word()?)
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
     } else {
       ctx.lex.store(_c);
       None
@@ -524,10 +522,10 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word()?)
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
     } else {
       ctx.lex.store(_c);
       None
@@ -546,10 +544,10 @@ impl ExprParser {
     Ok(ctx.cre.new_expr(this))
   }
 
-  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message<'a>> {
+  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word()?)
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
     } else {
       ctx.lex.store(_c);
       None

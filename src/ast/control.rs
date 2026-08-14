@@ -1,25 +1,24 @@
-use core::fmt;
-use owo_colors::OwoColorize;
 use std::{collections::HashMap, fs, ops::Range, path::Path, ptr};
 
 use crate::{ast::{self, AstId, AstKind}, error::Result};
 
 
-pub struct Crate<'a, 'd:'a> {
+pub struct Crate<'a> {
   pub name: String,
-  pub imod: Vec<&'d Crate<'d,'d>>,
+  pub imod: Vec<&'a Crate<'a>>,
 
   pub root_exec: ast::ItemId,
 
   pub str_pool: Vec<String>,
 
-  pub list_type: Vec<ast::Type<'a>>,
-  pub list_decl: Vec<ast::Decl<'a>>,
-  pub list_expr: Vec<ast::Expr<'a>>,
-  pub list_attr: Vec<ast::Attr<'a>>,
-  pub list_dirc: Vec<ast::Dirc<'a>>,
-  pub list_item: Vec<ast::Item<'a>>,
-  pub list_patt: Vec<ast::Patt<'a>>,
+  pub list_type: Vec<ast::Type>,
+  pub list_decl: Vec<ast::Decl>,
+  pub list_expr: Vec<ast::Expr>,
+  pub list_attr: Vec<ast::Attr>,
+  pub list_dirc: Vec<ast::Dirc>,
+  pub list_item: Vec<ast::Item>,
+  pub list_patt: Vec<ast::Patt>,
+  pub list_thing: Vec<ast::Thing>,
 
   pub extra_data: Vec<ast::AnyId>,
 
@@ -29,6 +28,7 @@ pub struct Crate<'a, 'd:'a> {
 
 pub struct Module {
   pub fpath: String,
+  pub fid: u16,
   pub name: String,
   pub mmap: Vec<u8>,
 }
@@ -37,9 +37,9 @@ pub struct Module {
 pub type Rng = Range<u32>;
 
 
-impl<'a,'d> Crate<'a,'d> {
+impl<'a> Crate<'a> {
 
-  pub fn new(name: String) -> Crate<'a,'d> {
+  pub fn new(name: String) -> Crate<'a> {
     let cre = Crate{
       name,
       imod: vec![],
@@ -53,6 +53,7 @@ impl<'a,'d> Crate<'a,'d> {
       list_dirc: vec![],
       list_item: vec![],
       list_patt: vec![],
+      list_thing: vec![],
 
       extra_data: vec![],
 
@@ -63,7 +64,7 @@ impl<'a,'d> Crate<'a,'d> {
   }
 
 
-  pub fn add_dep(&mut self, mol: &'d Crate<'d,'d>) -> u16 {
+  pub fn add_dep(&mut self, mol: &'a Crate<'a>) -> u16 {
     match self.imod.iter().position(|&x| ptr::eq(x, mol)) {
       Some(r) => (r as u16) +1,
       None => {
@@ -73,7 +74,7 @@ impl<'a,'d> Crate<'a,'d> {
     }
   }
 
-  pub fn get_dep(&self, mod_id: u16) -> &'d Crate<'d,'d> {
+  pub fn get_dep(&self, mod_id: u16) -> &'a Crate<'a> {
     self.imod[(mod_id -1) as usize] 
   }
 
@@ -92,8 +93,8 @@ impl<'a,'d> Crate<'a,'d> {
   }
 
 
-  pub fn localize<T>(&mut self, mol: &'d Crate<'d,'d>, eid: AstId<T>) -> AstId<T> {
-    let omol: &Crate<'d,'d> = if eid.krate == 0 { mol } else { mol.get_dep(eid.krate) };
+  pub fn localize<T>(&mut self, mol: &'a Crate<'a>, eid: AstId<T>) -> AstId<T> {
+    let omol = if eid.krate == 0 { mol } else { mol.get_dep(eid.krate) };
 
     let lmid = self.add_dep(omol);
 
@@ -101,46 +102,52 @@ impl<'a,'d> Crate<'a,'d> {
   }
 
 
-  pub fn get_type(&self, id: ast::TypeId) -> &ast::Type<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_type(&self, id: ast::TypeId) -> &ast::Type {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_type[id.index as usize]
   }
 
-  pub fn get_decl(&self, id: ast::DeclId) -> &ast::Decl<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_decl(&self, id: ast::DeclId) -> &ast::Decl {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_decl[id.index as usize]
   }
 
-  pub fn get_expr(&self, id: ast::ExprId) -> &ast::Expr<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_expr(&self, id: ast::ExprId) -> &ast::Expr {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_expr[id.index as usize]
   }
   
-  pub fn get_attr(&self, id: ast::AttrId) -> &ast::Attr<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_attr(&self, id: ast::AttrId) -> &ast::Attr {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_attr[id.index as usize]
   }
 
-  pub fn get_dirc(&self, id: ast::DircId) -> &ast::Dirc<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_dirc(&self, id: ast::DircId) -> &ast::Dirc {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_dirc[id.index as usize]
   }
 
-  pub fn get_item(&self, id: ast::ItemId) -> &ast::Item<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_item(&self, id: ast::ItemId) -> &ast::Item {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_item[id.index as usize]
   }
 
-  pub fn get_patt(&self, id: ast::PattId) -> &ast::Patt<'a> {
-    let modl: &Crate<'a,'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+  pub fn get_patt(&self, id: ast::PattId) -> &ast::Patt {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_patt[id.index as usize]
+  }
+
+  pub fn get_thing(&self, id: ast::ThingId) -> &ast::Thing {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+
+    &modl.list_thing[id.index as usize]
   }
 
   pub fn get_extra(&self, rng: Rng) -> &[ast::AnyId] {
@@ -150,7 +157,7 @@ impl<'a,'d> Crate<'a,'d> {
   }
 
 
-  pub fn new_type(&mut self, v: ast::Type<'a>) -> ast::TypeId {
+  pub fn new_type(&mut self, v: ast::Type) -> ast::TypeId {
     self.list_type.push(v);
 
     let idx = self.list_type.len() as u32 - 1;
@@ -158,7 +165,7 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Type, 0, idx);
   }
 
-  pub fn new_decl(&mut self, v: ast::Decl<'a>) -> ast::DeclId {
+  pub fn new_decl(&mut self, v: ast::Decl) -> ast::DeclId {
     self.list_decl.push(v);
 
     let idx = self.list_decl.len() as u32 - 1;
@@ -166,7 +173,7 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Decl, 0, idx);
   }
 
-  pub fn new_expr(&mut self, v: ast::Expr<'a>) -> ast::ExprId {
+  pub fn new_expr(&mut self, v: ast::Expr) -> ast::ExprId {
     self.list_expr.push(v);
 
     let idx = self.list_expr.len() as u32 - 1;
@@ -174,7 +181,7 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Expr, 0, idx);
   }
 
-  pub fn new_attr(&mut self, v: ast::Attr<'a>) -> ast::AttrId {
+  pub fn new_attr(&mut self, v: ast::Attr) -> ast::AttrId {
     self.list_attr.push(v);
 
     let idx = self.list_attr.len() as u32 - 1;
@@ -182,7 +189,7 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Attr, 0, idx);
   }
 
-  pub fn new_dirc(&mut self, v: ast::Dirc<'a>) -> ast::DircId {
+  pub fn new_dirc(&mut self, v: ast::Dirc) -> ast::DircId {
     self.list_dirc.push(v);
 
     let idx = self.list_dirc.len() as u32 - 1;
@@ -190,7 +197,7 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Dirc, 0, idx);
   }
 
-  pub fn new_item(&mut self, v: ast::Item<'a>) -> ast::ItemId {
+  pub fn new_item(&mut self, v: ast::Item) -> ast::ItemId {
     self.list_item.push(v);
 
     let idx = self.list_item.len() as u32 - 1;
@@ -198,12 +205,20 @@ impl<'a,'d> Crate<'a,'d> {
     return AstId::new(AstKind::Item, 0, idx);
   }
   
-  pub fn new_patt(&mut self, v: ast::Patt<'a>) -> ast::PattId {
+  pub fn new_patt(&mut self, v: ast::Patt) -> ast::PattId {
     self.list_patt.push(v);
 
     let idx = self.list_patt.len() as u32 - 1;
 
     return AstId::new(AstKind::Patt, 0, idx);
+  }
+  
+  pub fn new_thing(&mut self, v: ast::Thing) -> ast::ThingId {
+    self.list_thing.push(v);
+
+    let idx = self.list_thing.len() as u32 - 1;
+
+    return AstId::new(AstKind::Thing, 0, idx);
   }
 
   pub fn new_extra(&mut self, v: Vec<ast::AnyId>) -> Rng {
@@ -218,90 +233,26 @@ impl<'a,'d> Crate<'a,'d> {
 
 
   pub fn storage_size(&self) -> usize {
-
-    let type_size = size_of::<ast::Type>()*self.list_type.len();
-    let decl_size = size_of::<ast::Decl>()*self.list_decl.len();
-    let expr_size = size_of::<ast::Expr>()*self.list_expr.len();
-    let attr_size = size_of::<ast::Attr>()*self.list_attr.len();
-    let dirc_size = size_of::<ast::Dirc>()*self.list_dirc.len();
-    let item_size = size_of::<ast::Item>()*self.list_item.len();
-    let patt_size = size_of::<ast::Patt>()*self.list_patt.len();
-    let extra_size = size_of::<ast::AnyId>()*self.extra_data.len();
-
-    type_size+decl_size+expr_size+attr_size+dirc_size+item_size+patt_size+extra_size
+    size_of::<ast::Type>()*self.list_type.len()
+    +
+    size_of::<ast::Decl>()*self.list_decl.len()
+    +
+    size_of::<ast::Expr>()*self.list_expr.len()
+    +
+    size_of::<ast::Attr>()*self.list_attr.len()
+    +
+    size_of::<ast::Dirc>()*self.list_dirc.len()
+    +
+    size_of::<ast::Item>()*self.list_item.len()
+    +
+    size_of::<ast::Patt>()*self.list_patt.len()
+    +
+    size_of::<ast::Thing>()*self.list_thing.len()
+    +
+    size_of::<ast::AnyId>()*self.extra_data.len()
   }
 
 }
-
-
-impl<'a,'d> fmt::Display for Crate<'a,'d> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    writeln!(f, "  {}{}", "inter-module".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.imod.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i+1, "]".bright_black(), x.name)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "str-pool".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.str_pool.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "types".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_type.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x.display(self))?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "decls".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_decl.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "exprs".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_expr.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x.display(self))?;
-    }
-    writeln!(f)?;
-
-    
-    writeln!(f, "  {}{}", "attrs".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_attr.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "dircs".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_dirc.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "items".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_item.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x)?;
-    }
-    writeln!(f)?;
-
-
-    writeln!(f, "  {}{}", "patt".purple().bold(), ":".bright_black())?;
-    for (i, x) in self.list_patt.iter().enumerate() {
-      writeln!(f, "    {}{:x}{} {}", "[".bright_black(), i, "]".bright_black(), x.display(self))?;
-    }
-    writeln!(f)?;
-
-    Ok(())
-  }
-}
-
 
 
 impl Module {
@@ -313,7 +264,7 @@ impl Module {
     let name = String::from(Path::new(&fpath).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
 
     let mol = ast::Module{
-      fpath: fpath.to_string(), name, mmap
+      fpath: fpath.to_string(), name, mmap, fid: 0
     };
 
     Ok(mol)

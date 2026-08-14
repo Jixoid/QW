@@ -1,4 +1,4 @@
-use crate::{ast::{AnyId, AstId, Attr, AttrId, AttrVari}, diagnostic::Message, front::expr_p::ExprParser, lexer::WordKind};
+use crate::{ast::{AnyId, AstId, Attr, AttrId, AttrVari}, diagnostic::Message, front::expr_p::ExprParser, lexer::WK};
 use super::front::ParserContext;
 
 
@@ -6,24 +6,24 @@ pub struct AttrParser {}
 
 impl AttrParser {
 
-  pub fn read_attr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<AttrId>, Message<'a>> {
+  pub fn read_attr<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<Vec<AttrId>, Message> {
     let mut attrs = Vec::new();
 
     loop {
       let t = ctx.lex.get()?;
-      if t.kind == WordKind::Attribute {
+      if t.kind == WK::Attribute {
 
         loop {
           let t = ctx.lex.get()?;
-          if t.kind == WordKind::SquareBracketEnd { break; } else { ctx.lex.store(t); }
+          if t.kind == WK::SquareBracketEnd { break; } else { ctx.lex.store(t); }
           
           attrs.push(Self::read_attr_sub(ctx)?);
 
           let t = ctx.lex.get()?;
-          if t.kind == WordKind::Comma { continue; }
-          else if t.kind == WordKind::SquareBracketEnd { break; }
+          if t.kind == WK::Comma { continue; }
+          else if t.kind == WK::SquareBracketEnd { break; }
           else {
-            t.expect_equal_str2(",", "]")?;
+            t.expect_kind2(WK::Comma, WK::SquareBracketEnd)?;
           }
         }
 
@@ -37,46 +37,48 @@ impl AttrParser {
   }
 
 
-  fn read_attr_sub<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<AttrId, Message<'a>> {
+  fn read_attr_sub<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<AttrId, Message> {
     let key = ctx.lex.get()?;
     
     let _c = ctx.lex.get()?;
 
     match _c.kind {
-      WordKind::Colon => { // A:B
+      WK::Colon => { // A:B
         let val = ctx.lex.get()?;
 
-        let this = Attr{vari: AttrVari::Bin(key, val)};
+        let this = Attr{vari: AttrVari::Bin(key.save(), val.save())};
 
         Ok(ctx.cre.new_attr(this))
       }
 
-      WordKind::ParenBeg => { // A(B,C)
-        let mut attrs = Vec::new();
+      WK::ParenBeg => { // A(B,C)
+        let mut attrs = vec![];
 
         loop {
           let t = ctx.lex.get()?;
-          if t.kind == WordKind::ParenEnd { break; } else { ctx.lex.store(t); }
+          if t.kind == WK::ParenEnd { break; } else { ctx.lex.store(t); }
           
-          attrs.push(Self::read_attr_sub(ctx)?);
+          attrs.push(Self::read_attr_sub(ctx)?.to_any());
 
           let t = ctx.lex.get()?;
-          if t.kind == WordKind::Comma { continue; }
-          else if t.kind == WordKind::ParenEnd { break; }
+          if t.kind == WK::Comma { continue; }
+          else if t.kind == WK::ParenEnd { break; }
           else {
-            t.expect_equal_str2(",", ")")?;
+            t.expect_kind2(WK::Comma, WK::ParenEnd)?;
           }
         }
 
-        let this = Attr{vari: AttrVari::List(key, attrs)};
+        let rng = ctx.cre.new_extra(attrs);
+
+        let this = Attr{vari: AttrVari::List(key.save(), rng)};
 
         Ok(ctx.cre.new_attr(this))
       }
 
-      WordKind::Assign => { // A = $expr
+      WK::Assign => { // A = $expr
         let ex = ExprParser::read_expr(ctx, 0)?;
 
-        let this = Attr{vari: AttrVari::Set(key, ex)};
+        let this = Attr{vari: AttrVari::Set(key.save(), ex)};
 
         Ok(ctx.cre.new_attr(this))
       }
@@ -84,7 +86,7 @@ impl AttrParser {
       _ => {
         ctx.lex.store(_c);
 
-        let this = Attr{vari: AttrVari::One(key)};
+        let this = Attr{vari: AttrVari::One(key.save())};
 
         return Ok(ctx.cre.new_attr(this));
       }

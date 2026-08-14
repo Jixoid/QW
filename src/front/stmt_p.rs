@@ -7,7 +7,7 @@ pub struct StmtParser {}
 
 impl StmtParser {
 
-  pub fn read_stmt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId,  Message<'a>> {
+  pub fn read_stmt<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId,  Message> {
     let attrs = AttrParser::read_attr(ctx)?;
 
     let l = ctx.lex.get()?;
@@ -43,7 +43,7 @@ impl StmtParser {
   }
 
 
-  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<StmtId, Message<'a>> {
+  pub fn read_let<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, acck: AccessKind) -> Result<StmtId, Message> {
     let item = PattParser::read_patt(ctx)?;
 
     let t1 = ctx.lex.get()?;
@@ -78,7 +78,7 @@ impl StmtParser {
     Ok(ctx.cre.new_stmt(st))
   }
 
-  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+  pub fn read_ret<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message> {
     let mut _c = ctx.lex.get()?;
 
     let label = if _c.kind == WK::Backtick {
@@ -106,7 +106,7 @@ impl StmtParser {
     Ok(ctx.cre.new_stmt(st))
   }
   
-  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+  pub fn read_break<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message> {
     let mut _c = ctx.lex.get()?;
 
     let label = if _c.kind == WK::Backtick {
@@ -134,7 +134,7 @@ impl StmtParser {
     Ok(ctx.cre.new_stmt(st))
   }
 
-  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message<'a>> {
+  pub fn read_continue<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>) -> Result<StmtId, Message> {
     let mut _c = ctx.lex.get()?;
 
     let label = if _c.kind == WK::Backtick {

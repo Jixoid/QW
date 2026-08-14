@@ -5,6 +5,7 @@ pub mod attrs;
 pub mod dircs;
 pub mod items;
 pub mod patts;
+pub mod things;
 pub mod identy;
 pub mod control;
 
@@ -15,5 +16,6 @@ pub use attrs::*;
 pub use dircs::*;
 pub use items::*;
 pub use patts::*;
+pub use things::*;
 pub use identy::*;
 pub use control::*;

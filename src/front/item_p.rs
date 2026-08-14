@@ -1,14 +1,14 @@
-use crate::ast::AstId;
+use crate::ast::{AstId, Thing};
 use crate::lexer::WK;
-use crate::{ast::{DeclVari, GenericItem, Item, ItemId, ItemVari, Module, ModuleItem, Visibility}, diagnostic::Message, front::{Front, ParserContext, attr_p::AttrParser, decl_p::DeclParser, meta_p::MetaParser, type_p::TypeParser}, lexer::{Lexer, WordKind}};
+use crate::{ast::{DeclVari, Item, ItemId, ItemVari, Module, Visibility}, diagnostic::Message, front::{Front, ParserContext, attr_p::AttrParser, decl_p::DeclParser, meta_p::MetaParser, type_p::TypeParser}, lexer::Lexer};
 
 
 pub struct ItemParser {}
 
 impl ItemParser {
 
-  pub fn read_generic<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message<'a>> {
-    ctx.lex.get()?.expect_equal_str("<")?;
+  pub fn read_generic<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message> {
+    ctx.lex.get()?.expect_kind(WK::AngleBeg)?;
     
     let mut params = Vec::new();
     'ml: loop {
@@ -23,12 +23,12 @@ impl ItemParser {
         let c = ctx.lex.get()?;
         if c.kind == WK::Comma { continue 're; }
         else if c.kind == WK::Colon { break 're; }
-        else { c.expect_equal_str2(":", ",")?; }
+        else { c.expect_kind2(WK::Colon, WK::Comma)?; }
       }
       
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { params.push(crate::ast::types::FieldType{name: x, kind, vis: Visibility::Private, attrs: vec![]}); }
+      for x in names { params.push(crate::ast::types::FieldType{name: x.save(), kind, vis: Visibility::Private, attrs: vec![]}); }
       
       let e = ctx.lex.get()?;
       if e.kind == WK::Comma || e.kind == WK::Semicolon { continue 'ml; }
@@ -40,7 +40,7 @@ impl ItemParser {
     let mut reqs = vec![];
     
     let _c = ctx.lex.get()?;
-    if _c.str() == "requires" {
+    if _c.str(ctx.far) == "requires" {
 
       loop {
         let t = ctx.lex.get()?;
@@ -50,23 +50,24 @@ impl ItemParser {
           break;
         }
 
-        ctx.lex.get()?.expect_equal_str(":")?;
+        ctx.lex.get()?.expect_kind(WK::Colon)?;
 
         let mut tys = vec![];
 
         loop {
-          let sub = TypeParser::read_type(ctx, true)?;
-          tys.push(sub);
+          tys.push(TypeParser::read_type(ctx, true)?.to_any());
 
           let _c = ctx.lex.get()?;
           if _c.kind == WK::BitwiseOr { continue; }
           else if _c.kind == WK::Semicolon { break; }
           else {
-            _c.expect_equal_str2("|", ";")?;
+            _c.expect_kind2(WK::BitwiseOr, WK::Semicolon)?;
           }
         }
 
-        reqs.push((t, tys));
+        let rng = ctx.cre.new_extra(tys);
+
+        reqs.push( ctx.cre.new_thing(Thing::NamedTypeList(t.save(), rng)).to_any() );
       }
 
     } else {
@@ -99,14 +100,14 @@ impl ItemParser {
     }
     
 
-    let this = ItemVari::Generic(GenericItem{params, ctn, reqs});
+    let this = ItemVari::Generic{params, ctn: ctx.cre.new_extra(ctn), reqs: ctx.cre.new_extra(reqs)};
     
     let it = Item{vari: this, vis};
 
     Ok(ctx.cre.new_item(it))
   }
 
-  pub fn read_impl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message<'a>> {
+  pub fn read_impl<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<ItemId, Message> {
     let type_ty = TypeParser::read_type(ctx, false)?;
     
     let _c = ctx.lex.get()?;
@@ -118,7 +119,7 @@ impl ItemParser {
     };
 
     
-    ctx.lex.get()?.expect_equal_str("{")?;
+    ctx.lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
 
     let mut impls = Vec::new();
     let mut defvis = Visibility::Private;
@@ -134,8 +135,8 @@ impl ItemParser {
       if next_kw.kind == WK::Fun {
         let fun = DeclParser::read_fun(ctx, v, true)?;
         
-        if let DeclVari::Fun(ref f) = ctx.cre.get_decl(fun).vari {
-          if f.blok.is_null() {
+        if let DeclVari::Fun { kind: _, blok } = ctx.cre.get_decl(fun).vari {
+          if blok.is_null() {
             return Err(Message::error(next_kw, "extend methods must have a body (cannot end with `;`)".to_string(), vec![]));
           }
         }
@@ -143,7 +144,7 @@ impl ItemParser {
         AttrParser::attach_attr(ctx, fun, attrs);
         impls.push(fun);
       } else {
-        return Err(Message::error(next_kw, format!("expected `fun`, got `{}`", next_kw.str()), vec![]));
+        return Err(Message::error(next_kw, format!("expected `fun`, got `{}`", next_kw.str(ctx.far)), vec![]));
       }
     }
 
@@ -158,13 +159,13 @@ impl ItemParser {
     Ok(ctx.cre.new_item(it))
   }
   
-  pub fn read_use<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Vec<ItemId>, Message<'a>> {
+  pub fn read_use<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Vec<ItemId>, Message> {
     let mut base_path = Vec::new();
     let mut w = ctx.lex.get()?;
     
     // Parse the base path
     loop {
-      let is_word = match w.kind { WordKind::Word => true, _ => false };
+      let is_word = match w.kind { WK::Word => true, _ => false };
       
 
       if !is_word && w.kind != WK::Mul && w.kind != WK::CurlyBracketBeg {
@@ -173,7 +174,7 @@ impl ItemParser {
       
       if w.kind == WK::Mul {
         // wildcard import
-        ctx.lex.get()?.expect_equal_str(";")?;
+        ctx.lex.get()?.expect_kind(WK::Semicolon)?;
         
         let this = Item{vis, vari: ItemVari::ImportWildcard(base_path, None)};
         
@@ -188,14 +189,14 @@ impl ItemParser {
           let end_w = ctx.lex.get()?;
           if end_w.kind == WK::CurlyBracketEnd { break; }
           
-          if end_w.kind != crate::lexer::WordKind::Word {
+          if end_w.kind != WK::Word {
             return Err(Message::error(end_w, String::from("expected identifier in use block"), vec![]));
           }
           
           let name = end_w;
           let mut full_path = base_path.clone();
           
-          full_path.push((ctx.cre.get_str(name.str()), name));
+          full_path.push((ctx.cre.get_str(name.str(ctx.far)), name.save()));
           
           let this = Item{vis, vari: ItemVari::Import(full_path, None)};
           ids.push(ctx.cre.new_item(this));
@@ -206,12 +207,12 @@ impl ItemParser {
             return Err(Message::error(next_w, String::from("expected `,` or `}`"), vec![]));
           }
         }
-        ctx.lex.get()?.expect_equal_str(";")?;
+        ctx.lex.get()?.expect_kind(WK::Semicolon)?;
         return Ok(ids);
       }
       
       // it's an identifier
-      base_path.push((ctx.cre.get_str(w.str()), w));
+      base_path.push((ctx.cre.get_str(w.str(ctx.far)), w.save()));
       
       let next_w = ctx.lex.get()?;
       if next_w.kind == WK::Semicolon {
@@ -227,11 +228,11 @@ impl ItemParser {
     }
   }
 
-  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Option<ItemId>, Message<'a>> {
+  pub fn read_mod<'a, 'ctx, 'd>(ctx: &mut ParserContext<'a, 'ctx, 'd>, vis: Visibility) -> Result<Option<ItemId>, Message> {
     let name = ctx.lex.get()?;
-    ctx.lex.get()?.expect_equal_str(";")?;
+    ctx.lex.get()?.expect_kind(WK::Semicolon)?;
 
-    let mod_name = name.string();
+    let mod_name = name.string(ctx.far);
     let current_dir = std::path::Path::new(&ctx.lex.mol.fpath).parent().unwrap_or(std::path::Path::new(""));
     let mut mod_path = current_dir.join(format!("{}.qw", mod_name));
 
@@ -251,7 +252,7 @@ impl ItemParser {
 
     let mfd_static = ctx.far.alloc(mfd);
 
-    let mut lex = Lexer::new_module(mfd_static);
+    let mut lex = Lexer::new(mfd_static);
     
     let mut new_ctx = ParserContext {
       lex: &mut lex,
@@ -265,24 +266,24 @@ impl ItemParser {
     let mut defvis = Visibility::Private;
     
     loop {
-      let t = new_ctx.lex.lex();
-      if t.kind == crate::lexer::WordKind::EOF { break; }
-      else {
-        new_ctx.lex.store(t);
-        match Front::read(&mut new_ctx, &mut defvis) {
-          Ok(id) => {
-            anys.push(id);
-            anys.extend(new_ctx.sides.drain(..));
-          }
-          Err(e) => {
-            new_ctx.sum.add(e);
-            let _ = MetaParser::pmr_global(&mut new_ctx);
-          }
+      match new_ctx.lex.lex() {
+        None => break,
+        Some(t) => new_ctx.lex.store(t),
+      }
+
+      match Front::read(&mut new_ctx, &mut defvis) {
+        Ok(id) => {
+          anys.push(id);
+          anys.extend(new_ctx.sides.drain(..));
+        }
+        Err(e) => {
+          new_ctx.sum.add(e);
+          let _ = MetaParser::pmr_global(&mut new_ctx);
         }
       }
     }
 
-    let this = Item{vis, vari: ItemVari::Module(ModuleItem{name: mod_name, ctn: anys})};
+    let this = Item{vis, vari: ItemVari::Module{name: mod_name, ctn: ctx.cre.new_extra(anys)}};
     let mod_id = ctx.cre.new_item(this);
 
     Ok(Some(mod_id))

@@ -1,7 +1,7 @@
 use core::fmt;
 use owo_colors::OwoColorize;
 
-use crate::lexer::Word;
+use crate::{lexer::Word, route::build::FileArena};
 
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -9,31 +9,41 @@ pub enum MsgKind { Fatal, Error, Warn, Hint, Note }
 
 
 #[derive(Clone)]
-pub struct Message<'a> {
+pub struct Message {
   kind: MsgKind,
-  pos: Word<'a>,
+  pos: Word,
   msg: String,
   pars: Vec<String>,
-  notes: Vec<Message<'a>>,
+  notes: Vec<Message>,
 }
 
-impl<'a> Message<'a> {
-  pub fn new(kind: MsgKind, pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a> { Message {kind, pos, msg, pars, notes: Vec::new()} }
+impl Message {
+  pub fn new(kind: MsgKind, pos: Word, msg: String, pars: Vec<String>) -> Self { Message {kind, pos, msg, pars, notes: Vec::new()} }
 
-  pub fn fatal(pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a> { Self::new(MsgKind::Fatal, pos, msg, pars) }
-  pub fn error(pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a> { Self::new(MsgKind::Error, pos, msg, pars) }
-  pub fn warn(pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a>  { Self::new(MsgKind::Warn, pos, msg, pars) }
-  pub fn hint(pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a>  { Self::new(MsgKind::Hint, pos, msg, pars) }
-  pub fn note(pos: Word<'a>, msg: String, pars: Vec<String>) -> Message<'a>  { Self::new(MsgKind::Note, pos, msg, pars) }
+  pub fn fatal(pos: Word, msg: String, pars: Vec<String>) -> Self { Self::new(MsgKind::Fatal, pos, msg, pars) }
+  pub fn error(pos: Word, msg: String, pars: Vec<String>) -> Self { Self::new(MsgKind::Error, pos, msg, pars) }
+  pub fn warn(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Warn, pos, msg, pars) }
+  pub fn hint(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Hint, pos, msg, pars) }
+  pub fn note(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Note, pos, msg, pars) }
 
-  pub fn add_note(&mut self, m: Message<'a>) { self.notes.push(m); }
+  pub fn add_note(&mut self, m: Self) { self.notes.push(m); }
+
+  pub fn display<'a>(&'a self, far: &'a FileArena) -> MessageDisplay<'a> {
+    MessageDisplay(self, far)
+  }
 }
 
-impl<'a> fmt::Display for Message<'a> {
+
+pub struct MessageDisplay<'a> (&'a Message, &'a FileArena);
+
+
+impl<'a> fmt::Display for MessageDisplay<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let msg = self.0;
+    let far = self.1;
 
-    let (hr1, _hr2) = self.pos.interval();
-    let fpath = self.pos.mol.fpath.clone();
+    let (hr1, _hr2) = msg.pos.interval(far);
+    let fpath = msg.pos.mol(far).fpath.clone();
 
     write!(f, "{}{}{}{}{}{} ", 
       fpath.blue().bold(),
@@ -45,8 +55,7 @@ impl<'a> fmt::Display for Message<'a> {
     )?;
 
 
-
-    match self.kind {
+    match msg.kind {
       MsgKind::Fatal => write!(f, "{}", "fatal".bright_red().bold())?,
       MsgKind::Error => write!(f, "{}", "error".bright_red().bold())?,
       MsgKind::Warn  => write!(f, "{}", "warn".bright_yellow().bold())?,
@@ -54,17 +63,17 @@ impl<'a> fmt::Display for Message<'a> {
       MsgKind::Note  => write!(f, "{}", "note".bright_green().bold())?,
     };
     
-    let formatted_msg = format_from_vector(&self.msg, &self.pars);
+    let formatted_msg = format_from_vector(&msg.msg, &msg.pars);
     writeln!(f, "{}{}{}", ":".bright_black(), " ", formatted_msg)?;
 
 
-    let file = match str::from_utf8(&self.pos.mol.mmap[..]) {
+    let file = match str::from_utf8(&msg.pos.mol(far).mmap[..]) {
       Ok(r) => r,
       Err(..) => panic!("utf8 fail!"),
     };
 
-    let ctx_word = self.pos;
-    let (hr1, hr2) = ctx_word.interval();
+    let ctx_word = msg.pos;
+    let (hr1, hr2) = ctx_word.interval(far);
 
     let rng = ((ctx_word.off as usize), ((ctx_word.off as usize)+(ctx_word.size as usize)));
 
@@ -125,8 +134,8 @@ impl<'a> fmt::Display for Message<'a> {
       }
     }
 
-    for n in &self.notes {
-      write!(f, "{}", n)?;
+    for n in &msg.notes {
+      write!(f, "{}", n.display(far))?;
     }
 
     Ok(())
@@ -156,16 +165,18 @@ fn format_from_vector(fmt_str: &str, v: &[String]) -> String {
 
 
 #[derive(Clone)]
-pub struct Summary<'a> {
+pub struct Summary {
   fatal: u32, error: u32, warn: u32, hint: u32, note: u32,
-  msgs: Vec<Message<'a>>,
+  msgs: Vec<Message>,
 }
 
-impl<'a> Summary<'a> {
+impl Summary {
 
-  pub fn new() -> Summary<'a> { Summary {fatal: 0, error: 0, warn: 0, hint: 0, note: 0, msgs: Vec::new()} }
+  pub fn new() -> Self {
+    Self{fatal: 0, error: 0, warn: 0, hint: 0, note: 0, msgs: vec![]}
+  }
 
-  pub fn add(&mut self, m: Message<'a>) {
+  pub fn add(&mut self, m: Message) {
     match m.kind {
       MsgKind::Fatal => self.fatal += 1,
       MsgKind::Error => self.error += 1,
@@ -177,13 +188,13 @@ impl<'a> Summary<'a> {
     self.msgs.push(m);
   }
 
-  pub fn msgs(&self) -> &Vec<Message<'a>> { return &self.msgs; }
+  pub fn msgs(&self) -> &Vec<Message> { return &self.msgs; }
 
   pub fn sumall(&self) -> u32 { return self.fatal + self.error + self.warn + self.hint + self.note; }
   pub fn sumerr(&self) -> u32 { return self.fatal + self.error; }
 }
 
-impl<'a> fmt::Display for Summary<'a> {
+impl<'a> fmt::Display for Summary {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     if self.sumall() == 0 { write!(f, "") } else {
       let mut str = format!("{}{} ", "summary".bright_yellow().bold(), ":".bright_black());

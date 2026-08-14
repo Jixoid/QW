@@ -74,7 +74,7 @@ impl Value {
 
 
   pub fn load_file(m: &ast::Module) -> Result<Value, String> {
-    let mut lexer = Lexer::new_module(m);
+    let mut lexer = Lexer::new(m);
     let mut parser = Parser::new(&mut lexer);
     parser.parse()
   }
@@ -160,7 +160,7 @@ impl Value {
 
 struct Parser<'a, 'c> {
   lexer: &'c mut Lexer<'a>,
-  tokens: Vec<Word<'a>>,
+  tokens: Vec<Word>,
   pos: usize,
 }
 
@@ -169,22 +169,19 @@ impl<'a, 'c> Parser<'a, 'c> {
   fn new(lexer: &'c mut Lexer<'a>) -> Self {
     let mut tokens = Vec::new();
     loop {
-      let w = lexer.lex();
-      if w.kind == WordKind::EOF {
-        break;
-      }
-      if w.kind != WordKind::Unknown {
-        tokens.push(w);
+      match lexer.lex() {
+        None => break,
+        Some(w) => tokens.push(w),
       }
     }
     Self {lexer, tokens, pos: 0}
   }
 
-  fn peek(&self, offset: usize) -> Option<Word<'a>> {
+  fn peek(&self, offset: usize) -> Option<Word> {
     self.tokens.get(self.pos + offset).copied()
   }
 
-  fn next(&mut self) -> Option<Word<'a>> {
+  fn next(&mut self) -> Option<Word> {
     let w = self.tokens.get(self.pos).copied();
     if w.is_some() {
       self.pos += 1;
@@ -192,7 +189,7 @@ impl<'a, 'c> Parser<'a, 'c> {
     w
   }
 
-  fn text(&self, w: &Word<'a>) -> String {
+  fn text(&self, w: &Word) -> String {
     let rng = (w.off as usize)..((w.off as usize)+(w.size as usize));
 
     match str::from_utf8(&self.lexer.mol.mmap[rng]) {

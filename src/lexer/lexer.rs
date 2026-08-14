@@ -1,4 +1,4 @@
-use crate::{ast::Module, diagnostic::Message};
+use crate::{ast::Module, diagnostic::Message, route::build::FileArena};
 
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -232,36 +232,54 @@ pub struct HumanPos {
 }
 
 #[derive(Clone, Copy)]
-pub struct Word<'a> {
-  pub mol: &'a Module,
+pub struct Word {
   pub off: u32,
   pub size: u16,
+  pub fid: u16,
   pub kind: WordKind,
 }
 
-impl<'a> Word<'a> {
+#[derive(Clone, Copy)]
+pub struct Span {
+  pub off: u32,
+  pub size: u16,
+  pub fid: u16,
+}
 
-  pub fn new(mol: &'a Module, off: usize, size: usize, kind: WordKind) -> Word<'a> {
+
+impl<'a> Word {
+
+  pub fn new(off: usize, size: usize, fid: u16, kind: WordKind) -> Word {
     assert!(off  < 0xFFFF_FFFF);
     assert!(size < 0xFFFF);
 
-    Word{mol, off: off as u32, size: size as u16, kind}
+    Word{off: off as u32, size: size as u16, fid, kind}
   }
 
-  pub fn str(&self) -> &'a str {
+
+  pub fn save(&self) -> Span {
+    Span{ off: self.off, size: self.size, fid: self.fid }
+  }
+
+
+  pub fn str(&self, farena: &'a FileArena) -> &'a str {
     let rng = (self.off as usize)..((self.off as usize)+(self.size as usize));
 
-    let a = &self.mol.mmap[rng];
+    let a = &farena.get(self.fid).mmap[rng];
 
     unsafe { str::from_utf8_unchecked(a) }
   }
 
-  pub fn string(&self) -> String {
-    String::from(self.str())
+  pub fn string(&self, farena: &'a FileArena) -> String {
+    String::from(self.str(farena))
   }
 
 
-  pub fn interval(&self) -> (HumanPos, HumanPos) {
+  pub fn mol(&self, far: &'a FileArena) -> &'a Module {
+    far.get(self.fid)
+  }
+
+  pub fn interval(&self, farena: &'a FileArena) -> (HumanPos, HumanPos) {
     let calc = |text: &[u8], offset: usize| -> HumanPos {
       let mut line = 1;
       let mut last_newline_pos = 0;
@@ -284,7 +302,7 @@ impl<'a> Word<'a> {
       HumanPos { line, column }
     };
 
-    let text = &self.mol.mmap[..];
+    let text = &farena.get(self.fid).mmap[..];
     (calc(text, self.off as usize), calc(text, (self.off as usize) + (self.size as usize)))
   }
   
@@ -295,20 +313,23 @@ impl<'a> Word<'a> {
 pub struct Lexer<'a> {
   pub mol: &'a Module,
   pub off: usize,
-  pub store: Vec<Word<'a>>,
+  pub store: Vec<Word>,
+  pub fid: u16,
 }
 
 impl<'a> Lexer<'a> {
 
-  pub fn new_module(m: &'a Module) -> Self { return Self{mol: m, off: 0, store: Vec::new()} }
+  pub fn new(m: &'a Module) -> Self {
+    return Self{mol: m, off: 0, store: Vec::new(), fid: m.fid}
+  }
 
-  #[inline(always)]
-  pub fn kind(c: u8) -> CharKind { return CHAR_LUT[c as usize] }
-
-  pub fn store(&mut self, w: Word<'a>) {
+  pub fn store(&mut self, w: Word) {
     self.store.push(w);
   }
 
+
+  #[inline(always)]
+  pub fn kind(c: u8) -> CharKind { return CHAR_LUT[c as usize] }
 
   #[inline(always)]
   fn is_word_start(b: u8) -> bool { b.is_ascii_alphabetic() || b == b'_' }
@@ -317,9 +338,9 @@ impl<'a> Lexer<'a> {
   fn is_word_continue(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' }
 
   
-  pub fn lex(&mut self) -> Word<'a> {
+  pub fn lex(&mut self) -> Option<Word> {
     if let Some(w) = self.store.pop() {
-      return w;
+      return Some(w);
     }
 
     let size = self.mol.mmap.len() -8;
@@ -329,7 +350,7 @@ impl<'a> Lexer<'a> {
         () => {
           match self.mol.mmap.get(self.off) {
             Some(val) => *val,
-            None => return Word::new(self.mol, 0, 0, WordKind::EOF),
+            None => return None,
           }
         };
       }
@@ -338,16 +359,14 @@ impl<'a> Lexer<'a> {
         ($i:expr) => {
           match self.mol.mmap.get(self.off + $i) {
             Some(val) => *val,
-            None => return Word::new(self.mol, 0, 0, WordKind::EOF),
+            None => return None,
           }
         };
       }
 
       
       // EOF
-      if self.off >= size {
-        return Word::new(self.mol, 0, 0, WordKind::EOF);
-      }
+      if self.off >= size { return None; }
       
       let knd = Lexer::kind(get!());
 
@@ -368,10 +387,10 @@ impl<'a> Lexer<'a> {
         if self.off < size {
           self.off += 1;
         } else {
-          return Word::new(self.mol, 0, 0, WordKind::EOF);
+          return None;
         }
 
-        return Word::new(self.mol, legoff, self.off - legoff, WordKind::String);
+        return Some(Word::new(legoff, self.off - legoff, self.fid, WordKind::String));
       }
 
       // Whitespace
@@ -384,43 +403,43 @@ impl<'a> Lexer<'a> {
       if knd == CharKind::Symbol {
         let legoff = self.off;
 
-        match [geti!(0), geti!(1), geti!(2)] {
-          [b'<',b'<',b'='] => { self.off += 3; return Word::new(self.mol, legoff, 3, WordKind::AssignmentLeftShift); } // "<<="
-          [b'<',b'<',b'|'] => { self.off += 3; return Word::new(self.mol, legoff, 3, WordKind::RotateLeft); } // "<<|"
-          [b'<',b'<', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::ShiftLeft); } // "<<" 
-          [b'<',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::SmallerEqual); } // "<="
-          [b'<',b'-', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::ArrowLeft); } // "<-"
-          [b'<',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::AngleBeg); } // "<"
+        let (s,k) = match [geti!(0), geti!(1), geti!(2)] {
+          [b'<',b'<',b'='] => { self.off += 3; (3, WordKind::AssignmentLeftShift) } // "<<="
+          [b'<',b'<',b'|'] => { self.off += 3; (3, WordKind::RotateLeft) } // "<<|"
+          [b'<',b'<', ..]  => { self.off += 2; (2, WordKind::ShiftLeft) } // "<<" 
+          [b'<',b'=', ..]  => { self.off += 2; (2, WordKind::SmallerEqual) } // "<="
+          [b'<',b'-', ..]  => { self.off += 2; (2, WordKind::ArrowLeft) } // "<-"
+          [b'<',..]        => { self.off += 1; (1, WordKind::AngleBeg) } // "<"
           
-          [b'>',b'>',b'='] => { self.off += 3; return Word::new(self.mol, legoff, 3, WordKind::AssignmentRighShift); } // ">>="
-          [b'>',b'>', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::ShiftRigh); } // ">>"
-          [b'>',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::BiggerEqual); } // ">="
-          [b'>',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::AngleEnd); } // ">"
+          [b'>',b'>',b'='] => { self.off += 3; (3, WordKind::AssignmentRighShift) } // ">>="
+          [b'>',b'>', ..]  => { self.off += 2; (2, WordKind::ShiftRigh) } // ">>"
+          [b'>',b'=', ..]  => { self.off += 2; (2, WordKind::BiggerEqual) } // ">="
+          [b'>',..]        => { self.off += 1; (1, WordKind::AngleEnd) } // ">"
 
-          [b'|',b'>',b'>'] => { self.off += 3; return Word::new(self.mol, legoff, 3, WordKind::RotateRigh); } // "|>>"
-          [b'|',b'|', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::LogicalOr); } // "||"
-          [b'|',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentBitwiseOr); } // "|="
-          [b'|',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::BitwiseOr); } // "|"
+          [b'|',b'>',b'>'] => { self.off += 3; (3, WordKind::RotateRigh) } // "|>>"
+          [b'|',b'|', ..]  => { self.off += 2; (2, WordKind::LogicalOr) } // "||"
+          [b'|',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentBitwiseOr) } // "|="
+          [b'|',..]        => { self.off += 1; (1, WordKind::BitwiseOr) } // "|"
 
-          [b'-',b'>', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::ArrowRigh); } // "->"
-          [b'-',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentSub); } // "-="
-          [b'-',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Sub); } // "-"
+          [b'-',b'>', ..]  => { self.off += 2; (2, WordKind::ArrowRigh) } // "->"
+          [b'-',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentSub) } // "-="
+          [b'-',..]        => { self.off += 1; (1, WordKind::Sub) } // "-"
 
-          [b'+',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentAdd); } // "+="
-          [b'+',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Add); } // "+"
+          [b'+',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentAdd) } // "+="
+          [b'+',..]        => { self.off += 1; (1, WordKind::Add) } // "+"
 
-          [b'*',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentMul); } // "*="
-          [b'*',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Mul); } // "*"
+          [b'*',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentMul) } // "*="
+          [b'*',..]        => { self.off += 1; (1, WordKind::Mul) } // "*"
 
-          [b'%',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentRem); } // "%="
-          [b'%',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Rem); } // "%"
+          [b'%',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentRem) } // "%="
+          [b'%',..]        => { self.off += 1; (1, WordKind::Rem) } // "%"
 
-          [b'=',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::Equal); } // "=="
-          [b'=',b'>', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::FatArrow); } // "=>"
-          [b'=',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Assign); } // "="
+          [b'=',b'=', ..]  => { self.off += 2; (2, WordKind::Equal) } // "=="
+          [b'=',b'>', ..]  => { self.off += 2; (2, WordKind::FatArrow) } // "=>"
+          [b'=',..]        => { self.off += 1; (1, WordKind::Assign) } // "="
 
-          [b':',b':', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::Scope); } // "::"
-          [b':',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Colon); } // ":"
+          [b':',b':', ..]  => { self.off += 2; (2, WordKind::Scope) } // "::"
+          [b':',..]        => { self.off += 1; (1, WordKind::Colon) } // ":"
 
           [b'/',b'/', ..]  => { // Comment
             while self.off < size && get!() != b'\n' { self.off += 1; }
@@ -442,46 +461,44 @@ impl<'a> Lexer<'a> {
             }
             continue;
           }
-          [b'/',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentDiv); } // "/="
-          [b'/',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Div); } // "/"
+          [b'/',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentDiv) } // "/="
+          [b'/',..]        => { self.off += 1; (1, WordKind::Div) } // "/"
 
-          [b'!',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::NotEqual); } // "!="
-          [b'!',b'[', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::Attribute); } // "!["
-          [b'!',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Bang); } // "!"
+          [b'!',b'=', ..]  => { self.off += 2; (2, WordKind::NotEqual) } // "!="
+          [b'!',b'[', ..]  => { self.off += 2; (2, WordKind::Attribute) } // "!["
+          [b'!',..]        => { self.off += 1; (1, WordKind::Bang) } // "!"
 
-          [b'#',b'[', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::Directive); } // "#["
-          [b'#',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Hash); } // "#"
+          [b'#',b'[', ..]  => { self.off += 2; (2, WordKind::Directive) } // "#["
+          [b'#',..]        => { self.off += 1; (1, WordKind::Hash) } // "#"
 
-          [b'.',b'.', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::Dot2); } // ".."
-          [b'.',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Dot); } // "."
+          [b'.',b'.', ..]  => { self.off += 2; (2, WordKind::Dot2) } // ".."
+          [b'.',..]        => { self.off += 1; (1, WordKind::Dot) } // "."
 
-          [b'&',b'&', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::LogicalAnd); } // "&&"
-          [b'&',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentBitwiseAnd); } // "&="
-          [b'&',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::BitwiseAnd); } // "&"
+          [b'&',b'&', ..]  => { self.off += 2; (2, WordKind::LogicalAnd) } // "&&"
+          [b'&',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentBitwiseAnd) } // "&="
+          [b'&',..]        => { self.off += 1; (1, WordKind::BitwiseAnd) } // "&"
 
-          [b'^',b'^', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::LogicalXor); } // "^^"
-          [b'^',b'=', ..]  => { self.off += 2; return Word::new(self.mol, legoff, 2, WordKind::AssignmentBitwiseXor); } // "^="
-          [b'^',..]        => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::BitwiseXor); } // "^"
+          [b'^',b'^', ..]  => { self.off += 2; (2, WordKind::LogicalXor) } // "^^"
+          [b'^',b'=', ..]  => { self.off += 2; (2, WordKind::AssignmentBitwiseXor) } // "^="
+          [b'^',..]        => { self.off += 1; (1, WordKind::BitwiseXor) } // "^"
 
-          [b'[',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::SquareBracketBeg); } // "["
-          [b']',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::SquareBracketEnd); } // "]"
-          [b'{',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::CurlyBracketBeg); }  // "{"
-          [b'}',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::CurlyBracketEnd); }  // "}"
-          [b'(',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::ParenBeg); }         // "("
-          [b')',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::ParenEnd); }         // ")"
-          [b';',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Semicolon); } // ";"
-          [b',',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Comma); }     // ","
-          [b'@',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::At); }        // "@"
-          [b'?',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Question); }  // "?"
-          [b'~',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Tilde); }     // "~"
-          [b'`',..] => { self.off += 1; return Word::new(self.mol, legoff, 1, WordKind::Backtick); }  // "`"
+          [b'[',..] => { self.off += 1; (1, WordKind::SquareBracketBeg) } // "["
+          [b']',..] => { self.off += 1; (1, WordKind::SquareBracketEnd) } // "]"
+          [b'{',..] => { self.off += 1; (1, WordKind::CurlyBracketBeg) }  // "{"
+          [b'}',..] => { self.off += 1; (1, WordKind::CurlyBracketEnd) }  // "}"
+          [b'(',..] => { self.off += 1; (1, WordKind::ParenBeg) }         // "("
+          [b')',..] => { self.off += 1; (1, WordKind::ParenEnd) }         // ")"
+          [b';',..] => { self.off += 1; (1, WordKind::Semicolon) } // ";"
+          [b',',..] => { self.off += 1; (1, WordKind::Comma) }     // ","
+          [b'@',..] => { self.off += 1; (1, WordKind::At) }        // "@"
+          [b'?',..] => { self.off += 1; (1, WordKind::Question) }  // "?"
+          [b'~',..] => { self.off += 1; (1, WordKind::Tilde) }     // "~"
+          [b'`',..] => { self.off += 1; (1, WordKind::Backtick) }  // "`"
 
-          _ => {
-            // Unknown Symbol (fallback)
-            self.off += 1;
-            return Word::new(self.mol, legoff, 1, WordKind::Unknown);
-          }
-        }
+          [..] => { self.off += 1; (1, WordKind::Unknown) }
+        };
+
+        return Some(Word::new(legoff, s, self.fid, k));
       }
 
       // Word / Numeral
@@ -489,9 +506,7 @@ impl<'a> Lexer<'a> {
       let bytes = &self.mol.mmap[..];
       let size = bytes.len();
 
-      if start >= size {
-        return Word::new(self.mol, start, 0, WordKind::EOF);
-      }
+      if start >= size { return None; }
 
       let first = bytes[start];
 
@@ -499,7 +514,7 @@ impl<'a> Lexer<'a> {
         let next_is_word = (start + 1 < size) && Self::is_word_continue(bytes[start + 1]);
         if !next_is_word {
           self.off += 1;
-          return Word::new(self.mol, start, 1, WordKind::Underscore);
+          return Some(Word::new(start, 1, self.fid, WordKind::Underscore));
         }
       }
 
@@ -522,7 +537,7 @@ impl<'a> Lexer<'a> {
           }
         }
 
-        return Word::new(self.mol, start, self.off - start, WordKind::Number);
+        return Some(Word::new(start, self.off - start, self.fid, WordKind::Number));
       }
 
       if Self::is_word_start(first) {
@@ -567,19 +582,18 @@ impl<'a> Lexer<'a> {
           _ => WordKind::Word,
         };
 
-        return Word::new(self.mol, start, len, kind);
+        return Some(Word::new(start, len, self.fid, kind));
       }
     }
   }
 
 
-  pub fn get(&mut self) -> Result<Word<'a>, Message<'a>> {
+  pub fn get(&mut self) -> Result<Word, Message> {
     let t = self.lex();
 
-    if t.kind == WordKind::EOF {
-      Err(Message::fatal(t, String::from("file finished"), Vec::new()))
-    } else {
-      Ok(t)
+    match t {
+      Some(r) => Ok(r),
+      None => Err(Message::fatal(Word {off: 0, size: 0, fid: 0, kind: WK::EOF}, String::from("file finished"), vec![])),
     }
   }
 
@@ -596,6 +610,7 @@ mod tests {
     mmap.resize(mmap.len() + 8, 0);
     Module {
       fpath: "test.qw".to_string(),
+      fid: 0,
       name: "test".to_string(),
       mmap,
     }
@@ -604,25 +619,25 @@ mod tests {
   #[test]
   fn test_multiline_comment() {
     let mol = create_module("let x /* comment */ = 5;");
-    let mut lexer = Lexer::new_module(&mol);
-    assert_eq!(lexer.lex().kind, WordKind::Let);
-    assert_eq!(lexer.lex().kind, WordKind::Word); // x
-    assert_eq!(lexer.lex().kind, WordKind::Assign);
-    assert_eq!(lexer.lex().kind, WordKind::Number); // 5
-    assert_eq!(lexer.lex().kind, WordKind::Semicolon);
-    assert_eq!(lexer.lex().kind, WordKind::EOF);
+    let mut lexer = Lexer::new(&mol);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Let);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Word); // x
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Assign);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Number); // 5
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Semicolon);
+    assert!(lexer.lex().is_none());
   }
 
   #[test]
   fn test_nested_multiline_comment() {
     let mol = create_module("/* outer /* inner */ outer */ fun main() {}");
-    let mut lexer = Lexer::new_module(&mol);
-    assert_eq!(lexer.lex().kind, WordKind::Fun);
-    assert_eq!(lexer.lex().kind, WordKind::Word); // main
-    assert_eq!(lexer.lex().kind, WordKind::ParenBeg);
-    assert_eq!(lexer.lex().kind, WordKind::ParenEnd);
-    assert_eq!(lexer.lex().kind, WordKind::CurlyBracketBeg);
-    assert_eq!(lexer.lex().kind, WordKind::CurlyBracketEnd);
-    assert_eq!(lexer.lex().kind, WordKind::EOF);
+    let mut lexer = Lexer::new(&mol);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Fun);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::Word); // main
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::ParenBeg);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::ParenEnd);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::CurlyBracketBeg);
+    assert_eq!(lexer.lex().unwrap().kind, WordKind::CurlyBracketEnd);
+    assert!(lexer.lex().is_none());
   }
 }

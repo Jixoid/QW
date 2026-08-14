@@ -6,7 +6,7 @@ use crate::ast::StmtVari;
 
 impl<'f, 'a, 'd> Sema<'f, 'a, 'd> {
 
-  pub fn check_stmt(&mut self, id: AstId) -> Result<(), Message<'a>> {
+  pub fn check_stmt(&mut self, id: AstId) -> Result<(), Message> {
     self.check_attributes(id)?;
     enum ExtractedStmt<'a> {
       Let(crate::lexer::Word<'a>, AstId, Option<AstId>),
