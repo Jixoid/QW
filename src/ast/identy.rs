@@ -1,3 +1,5 @@
+use core::fmt;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecAny;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecType;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecDecl;
@@ -20,7 +22,7 @@ pub type ThingId = AstId<SpecThing>;
 
 
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum AstKind {
   Null  = 0,
   Type  = 1,
@@ -34,7 +36,7 @@ pub enum AstKind {
 }
 
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct AstId<T> {
   pub kind: AstKind,
   pub index: u32,
@@ -75,4 +77,12 @@ impl<T> AstId<T> {
     Self{ kind: id.kind, index: id.index, spec: None }
   }
 
+}
+
+impl<T> fmt::Display for AstId<T> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "AstId({:?},{})", self.kind, self.index)?;
+
+    Ok(())
+  }
 }

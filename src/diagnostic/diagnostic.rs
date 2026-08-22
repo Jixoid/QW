@@ -1,7 +1,7 @@
 use core::fmt;
 use owo_colors::OwoColorize;
 
-use crate::{lexer::Word, route::build::FileArena};
+use crate::{lexer::Span, route::build::FileArena};
 
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -11,20 +11,20 @@ pub enum MsgKind { Fatal, Error, Warn, Hint, Note }
 #[derive(Clone)]
 pub struct Message {
   kind: MsgKind,
-  pos: Word,
+  pos: Span,
   msg: String,
   pars: Vec<String>,
   notes: Vec<Message>,
 }
 
 impl Message {
-  pub fn new(kind: MsgKind, pos: Word, msg: String, pars: Vec<String>) -> Self { Message {kind, pos, msg, pars, notes: Vec::new()} }
+  pub fn new(kind: MsgKind, pos: Span, msg: &str, pars: Vec<String>) -> Self { Message {kind, pos, msg: msg.to_string(), pars, notes: Vec::new()} }
 
-  pub fn fatal(pos: Word, msg: String, pars: Vec<String>) -> Self { Self::new(MsgKind::Fatal, pos, msg, pars) }
-  pub fn error(pos: Word, msg: String, pars: Vec<String>) -> Self { Self::new(MsgKind::Error, pos, msg, pars) }
-  pub fn warn(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Warn, pos, msg, pars) }
-  pub fn hint(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Hint, pos, msg, pars) }
-  pub fn note(pos: Word, msg: String, pars: Vec<String>) -> Self  { Self::new(MsgKind::Note, pos, msg, pars) }
+  pub fn fatal(pos: Span, msg: &str, pars: Vec<String>) -> Self { Self::new(MsgKind::Fatal, pos, msg, pars) }
+  pub fn error(pos: Span, msg: &str, pars: Vec<String>) -> Self { Self::new(MsgKind::Error, pos, msg, pars) }
+  pub fn warn(pos: Span, msg: &str, pars: Vec<String>) -> Self  { Self::new(MsgKind::Warn, pos, msg, pars) }
+  pub fn hint(pos: Span, msg: &str, pars: Vec<String>) -> Self  { Self::new(MsgKind::Hint, pos, msg, pars) }
+  pub fn note(pos: Span, msg: &str, pars: Vec<String>) -> Self  { Self::new(MsgKind::Note, pos, msg, pars) }
 
   pub fn add_note(&mut self, m: Self) { self.notes.push(m); }
 

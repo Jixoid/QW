@@ -26,7 +26,7 @@ impl MetaParser {
   }
 
 
-  pub fn read_visibility(ctx: &mut ParserContext, defvis: &mut Visibility) -> Result<Visibility, Message> {
+  pub fn read_scpvis(ctx: &mut ParserContext, defvis: &mut Visibility) -> Result<(), Message> {
     loop {
       let t = ctx.lex.get()?;
       
@@ -35,11 +35,12 @@ impl MetaParser {
         WK::Priv  => Visibility::Private,
         WK::Prot  => Visibility::Protected,
         WK::Crate => Visibility::Crate,
+        WK::Super => Visibility::Super,
         
         _ => {
           ctx.lex.store(t);
-          return Ok(defvis.clone());
-        },
+          return Ok(());
+        }
       };
 
       let c = ctx.lex.get()?;
@@ -48,12 +49,29 @@ impl MetaParser {
         continue;
       } else {
         ctx.lex.store(c);
-        return Ok(vis);
+        ctx.lex.store(t);
+        return Ok(());
       }
     }
   }
+
+  pub fn read_vis(ctx: &mut ParserContext, defvis: Visibility) -> Result<Visibility, Message> {
+    let t = ctx.lex.get()?;
+    
+    let vis = match t.kind {
+      WK::Pub   => Visibility::Public,
+      WK::Priv  => Visibility::Private,
+      WK::Prot  => Visibility::Protected,
+      WK::Crate => Visibility::Crate,
+      WK::Super => Visibility::Super,
+      
+      _ => { ctx.lex.store(t); defvis }
+    };
+
+    Ok(vis)
+  }
   
-  pub fn read_fun_args(ctx: &mut ParserContext) -> Result<Vec<FieldType>, Message> {
+  pub fn read_fun_args(ctx: &mut ParserContext) -> Result<Rng, Message> {
     let mut args = vec![];
     
     ctx.lex.get()?.expect_kind(WK::ParenBeg)?;
@@ -81,7 +99,7 @@ impl MetaParser {
 
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { args.push(FieldType{name: x.save(), kind, vis: Visibility::Private, attrs: vec![]}); }
+      for x in names { args.push( ctx.cre.new_thing(Thing::NamedType(x.save(), kind)).to_any() ); }
 
       let e = ctx.lex.get()?;
 
@@ -92,7 +110,7 @@ impl MetaParser {
       }
     }
 
-    Ok(args)
+    Ok(ctx.cre.new_extra(args))
   }
 
 }
@@ -103,7 +121,7 @@ impl<'a> Word {
   pub fn expect_word(self, far: &FileArena) -> Result<Self, Message> {
     match self.kind == WordKind::Word {
       true  => Ok(self),
-      false => Err(Message::error(self, String::from("expected identifier, but found `{}`"), vec![
+      false => Err(Message::error(self.save(), "expected identifier, but found `{}`", vec![
         self.string(far),
       ]))
     }
@@ -113,7 +131,7 @@ impl<'a> Word {
   pub fn expect_kind(self, k1: WK) -> Result<Self, Message> {
     match self.kind == k1 {
       true  => Ok(self),
-      false => Err(Message::error(self, String::from("expected {}, but found {}"), vec![
+      false => Err(Message::error(self.save(), "expected {}, but found {}", vec![
         format!("{:?}", k1),
         format!("{:?}", self.kind),
       ]))
@@ -123,7 +141,7 @@ impl<'a> Word {
   pub fn expect_kind2(self, k1: WK, k2: WK) -> Result<Self, Message> {
     match self.kind == k1 || self.kind == k2 {
       true  => Ok(self),
-      false => Err(Message::error(self, String::from("expected `{}` or `{}`, but found `{}`"), vec![
+      false => Err(Message::error(self.save(), "expected `{}` or `{}`, but found `{}`", vec![
         format!("{:?}", k1),
         format!("{:?}", k2),
         format!("{:?}", self.kind),
@@ -134,7 +152,7 @@ impl<'a> Word {
   pub fn expect_kind3(self, k1: WK, k2: WK, k3: WK) -> Result<Self, Message> {
     match self.kind == k1 || self.kind == k2 || self.kind == k3 {
       true  => Ok(self),
-      false => Err(Message::error(self, String::from("expected `{}`, `{}` or `{}`, but found `{}`"), vec![
+      false => Err(Message::error(self.save(), "expected `{}`, `{}` or `{}`, but found `{}`", vec![
         format!("{:?}", k1),
         format!("{:?}", k2),
         format!("{:?}", k3),

@@ -94,14 +94,14 @@ impl ExprParser {
           ctx.lex.store(next);
         }
 
-        _ => return Err(Message::error(separator, format!("expected `,` or `)` in argument list, found `{}`", separator.str(ctx.far)), vec![])),
+        _ => return Err(Message::error(separator.save(), "expected `,` or `)` in argument list, found `{}`", vec![ separator.string(ctx.far) ])),
       }
     }
 
     Ok(args)
   }
 
-  fn read_atom(ctx: &mut ParserContext) -> Result<ExprId, Message> { loop {
+  pub fn read_atom(ctx: &mut ParserContext) -> Result<ExprId, Message> { loop {
     let tok = ctx.lex.get()?;
     
     if tok.str(ctx.far).chars().next().map_or(false, |c| c.is_ascii_digit()) {
@@ -188,15 +188,13 @@ impl ExprParser {
       WK::Let      => Self::read_let(ctx, AccessKind::IMM)?,
       WK::Var      => Self::read_let(ctx, AccessKind::MUT)?,
       
-      _ => match tok.str(ctx.far) {
-        "ret"      => Self::read_ret(ctx)?,
-        "break"    => Self::read_break(ctx)?,
-        "continue" => Self::read_continue(ctx)?,
-        
-        _ => {
-          ctx.lex.store(tok);
-          Self::read_atom(ctx)? 
-        }
+      WK::Ret      => Self::read_ret(ctx)?,
+      WK::Break    => Self::read_break(ctx)?,
+      WK::Continue => Self::read_continue(ctx)?,
+
+      _ => {
+        ctx.lex.store(tok);
+        Self::read_atom(ctx)? 
       }
     };
 
@@ -214,7 +212,7 @@ impl ExprParser {
 
           let lookahead = ctx.lex.get()?;
           if lookahead.kind == WK::Scope {
-            return Err(Message::error(lookahead, "cannot use `::` on a field access expression; use type name instead".to_string(), vec![]));
+            return Err(Message::error(lookahead.save(), "cannot use `::` on a field access expression; use type name instead", vec![]));
           }
           ctx.lex.store(lookahead);
 
@@ -255,7 +253,7 @@ impl ExprParser {
                 }
                 ctx.lex.store(next);
               }
-              _ => return Err(Message::error(sep, format!("expected `,` or `]` in index expression, found `{}`", sep.str(ctx.far)), vec![])),
+              _ => return Err(Message::error(sep.save(), "expected `,` or `]` in index expression, found `{}`", vec![ sep.string(ctx.far) ])),
             }
           }
 
@@ -300,7 +298,7 @@ impl ExprParser {
     if t.kind == WK::Backtick {
       let lbl = ctx.lex.get()?;
       if lbl.kind != WK::Word {
-        return Err(Message::error(lbl, String::from("expected identifier after backtick"), vec![]));
+        return Err(Message::error(lbl.save(), "expected identifier after backtick", vec![]));
       }
       ctx.lex.get()?.expect_kind(WK::Colon)?;
       label = Some(lbl.save());

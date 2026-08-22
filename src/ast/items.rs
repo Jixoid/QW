@@ -1,16 +1,17 @@
-use crate::{ast::{self, Rng, Visibility}, lexer::Span};
+use crate::ast::{self, Rng, Visibility};
 
 
+#[derive(Debug)]
 pub enum ItemVari {
-  Module{name: String, ctn: Rng},
+  Module{name: String, ctn: Rng /* DeclId | ItemId */},
   
-  Generic{params: Vec<ast::FieldType>, ctn: Rng, reqs: Rng},
+  Generic{params: Rng /* NamedType */, reqs: Rng /* NamedTypeList */, ctn: Rng /* DeclId | ItemId */},
   
-  Impl{trait_ty: ast::TypeId, type_ty: ast::TypeId, ctn: Vec<ast::DeclId>},
+  Impl{type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: Rng /* DeclId */},
 
-  Import(Vec<(u32, Span)>, Option<ast::DeclId>),
-  ImportWildcard(Vec<(u32, Span)>, Option<ast::DeclId>),
+  Import(Rng /* ThingId */),
 }
+
 
 pub struct Item {
   pub vari: ItemVari,

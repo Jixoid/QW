@@ -19,7 +19,7 @@ pub struct Crate {
 
   pub extra_data: Vec<ast::AnyId>,
 
-  pub map_attr: HashMap<ast::AnyId, Vec<ast::AttrId>>,
+  pub map_attr: HashMap<ast::AnyId, Rng /* AttrId */>,
 }
 
 

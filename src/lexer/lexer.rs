@@ -181,8 +181,9 @@ pub enum WordKind {
 
   // Keyword
   If, Ef, Else, Match, Loop, While, For, In, Let, Var,
-  Using, Struct, Iface, Trait, Enum, Flags, Fun, Init, Fini, Generic, Mod, Impl,
-  Pub, Priv, Prot, Crate
+  Using, Struct, Iface, Trait, Enum, Flags, Fun, Init, Fini, Generic, Mod, Use, Impl,
+  Pub, Priv, Prot, Crate, Super, Mut, Imm,
+  Ret, Break, Continue, Die,
 }
 
 const fn create_char_lut() -> [CharKind; 256] {
@@ -239,7 +240,7 @@ pub struct Word {
   pub kind: WordKind,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Span {
   pub off: u32,
   pub size: u16,
@@ -261,6 +262,54 @@ impl<'a> Word {
     Span{ off: self.off, size: self.size, fid: self.fid }
   }
 
+
+  pub fn str(&self, farena: &'a FileArena) -> &'a str {
+    let rng = (self.off as usize)..((self.off as usize)+(self.size as usize));
+
+    let a = &farena.get(self.fid).mmap[rng];
+
+    unsafe { str::from_utf8_unchecked(a) }
+  }
+
+  pub fn string(&self, farena: &'a FileArena) -> String {
+    String::from(self.str(farena))
+  }
+
+
+  pub fn mol(&self, far: &'a FileArena) -> &'a Module {
+    far.get(self.fid)
+  }
+
+  pub fn interval(&self, farena: &'a FileArena) -> (HumanPos, HumanPos) {
+    let calc = |text: &[u8], offset: usize| -> HumanPos {
+      let mut line = 1;
+      let mut last_newline_pos = 0;
+
+      for i in 0..offset {
+        if text[i] == b'\n' {
+          line += 1;
+          last_newline_pos = i + 1;
+        }
+      }
+
+      let mut column = 1;
+      for i in last_newline_pos..offset {
+        let c = text[i];
+        if (c & 0xC0) != 0x80 {
+          column += 1;
+        }
+      }
+
+      HumanPos { line, column }
+    };
+
+    let text = &farena.get(self.fid).mmap[..];
+    (calc(text, self.off as usize), calc(text, (self.off as usize) + (self.size as usize)))
+  }
+  
+}
+
+impl<'a> Span {
 
   pub fn str(&self, farena: &'a FileArena) -> &'a str {
     let rng = (self.off as usize)..((self.off as usize)+(self.size as usize));
@@ -572,12 +621,21 @@ impl<'a> Lexer<'a> {
           b"flags"   => WK::Flags,
           b"generic" => WK::Generic,
           b"mod"     => WK::Mod,
+          b"use"     => WK::Use,
           b"impl"    => WK::Impl,
 
           b"pub"   => WK::Pub,
           b"priv"  => WK::Priv,
           b"prot"  => WK::Prot,
           b"crate" => WK::Crate,
+          b"super" => WK::Super,
+          b"mut"   => WK::Mut,
+          b"imm"   => WK::Imm,
+
+          b"ret"      => WK::Ret,
+          b"break"    => WK::Break,
+          b"continue" => WK::Continue,
+          b"die"      => WK::Die,
 
           _ => WordKind::Word,
         };
@@ -593,7 +651,7 @@ impl<'a> Lexer<'a> {
 
     match t {
       Some(r) => Ok(r),
-      None => Err(Message::fatal(Word {off: 0, size: 0, fid: 0, kind: WK::EOF}, String::from("file finished"), vec![])),
+      None => Err(Message::fatal(Span{off: 0, size: 0, fid: 0}, "file finished", vec![])),
     }
   }
 

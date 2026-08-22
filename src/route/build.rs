@@ -72,7 +72,7 @@ fn humanize_size(size: usize) -> String {
 
 
 
-pub fn build_cre<'a>(info: &BuildInfo, farena: &'a FileArena, fpath: String) -> Result<()> {
+pub fn build_cre<'a>(name: String, info: &BuildInfo, farena: &'a FileArena, fpath: String) -> Result<()> {
   let mut ast_cre = ast::Crate::new();
 
   let mol = farena.alloc(ast::Module::new(&fpath)?);
@@ -87,7 +87,7 @@ pub fn build_cre<'a>(info: &BuildInfo, farena: &'a FileArena, fpath: String) -> 
     
     let sum = Front::new(&mut ast_cre, &mol, farena)?.parse(&mut anys);
 
-    let root = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{ name: "".to_string(), ctn: ast_cre.new_extra(anys) }};
+    let root = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{ name, ctn: ast_cre.new_extra(anys) }};
     ast_cre.root = ast_cre.new_item(root);
 
     /* time */ let front_time = now.elapsed();
@@ -104,7 +104,10 @@ pub fn build_cre<'a>(info: &BuildInfo, farena: &'a FileArena, fpath: String) -> 
     /* time */ now = Instant::now();
     /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
     
-    let hir_cre = HGen::lower(&ast_cre);
+    let hir_cre = match HGen::lower(&ast_cre, farena) {
+      Ok(a) => a,
+      Err(e) => return Err(CompilerError::Str( format!("{}", e.display(farena)) )),
+    };
     
     /* time */ let hgen_time = now.elapsed();
     /* usag */ let hir_usage = hir_cre.storage_size();
@@ -184,29 +187,29 @@ pub fn build(info: BuildInfo) -> Result<()> {
     return Err(CompilerError::Str("could not find `qw.conf`.".to_string()));
   }
 
-  //let mfd = Module::new(conf_path.to_str().unwrap_or(""))?;
+  let mfd = ast::Module::new(conf_path.to_str().unwrap_or(""))?;
 
-  //let conf = crate::ds::Value::load_file(&mfd).map_err(|e| CompilerError::Str(format!("{:?}", e)))?;
+  let conf = crate::ds::Value::load_file(&mfd).map_err(|e| CompilerError::Str(format!("{:?}", e)))?;
 
-  //let crate_name = || -> String {
-  //  if let crate::ds::Value::Stc(stc) = conf {
-  //    for field in &stc.subs {
-  //      if field.name == "name" {
-  //        if let crate::ds::Value::Str(s) = &field.kind {
-  //          return s.clone();
-  //        }
-  //      }
-  //    }
-  //  }
-  //  
-  //  String::from("main")
-  //}();
+  let crate_name = || -> Result<String> {
+    if let crate::ds::Value::Stc(stc) = conf {
+      for field in &stc.subs {
+        if field.name == "name" {
+          if let crate::ds::Value::Str(s) = &field.kind {
+            return Ok(s.clone());
+          }
+        }
+      }
+    }
+
+    return Err(CompilerError::Str("name, not finded in `qw.conf`".to_string()));
+  }()?;
 
   //: qw.conf readed
 
   let farena = FileArena::new();
 
-  build_cre(&info, &farena, std::path::Path::new(info.path).join("src").join("main.qw").to_str().unwrap().to_string())?;
+  build_cre(crate_name, &info, &farena, std::path::Path::new(info.path).join("src").join("main.qw").to_str().unwrap().to_string())?;
 
   Ok(())
 }

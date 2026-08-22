@@ -1,32 +1,21 @@
-use crate::{ast::{ExprId, Rng, TypeId, Visibility}, lexer::Span};
+use crate::{ast::{ExprId, Rng, TypeId}, lexer::Span};
 
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccessKind { IMM, MUT }
 
 
-#[derive(Clone)]
-pub struct FieldType {
-  pub name: Span,
-  pub kind: TypeId,
-  pub vis: Visibility,
-  pub attrs: Vec<crate::ast::Attr>,
+#[derive(Debug)]
+pub enum FunAttrs {
+  Static = 0x01,
+  Const  = 0x02,
+  Pure   = 0x04,
 }
 
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum IntegerValue { SIG(i64), USG(u64) }
-
-
-#[derive(Clone)]
-pub struct NickType {
-  pub pos: Span,
-  pub idx: u32
-}
-
-
+#[derive(Debug)]
 pub enum Type {
-  Nick(NickType),
+  Nick{pos: Span, idx: u32},
   Path(Rng),
 
   Ptr   {sub: TypeId, acc: AccessKind},
@@ -37,17 +26,18 @@ pub enum Type {
   Option{sub: TypeId},
   Result{sub: TypeId, err: TypeId},
   
-  Struct{vars: Vec<FieldType>},
+  Struct{vars: Rng /* NamedTypeVis */, bases: Option<Rng> /* TypeId */},
   Tuple {vars: Rng /* TypeId */},
 
-  Iface{funs: Vec<FieldType>},
-  Trait{funs: Vec<FieldType>},
+  Iface{funs: Rng /* NamedTypeVis */, bases: Option<Rng> /* TypeId */},
+  Trait{funs: Rng /* NamedTypeVis */, bases: Option<Rng> /* TypeId */},
 
-  Fun {args: Vec<FieldType>, ret: Option<TypeId>},
-  Init{args: Vec<FieldType>, ils: Option<Rng> /* NamedTypeList */},
+  Fun {args: Rng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
+  Init{args: Rng /* NamedType */, attr: u8 /* FunAttrs */},
+  Fini{args: Rng /* NamedType */, attr: u8 /* FunAttrs */},
 
-  Enum {vals: Rng /* Name | NamedExpr */},
-  Flags{vals: Rng /* Name | NamedExpr */},
+  Enum {vals: Rng /* Name | NamedExpr */, bases: Option<Rng> /* TypeId */},
+  Flags{vals: Rng /* Name | NamedExpr */, bases: Option<Rng> /* TypeId */},
 
-  Specialize{base: TypeId, args: Vec<TypeId>},
+  Specialize{base: TypeId, args: Rng /* TypeId | ExprId */},
 }

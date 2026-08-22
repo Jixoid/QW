@@ -1,4 +1,4 @@
-use crate::{ast::{AnyId, AstId, Attr, AttrId, AttrVari}, diagnostic::Message, front::expr_p::ExprParser, lexer::WK};
+use crate::{ast::{AnyId, AstId, Attr, AttrId, AttrVari, Rng}, diagnostic::Message, front::expr_p::ExprParser, lexer::WK};
 use super::front::ParserContext;
 
 
@@ -6,8 +6,8 @@ pub struct AttrParser {}
 
 impl AttrParser {
 
-  pub fn read_attr(ctx: &mut ParserContext) -> Result<Vec<AttrId>, Message> {
-    let mut attrs = Vec::new();
+  pub fn read_attr(ctx: &mut ParserContext) -> Result<Option<Rng>, Message> {
+    let mut attrs = vec![];
 
     loop {
       let t = ctx.lex.get()?;
@@ -17,7 +17,7 @@ impl AttrParser {
           let t = ctx.lex.get()?;
           if t.kind == WK::SquareBracketEnd { break; } else { ctx.lex.store(t); }
           
-          attrs.push(Self::read_attr_sub(ctx)?);
+          attrs.push(Self::read_attr_sub(ctx)?.to_any());
 
           let t = ctx.lex.get()?;
           if t.kind == WK::Comma { continue; }
@@ -33,7 +33,12 @@ impl AttrParser {
       }
     }
 
-    Ok(attrs)
+
+    if attrs.is_empty() {
+      Ok(None)
+    } else {
+      Ok(Some(ctx.cre.new_extra(attrs)))
+    }
   }
 
 
@@ -95,7 +100,7 @@ impl AttrParser {
   }
 
 
-  pub fn attach_attr<T>(ctx: &mut ParserContext, id: AstId<T>, attrs: Vec<AttrId>) {
+  pub fn attach_attr<T>(ctx: &mut ParserContext, id: AstId<T>, attrs: Rng) {
     if !attrs.is_empty() {
       ctx.cre.map_attr.insert(AnyId::new_from(id), attrs);
     }

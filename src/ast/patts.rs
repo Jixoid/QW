@@ -4,7 +4,9 @@ use crate::{ast::Rng, lexer::Span};
 pub enum Patt {
   One(Span),
   
-  Wildcard,
+  /// _
+  Under,
+  /// ..
   Rest,
   
   Tuple(Rng),

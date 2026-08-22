@@ -1,4 +1,4 @@
-use crate::ast::{AstId, Thing};
+use crate::ast::{self, AstId, Thing};
 use crate::lexer::WK;
 use crate::{ast::{DeclVari, Item, ItemId, ItemVari, Module, Visibility}, diagnostic::Message, front::{Front, ParserContext, attr_p::AttrParser, decl_p::DeclParser, meta_p::MetaParser, type_p::TypeParser}, lexer::Lexer};
 
@@ -10,7 +10,7 @@ impl ItemParser {
   pub fn read_generic(ctx: &mut ParserContext, vis: Visibility) -> Result<ItemId, Message> {
     ctx.lex.get()?.expect_kind(WK::AngleBeg)?;
     
-    let mut params = Vec::new();
+    let mut params = vec![];
     'ml: loop {
       let t = ctx.lex.get()?;
       if t.kind == WK::AngleEnd { break 'ml; } else { ctx.lex.store(t); }
@@ -28,12 +28,12 @@ impl ItemParser {
       
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { params.push(crate::ast::types::FieldType{name: x.save(), kind, vis: Visibility::Private, attrs: vec![]}); }
+      for x in names { params.push( ctx.cre.new_thing(Thing::NamedType(x.save(), kind)).to_any() ); }
       
       let e = ctx.lex.get()?;
       if e.kind == WK::Comma || e.kind == WK::Semicolon { continue 'ml; }
       else if e.kind == WK::AngleEnd { break 'ml; }
-      else { return Err(Message::error(e, String::from("expected `,`, `;` or `>`"), vec![])); }
+      else { return Err(Message::error(e.save(), "expected `,`, `;` or `>`", vec![])); }
     }
 
 
@@ -75,7 +75,7 @@ impl ItemParser {
     }
 
     
-    let mut ctn = Vec::new();
+    let mut ctn = vec![];
     
     let _c = ctx.lex.get()?;
     if _c.kind == WK::CurlyBracketBeg {
@@ -100,7 +100,11 @@ impl ItemParser {
     }
     
 
-    let this = ItemVari::Generic{params, ctn: ctx.cre.new_extra(ctn), reqs: ctx.cre.new_extra(reqs)};
+    let this = ItemVari::Generic{
+      params: ctx.cre.new_extra(params),
+      ctn: ctx.cre.new_extra(ctn),
+      reqs: ctx.cre.new_extra(reqs),
+    };
     
     let it = Item{vari: this, vis};
 
@@ -128,30 +132,32 @@ impl ItemParser {
       let t = ctx.lex.get()?;
       if t.kind == WK::CurlyBracketEnd { break; } else { ctx.lex.store(t); }
 
+      MetaParser::read_scpvis(ctx, &mut defvis)?;
       let attrs = AttrParser::read_attr(ctx)?;
-      let v = MetaParser::read_visibility(ctx, &mut defvis)?;
+      let vis = MetaParser::read_vis(ctx, defvis)?;
       
       let next_kw = ctx.lex.get()?;
       if next_kw.kind == WK::Fun {
-        let fun = DeclParser::read_fun(ctx, v, true)?;
+        let fun = DeclParser::read_fun(ctx, vis)?;
         
         if let DeclVari::Fun { kind: _, blok } = ctx.cre.get_decl(fun).vari {
-          if blok.is_null() {
-            return Err(Message::error(next_kw, "extend methods must have a body (cannot end with `;`)".to_string(), vec![]));
+          if blok.is_none() {
+            return Err(Message::error(next_kw.save(), "extend methods must have a body (cannot end with `;`)", vec![]));
           }
         }
         
-        AttrParser::attach_attr(ctx, fun, attrs);
-        impls.push(fun);
+        if let Some(a) = attrs { AttrParser::attach_attr(ctx, fun, a); }
+
+        impls.push(fun.to_any());
       } else {
-        return Err(Message::error(next_kw, format!("expected `fun`, got `{}`", next_kw.str(ctx.far)), vec![]));
+        return Err(Message::error(next_kw.save(), "expected `fun`, got `{}`", vec![ next_kw.string(ctx.far) ]));
       }
     }
 
     let this = ItemVari::Impl{
       type_ty,
-      trait_ty,
-      ctn: impls,
+      trait_ty: Some(trait_ty),
+      ctn: ctx.cre.new_extra(impls),
     };
     
     let it = Item{vis, vari: this};
@@ -159,77 +165,55 @@ impl ItemParser {
     Ok(ctx.cre.new_item(it))
   }
   
-  pub fn read_use(ctx: &mut ParserContext, vis: Visibility) -> Result<Vec<ItemId>, Message> {
-    let mut base_path = Vec::new();
-    let mut w = ctx.lex.get()?;
+  pub fn read_use(ctx: &mut ParserContext, vis: Visibility) -> Result<ItemId, Message> {
+    let _c = ctx.lex.get()?;
     
-    // Parse the base path
+    let start = match _c.kind {
+      WK::Crate => ctx.cre.new_thing(Thing::Crate),
+      WK::Super => ctx.cre.new_thing(Thing::Super),
+
+      WK::Word => ctx.cre.new_thing(Thing::Name(_c.save())),
+
+      _ => return Err(Message::error(_c.save(), "unknown use starter: {}", vec![ _c.string(ctx.far) ])),
+    };
+
+    let mut all = vec![ start.to_any() ];
+    
     loop {
-      let is_word = match w.kind { WK::Word => true, _ => false };
-      
+      let _c = ctx.lex.get()?;
+      if _c.kind == WK::Scope {}
+      else if _c.kind == WK::Semicolon { break; }
+      else {
+        _c.expect_kind2(WK::Scope, WK::Semicolon)?;
+      }
 
-      if !is_word && w.kind != WK::Mul && w.kind != WK::CurlyBracketBeg {
-        return Err(Message::error(w, String::from("expected identifier, `*` or `{` in use path"), vec![]));
-      }
-      
-      if w.kind == WK::Mul {
-        // wildcard import
-        ctx.lex.get()?.expect_kind(WK::Semicolon)?;
-        
-        let this = Item{vis, vari: ItemVari::ImportWildcard(base_path, None)};
-        
-        let id = ctx.cre.new_item(this);
-        return Ok(vec![id]);
-      }
-      
-      if w.kind == WK::CurlyBracketBeg {
-        // multiple imports block
-        let mut ids = Vec::new();
-        loop {
-          let end_w = ctx.lex.get()?;
-          if end_w.kind == WK::CurlyBracketEnd { break; }
-          
-          if end_w.kind != WK::Word {
-            return Err(Message::error(end_w, String::from("expected identifier in use block"), vec![]));
-          }
-          
-          let name = end_w;
-          let mut full_path = base_path.clone();
-          
-          full_path.push((ctx.cre.get_str(name.str(ctx.far)), name.save()));
-          
-          let this = Item{vis, vari: ItemVari::Import(full_path, None)};
-          ids.push(ctx.cre.new_item(this));
-          
-          let next_w = ctx.lex.get()?;
-          if next_w.kind == WK::CurlyBracketEnd { break; }
-          if next_w.kind != WK::Comma {
-            return Err(Message::error(next_w, String::from("expected `,` or `}`"), vec![]));
-          }
-        }
-        ctx.lex.get()?.expect_kind(WK::Semicolon)?;
-        return Ok(ids);
-      }
-      
-      // it's an identifier
-      base_path.push((ctx.cre.get_str(w.str(ctx.far)), w.save()));
-      
-      let next_w = ctx.lex.get()?;
-      if next_w.kind == WK::Semicolon {
-        let this = Item{vis, vari: ItemVari::Import(base_path, None)};
-
-        let id = ctx.cre.new_item(this);
-        return Ok(vec![id]);
-      } else if next_w.kind == WK::Scope {
-        w = ctx.lex.get()?;
-      } else {
-        return Err(Message::error(next_w, String::from("expected `::` or `;` in use path"), vec![]));
-      }
+      all.push(Self::read_use_sub(ctx)?.to_any());
     }
+
+
+    let this = Item{vis, vari: ItemVari::Import( ctx.cre.new_extra(all) )};
+
+    Ok(ctx.cre.new_item(this))
   }
 
+  fn read_use_sub(ctx: &mut ParserContext) -> Result<ast::ThingId, Message> {
+    let _c = ctx.lex.get()?;
+
+    let ret = match _c.kind {
+      WK::Crate => ctx.cre.new_thing(Thing::Crate),
+      WK::Super => ctx.cre.new_thing(Thing::Super),
+
+      WK::Word => ctx.cre.new_thing(Thing::Name(_c.save())),
+
+      _ => return Err(Message::error(_c.save(), "unknown use starter: {}", vec![ _c.string(ctx.far) ])),
+    };
+
+    Ok(ret)
+  }
+
+
   pub fn read_mod(ctx: &mut ParserContext, vis: Visibility) -> Result<Option<ItemId>, Message> {
-    let name = ctx.lex.get()?;
+    let name = ctx.lex.get()?.expect_word(ctx.far)?;
     ctx.lex.get()?.expect_kind(WK::Semicolon)?;
 
     let mod_name = name.string(ctx.far);
@@ -247,7 +231,7 @@ impl ItemParser {
 
     let mfd = match Module::new(mod_path.to_str().unwrap()) {
       Ok(s) => s,
-      Err(..) => return Err(Message::error(name, format!("module file not found `{}.qw` or `{}/mod.qw`", mod_name, mod_name), vec![])),
+      Err(..) => return Err(Message::error(name.save(), "module file not found `{}.qw` or `{}/mod.qw`", vec![ mod_name.clone(), mod_name ])),
     };
 
     let mfd_static = ctx.far.alloc(mfd);
