@@ -1,5 +1,3 @@
-use core::fmt;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecAny;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecType;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct SpecDecl;
@@ -77,12 +75,4 @@ impl<T> AstId<T> {
     Self{ kind: id.kind, index: id.index, spec: None }
   }
 
-}
-
-impl<T> fmt::Display for AstId<T> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "AstId({:?},{})", self.kind, self.index)?;
-
-    Ok(())
-  }
 }

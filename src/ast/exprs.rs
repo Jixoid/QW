@@ -23,25 +23,14 @@ pub enum UnaryOp {
 }
 
 
-pub enum NumberConst {
-  I64(i64),
-  U64(u64),
-  F64(f64),
-}
-
-pub struct NumberExpr {
-  pub pos: Span,
-  pub num: NumberConst,
-}
-
 pub enum Expr {
-  Nick{pos: Span, idx: u32},
+  Nick(Span),
   Path(Vec<ExprId>),
   Member(Vec<ExprId>),
 
   Tuple(Vec<ExprId>),
 
-  Number(NumberExpr),
+  Number(Span),
   String(Span),
 
   Block{label: Option<Span>, rng: Rng, expr: Option<ExprId>},
@@ -66,6 +55,8 @@ pub enum Expr {
 
   Try(ExprId),
   Unwrap(ExprId),
+  Unsafe(ExprId),
+  Specialize{callee: ExprId, args: Vec<TypeId>},
 }
 
 

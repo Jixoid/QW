@@ -1,3 +1,1 @@
-pub mod mangle;
-pub mod hgen;
-pub use hgen::HGen;
+pub mod mgen;

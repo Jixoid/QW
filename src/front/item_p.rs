@@ -28,12 +28,16 @@ impl ItemParser {
       
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { params.push( ctx.cre.new_thing(Thing::NamedType(x.save(), kind)).to_any() ); }
+      for x in names {
+        let this = Thing::NamedType(x.save(ctx), kind);
+
+        params.push( ctx.cre.new_thing(this).to_any() );
+      }
       
       let e = ctx.lex.get()?;
       if e.kind == WK::Comma || e.kind == WK::Semicolon { continue 'ml; }
       else if e.kind == WK::AngleEnd { break 'ml; }
-      else { return Err(Message::error(e.save(), "expected `,`, `;` or `>`", vec![])); }
+      else { return Err(Message::error(e, "expected `,`, `;` or `>`", vec![])); }
     }
 
 
@@ -67,7 +71,9 @@ impl ItemParser {
 
         let rng = ctx.cre.new_extra(tys);
 
-        reqs.push( ctx.cre.new_thing(Thing::NamedTypeList(t.save(), rng)).to_any() );
+        let this = Thing::NamedTypeList(t.save(ctx), rng);
+        
+        reqs.push( ctx.cre.new_thing(this).to_any() );
       }
 
     } else {
@@ -101,14 +107,44 @@ impl ItemParser {
     
 
     let this = ItemVari::Generic{
-      params: ctx.cre.new_extra(params),
-      ctn: ctx.cre.new_extra(ctn),
+      params: ctx.cre.new_extra(params.clone()),
+      ctn: ctx.cre.new_extra(ctn.clone()),
       reqs: ctx.cre.new_extra(reqs),
     };
     
     let it = Item{vari: this, vis};
+    let gen_id = ctx.cre.new_item(it);
 
-    Ok(ctx.cre.new_item(it))
+    let mut gen_anys = params.clone();
+    gen_anys.extend(ctn.clone());
+    let scp = ast::Scope::from_anys(ctx.cre, &gen_anys);
+    ctx.cre.attach_scp(gen_id.to_any(), scp);
+
+    let param_pairs: Vec<(u32, ast::AnyId)> = params.iter().filter_map(|&p| {
+      let thing = ctx.cre.get_thing(ast::ThingId::new_from(p));
+      if let ast::Thing::NamedType(span, ..) = thing {
+        Some((span.sid, p))
+      } else {
+        None
+      }
+    }).collect();
+
+    // Propagate generic type parameters into child decl/struct scopes
+    for &child in &ctn {
+      if child.kind == ast::AstKind::Decl {
+        let decl = ctx.cre.get_decl(ast::DeclId::new_from(child));
+        if let ast::DeclVari::Using { kind } = &decl.vari {
+          let kind_any = kind.to_any();
+          if let Some(target_scp) = ctx.cre.map_scop.get_mut(&kind_any) {
+            for &(sid, p) in &param_pairs {
+              target_scp.insert(sid, p);
+            }
+          }
+        }
+      }
+    }
+
+    Ok(gen_id)
   }
 
   pub fn read_impl(ctx: &mut ParserContext, vis: Visibility) -> Result<ItemId, Message> {
@@ -142,7 +178,7 @@ impl ItemParser {
         
         if let DeclVari::Fun { kind: _, blok } = ctx.cre.get_decl(fun).vari {
           if blok.is_none() {
-            return Err(Message::error(next_kw.save(), "extend methods must have a body (cannot end with `;`)", vec![]));
+            return Err(Message::error(next_kw, "extend methods must have a body (cannot end with `;`)", vec![]));
           }
         }
         
@@ -150,7 +186,7 @@ impl ItemParser {
 
         impls.push(fun.to_any());
       } else {
-        return Err(Message::error(next_kw.save(), "expected `fun`, got `{}`", vec![ next_kw.string(ctx.far) ]));
+        return Err(Message::error(next_kw, "expected `fun`, got `{}`", vec![ next_kw.string(ctx.far) ]));
       }
     }
 
@@ -172,24 +208,26 @@ impl ItemParser {
       WK::Crate => ctx.cre.new_thing(Thing::Crate),
       WK::Super => ctx.cre.new_thing(Thing::Super),
 
-      WK::Word => ctx.cre.new_thing(Thing::Name(_c.save())),
+      WK::Word => {
+        let this = Thing::Name(_c.save(ctx));
+        ctx.cre.new_thing(this)
+      }
 
-      _ => return Err(Message::error(_c.save(), "unknown use starter: {}", vec![ _c.string(ctx.far) ])),
+      _ => return Err(Message::error(_c, "unknown use starter: {}", vec![ _c.string(ctx.far) ])),
     };
 
     let mut all = vec![ start.to_any() ];
     
     loop {
       let _c = ctx.lex.get()?;
-      if _c.kind == WK::Scope {}
-      else if _c.kind == WK::Semicolon { break; }
-      else {
+      if _c.kind == WK::Semicolon {
+        break;
+      } else if _c.kind == WK::Scope {
+        all.push(Self::read_use_sub(ctx)?.to_any());
+      } else {
         _c.expect_kind2(WK::Scope, WK::Semicolon)?;
       }
-
-      all.push(Self::read_use_sub(ctx)?.to_any());
     }
-
 
     let this = Item{vis, vari: ItemVari::Import( ctx.cre.new_extra(all) )};
 
@@ -202,10 +240,14 @@ impl ItemParser {
     let ret = match _c.kind {
       WK::Crate => ctx.cre.new_thing(Thing::Crate),
       WK::Super => ctx.cre.new_thing(Thing::Super),
+      WK::Mul   => ctx.cre.new_thing(Thing::Wildcard),
 
-      WK::Word => ctx.cre.new_thing(Thing::Name(_c.save())),
+      WK::Word => {
+        let this = Thing::Name(_c.save(ctx));
+        ctx.cre.new_thing(this)
+      }
 
-      _ => return Err(Message::error(_c.save(), "unknown use starter: {}", vec![ _c.string(ctx.far) ])),
+      _ => return Err(Message::error(_c, "unknown use segment: {}", vec![ _c.string(ctx.far) ])),
     };
 
     Ok(ret)
@@ -214,6 +256,7 @@ impl ItemParser {
 
   pub fn read_mod(ctx: &mut ParserContext, vis: Visibility) -> Result<Option<ItemId>, Message> {
     let name = ctx.lex.get()?.expect_word(ctx.far)?;
+    let _name_span = name.save(ctx);
     ctx.lex.get()?.expect_kind(WK::Semicolon)?;
 
     let mod_name = name.string(ctx.far);
@@ -231,7 +274,7 @@ impl ItemParser {
 
     let mfd = match Module::new(mod_path.to_str().unwrap()) {
       Ok(s) => s,
-      Err(..) => return Err(Message::error(name.save(), "module file not found `{}.qw` or `{}/mod.qw`", vec![ mod_name.clone(), mod_name ])),
+      Err(..) => return Err(Message::error(name, "module file not found `{}.qw` or `{}/mod.qw`", vec![ mod_name.clone(), mod_name ])),
     };
 
     let mfd_static = ctx.far.alloc(mfd);
@@ -267,8 +310,12 @@ impl ItemParser {
       }
     }
 
-    let this = Item{vis, vari: ItemVari::Module{name: mod_name, ctn: ctx.cre.new_extra(anys)}};
+    let ctn = ctx.cre.new_extra(anys.clone());
+    let this = Item{vis, vari: ItemVari::Module{name: mod_name, ctn}};
     let mod_id = ctx.cre.new_item(this);
+
+    let scp = ast::Scope::from_anys(ctx.cre, &anys);
+    ctx.cre.attach_scp(mod_id.to_any(), scp);
 
     Ok(Some(mod_id))
   }

@@ -51,7 +51,7 @@ impl AttrParser {
       WK::Colon => { // A:B
         let val = ctx.lex.get()?;
 
-        let this = Attr{vari: AttrVari::Bin(key.save(), val.save())};
+        let this = Attr{vari: AttrVari::Bin(key.save(ctx), val.save(ctx))};
 
         Ok(ctx.cre.new_attr(this))
       }
@@ -75,7 +75,7 @@ impl AttrParser {
 
         let rng = ctx.cre.new_extra(attrs);
 
-        let this = Attr{vari: AttrVari::List(key.save(), rng)};
+        let this = Attr{vari: AttrVari::List(key.save(ctx), rng)};
 
         Ok(ctx.cre.new_attr(this))
       }
@@ -83,7 +83,7 @@ impl AttrParser {
       WK::Assign => { // A = $expr
         let ex = ExprParser::read_expr(ctx, 0)?;
 
-        let this = Attr{vari: AttrVari::Set(key.save(), ex)};
+        let this = Attr{vari: AttrVari::Set(key.save(ctx), ex)};
 
         Ok(ctx.cre.new_attr(this))
       }
@@ -91,7 +91,7 @@ impl AttrParser {
       _ => {
         ctx.lex.store(_c);
 
-        let this = Attr{vari: AttrVari::One(key.save())};
+        let this = Attr{vari: AttrVari::One(key.save(ctx))};
 
         return Ok(ctx.cre.new_attr(this));
       }

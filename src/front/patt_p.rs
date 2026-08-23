@@ -12,7 +12,7 @@ impl PattParser {
       WK::Word => {
         _c.expect_word(ctx.far)?;
 
-        let this = Patt::One(_c.save());
+        let this = Patt::One(_c.save(ctx));
         Ok(ctx.cre.new_patt(this))
       }
 
@@ -41,7 +41,7 @@ impl PattParser {
           if next_c.kind == WK::ParenEnd { break; }
           else if next_c.kind == WK::Comma { continue; }
           else {
-            return Err(Message::error(next_c.save(), "expected ',' or ')' in tuple pattern", vec![]));
+            return Err(Message::error(next_c, "expected ',' or ')' in tuple pattern", vec![]));
           }
         }
 
@@ -66,7 +66,7 @@ impl PattParser {
           if next_c.kind == WK::SquareBracketEnd { break; }
           else if next_c.kind == WK::Comma { continue; }
           else {
-            return Err(Message::error(next_c.save(), "expected ',' or ']' in array pattern", vec![]));
+            return Err(Message::error(next_c, "expected ',' or ']' in array pattern", vec![]));
           }
         }
 
@@ -76,7 +76,7 @@ impl PattParser {
         Ok(ctx.cre.new_patt(this))
       }
 
-      _ => Err(Message::error(_c.save(), "unknown pattern", vec![])),
+      _ => Err(Message::error(_c, "unknown pattern", vec![])),
     }
   }
 

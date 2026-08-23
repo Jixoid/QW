@@ -1,13 +1,21 @@
-use std::ptr;
+use std::{ptr, ops::Range};
 
-use crate::hir::{self, HirId, HirKind};
+use crate::hir::{HirId, HirKind, Item, ItemId, Thing, ThingId, Type, TypeId};
+
+
+pub type Rng = Range<u32>;
 
 
 pub struct Crate<'a> {
+  pub root: Option<ItemId>,
+  
   pub imod: Vec<&'a Crate<'a>>,
 
-  pub list_type: Vec<hir::Type>,
-  pub list_decl: Vec<hir::Decl>,
+  pub list_type: Vec<Type>,
+  pub list_item: Vec<Item>,
+  pub list_thing: Vec<Thing>,
+
+  pub extra_data: Vec<ItemId>,
 }
 
 
@@ -15,10 +23,15 @@ impl<'a> Crate<'a> {
 
   pub fn new() -> Self {
     Self{
+      root: None,
+
       imod: vec![],
 
       list_type: vec![],
-      list_decl: vec![],
+      list_item: vec![],
+      list_thing: vec![],
+
+      extra_data: vec![],
     }
   }
 
@@ -47,14 +60,26 @@ impl<'a> Crate<'a> {
   }
 
 
-  pub fn get_type(&self, id: hir::TypeId) -> &hir::Type {
+  pub fn get_type(&self, id: TypeId) -> &Type {
     let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
     &modl.list_type[id.index as usize]
   }
 
+  pub fn get_item(&self, id: ItemId) -> &Item {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
 
-  pub fn new_type(&mut self, v: hir::Type) -> hir::TypeId {
+    &modl.list_item[id.index as usize]
+  }
+
+  pub fn get_thing(&self, id: ThingId) -> &Thing {
+    let modl: &Crate<'a> = if id.krate == 0 { self } else { &self.imod[(id.krate-1) as usize] };
+
+    &modl.list_thing[id.index as usize]
+  }
+
+
+  pub fn new_type(&mut self, v: Type) -> TypeId {
     self.list_type.push(v);
 
     let idx = self.list_type.len() as u32 - 1;
@@ -62,11 +87,48 @@ impl<'a> Crate<'a> {
     return HirId::new(HirKind::Type, 0, idx);
   }
 
+  pub fn new_item(&mut self, v: Item) -> ItemId {
+    self.list_item.push(v);
+
+    let idx = self.list_item.len() as u32 - 1;
+
+    return HirId::new(HirKind::Item, 0, idx);
+  }
+
+  pub fn new_thing(&mut self, v: Thing) -> ThingId {
+    self.list_thing.push(v);
+
+    let idx = self.list_thing.len() as u32 - 1;
+
+    return HirId::new(HirKind::Thing, 0, idx);
+  }
+
+
+  pub fn get_extra(&self, rng: &Rng) -> &[ItemId] {
+    let r = (rng.start as usize)..(rng.end as usize);
+
+    &self.extra_data[r]
+  }
+
+  pub fn new_extra(&mut self, v: Vec<ItemId>) -> Rng {
+    let start = self.extra_data.len() as u32;
+
+    self.extra_data.extend(v);
+
+    let end = self.extra_data.len() as u32;
+
+    start..end
+  }
+
 
   pub fn storage_size(&self) -> usize {
-    size_of::<hir::Type>()*self.list_type.len()
+    size_of::<Type>()*self.list_type.len()
     +
-    size_of::<hir::Decl>()*self.list_decl.len()
+    size_of::<Item>()*self.list_item.len()
+    +
+    size_of::<Thing>()*self.list_thing.len()
+    +
+    size_of::<ItemId>()*self.extra_data.len()
   }
 
 }

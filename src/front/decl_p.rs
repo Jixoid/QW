@@ -1,4 +1,4 @@
-use crate::{ast::{AccessKind, Decl, DeclId, DeclVari, Thing, Type, TypeId, Visibility}, diagnostic::Message, front::{ParserContext, expr_p::ExprParser, meta_p::MetaParser, type_p::TypeParser}, lexer::WK};
+use crate::{ast::{Decl, DeclId, DeclVari, Thing, Type, TypeId, Visibility}, diagnostic::Message, front::{ParserContext, expr_p::ExprParser, meta_p::MetaParser, type_p::TypeParser}, lexer::WK};
 
 
 pub struct DeclParser {}
@@ -6,7 +6,7 @@ pub struct DeclParser {}
 impl DeclParser {
 
   pub fn read_fun(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
 
     let kind = TypeParser::read_fun(ctx)?;
 
@@ -31,7 +31,7 @@ impl DeclParser {
   }
 
   pub fn read_init(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
 
     let args = MetaParser::read_fun_args(ctx)?;
 
@@ -53,7 +53,7 @@ impl DeclParser {
         ctx.lex.get()?.expect_kind(WK::ParenEnd)?;
         
 
-        let it = Thing::NamedExpr(t.save(), v);
+        let it = Thing::NamedExpr(t.save(ctx), v);
 
         ils.push( ctx.cre.new_thing(it).to_any() );
 
@@ -94,7 +94,7 @@ impl DeclParser {
   }
   
   pub fn read_fini(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
 
     let args = MetaParser::read_fun_args(ctx)?;
 
@@ -120,7 +120,7 @@ impl DeclParser {
   }
   
   pub fn read_using(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     
     ctx.lex.get()?.expect_kind(WK::Assign)?;
     let kind = TypeParser::read_type(ctx, false)?;
@@ -134,7 +134,7 @@ impl DeclParser {
   }
 
   pub fn read_struct(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     let kind = TypeParser::read_struct(ctx)?;
 
     let this = DeclVari::Using{ kind };
@@ -145,7 +145,7 @@ impl DeclParser {
   }
 
   pub fn read_iface(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     let kind = TypeParser::read_iface(ctx)?;
 
     let this = DeclVari::Using{ kind };
@@ -156,7 +156,7 @@ impl DeclParser {
   }
 
   pub fn read_trait(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     let kind = TypeParser::read_trait(ctx)?;
 
     let this = DeclVari::Using{ kind };
@@ -167,7 +167,7 @@ impl DeclParser {
   }
 
   pub fn read_enum(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     let kind = TypeParser::read_enum(ctx)?;
 
     let this = DeclVari::Using{ kind };
@@ -178,7 +178,7 @@ impl DeclParser {
   }
 
   pub fn read_flags(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId, Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
     let kind = TypeParser::read_flags(ctx)?;
 
     let this = DeclVari::Using{ kind };
@@ -188,8 +188,8 @@ impl DeclParser {
     Ok(ctx.cre.new_decl(dl))
   }
 
-  pub fn read_var(ctx: &mut ParserContext, vis: Visibility, acck: AccessKind) -> Result<DeclId,  Message> {
-    let name = ctx.lex.get()?.expect_word(ctx.far)?.save();
+  pub fn read_var(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
 
     let t1 = ctx.lex.get()?;
     
@@ -212,7 +212,38 @@ impl DeclParser {
       t2.expect_kind2(WK::Assign, WK::Semicolon)?;
     }
 
-    let this = DeclVari::Var{kind, acck, init};
+    let this = DeclVari::Var{kind, init};
+
+    let dl = Decl{name, vari: this, vis};
+
+    Ok(ctx.cre.new_decl(dl))
+  }
+
+  pub fn read_let(ctx: &mut ParserContext, vis: Visibility) -> Result<DeclId,  Message> {
+    let name = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
+
+    let t1 = ctx.lex.get()?;
+    
+    let kind = if t1.kind == WK::Colon {
+      TypeParser::read_type(ctx, true)?
+    } else {
+      ctx.lex.store(t1);
+      TypeId::null()
+    };
+
+    let mut init = None;
+    let t2 = ctx.lex.get()?;
+
+    if t2.kind == WK::Assign {
+      init = Some(ExprParser::read_expr(ctx, 0)?);
+      ctx.lex.get()?.expect_kind(WK::Semicolon)?;
+    }
+    else if t2.kind == WK::Semicolon { /* no init */ }
+    else {
+      t2.expect_kind2(WK::Assign, WK::Semicolon)?;
+    }
+
+    let this = DeclVari::Let{kind, init};
 
     let dl = Decl{name, vari: this, vis};
 

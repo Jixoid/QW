@@ -99,7 +99,11 @@ impl MetaParser {
 
       let kind = TypeParser::read_type(ctx, true)?;
       
-      for x in names { args.push( ctx.cre.new_thing(Thing::NamedType(x.save(), kind)).to_any() ); }
+      for x in names {
+        let thing = Thing::NamedType(x.save(ctx), kind);
+
+        args.push( ctx.cre.new_thing(thing).to_any() );
+      }
 
       let e = ctx.lex.get()?;
 
@@ -121,7 +125,7 @@ impl<'a> Word {
   pub fn expect_word(self, far: &FileArena) -> Result<Self, Message> {
     match self.kind == WordKind::Word {
       true  => Ok(self),
-      false => Err(Message::error(self.save(), "expected identifier, but found `{}`", vec![
+      false => Err(Message::error(self, "expected identifier, but found `{}`", vec![
         self.string(far),
       ]))
     }
@@ -131,7 +135,7 @@ impl<'a> Word {
   pub fn expect_kind(self, k1: WK) -> Result<Self, Message> {
     match self.kind == k1 {
       true  => Ok(self),
-      false => Err(Message::error(self.save(), "expected {}, but found {}", vec![
+      false => Err(Message::error(self, "expected {}, but found {}", vec![
         format!("{:?}", k1),
         format!("{:?}", self.kind),
       ]))
@@ -141,7 +145,7 @@ impl<'a> Word {
   pub fn expect_kind2(self, k1: WK, k2: WK) -> Result<Self, Message> {
     match self.kind == k1 || self.kind == k2 {
       true  => Ok(self),
-      false => Err(Message::error(self.save(), "expected `{}` or `{}`, but found `{}`", vec![
+      false => Err(Message::error(self, "expected `{}` or `{}`, but found `{}`", vec![
         format!("{:?}", k1),
         format!("{:?}", k2),
         format!("{:?}", self.kind),
@@ -152,7 +156,7 @@ impl<'a> Word {
   pub fn expect_kind3(self, k1: WK, k2: WK, k3: WK) -> Result<Self, Message> {
     match self.kind == k1 || self.kind == k2 || self.kind == k3 {
       true  => Ok(self),
-      false => Err(Message::error(self.save(), "expected `{}`, `{}` or `{}`, but found `{}`", vec![
+      false => Err(Message::error(self, "expected `{}`, `{}` or `{}`, but found `{}`", vec![
         format!("{:?}", k1),
         format!("{:?}", k2),
         format!("{:?}", k3),

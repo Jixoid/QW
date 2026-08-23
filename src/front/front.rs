@@ -1,5 +1,5 @@
 use crate::{
-  ast::{self, AccessKind, Crate, Module, Visibility}, diagnostic::{Message, Summary}, error, lexer::{Lexer, WK},
+  ast::{self, Crate, Module, Visibility}, diagnostic::{Message, Summary}, error, lexer::{Lexer, WK},
   front::{attr_p::AttrParser, decl_p::DeclParser, item_p::ItemParser, meta_p::MetaParser}, route::build::FileArena
 };
 
@@ -58,8 +58,8 @@ impl<'f,'a,'d> Front<'f,'a> {
       WK::Trait  => DeclParser::read_trait(ctx, vis)?.to_any(),
       WK::Enum   => DeclParser::read_enum(ctx, vis)?.to_any(),
       WK::Flags  => DeclParser::read_flags(ctx, vis)?.to_any(),
-      WK::Let    => DeclParser::read_var(ctx, vis, AccessKind::IMM)?.to_any(),
-      WK::Var    => DeclParser::read_var(ctx, vis, AccessKind::MUT)?.to_any(),
+      WK::Let    => DeclParser::read_let(ctx, vis)?.to_any(),
+      WK::Var    => DeclParser::read_var(ctx, vis)?.to_any(),
       
       WK::Impl    => ItemParser::read_impl(ctx, vis)?.to_any(),
       WK::Generic => ItemParser::read_generic(ctx, vis)?.to_any(),
@@ -70,7 +70,7 @@ impl<'f,'a,'d> Front<'f,'a> {
         None => continue,
       }
 
-      _ => return Err(Message::error(l.save(), "unknown keyword: `{}`", vec![l.string(ctx.far)])),
+      _ => return Err(Message::error(l, "unknown keyword: `{}`", vec![l.string(ctx.far)])),
     };
 
     if let Some(a) = attrs { AttrParser::attach_attr(ctx, id, a); }

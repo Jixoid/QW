@@ -1,0 +1,32 @@
+
+use sys::alloc::*;
+
+
+mod clib {
+  ![C]
+  fun malloc(size: usize) -> ^u8;
+
+  ![C]
+  fun free(ptr: ^u8);
+
+  ![C]
+  fun realloc(ptr: ^u8; size: usize) -> ^u8;
+}
+
+
+![default:allocator]
+struct CAllocator: Allocator {
+
+  fun alloc(layout: Layout) -> ^u8 {
+    clib::malloc(layout.size)
+  }
+
+  fun dispose(ptr: ^u8, layout: Layout) {
+    clib::free(ptr);
+  }
+
+  fun realloc(ptr: ^u8, layout: Layout) -> ^u8 {
+    clib::realloc(ptr, layout.size)
+  }
+
+}

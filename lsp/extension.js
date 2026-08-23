@@ -30,6 +30,8 @@ const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 const WORD_MAP = new Map([
   // Declarations & Modifiers
   ['fun', 'keyword'],
+  ['init', 'keyword'],
+  ['fini', 'keyword'],
   ['let', 'keyword'],
   ['var', 'keyword'],
   ['using', 'keyword'],
@@ -41,18 +43,20 @@ const WORD_MAP = new Map([
   ['impl', 'keyword'],
   ['generic', 'keyword'],
   ['mod', 'keyword'],
-  ['pub', 'keyword'],
-  ['priv', 'keyword'],
-  ['prot', 'keyword'],
-  ['crate', 'keyword'],
   ['use', 'keyword'],
   ['requires', 'keyword'],
-  ['init', 'keyword'],
   ['new', 'keyword'],
   ['static', 'keyword'],
   ['const', 'keyword'],
   ['mut', 'keyword'],
   ['imm', 'keyword'],
+
+  // Visibility & Scoping
+  ['pub', 'keyword'],
+  ['priv', 'keyword'],
+  ['prot', 'keyword'],
+  ['crate', 'keyword'],
+  ['super', 'keyword'],
 
   // Control Flow
   ['if', 'keyword'],
@@ -67,25 +71,26 @@ const WORD_MAP = new Map([
   ['return', 'keyword'],
   ['break', 'keyword'],
   ['continue', 'keyword'],
+  ['die', 'keyword'],
 
   // Primitive & Standard Types
   ['i8', 'type'],
   ['i16', 'type'],
   ['i32', 'type'],
   ['i64', 'type'],
+  ['isize', 'type'],
   ['u8', 'type'],
   ['u16', 'type'],
   ['u32', 'type'],
   ['u64', 'type'],
+  ['usize', 'type'],
   ['f32', 'type'],
   ['f64', 'type'],
+  ['fsize', 'type'],
   ['bool', 'type'],
   ['str', 'type'],
   ['char', 'type'],
   ['void', 'type'],
-  ['int', 'type'],
-  ['uint', 'type'],
-  ['float', 'type'],
   ['type', 'type'],
   ['Self', 'type'],
 
@@ -220,9 +225,9 @@ class QWWordMappingHighlighter {
             if (typeIndex !== -1) {
               tokensBuilder.push(lineIndex, wordStart, word.length, typeIndex, 0);
             }
-            if (word === 'fun' || word === 'init') {
+            if (word === 'fun' || word === 'init' || word === 'fini') {
               expectFunctionName = true;
-            } else if (word === 'struct' || word === 'enum' || word === 'iface' || word === 'trait' || word === 'flags') {
+            } else if (word === 'struct' || word === 'enum' || word === 'iface' || word === 'trait' || word === 'flags' || word === 'type') {
               expectTypeName = true;
             }
           } else {

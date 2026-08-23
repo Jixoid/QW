@@ -17,5 +17,5 @@ pub enum Thing {
   
   NamedTypeVis(Span, Visibility, TypeId),
 
-  NamedTypeList(Span, Rng),
+  NamedTypeList(Span, Rng /* TypeId */),
 }

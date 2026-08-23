@@ -1,4 +1,4 @@
-use crate::{ast::Module, diagnostic::Message, route::build::FileArena};
+use crate::{ast::Module, diagnostic::Message, front::ParserContext, route::build::FileArena};
 
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -183,7 +183,7 @@ pub enum WordKind {
   If, Ef, Else, Match, Loop, While, For, In, Let, Var,
   Using, Struct, Iface, Trait, Enum, Flags, Fun, Init, Fini, Generic, Mod, Use, Impl,
   Pub, Priv, Prot, Crate, Super, Mut, Imm,
-  Ret, Break, Continue, Die,
+  Ret, Break, Continue, Die, Unsafe,
 }
 
 const fn create_char_lut() -> [CharKind; 256] {
@@ -243,6 +243,7 @@ pub struct Word {
 #[derive(Debug, Clone, Copy)]
 pub struct Span {
   pub off: u32,
+  pub sid: u32,
   pub size: u16,
   pub fid: u16,
 }
@@ -258,8 +259,10 @@ impl<'a> Word {
   }
 
 
-  pub fn save(&self) -> Span {
-    Span{ off: self.off, size: self.size, fid: self.fid }
+  pub fn save(&self, ctx: &mut ParserContext) -> Span {
+    let sid = ctx.cre.get_str(self.str(ctx.far));
+
+    Span{ off: self.off, size: self.size, fid: self.fid, sid }
   }
 
 
@@ -636,6 +639,7 @@ impl<'a> Lexer<'a> {
           b"break"    => WK::Break,
           b"continue" => WK::Continue,
           b"die"      => WK::Die,
+          b"unsafe"   => WK::Unsafe,
 
           _ => WordKind::Word,
         };
@@ -651,7 +655,7 @@ impl<'a> Lexer<'a> {
 
     match t {
       Some(r) => Ok(r),
-      None => Err(Message::fatal(Span{off: 0, size: 0, fid: 0}, "file finished", vec![])),
+      None => Err(Message::fatal(Word{off: 0, size: 0, fid: 0, kind: WK::EOF}, "file finished", vec![])),
     }
   }
 

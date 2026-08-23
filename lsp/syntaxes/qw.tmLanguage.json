@@ -36,7 +36,7 @@
       "patterns": [
         {
           "name": "meta.function.declaration.qw",
-          "match": "\\b(fun|init)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "\\b(fun|init|fini)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.declaration.qw" },
             "2": { "name": "entity.name.function.qw" }
@@ -109,15 +109,15 @@
       "patterns": [
         {
           "name": "keyword.control.qw",
-          "match": "\\b(if|ef|else|match|loop|while|for|in|ret|return|break|continue)\\b"
+          "match": "\\b(if|ef|else|match|loop|while|for|in|ret|return|break|continue|die)\\b"
         },
         {
           "name": "keyword.declaration.qw",
-          "match": "\\b(fun|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|requires|init|static|const|mut|imm)\\b"
+          "match": "\\b(fun|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|new|static|const|mut|imm)\\b"
         },
         {
           "name": "keyword.other.visibility.qw",
-          "match": "\\b(pub|priv|prot|crate)\\b"
+          "match": "\\b(pub|priv|prot|crate|super)\\b"
         }
       ]
     },
@@ -125,7 +125,7 @@
       "patterns": [
         {
           "name": "storage.type.qw",
-          "match": "\\b(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|bool|str|char|void|Self|int|uint|float)\\b"
+          "match": "\\b(i8|i16|i32|i64|isize|u8|u16|u32|u64|usize|f32|f64|fsize|bool|str|char|void|type|Self)\\b"
         }
       ]
     },

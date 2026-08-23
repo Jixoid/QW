@@ -1,7 +1,7 @@
 use crate::ast::AccessKind;
 use crate::front::type_p::TypeParser;
 use crate::lexer::WK;
-use crate::{ast::{BinaryOp, Expr, ExprId, MatchArm, NumberConst, NumberExpr, UnaryOp}, diagnostic::*, front::{ParserContext, patt_p::PattParser}};
+use crate::{ast::{BinaryOp, Expr, ExprId, MatchArm, UnaryOp}, diagnostic::*, front::{ParserContext, patt_p::PattParser}};
 
 
 pub struct ExprParser {}
@@ -94,7 +94,7 @@ impl ExprParser {
           ctx.lex.store(next);
         }
 
-        _ => return Err(Message::error(separator.save(), "expected `,` or `)` in argument list, found `{}`", vec![ separator.string(ctx.far) ])),
+        _ => return Err(Message::error(separator, "expected `,` or `)` in argument list, found `{}`", vec![ separator.string(ctx.far) ])),
       }
     }
 
@@ -105,18 +105,24 @@ impl ExprParser {
     let tok = ctx.lex.get()?;
     
     if tok.str(ctx.far).chars().next().map_or(false, |c| c.is_ascii_digit()) {
-      if let Ok(num) = tok.str(ctx.far).parse::<i64>() {
-        return Ok(ctx.cre.new_expr(Expr::Number(NumberExpr{pos: tok.save(), num: NumberConst::I64(num)}) ));
-      }
+      let this = Expr::Number(tok.save(ctx));
+      
+      return Ok(ctx.cre.new_expr(this));
     }
 
-    if tok.kind == WK::String {
-      return Ok(ctx.cre.new_expr(Expr::String(tok.save())));
+    else if tok.kind == WK::String {
+      let this = Expr::String(tok.save(ctx));
+      
+      return Ok(ctx.cre.new_expr(this));
     }
 
-    tok.expect_word(ctx.far)?;
-    let ident = ctx.cre.get_str(tok.str(ctx.far));
-    return Ok(ctx.cre.new_expr(Expr::Nick{pos: tok.save(), idx: ident}));
+    else {
+      tok.expect_word(ctx.far)?;
+      
+      let this = Expr::Nick(tok.save(ctx));
+      
+      return Ok(ctx.cre.new_expr(this));
+    }
   }}
 
 
@@ -185,12 +191,13 @@ impl ExprParser {
       WK::Loop  => Self::read_loop(ctx)?,
       WK::For   => Self::read_for(ctx)?,
 
-      WK::Let      => Self::read_let(ctx, AccessKind::IMM)?,
-      WK::Var      => Self::read_let(ctx, AccessKind::MUT)?,
+      WK::Let => Self::read_let(ctx, AccessKind::IMM)?,
+      WK::Var => Self::read_let(ctx, AccessKind::MUT)?,
       
       WK::Ret      => Self::read_ret(ctx)?,
       WK::Break    => Self::read_break(ctx)?,
       WK::Continue => Self::read_continue(ctx)?,
+      WK::Unsafe   => Self::read_unsafe(ctx)?,
 
       _ => {
         ctx.lex.store(tok);
@@ -204,15 +211,14 @@ impl ExprParser {
       
       match next.kind {
         WK::Dot => {
-          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?;
-          let field_idx = ctx.cre.get_str(field_tok.str(ctx.far));
+          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
 
-          let sub = Expr::Nick{pos: field_tok.save(), idx: field_idx};
+          let sub = Expr::Nick(field_tok);
           let sub_id = ctx.cre.new_expr(sub);
 
           let lookahead = ctx.lex.get()?;
           if lookahead.kind == WK::Scope {
-            return Err(Message::error(lookahead.save(), "cannot use `::` on a field access expression; use type name instead", vec![]));
+            return Err(Message::error(lookahead, "cannot use `::` on a field access expression; use type name instead", vec![]));
           }
           ctx.lex.store(lookahead);
 
@@ -220,10 +226,9 @@ impl ExprParser {
         }
 
         WK::Scope => {
-          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?;
-          let field_idx = ctx.cre.get_str(field_tok.str(ctx.far));
-
-          let sub = Expr::Nick{pos: field_tok.save(), idx: field_idx};
+          let field_tok = ctx.lex.get()?.expect_word(ctx.far)?.save(ctx);
+          
+          let sub = Expr::Nick(field_tok);
           let sub_id = ctx.cre.new_expr(sub);
 
           lhs = ctx.cre.new_expr(Expr::Path(vec![lhs, sub_id]));
@@ -253,7 +258,7 @@ impl ExprParser {
                 }
                 ctx.lex.store(next);
               }
-              _ => return Err(Message::error(sep.save(), "expected `,` or `]` in index expression, found `{}`", vec![ sep.string(ctx.far) ])),
+              _ => return Err(Message::error(sep, "expected `,` or `]` in index expression, found `{}`", vec![ sep.string(ctx.far) ])),
             }
           }
 
@@ -263,6 +268,60 @@ impl ExprParser {
         WK::Bang => lhs = ctx.cre.new_expr(Expr::Unwrap(lhs)),
         
         WK::Question => lhs = ctx.cre.new_expr(Expr::Try(lhs)),
+
+        WK::AngleBeg => {
+          let lex_off = ctx.lex.off;
+          let lex_store = ctx.lex.store.clone();
+
+          let mut args = Vec::new();
+          let mut success = false;
+
+          let first = ctx.lex.get();
+          if let Ok(first_tok) = first {
+            if first_tok.kind == WK::AngleEnd {
+              success = true;
+            } else {
+              ctx.lex.store(first_tok);
+              loop {
+                let ty_res = TypeParser::read_type(ctx, true);
+                match ty_res {
+                  Ok(ty) => {
+                    args.push(ty);
+                    let sep = ctx.lex.get();
+                    match sep {
+                      Ok(sep_tok) if sep_tok.kind == WK::AngleEnd => {
+                        success = true;
+                        break;
+                      }
+                      Ok(sep_tok) if sep_tok.kind == WK::Comma => {
+                        let next_tok = ctx.lex.get();
+                        match next_tok {
+                          Ok(nt) if nt.kind == WK::AngleEnd => {
+                            success = true;
+                            break;
+                          }
+                          Ok(nt) => ctx.lex.store(nt),
+                          Err(_) => break,
+                        }
+                      }
+                      _ => break,
+                    }
+                  }
+                  Err(_) => break,
+                }
+              }
+            }
+          }
+
+          if success {
+            lhs = ctx.cre.new_expr(Expr::Specialize{callee: lhs, args});
+          } else {
+            ctx.lex.off = lex_off;
+            ctx.lex.store = lex_store;
+            ctx.lex.store(next);
+            break;
+          }
+        }
 
         _ => {
           ctx.lex.store(next);
@@ -298,10 +357,10 @@ impl ExprParser {
     if t.kind == WK::Backtick {
       let lbl = ctx.lex.get()?;
       if lbl.kind != WK::Word {
-        return Err(Message::error(lbl.save(), "expected identifier after backtick", vec![]));
+        return Err(Message::error(lbl, "expected identifier after backtick", vec![]));
       }
       ctx.lex.get()?.expect_kind(WK::Colon)?;
-      label = Some(lbl.save());
+      label = Some(lbl.save(ctx));
       t = ctx.lex.get()?;
     }
 
@@ -328,7 +387,7 @@ impl ExprParser {
       } else {
         let is_block_like = matches!(
           ctx.cre.get_expr(ex_id),
-          Expr::If { .. } | Expr::Block { .. } | Expr::Match { .. } | Expr::Loop { .. } | Expr::While { .. } | Expr::ForIn { .. }
+          Expr::If{ .. } | Expr::Block{ .. } | Expr::Match{ .. } | Expr::Loop{ .. } | Expr::While{ .. } | Expr::ForIn{ .. } | Expr::Unsafe(..)
         );
         if is_block_like {
           ctx.lex.store(end);
@@ -501,7 +560,7 @@ impl ExprParser {
   pub fn read_ret(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save(ctx))
     } else {
       ctx.lex.store(_c);
       None
@@ -523,7 +582,7 @@ impl ExprParser {
   pub fn read_break(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save(ctx))
     } else {
       ctx.lex.store(_c);
       None
@@ -545,7 +604,7 @@ impl ExprParser {
   pub fn read_continue(ctx: &mut ParserContext) -> Result<ExprId, Message> {
     let _c = ctx.lex.get()?;
     let label = if _c.kind == WK::Backtick {
-      Some(ctx.lex.get()?.expect_word(ctx.far)?.save())
+      Some(ctx.lex.get()?.expect_word(ctx.far)?.save(ctx))
     } else {
       ctx.lex.store(_c);
       None
@@ -553,6 +612,12 @@ impl ExprParser {
 
     let this = Expr::Continue{label};
 
+    Ok(ctx.cre.new_expr(this))
+  }
+
+  pub fn read_unsafe(ctx: &mut ParserContext) -> Result<ExprId, Message> {
+    let blok = Self::read_block(ctx)?;
+    let this = Expr::Unsafe(blok);
     Ok(ctx.cre.new_expr(this))
   }
 

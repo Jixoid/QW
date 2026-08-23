@@ -12,11 +12,13 @@ enum CtnRet {
   Fini(DeclId),
   Impl(Item),
   Vars(Vec<AnyId>),
+  Let(DeclId),
 }
 
 struct CtnMask {
   impl_: bool,
   vars_: bool,
+  lets_: bool,
 }
 
 
@@ -29,12 +31,12 @@ impl TypeParser {
     let _n = ctx.lex.get()?;
 
     let tyid = match _n.kind {
-      WK::Struct => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_struct(ctx)? },
-      WK::Fun    => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_fun(ctx)? },
-      WK::Iface  => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_iface(ctx)? },
-      WK::Trait  => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_trait(ctx)? },
-      WK::Enum   => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_enum(ctx)? },
-      WK::Flags  => if indecl { return Err(Message::error(_n.save(), "advanced structures are not permitted within the decl", vec![])); } else { Self::read_flags(ctx)? },
+      WK::Struct => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_struct(ctx)? },
+      WK::Fun    => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_fun(ctx)? },
+      WK::Iface  => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_iface(ctx)? },
+      WK::Trait  => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_trait(ctx)? },
+      WK::Enum   => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_enum(ctx)? },
+      WK::Flags  => if indecl { return Err(Message::error(_n, "advanced structures are not permitted within the decl", vec![])); } else { Self::read_flags(ctx)? },
       
       WK::Dot2 => {
         let sub = Self::read_type(ctx, indecl)?;
@@ -155,7 +157,7 @@ impl TypeParser {
       }
 
       _ => {
-        let nick = Type::Nick{pos: _n.expect_word(ctx.far)?.save(), idx: ctx.cre.get_str(_n.str(ctx.far))};
+        let nick = Type::Nick{pos: _n.expect_word(ctx.far)?.save(ctx), idx: ctx.cre.get_str(_n.str(ctx.far))};
         let mut path = vec![ ctx.cre.new_type(nick).to_any() ];
 
         loop {
@@ -164,7 +166,7 @@ impl TypeParser {
           match _c.kind {
             WK::Scope => {
               let _n = ctx.lex.get()?.expect_word(ctx.far)?;
-              let sub = Type::Nick{pos: _n.save(), idx: ctx.cre.get_str(_n.str(ctx.far))};
+              let sub = Type::Nick{pos: _n.save(ctx), idx: ctx.cre.get_str(_n.str(ctx.far))};
               
               path.push( ctx.cre.new_type(sub).to_any() );
             }
@@ -247,7 +249,7 @@ impl TypeParser {
       WK::Fini => Fini(DeclParser::read_fini(ctx, vis)?),
 
       WK::Impl => {
-        if !mask.impl_ { return Err(Message::error(t.save(), "not allowed here", vec![])) }
+        if !mask.impl_ { return Err(Message::error(t, "not allowed here", vec![])) }
 
         ctx.lex.get()?.expect_kind(WK::Colon)?;
 
@@ -275,14 +277,14 @@ impl TypeParser {
             
             if let DeclVari::Fun { kind: _, blok } = ctx.cre.get_decl(fun).vari {
               if blok.is_none() {
-                return Err(Message::error(next_kw.save(), "extend methods must have a body (cannot end with `;`)", vec![]));
+                return Err(Message::error(next_kw, "extend methods must have a body (cannot end with `;`)", vec![]));
               }
             }
             
             if let Some(a) = attrs { AttrParser::attach_attr(ctx, fun, a); }
             impls.push(fun.to_any());
           } else {
-            return Err(Message::error(next_kw.save(), "expected `fun`, got `{}`", vec![ next_kw.string(ctx.far) ]));
+            return Err(Message::error(next_kw, "expected `fun`, got `{}`", vec![ next_kw.string(ctx.far) ]));
           }
 
           if onedef { break; }
@@ -298,14 +300,14 @@ impl TypeParser {
       }
 
       WK::Var | WK::Word => {
-        if !mask.vars_ { return Err(Message::error(t.save(), "not allowed here", vec![])) }
+        if !mask.vars_ { return Err(Message::error(t, "not allowed here", vec![])) }
 
         if t.kind == WK::Word { ctx.lex.store(t); }
 
         let mut names: Vec<Span> = vec![];
 
         loop {
-          names.push(ctx.lex.get()?.expect_word(ctx.far)?.save());
+          names.push(ctx.lex.get()?.expect_word(ctx.far)?.save(ctx));
 
           let c = ctx.lex.get()?;
 
@@ -331,7 +333,21 @@ impl TypeParser {
         Vars(res)
       }
 
-      _ => { ctx.lex.store(t); Null},
+      WK::Let => {
+        if !mask.lets_ { return Err(Message::error(t, "not allowed here", vec![])) }
+
+        let dl = DeclParser::read_let(ctx, vis)?;
+        Let(dl)
+      }
+
+      _ => {
+        if t.kind == WK::CurlyBracketEnd {
+          ctx.lex.store(t);
+          Null
+        } else {
+          return Err(Message::error(t, "unexpected token inside definition: `{}`", vec![t.string(ctx.far)]));
+        }
+      }
     };
 
     Ok(res)
@@ -350,7 +366,7 @@ impl TypeParser {
 
       if _c.str(ctx.far) == "static" {
         if attr & FunAttrs::Static as u8 != 0 {
-          ctx.sum.add(Message::warn(_c.save(), "duplicated attribute: `static`", vec![]));
+          ctx.sum.add(Message::warn(_c, "duplicated attribute: `static`", vec![]));
         }
 
         attr |= FunAttrs::Static as u8;
@@ -358,7 +374,7 @@ impl TypeParser {
       
       else if _c.str(ctx.far) == "const" {
         if attr & FunAttrs::Const as u8 != 0 {
-          ctx.sum.add(Message::warn(_c.save(), "duplicated attribute: `const`", vec![]));
+          ctx.sum.add(Message::warn(_c, "duplicated attribute: `const`", vec![]));
         }
 
         attr |= FunAttrs::Const as u8;
@@ -366,14 +382,14 @@ impl TypeParser {
 
       else if _c.str(ctx.far) == "pure" {
         if attr & FunAttrs::Pure as u8 != 0 {
-          ctx.sum.add(Message::warn(_c.save(), "duplicated attribute: `pure`", vec![]));
+          ctx.sum.add(Message::warn(_c, "duplicated attribute: `pure`", vec![]));
         }
 
         attr |= FunAttrs::Pure as u8;
       }
       
       else {
-        return Err(Message::error(_c.save(), "unknown function modifier: `{}`", vec![_c.string(ctx.far)]));
+        return Err(Message::error(_c, "unknown function modifier: `{}`", vec![_c.string(ctx.far)]));
       }
       _c = ctx.lex.get()?;
     }
@@ -399,6 +415,7 @@ impl TypeParser {
     let mut vars = vec![];
     let mut funs = vec![];
     let mut imps = vec![];
+    let mut lets = vec![];
 
     let mut defvis = Visibility::Private;
 
@@ -411,7 +428,7 @@ impl TypeParser {
       let attrs = AttrParser::read_attr(ctx)?;
       let vis = MetaParser::read_vis(ctx, defvis)?;
       
-      match Self::read_ctn(ctx, vis, CtnMask { impl_: true, vars_: true })? {
+      match Self::read_ctn(ctx, vis, CtnMask { impl_: true, vars_: true, lets_: true })? {
         Null => {},
 
         Fun(v) | Init(v) | Fini(v) => {
@@ -423,12 +440,19 @@ impl TypeParser {
         Impl(v) => imps.push(v),
 
         Vars(v) => vars.extend(v),
+
+        Let(v) => lets.push(v.to_any()),
       }
     }
 
 
+    let mut members = vars.clone();
+    members.extend(&funs);
+    members.extend(&lets);
+    let scp = crate::ast::Scope::from_anys(ctx.cre, &members);
     let it = Type::Struct{ vars: ctx.cre.new_extra(vars), bases };
     let ty = ctx.cre.new_type(it);
+    ctx.cre.attach_scp(ty.to_any(), scp);
 
     // local func impl
     if !funs.is_empty() {
@@ -470,7 +494,7 @@ impl TypeParser {
       let attrs = AttrParser::read_attr(ctx)?;
       let vis = MetaParser::read_vis(ctx, defvis)?;
       
-      match Self::read_ctn(ctx, vis, CtnMask { impl_: false, vars_: false })? {
+      match Self::read_ctn(ctx, vis, CtnMask { impl_: false, vars_: false, lets_: false })? {
         Null => {},
 
         Fun(v) | Init(v) | Fini(v) => {
@@ -479,13 +503,16 @@ impl TypeParser {
           funs.push(v.to_any())
         }
       
-        Impl(..) | Vars(..) => panic!(),
+        Impl(..) | Vars(..) | Let(..) => panic!(),
       }
     }
 
+    let scp = crate::ast::Scope::from_anys(ctx.cre, &funs);
     let this = Type::Iface{ funs: ctx.cre.new_extra(funs), bases };
+    let ty = ctx.cre.new_type(this);
+    ctx.cre.attach_scp(ty.to_any(), scp);
 
-    Ok(ctx.cre.new_type(this))
+    Ok(ty)
   }
 
   pub fn read_trait(ctx: &mut ParserContext) -> Result<TypeId, Message> {
@@ -506,7 +533,7 @@ impl TypeParser {
       let attrs = AttrParser::read_attr(ctx)?;
       let vis = MetaParser::read_vis(ctx, defvis)?;
       
-      match Self::read_ctn(ctx, vis, CtnMask { impl_: false, vars_: false })? {
+      match Self::read_ctn(ctx, vis, CtnMask { impl_: false, vars_: false, lets_: false })? {
         Null => {},
 
         Fun(v) | Init(v) | Fini(v) => {
@@ -515,13 +542,16 @@ impl TypeParser {
           funs.push(v.to_any())
         }
       
-        Impl(..) | Vars(..) => panic!(),
+        Impl(..) | Vars(..) | Let(..) => panic!(),
       }
     }
 
+    let scp = crate::ast::Scope::from_anys(ctx.cre, &funs);
     let this = Type::Trait{ funs: ctx.cre.new_extra(funs), bases };
+    let ty = ctx.cre.new_type(this);
+    ctx.cre.attach_scp(ty.to_any(), scp);
 
-    Ok(ctx.cre.new_type(this))
+    Ok(ty)
   }
 
   pub fn read_enum(ctx: &mut ParserContext) -> Result<TypeId, Message> {
@@ -543,7 +573,9 @@ impl TypeParser {
         WK::Assign => {
           let val = ExprParser::read_expr(ctx, 0)?;
 
-          vals.push( ctx.cre.new_thing(Thing::NamedExpr(t.save(), val)).to_any() );
+          let this = Thing::NamedExpr(t.save(ctx), val);
+
+          vals.push( ctx.cre.new_thing(this).to_any() );
 
           let _c = ctx.lex.get()?;
           if _c.kind == WK::Comma { continue; }
@@ -551,7 +583,9 @@ impl TypeParser {
         }
 
         WK::Comma | WK::CurlyBracketEnd => {
-          vals.push( ctx.cre.new_thing(Thing::Name(t.save())).to_any() );
+          let this = Thing::Name(t.save(ctx));
+
+          vals.push( ctx.cre.new_thing(this).to_any() );
 
           if _c.kind == WK::CurlyBracketEnd { break; }
         }
@@ -560,9 +594,12 @@ impl TypeParser {
       }
     }
 
+    let scp = crate::ast::Scope::from_anys(ctx.cre, &vals);
     let this = Type::Enum{ vals: ctx.cre.new_extra(vals), bases };
+    let ty = ctx.cre.new_type(this);
+    ctx.cre.attach_scp(ty.to_any(), scp);
 
-    Ok(ctx.cre.new_type(this))
+    Ok(ty)
   }
 
   pub fn read_flags(ctx: &mut ParserContext) -> Result<TypeId, Message> {
@@ -584,7 +621,9 @@ impl TypeParser {
         WK::Assign => {
           let val = ExprParser::read_expr(ctx, 0)?;
 
-          vals.push( ctx.cre.new_thing(Thing::NamedExpr(t.save(), val)).to_any() );
+          let this = Thing::NamedExpr(t.save(ctx), val);
+
+          vals.push( ctx.cre.new_thing(this).to_any() );
 
           let _c = ctx.lex.get()?;
           if _c.kind == WK::Comma { continue; }
@@ -592,7 +631,9 @@ impl TypeParser {
         }
 
         WK::Comma | WK::CurlyBracketEnd => {
-          vals.push( ctx.cre.new_thing(Thing::Name(t.save())).to_any() );
+          let this = Thing::Name(t.save(ctx));
+
+          vals.push( ctx.cre.new_thing(this).to_any() );
 
           if _c.kind == WK::CurlyBracketEnd { break; }
         }
@@ -601,9 +642,13 @@ impl TypeParser {
       }
     }
 
+    let scp = crate::ast::Scope::from_anys(ctx.cre, &vals);
     let this = Type::Flags{ vals: ctx.cre.new_extra(vals), bases };
+    let ty = ctx.cre.new_type(this);
+    ctx.cre.attach_scp(ty.to_any(), scp);
 
-    Ok(ctx.cre.new_type(this))
+    Ok(ty)
   }
 
 }
+

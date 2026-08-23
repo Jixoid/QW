@@ -1,4 +1,4 @@
-use crate::{ast::{AccessKind, ExprId, Rng, TypeId}, lexer::Span};
+use crate::{ast::{ExprId, Rng, TypeId}, lexer::Span};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -14,7 +14,8 @@ pub enum Visibility {
 
 #[derive(Debug)]
 pub enum DeclVari {
-  Var  {kind: TypeId, acck: AccessKind, init: Option<ExprId>},
+  Var  {kind: TypeId, init: Option<ExprId>},
+  Let  {kind: TypeId, init: Option<ExprId>},
   Fun  {kind: TypeId, blok: Option<ExprId>},
   Init {kind: TypeId, blok: Option<ExprId>, ils: Option<Rng> /* NamedTypeList */},
   Fini {kind: TypeId, blok: Option<ExprId>},

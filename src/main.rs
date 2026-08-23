@@ -13,12 +13,12 @@ pub mod lexer;
 pub mod front;
 pub mod arena;
 pub mod ds;
+
 pub mod hir;
 pub mod hgen;
-//pub mod sema;
-//pub mod layout;
-//pub mod cgen;
-//pub mod basic_cgen;
+
+pub mod mir;
+pub mod mgen;
 
 
 #[derive(Parser)]

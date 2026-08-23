@@ -1,0 +1,18 @@
+
+![lang = "sys/alloc/Layout"]
+pub struct Layout {
+  pub size, align: usize;
+
+  pub init new(size, align: usize): size(size), align(align) {}
+}
+
+
+![lang = "sys/alloc/Allocator"]
+pub trait Allocator {
+  fun alloc(layout: Layout) -> ^u8;
+  fun dispose(ptr: ^u8, layout: Layout);
+  fun realloc(ptr: ^u8, layout: Layout) -> ^u8;
+}
+
+![lang = "sys/alloc/allocator"]
+var allocator: Allocator;

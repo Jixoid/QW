@@ -1,0 +1,42 @@
+
+use sys::alloc::*;
+
+
+generic <T: type>
+pub struct Vec {
+  priv:
+    var data: ^T;
+    var len, cap: usize;
+
+  priv:
+    let Size = sizeof(T);
+    let Align = alignof(T);
+
+  pub:
+    init new(): data(null), len(0), cap(0) {}
+
+    init with_capacity(cap: usize): data(null), len(0), cap(cap) {
+      if cap == 0 { ret; }
+
+      unsafe {
+
+        self.data = cast<^T>(allocator.alloc(Layout::new(Self::Size * cap, Self::Align)));
+
+      }
+    }
+
+    fini dis() {
+      if self.data != null {
+        unsafe {
+
+          allocator.dispose(cast<^u8>(self.data), Layout::new(Self::Size * self.cap, Self::Align));
+
+        }
+      }
+    }
+
+
+  pub:
+    fun len() const -> usize { self.len }
+    fun cap() const -> usize { self.cap }
+}
