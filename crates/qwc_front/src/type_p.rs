@@ -28,6 +28,9 @@ impl TypeParser {
 
       WK::Fun => Self::pre_fun(ctx!(cre, sin, far, lex, sum), true)?,
 
+      WK::SelfB => Self::pre_self(ctx!(cre, sin, far, lex, sum))?,
+      WK::Type  => Self::pre_type(ctx!(cre, sin, far, lex, sum))?,
+
       _ => Self::pre_nick(ctx!(cre, sin, far, lex, sum))?
     };
 
@@ -124,6 +127,31 @@ impl TypeParser {
 
 
   // Sub
+  fn pre_self(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+    let start = lex.get()?;
+
+    // Post
+    let this = Type{
+      pos: lex.pos_extend(start),
+      kind: TypeKind::SelfT()
+    };
+
+    Ok(cre.push(this))
+  }
+
+  fn pre_type(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+    let start = lex.get()?;
+
+    // Post
+    let this = Type{
+      pos: lex.pos_extend(start),
+      kind: TypeKind::Type()
+    };
+
+    Ok(cre.push(this))
+  }
+  
+
   fn pre_option(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
@@ -172,12 +200,7 @@ impl TypeParser {
   fn pre_ref(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    let ism = match lex.peek()?.kind() {
-      WK::Mut => { lex.bump()?; true },
-      WK::Imm => { lex.bump()?; false },
-
-      _ => false
-    };
+    let ism = if lex.peek()?.kind() == WK::Mut { lex.bump()?; true } else { false };
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum))?;
 
@@ -194,12 +217,7 @@ impl TypeParser {
   fn pre_ptr(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    let ism = match lex.peek()?.kind() {
-      WK::Mut => { lex.bump()?; true },
-      WK::Imm => { lex.bump()?; false },
-
-      _ => false
-    };
+    let ism = if lex.peek()?.kind() == WK::Mut { lex.bump()?; true } else { false };
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum))?;
 

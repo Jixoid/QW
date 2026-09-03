@@ -402,7 +402,6 @@ impl<'a> Lexer<'a> {
           b"crate" => WK::Crate,
           b"super" => WK::Super,
           b"mut"   => WK::Mut,
-          b"imm"   => WK::Imm,
 
           b"ret"      => WK::Ret,
           b"break"    => WK::Break,
@@ -416,6 +415,10 @@ impl<'a> Lexer<'a> {
           b"false" => WK::False,
           b"undef" => WK::Undef,
           b"unreachable" => WK::Unreachable,
+
+          b"self" => WK::SelfS,
+          b"Self" => WK::SelfB,
+          b"type" => WK::Type,
 
           _ => WK::Word,
         };

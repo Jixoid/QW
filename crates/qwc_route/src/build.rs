@@ -1,7 +1,7 @@
 use std::{env, path::Path, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
-use qwc_ast::{self as ast, StrInterner};
+use qwc_ast::{self as ast, Scope, StrInterner};
 use qwc_diagnostic::Summary;
 use qwc_front::Front;
 
@@ -11,9 +11,10 @@ use crate::{BuildVariant, Error, parse_conf};
 pub struct BuildInfo<'a> {
   pub path: &'a str,
   pub variant: BuildVariant,
-  pub verbose: bool,
+  pub verbose: u8,
   pub timings: bool,
   pub usages: bool,
+  pub ast_dump: bool,
   pub check_only: bool,
 }
 
@@ -176,7 +177,7 @@ pub fn bduild_cre<'a>(name: String, info: &BuildInfo, fpath: String, deps: Vec<(
 */
 
 
-pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary), Error> {
+pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary, Option<Scope>), Error> {
   let fi = {
     let fid = far.add(fpath);
     far.get(fid)
@@ -189,8 +190,8 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
   let submods_to_load = {
     let mut submods_to_load = vec![];
     
-    for (id, kind) in cre.extra_get(rng) {
-      let id = ast::ItemId::new_from(ast::AnyId::new_from(id, kind));
+    for id in cre.extra_get(rng) {
+      let id = ast::ItemId::new_from(id);
       let this: &ast::Item = cre.get(id);
       
       if let ast::ItemKind::ModuleUnloaded = this.kind {
@@ -214,19 +215,17 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
   };
 
   for (id, path) in submods_to_load {
-    match read_file(&path, cre, sin, far) {
-      Err(..) => (),
+    let _ = read_file(&path, cre, sin, far).map(|(it, ssum, scp)| {
+      scp.map(|scp| cre.attach(id, scp));
+      
+      let rng = if let ast::ItemKind::Krate(rng) = it.kind { rng } else { panic!() };
+      
+      let this: &mut ast::Item = cre.get_mut(id);
+      
+      this.kind = ast::ItemKind::ModuleFile(rng, it.pos.fid());
 
-      Ok((it, subsum)) => {
-        let rng = if let ast::ItemKind::Krate(rng) = it.kind { rng } else { panic!() };
-        
-        let this: &mut ast::Item = cre.get_mut(id);
-        
-        this.kind = ast::ItemKind::ModuleFile(rng, it.pos.fid());
-
-        sum += subsum;
-      }
-    }
+      sum += ssum;
+    });
   }
 
 
@@ -237,12 +236,14 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     name: None,
     kind: ast::ItemKind::Krate(rng)
   };
+
+  let scp = Scope::new_with(cre, this);
   
-  Ok((this, sum))
+  Ok((this, sum, scp))
 }
 
 
-pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, Duration), Error> {
+pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, StrInterner, Files, Duration), Error> {
   let mut cre = ast::Krate::new();
   let mut far = Files::new();
   let mut sin = StrInterner::new();
@@ -264,12 +265,19 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, Du
     }
   };
   
-  if info.verbose {
+  if info.verbose > 0 {
     eprintln!("{}{} {}", "Compiling".green().bold(), ":".bright_black(), conf.name);
   }
   
   let now = Instant::now();
-  let (root, sum) = read_file(&entry_file, &mut cre, &mut sin, &mut far)?;
+  let (root, sum) = {
+    let (root, sum, scp) = read_file(&entry_file, &mut cre, &mut sin, &mut far)?;
+
+    let id = cre.push(root);
+    scp.map(|scp| cre.attach(id, scp));
+    
+    (id, sum)
+  };
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -280,19 +288,22 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, Du
     if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
   }
 
-  let root = cre.push(root);
   cre.set_root(root);
 
   env::set_current_dir(legcurpath)?;
-
-  Ok((cre, time))
+  
+  Ok((cre, sin, far, time))
 }
 
 
 pub fn build(info: BuildInfo) -> Result<(), Error> {
   // PASS 1
-  let (ast_cre, front_time) = build_ast_krate(Path::new(info.path), &info)?;
-
+  let (ast_cre, sin, far, front_time) = build_ast_krate(Path::new(info.path), &info)?;
+  
+  if info.ast_dump {
+    eprint!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far});
+  }
+  
   // PASS 2
   // hir, hgen
 
@@ -307,12 +318,29 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Extra Info
   if info.timings {
     eprintln!("{}: {:?}", "timings".yellow().bold(), (front_time));
-    eprintln!("  {}: {:?}", "front".yellow(), front_time);
+    
+    if info.verbose > 0 {
+      eprintln!("  {}: {:?}", "front".yellow(), front_time);
+    }
   }
   
   if info.usages {
-    eprintln!("{}: {}", "usages".yellow().bold(), humanize_size(ast_cre.size()));
-    eprintln!("  {}: {}", "ast".yellow(), humanize_size(ast_cre.size()));
+    let (ast_used, ast_alloc) = (ast_cre.size_all_used(), ast_cre.size_all_alloc());
+
+    eprintln!("{}: {} {} {}", "usages".yellow().bold(), humanize_size(ast_used), "/".bright_black(), humanize_size(ast_alloc));
+
+    if info.verbose > 0 {
+      eprintln!("  {}: {} {} {}", "ast".yellow(), humanize_size(ast_used), "/".bright_black(), humanize_size(ast_alloc));
+      
+      if info.verbose > 1 {
+        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(ast_cre.size_used::<ast::Type>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Type>()));
+        eprintln!("   {}: {} {} {}", "expr".cyan(), humanize_size(ast_cre.size_used::<ast::Expr>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Expr>()));
+        eprintln!("   {}: {} {} {}", "item".cyan(), humanize_size(ast_cre.size_used::<ast::Item>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Item>()));
+        eprintln!("   {}: {} {} {}", "patt".cyan(), humanize_size(ast_cre.size_used::<ast::Patt>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Patt>()));
+        eprintln!("   {}: {} {} {}", "thing".cyan(), humanize_size(ast_cre.size_used::<ast::Thing>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Thing>()));
+        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(ast_cre.size_used::<ast::AnyId>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::AnyId>()));
+      }
+    }
   }
 
   Ok(())

@@ -15,22 +15,25 @@ where T: AstKind
 
 impl<T: AstKind> AstId<T> {
 
-  #[inline(always)]
   pub(crate) fn new(idx: u32) -> Self {
     Self{idx: NonZeroU32::new(idx+1).unwrap(), pkind: PhantomData}
   }
 
-  #[inline(always)]
+  pub fn new_from(id: (AstId<SpecAny>, NodeKind)) -> Self {
+    assert_eq!(T::kind(), id.1);
+    AstId::<T>::new(id.0.idx())
+  }
+
   pub(crate) fn idx(&self) -> u32 {
     self.idx.get()-1
   }
 
 
   pub fn to_any(&self) -> AnyId {
-    AnyId::new(self.idx.get(), T::kind())
+    AnyId::new(self.idx(), T::kind())
   }
 
-  pub fn new_from(id: AnyId) -> Self {
+  pub fn from_any(id: AnyId) -> Self {
     assert_eq!(T::kind(), id.kind());
     AstId::<T>::new(id.idx())
   }
@@ -63,9 +66,10 @@ impl AnyId {
     Self{ id: AstId::new(idx), kind }
   }
 
-  pub fn new_from(id: AstId<SpecAny>, kind: NodeKind) -> Self {
-    Self { id, kind }
+  pub fn new_from(id: (AstId<SpecAny>, NodeKind)) -> Self {
+    Self { id: id.0, kind: id.1 }
   }
+
 
   pub(crate) fn idx(&self) -> u32 {
     self.id.idx()

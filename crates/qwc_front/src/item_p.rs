@@ -1,4 +1,4 @@
-use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, Visibility};
+use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Scope, Thing, ThingId, Visibility};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 
@@ -449,8 +449,11 @@ impl ItemParser {
       name: None,
       kind: ItemKind::Generic{ params, reqs, ctn },
     };
+    let id = cre.push(this);
+
+    Scope::new_with(cre, this).map(|scp| cre.attach(id, scp));
     
-    Ok(cre.push(this))
+    Ok(id)
   }
 
   fn sub_use(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
@@ -541,8 +544,13 @@ impl ItemParser {
         Some(v) => ItemKind::Module(v),
       }
     };
+    let id = cre.push(this);
 
-    Ok(cre.push(this))
+    if let ItemKind::Module(..) = this.kind {
+      Scope::new_with(cre, this).map(|scp| cre.attach(id, scp));
+    }
+
+    Ok(id)
   }
 
   fn sub_itemty(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);

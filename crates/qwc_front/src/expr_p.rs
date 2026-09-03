@@ -37,6 +37,9 @@ impl ExprParser {
       
       WK::Unsafe  => Self::pre_unsafe(ctx!(cre, sin, far, lex, sum))?,
       WK::Relaxed => Self::pre_relaxed(ctx!(cre, sin, far, lex, sum))?,
+
+      WK::SelfB => Self::pre_self_b(ctx!(cre, sin, far, lex, sum))?,
+      WK::SelfS => Self::pre_self_s(ctx!(cre, sin, far, lex, sum))?,
       
       WK::Let | WK::Var => Self::pre_let(ctx!(cre, sin, far, lex, sum))?,
       
@@ -358,6 +361,31 @@ impl ExprParser {
     let this = Expr{
       pos: lex.pos_extend(start),
       kind: ExprKind::Block{ label, rng, expr }
+    };
+
+    Ok(cre.push(this))
+  }
+
+
+  fn pre_self_b(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+    let start = lex.get()?;
+
+    // Post
+    let this = Expr{
+      pos: lex.pos_extend(start),
+      kind: ExprKind::SelfB()
+    };
+
+    Ok(cre.push(this))
+  }
+
+  fn pre_self_s(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+    let start = lex.get()?;
+
+    // Post
+    let this = Expr{
+      pos: lex.pos_extend(start),
+      kind: ExprKind::SelfS()
     };
 
     Ok(cre.push(this))

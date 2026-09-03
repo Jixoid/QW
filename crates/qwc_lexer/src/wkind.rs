@@ -168,9 +168,17 @@ pub enum WK {
   // Keyword
   If, Ef, Else, Match, Loop, While, For, In, Let, Var,
   Using, Struct, Iface, Trait, Enum, Flags, Variant, Fun, Init, Fini, Generic, Mod, Use, Impl,
-  Pub, Priv, Prot, Crate, Super, Mut, Imm,
+  Pub, Priv, Prot, Crate, Super, Mut,
   Ret, Break, Continue, Die, Unsafe, Relaxed,
   True, False, Undef, Unreachable,
+  
+  /// Self
+  SelfB,
+  /// self
+  SelfS,
+
+  /// type
+  Type,
 }
 
 

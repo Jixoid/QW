@@ -33,6 +33,10 @@ pub enum TypeKind {
   Option (TypeId),
   Fail   (TypeId),
 
+  // Intrinsic
+  Type (),
+  SelfT(),
+
   // Variant
   Result  {sub: TypeId, err: TypeId},
   Variant (Rng /* Name | NamedType */),

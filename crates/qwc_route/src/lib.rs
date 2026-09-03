@@ -71,8 +71,11 @@ enum MainCommands {
     usages: bool,
 
     /// Use verbose output
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
+    
     #[arg(short, long)]
-    verbose: bool,
+    ast_dump: bool,
   },
 
   #[command(alias = "c")]
@@ -91,8 +94,8 @@ enum MainCommands {
     usages: bool,
 
     /// Use verbose output
-    #[arg(short, long)]
-    verbose: bool,
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
   },
 
   /*
@@ -132,13 +135,14 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Build{path, variant, verbose, timings, usages} => {
+    MainCommands::Build{path, variant, verbose, timings, usages, ast_dump} => {
       let info = build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant,
         verbose,
         timings,
         usages,
+        ast_dump,
         check_only: false,
       };
 
@@ -158,6 +162,7 @@ fn main_cmd(cmd: MainCommands) {
         verbose,
         timings,
         usages,
+        ast_dump: false,
         check_only: true,
       };
 

@@ -343,6 +343,7 @@ name = "qwc_ast"
 version = "0.1.0"
 dependencies = [
  "lasso",
+ "owo-colors",
  "qwc_arena",
  "qwc_diagnostic",
  "qwc_lexer",

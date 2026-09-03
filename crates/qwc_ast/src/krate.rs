@@ -1,11 +1,11 @@
 use core::slice;
-use std::collections::HashMap;
 
 use qwc_arena::{Arena, Files};
 use qwc_diagnostic::{Message, msg};
 use qwc_lexer::{WK, Word};
+use rustc_hash::FxHashMap;
 
-use crate::{AnyId, Attribute, Expr, ExprId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, SpecAny}, StrInterner};
+use crate::{AnyId, Attribute, Expr, ExprId, Ident, Item, ItemId, Patt, PattId, Scope, StrInterner, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, SpecAny}};
 
 
 pub struct Krate {
@@ -22,7 +22,8 @@ pub struct Krate {
   extra_data: (Arena<AstId<SpecAny>>, Arena<NodeKind>),
 
   // Attribute
-  map_attr: HashMap<AnyId, Vec<Attribute>>,
+  map_attr: FxHashMap<AnyId, Vec<Attribute>>,
+  map_scope: FxHashMap<AnyId, Scope>,
 }
 
 
@@ -40,7 +41,8 @@ impl Krate {
       
       extra_data: (Arena::new(), Arena::new()),
       
-      map_attr: HashMap::new()
+      map_attr: FxHashMap::default(),
+      map_scope: FxHashMap::default(),
     }
   }
 
@@ -98,26 +100,22 @@ impl Krate {
 
   // Attach
   pub fn attach<T: AttachNode>(&mut self, id: impl Into<AnyId>, obj: T) { T::attach(self, id.into(), obj); }
+  pub fn get_attached<T: AttachNode>(&self, id: impl Into<AnyId>) -> Option<&T> { T::get(self, id.into()) }
+  pub fn get_attached_mut<T: AttachNode>(&mut self, id: impl Into<AnyId>) -> Option<&mut T> { T::get_mut(self, id.into()) }
 
 
   // Size
-  pub fn size(&self) -> usize {
-    fn byte_size<T: Copy>(arena: &Arena<T>) -> usize { size_of::<T>() * arena.len() }
-    
-    byte_size(&self.list_type)
-    +
-    byte_size(&self.list_expr)
-    +
-    byte_size(&self.list_item)
-    +
-    byte_size(&self.list_patt)
-    +
-    byte_size(&self.list_thig)
-    +
-    byte_size(&self.extra_data.0)
-    +
-    byte_size(&self.extra_data.1)
+  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(&self) }
+  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
+  
+  pub fn size_all_used(&self) -> usize {
+    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<AnyId>(&self)
   }
+
+  pub fn size_all_alloc(&self) -> usize {
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<AnyId>(&self)
+  }
+
 }
 
 
@@ -201,10 +199,57 @@ impl ArenaNode for Thing {
 
 
 // attach
-pub trait AttachNode {
+pub trait AttachNode: Sized {
   fn attach(krate: &mut Krate, id: AnyId, obj: Self);
+  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self>;
+  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self>;
 }
 
 impl AttachNode for Vec<Attribute> {
   fn attach(krate: &mut Krate, id: AnyId, obj: Self) { krate.map_attr.insert(id, obj); }
+  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self> { krate.map_attr.get(&id) }
+  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self> { krate.map_attr.get_mut(&id) }
+}
+
+impl AttachNode for Scope {
+  fn attach(krate: &mut Krate, id: AnyId, obj: Self) { krate.map_scope.insert(id, obj); }
+  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self> { krate.map_scope.get(&id) }
+  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self> { krate.map_scope.get_mut(&id) }
+}
+
+
+// size api
+pub trait SizeApi {
+  fn size_used(cre: &Krate) -> usize;
+  fn size_alloc(cre: &Krate) -> usize;
+}
+
+impl SizeApi for Type {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_type.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_type.allocated_len() }
+}
+
+impl SizeApi for Expr {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_expr.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_expr.allocated_len() }
+}
+
+impl SizeApi for Item {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_item.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_item.allocated_len() }
+}
+
+impl SizeApi for Patt {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_patt.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_patt.allocated_len() }
+}
+
+impl SizeApi for Thing {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thig.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thig.allocated_len() }
+}
+
+impl SizeApi for AnyId {
+  fn size_used(cre: &Krate) -> usize { (size_of::<AstId<SpecAny>>() * cre.extra_data.0.len()) + (size_of::<NodeKind>() * cre.extra_data.1.len()) }
+  fn size_alloc(cre: &Krate) -> usize { (size_of::<AstId<SpecAny>>() * cre.extra_data.0.allocated_len()) + (size_of::<NodeKind>() * cre.extra_data.1.allocated_len()) }
 }

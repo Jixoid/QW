@@ -1,6 +1,6 @@
 use std::{mem, ops::Range};
 
-const PAGE_SIZE: usize = 4 * 1024 * 1024; // 4 MB
+const PAGE_SIZE: usize = 1 * 1024 * 1024; // 1 MB
 
 pub struct Arena<T>
 where T: Copy
@@ -143,6 +143,8 @@ impl<T: Copy> Arena<T> {
   
 
   pub fn len(&self) -> usize { self.len }
+
+  pub fn allocated_len(&self) -> usize { self.data.len() * Self::per_len() }
 
   pub fn is_empty(&self) -> bool { self.len == 0 }
 

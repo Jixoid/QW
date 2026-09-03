@@ -80,12 +80,12 @@ fn check2<T>(var: &mut Option<T>, val: T) -> Result<(), Error> {
 
 trait EasyAccess {
   fn expect_struct(&self) -> Result<&HashMap<String, Value>, Error>;
-  fn expect_array(&self) -> Result<&Vec<Value>, Error>;
+  //fn expect_array(&self) -> Result<&Vec<Value>, Error>;
   fn expect_string(&self) -> Result<String, Error>;
 }
 
 impl EasyAccess for Value {
   fn expect_struct(&self) -> Result<&HashMap<String, Value>, Error> { if let Value::Stc(ret) = self { Ok(ret) } else { Err(Error::New | "expect_struct") } }
-  fn expect_array(&self) -> Result<&Vec<Value>, Error> { if let Value::Arr(ret) = self { Ok(ret) } else { Err(Error::New | "expect_struct") } }
+  //fn expect_array(&self) -> Result<&Vec<Value>, Error> { if let Value::Arr(ret) = self { Ok(ret) } else { Err(Error::New | "expect_struct") } }
   fn expect_string(&self) -> Result<String, Error> { if let Value::Str(ret) = self { Ok(ret.clone()) } else { Err(Error::New | "expect_struct") } }
 }

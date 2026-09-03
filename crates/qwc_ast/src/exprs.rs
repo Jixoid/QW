@@ -32,6 +32,10 @@ pub enum ExprKind {
   Number (Span),
   String (Span),
   
+  // Intrinsic
+  SelfB(),
+  SelfS(),
+
   // Data
   Tuple (Rng /* ExprId */),
   Array (Rng /* ExprId */),
