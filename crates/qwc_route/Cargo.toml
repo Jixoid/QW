@@ -1,0 +1,14 @@
+[package]
+name = "qwc_route"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_ast = { path = "../qwc_ast" }
+qwc_ds = { path = "../qwc_ds" }
+qwc_arena = { path = "../qwc_arena" }
+qwc_diagnostic = { path = "../qwc_diagnostic" }
+qwc_front = { path = "../qwc_front" }
+clap = { version = "4.5", features = ["derive"] }
+uuid = { version = "1.10", features = ["v4"] }
+owo-colors = "4.4.0"

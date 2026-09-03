@@ -1,11 +1,11 @@
-use crate::hir::{Rng, TypeId};
+use crate::hir::{ExprId, Rng, TypeId};
 
 
 pub enum Item {
   Module(Rng /* ItemId */),
 
-  Fun(TypeId),
+  Fun { kind: TypeId, blok: Option<ExprId> },
 
-  Var(TypeId),
-  Let(TypeId),
+  Var { kind: TypeId, init: Option<ExprId> },
+  Let { kind: TypeId, init: Option<ExprId> },
 }

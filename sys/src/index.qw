@@ -1,0 +1,4 @@
+
+pub trait Index {
+  fun index(idx: usize) -> &Self;
+}

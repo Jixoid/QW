@@ -1,0 +1,12 @@
+[package]
+name = "qwc_diagnostic"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+lexer-internal = []
+ast-internal = []
+
+[dependencies]
+qwc_arena = { path = "../qwc_arena" }
+owo-colors = "4.3.0"

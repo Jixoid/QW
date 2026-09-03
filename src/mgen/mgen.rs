@@ -15,7 +15,7 @@ impl MGen {
   pub fn lower<'a,'d>(hir: &'a hir::Crate<'d>) -> Result<mir::Crate, Message> {
     let mut ret = mir::Crate::new();
     
-    let mut gctx = GenContext {
+    let _gctx = GenContext {
       hir,
       mir: &mut ret,
     };

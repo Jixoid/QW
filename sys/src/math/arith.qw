@@ -1,0 +1,16 @@
+
+pub trait Add {
+  fun add(v: Self) const -> Self;
+}
+
+pub trait Sub {
+  fun sub(v: Self) const -> Self;
+}
+
+pub trait Mul {
+  fun mul(v: Self) const -> Self;
+}
+
+pub trait Div {
+  fun div(v: Self) const -> Self;
+}

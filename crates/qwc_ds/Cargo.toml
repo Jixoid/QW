@@ -1,0 +1,9 @@
+[package]
+name = "qwc_ds"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_lexer = { path = "../qwc_lexer" }
+qwc_diagnostic = { path = "../qwc_diagnostic" }
+qwc_arena = { path = "../qwc_arena" }

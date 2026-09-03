@@ -1,9 +1,9 @@
-use crate::hir::{Rng, TypeId};
+use crate::{hir::{Rng, TypeId}, lexer::Span};
 
 
 pub enum Thing {
-  Name(u32),
+  Name(Span),
   List(Rng),
 
-  NamedType(u32, TypeId),
+  NamedType(Span, TypeId),
 }

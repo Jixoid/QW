@@ -12,7 +12,7 @@ pub type ThingId = HirId<SpecThing>;
 
 
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum HirKind {
   Type = 1,
   Expr = 2,
@@ -21,7 +21,7 @@ pub enum HirKind {
 }
 
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct HirId<T> {
   pub kind: HirKind,
   pub krate: u16,

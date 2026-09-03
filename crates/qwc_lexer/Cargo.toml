@@ -1,0 +1,11 @@
+[package]
+name = "qwc_lexer"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+ast-internal = []
+
+[dependencies]
+qwc_diagnostic = { path = "../qwc_diagnostic", features = ["lexer-internal"] }
+qwc_arena = { path = "../qwc_arena" }

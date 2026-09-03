@@ -36,7 +36,58 @@ pub struct Vec {
     }
 
 
+  priv:
+    fun grow() {
+      let new_cap: usize = if self.cap == 0 { 4 } else { self.cap * 2 };
+      let new_layout = Layout::new(Self::Size * new_cap, Self::Align);
+
+      unsafe {
+        let new_data = cast<^T>(allocator.alloc(new_layout));
+
+        if self.data != null {
+          let old_layout = Layout::new(Self::Size * self.cap, Self::Align);
+          allocator.dispose(cast<^u8>(self.data), old_layout);
+        }
+
+        self.data = new_data;
+        self.cap = new_cap;
+      }
+    }
+
   pub:
     fun len() const -> usize { self.len }
     fun cap() const -> usize { self.cap }
+    fun is_empty() const -> bool { self.len == 0 }
+
+  pub:
+    fun push(val: T) {
+      if self.len == self.cap {
+        self.grow();
+      }
+
+      unsafe {
+        (self.data + self.len).* = val;
+      }
+
+      self.len += 1;
+    }
+
+  pub:
+    fun first() const -> ?&T {
+      if self.len == 0 {
+        ret null;
+      }
+      unsafe {
+        &(self.data.*)
+      }
+    }
+
+    fun last() const -> ?&T {
+      if self.len == 0 {
+        ret null;
+      }
+      unsafe {
+        &((self.data + (self.len - 1)).*)
+      }
+    }
 }

@@ -1,0 +1,31 @@
+
+pub trait Sqrt {
+  fun sqrt() const -> Self;
+}
+
+
+
+impl f16: Sqrt {
+  ![lang = "sys/math/sqrt/f16"]
+  fun sqrt() const -> Self;
+}
+
+impl f32: Sqrt {
+  ![lang = "sys/math/sqrt/f32"]
+  fun sqrt() const -> Self;
+}
+
+impl f64: Sqrt {
+  ![lang = "sys/math/sqrt/f64"]
+  fun sqrt() const -> Self;
+}
+
+impl f80: Sqrt {
+  ![lang = "sys/math/sqrt/f80"]
+  fun sqrt() const -> Self;
+}
+
+impl f128: Sqrt {
+  ![lang = "sys/math/sqrt/f128"]
+  fun sqrt() const -> Self;
+}

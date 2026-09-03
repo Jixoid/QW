@@ -1,20 +1,30 @@
-use crate::hir::{Rng, TypeId};
+use crate::{ast, hir::{ExprId, Rng, TypeId}};
 
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccessKind { IMM, MUT }
 
+impl From<ast::AccessKind> for AccessKind {
+  fn from(value: ast::AccessKind) -> Self {
+    match value {
+      ast::AccessKind::IMM => AccessKind::IMM,
+      ast::AccessKind::MUT => AccessKind::MUT,
+    }
+  }
+}
 
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
   Ptr(TypeId, AccessKind),
   Ref(TypeId, AccessKind),
   DynArr(TypeId),
-  StaArr(TypeId, usize),
+  StaArr(TypeId, u64),
 
   Range(TypeId),
   Option(TypeId),
   Result(TypeId, TypeId),
-  Vector(TypeId, usize),
+  Vector(TypeId, ExprId),
 
   Unit, Bool, Char, Str,
 
