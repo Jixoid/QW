@@ -74,8 +74,8 @@ enum MainCommands {
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
     
-    #[arg(short, long)]
-    ast_dump: bool,
+    #[arg(long, value_delimiter = ',', value_enum)]
+    dump: Vec<DumpStage>,
   },
 
   #[command(alias = "c")]
@@ -135,14 +135,14 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
-    MainCommands::Build{path, variant, verbose, timings, usages, ast_dump} => {
+    MainCommands::Build{path, variant, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: path.to_str().unwrap_or(""),
         variant,
         verbose,
         timings,
         usages,
-        ast_dump,
+        dump,
         check_only: false,
       };
 
@@ -162,7 +162,7 @@ fn main_cmd(cmd: MainCommands) {
         verbose,
         timings,
         usages,
-        ast_dump: false,
+        dump: vec![],
         check_only: true,
       };
 
@@ -186,4 +186,13 @@ enum BuildVariant {
   Debug,
   Release,
   RelWithDebInfo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
+#[value(rename_all = "lowercase")] // CLI'da küçük harf zorunluluğu: ast, scope, hir
+enum DumpStage {
+  Ast,
+  Scope,
+  Hir,
+  Mir,
 }

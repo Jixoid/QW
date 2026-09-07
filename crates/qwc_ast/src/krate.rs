@@ -3,9 +3,10 @@ use core::slice;
 use qwc_arena::{Arena, Files};
 use qwc_diagnostic::{Message, msg};
 use qwc_lexer::{WK, Word};
+use qwc_string_interner::StrInterner;
 use rustc_hash::FxHashMap;
 
-use crate::{AnyId, Attribute, Expr, ExprId, Ident, Item, ItemId, Patt, PattId, Scope, StrInterner, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, SpecAny}};
+use crate::{AnyId, Attribute, Expr, ExprId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, SpecAny}};
 
 
 pub struct Krate {
@@ -23,7 +24,6 @@ pub struct Krate {
 
   // Attribute
   map_attr: FxHashMap<AnyId, Vec<Attribute>>,
-  map_scope: FxHashMap<AnyId, Scope>,
 }
 
 
@@ -42,7 +42,6 @@ impl Krate {
       extra_data: (Arena::new(), Arena::new()),
       
       map_attr: FxHashMap::default(),
-      map_scope: FxHashMap::default(),
     }
   }
 
@@ -119,7 +118,7 @@ impl Krate {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Rng(pub u32, pub u32);
 
 impl Rng {
@@ -209,12 +208,6 @@ impl AttachNode for Vec<Attribute> {
   fn attach(krate: &mut Krate, id: AnyId, obj: Self) { krate.map_attr.insert(id, obj); }
   fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self> { krate.map_attr.get(&id) }
   fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self> { krate.map_attr.get_mut(&id) }
-}
-
-impl AttachNode for Scope {
-  fn attach(krate: &mut Krate, id: AnyId, obj: Self) { krate.map_scope.insert(id, obj); }
-  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self> { krate.map_scope.get(&id) }
-  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self> { krate.map_scope.get_mut(&id) }
 }
 
 

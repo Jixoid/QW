@@ -2,15 +2,16 @@ use std::fmt;
 
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
+use qwc_string_interner::StrInterner;
 
 use crate::{
   id::{AstId, NodeKind, SpecAny},
   AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt,
-  PattId, Scope, ScopeKind, StrInterner, Thing, ThingId, Type, TypeId, TypeKind, UnaryOp, Visibility,
+  PattId, Thing, ThingId, Type, TypeId, TypeKind, UnaryOp, Visibility,
 };
 
 
-pub trait DumpHandler {
+trait DumpHandler {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result;
 }
 
@@ -64,42 +65,6 @@ fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files,
   Ok(())
 }
 
-fn dump_scope(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-  if let Some(scope) = cre.get_attached::<Scope>(id) {
-    scope.dump(cre, sin, far, f, indent)?;
-  }
-  Ok(())
-}
-
-
-
-// Implementations
-
-impl DumpHandler for Scope {
-  fn dump(&self, _cre: &Krate, sin: &StrInterner, _far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    if self.is_empty() {
-      return Ok(());
-    }
-    write_indent(f, indent)?;
-    write!(f, "{}", "/* scope: [ ".bright_black())?;
-    let mut first = true;
-    for (&sid, kind) in self.iter() {
-      if !first {
-        write!(f, "{}", ", ".bright_black())?;
-      }
-      first = false;
-      let name = sin.str(sid);
-      match kind {
-        ScopeKind::Type(_) => write!(f, "{}({})", "type".green(), name.white().bold())?,
-        ScopeKind::Expr(_) => write!(f, "{}({})", "expr".blue(), name.white().bold())?,
-        ScopeKind::Scope(_) => write!(f, "{}({})", "scope".magenta(), name.white().bold())?,
-      }
-    }
-    writeln!(f, "{}", " ] */".bright_black())?;
-    Ok(())
-  }
-}
-
 impl DumpHandler for Attribute {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self {
@@ -133,7 +98,7 @@ impl DumpHandler for Attribute {
 impl DumpHandler for ItemId {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     dump_attrs(*self, cre, sin, far, f, indent)?;
-    dump_scope(*self, cre, sin, far, f, indent)?;
+    //dump_scope(*self, cre, sin, far, f, indent)?;
     let item: &Item = cre.get(*self);
     item.dump(cre, sin, far, f, indent)
   }
@@ -256,10 +221,21 @@ impl DumpHandler for Item {
           write!(f, ": ")?;
           ty.dump(cre, sin, far, f, indent)?;
         }
-        if let Some(val) = value {
-          write!(f, " = ")?;
-          val.dump(cre, sin, far, f, indent)?;
-        }
+        
+        write!(f, " = ")?;
+        value.dump(cre, sin, far, f, indent)?;
+        
+        writeln!(f, ";")?;
+      }
+
+      ItemKind::Member { kind } => {
+        let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
+        
+        write!(f, "{} {}", "mem".blue(), name.white().bold())?;
+        
+        write!(f, ": ")?;
+        kind.dump(cre, sin, far, f, indent)?;
+        
         writeln!(f, ";")?;
       }
 
@@ -591,7 +567,7 @@ impl DumpHandler for Type {
         write!(f, "]")?;
       }
 
-      TypeKind::Unit() => {
+      TypeKind::Unit => {
         write!(f, "()")?;
       }
 
@@ -819,11 +795,11 @@ impl DumpHandler for Expr {
         }
       }
 
-      ExprKind::Unit() => {
+      ExprKind::Unit => {
         write!(f, "()")?;
       }
 
-      ExprKind::Bool(span) => {
+      ExprKind::Bool(span, ..) => {
         write!(f, "{}", span.str(far).yellow())?;
       }
 

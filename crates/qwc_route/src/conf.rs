@@ -53,7 +53,7 @@ pub fn parse_conf(fpath: &Path, far: &mut Files) -> Result<ConfSetup, Error> {
         for (name, val) in raw { map.insert(name.clone(), val.expect_string()?); }
 
         check2(&mut setup.wspace, map)?
-      },
+      }
 
       c @ _ => return Err(Error::New | format!("unknown key: `{}`", c))
     }

@@ -3,14 +3,17 @@ use qwc_diagnostic::Span;
 use crate::{ExprId, Rng, TypeId, ident::Ident};
 
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Visibility { Inherited, Public, Private, Protected, Crate, Super, Group }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum ItemKind {
   // Variable
-  Let {kind: Option<TypeId>, value: Option<ExprId>, ism: bool},
+  Let {kind: Option<TypeId>, value: ExprId, ism: bool},
+
+  // Member
+  Member {kind: TypeId},
   
   // Function
   Fun  {kind: TypeId, blok: Option<ExprId>},
@@ -28,7 +31,7 @@ pub enum ItemKind {
   ModuleFile (Rng /* ItemId */, u16 /* fid */),
   
   // Generic
-  Generic {params: Rng /* NamedType */, reqs: Rng /* NamedTypeList */, ctn: Rng /* ItemId */},
+  Generic {params: Rng /* Name | NamedType */, reqs: Rng /* NamedTypeList */, ctn: Rng /* ItemId */},
   
   // Impl
   Impl {type_ty: TypeId, trait_ty: Option<TypeId>, ctn: Rng /* ItemId */},
@@ -39,7 +42,7 @@ pub enum ItemKind {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Item {
   pub pos: Span,
   pub vis: Visibility,

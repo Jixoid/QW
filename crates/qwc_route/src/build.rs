@@ -1,11 +1,17 @@
 use std::{env, path::Path, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
-use qwc_ast::{self as ast, Scope, StrInterner};
+use qwc_ast::{self as ast, Visitor};
+use qwc_hir::{self as hir};
+use qwc_mir::{self as mir};
 use qwc_diagnostic::Summary;
-use qwc_front::Front;
+use qwc_parse::Parse;
+use qwc_hir_gen::HGen;
+use qwc_mir_gen::MGen;
+use qwc_resolve::ScopeMap;
+use qwc_string_interner::StrInterner;
 
-use crate::{BuildVariant, Error, parse_conf};
+use crate::{BuildVariant, DumpStage, Error, parse_conf};
 
 
 pub struct BuildInfo<'a> {
@@ -14,178 +20,18 @@ pub struct BuildInfo<'a> {
   pub verbose: u8,
   pub timings: bool,
   pub usages: bool,
-  pub ast_dump: bool,
+  pub dump: Vec<DumpStage>,
   pub check_only: bool,
 }
 
-/*
-fn parse_deps(conf: &Value) -> Vec<(String, String)> {
-  let mut deps = Vec::new();
 
-  if let Value::Stc(stc) = conf {
-    for (name, val) in stc {
-      if name == "onerepo" {
-        if let Value::Stc(repos) = &val {
-          for (name, val) in repos {
-            let dep_name = name.clone();
-            match &val {
-              Value::Str(path) => deps.push((dep_name, path.clone())),
-
-              Value::Stc(repo_stc) => {
-                for (name, val) in repo_stc {
-                  if name == "path" {
-                    if let Value::Str(path) = &val {
-                      deps.push((dep_name.clone(), path.clone()));
-                    }
-                  }
-                }
-              }
-              _ => {}
-            }
-          }
-        }
-      }
-    }
-  }
-
-  deps
-}
-
-
-pub fn bduild_cre<'a>(name: String, info: &BuildInfo, fpath: String, deps: Vec<(String, String)>) -> Result<(), Error> {
-  let mut ast_cre = ast::Krate::new();
-
-  let mut anys = vec![];
-  let mut dep_errors = 0;
-
-  // Load dependencies into root crate
-  for (dep_name, dep_path) in deps {
-    let dep_src = std::path::Path::new(&dep_path).join("src");
-    let dep_entry = if dep_src.join("lib.qw").exists() {
-      dep_src.join("lib.qw")
-    } else if dep_src.join("main.qw").exists() {
-      dep_src.join("main.qw")
-    } else {
-      continue;
-    };
-
-    let dep_fpath = dep_entry.to_str().unwrap_or("").to_string();
-    if far.is_loaded(&dep_fpath) { continue; }
-
-    let dep_mol = farena.alloc(ast::Module::new(&dep_fpath)?);
-    let mut dep_anys = vec![];
-
-    if info.verbose { println!("{}{} {} ({})", "front".red().bold(), ":".bright_black(), dep_name, dep_mol.name); }
-    let dep_sum = Front::new(&mut ast_cre, dep_mol, farena)?.parse(&mut dep_anys);
-
-    for m in dep_sum.msgs() { eprintln!("{}", m.display(farena)); }
-    dep_errors += dep_sum.sumerr();
-
-    let _ = ast_cre.get_str(&dep_name);
-    let dep_scp = ast::Scope::from_anys(&ast_cre, &dep_anys);
-    let dep_item = ast::Item {
-      vis: ast::Visibility::Public,
-      vari: ast::ItemVari::Module {
-        name: dep_name,
-        ctn: ast_cre.new_extra(dep_anys),
-      },
-    };
-    let dep_id = ast_cre.new_item(dep_item);
-    ast_cre.attach_scp(dep_id.to_any(), dep_scp);
-    anys.push(dep_id.to_any());
-  }
-
-  if dep_errors > 0 { return Ok(()); }
-
-  let mol = far.alloc(ast::Module::new(&fpath)?);
-  
-  let mut now: Instant;
-  
-  // Front
-    /* time */ now = Instant::now();
-    /* verb */ if info.verbose { println!("{}{} {}", "front".red().bold(), ":".bright_black(), mol.name) }
-    
-    let sum = Front::new(&mut ast_cre, &mol, farena)?.parse(&mut anys);
-
-    let _ = ast_cre.get_str(&name);
-    let root_scp = ast::Scope::from_anys(&ast_cre, &anys);
-    let root = ast::Item{vis: ast::Visibility::Public, vari: ast::ItemVari::Module{ name, ctn: ast_cre.new_extra(anys) }};
-    let root_id = ast_cre.new_item(root);
-    ast_cre.root = root_id;
-    ast_cre.attach_scp(root_id.to_any(), root_scp);
-
-    /* time */ let front_time = now.elapsed();
-    /* usag */ let ast_usage = ast_cre.storage_size();
-    
-    // Summary
-    for m in sum.msgs() { eprintln!("{}", m.display(farena)); }
-    if sum.sumall() > 0 { eprintln!("{}", sum); }
-    if sum.sumerr() > 0 { return Ok(()); }
-    drop(sum);
-
-  /*
-  // HGen
-    /* time */ now = Instant::now();
-    /* verb */ if info.verbose { println!("{}{} {}", "hgen".red().bold(), ":".bright_black(), mol.name) }
-    
-    let hir_cre = match HGen::lower(&ast_cre, farena) {
-      Ok(a) => a,
-      Err(e) => return Err(CompilerError::Str( format!("{}", e.display(farena)) )),
-    };
-    
-    /* time */ let hgen_time = now.elapsed();
-    /* usag */ let hir_usage = hir_cre.storage_size();
-
-  
-  // MGen
-    /* time */ now = Instant::now();
-    /* verb */ if info.verbose { println!("{}{} {}", "mgen".red().bold(), ":".bright_black(), mol.name) }
-
-    let mir_cre = match MGen::lower(&hir_cre) {
-      Ok(a) => a,
-      Err(e) => return Err(CompilerError::Str( format!("{}", e.display(farena)) )),
-    };
-    
-    /* time */ let mgen_time = now.elapsed();
-    /* usag */ let mir_usage = mir_cre.storage_size();
-  */
-
-  // Build Summary
-  if info.timings {
-    println!("{}{} {}ms", "build-time".yellow().bold(), ":".bright_black(), (front_time /*+hgen_time+mgen_time*/).as_millis());
-
-    if info.verbose {
-      println!("  {}{} {:?}", "front".blue().bold(), ":".bright_black(), front_time);
-      //println!("  {}{} {:?}", "hgen".blue().bold(), ":".bright_black(), hgen_time);
-      //println!("  {}{} {:?}", "mgen".blue().bold(), ":".bright_black(), mgen_time);
-    }
-  }
-
-  // Usage
-  if info.usages {
-    println!("{}{} {}", "mem-usage".yellow().bold(), ":".bright_black(), humanize_size(ast_usage /*+hir_usage+mir_usage*/));
-
-    if info.verbose {
-      println!("  {}{} {}", "ast".blue().bold(), ":".bright_black(), humanize_size(ast_usage));
-      //println!("  {}{} {}", "hir".blue().bold(), ":".bright_black(), humanize_size(hir_usage));
-      //println!("  {}{} {}", "mir".blue().bold(), ":".bright_black(), humanize_size(mir_usage));
-    }
-  }
-
-  Ok(())
-}
-*/
-
-
-pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary, Option<Scope>), Error> {
+pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary), Error> {
   let fi = {
     let fid = far.add(fpath);
     far.get(fid)
   };
 
-  let (start_rng, mut sum) = Front::parse(cre, sin, far, fi);
-
-  let (start, rng) = start_rng.unwrap();
+  let (start, rng, mut sum) = Parse::parse(cre, sin, far, fi);
 
   let submods_to_load = {
     let mut submods_to_load = vec![];
@@ -215,9 +61,7 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
   };
 
   for (id, path) in submods_to_load {
-    let _ = read_file(&path, cre, sin, far).map(|(it, ssum, scp)| {
-      scp.map(|scp| cre.attach(id, scp));
-      
+    let _ = read_file(&path, cre, sin, far).map(|(it, ssum)| {
       let rng = if let ast::ItemKind::Krate(rng) = it.kind { rng } else { panic!() };
       
       let this: &mut ast::Item = cre.get_mut(id);
@@ -237,9 +81,7 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     kind: ast::ItemKind::Krate(rng)
   };
 
-  let scp = Scope::new_with(cre, this);
-  
-  Ok((this, sum, scp))
+  Ok((this, sum))
 }
 
 
@@ -271,10 +113,9 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   
   let now = Instant::now();
   let (root, sum) = {
-    let (root, sum, scp) = read_file(&entry_file, &mut cre, &mut sin, &mut far)?;
+    let (root, sum) = read_file(&entry_file, &mut cre, &mut sin, &mut far)?;
 
     let id = cre.push(root);
-    scp.map(|scp| cre.attach(id, scp));
     
     (id, sum)
   };
@@ -295,43 +136,115 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   Ok((cre, sin, far, time))
 }
 
+pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files) -> Result<(ScopeMap, Duration), Error> {
+
+  let now = Instant::now();
+  let ret = ScopeMap::visit(&ast_cre, &sin, &far);
+  let time = now.elapsed();
+
+  match ret {
+    Ok(v) => Ok((v, time)),
+    Err(sum) => {
+      for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    
+      eprintln!("{}", sum);
+
+      Err(Error::New | "compilation stopped")
+    }
+  }
+}
+
+pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap) -> Result<(hir::Krate, Duration), Error> {
+  let now = Instant::now();
+  let (hir_cre, sum) = HGen::low(&ast_cre, sin, far, ast_scp);
+  let time = now.elapsed();
+
+  if !sum.is_empty() {
+    for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    
+    eprintln!("{}", sum);
+
+    if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
+  }
+
+  Ok((hir_cre.unwrap(), time))
+}
+
+pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files) -> Result<(mir::Krate, Duration), Error> {
+  let now = Instant::now();
+  let (mir_cre, sum) = MGen::low(&hir_cre, sin);
+  let time = now.elapsed();
+
+  if !sum.is_empty() {
+    for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    
+    eprintln!("{}", sum);
+
+    if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
+  }
+
+  Ok((mir_cre.unwrap(), time))
+}
+
+
 
 pub fn build(info: BuildInfo) -> Result<(), Error> {
   // PASS 1
-  let (ast_cre, sin, far, front_time) = build_ast_krate(Path::new(info.path), &info)?;
+  if info.verbose > 0 { eprintln!("{}", "front".red().bold()) }
   
-  if info.ast_dump {
-    eprint!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far});
-  }
+  let (ast_cre, sin, far, parse_time) = build_ast_krate(Path::new(info.path), &info)?;
+  
+  if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
+  
+  
+  // PASS 1 + ScopeMap
+  if info.verbose > 0 { eprintln!("{}", "scope".red().bold()) }
+  
+  let (ast_scp, scope_time) = build_ast_scope(&ast_cre, &sin, &far)?;
+  
+  if info.dump.contains(&DumpStage::Scope) { eprintln!("{}", qwc_resolve::dupm_scp::Dump{scp: &ast_scp, sin: &sin, root: ast_cre.root().unwrap().to_any()}) }
+  
   
   // PASS 2
-  // hir, hgen
-
+  if info.verbose > 0 { eprintln!("{}", "hgen".red().bold()) }
+  
+  let (hir_cre, hgen_time) = build_hir_krate(&ast_cre, &sin, &far, &ast_scp)?;
+  
   if info.check_only {
     return Ok(())
   }
+  
+  
+  // Pass 3
+  if info.verbose > 0 { eprintln!("{}", "mgen".red().bold()) }
 
-  // PASS 3
-  // mir, mgen
+  let (mir_cre, mgen_time) = build_mir_krate(&hir_cre, &sin, &far)?;
+
+  if info.dump.contains(&DumpStage::Mir) { eprintln!("{}", mir::Dump{cre: &mir_cre}) }
+
 
 
   // Extra Info
   if info.timings {
-    eprintln!("{}: {:?}", "timings".yellow().bold(), (front_time));
+    eprintln!("{}: {:?}", "timings".yellow().bold(), (parse_time + scope_time + hgen_time + mgen_time));
     
     if info.verbose > 0 {
-      eprintln!("  {}: {:?}", "front".yellow(), front_time);
+      eprintln!("  {}: {:?}", "parse".yellow(), parse_time);
+      eprintln!("  {}: {:?}", "scope".yellow(), scope_time);
+      eprintln!("  {}:  {:?}", "hgen".yellow(), hgen_time);
+      eprintln!("  {}:  {:?}", "mgen".yellow(), mgen_time);
     }
   }
   
   if info.usages {
     let (ast_used, ast_alloc) = (ast_cre.size_all_used(), ast_cre.size_all_alloc());
+    let (hir_used, hir_alloc) = (hir_cre.size_all_used(), hir_cre.size_all_alloc());
+    let (mir_used, mir_alloc) = (mir_cre.size_all_used(), mir_cre.size_all_alloc());
 
-    eprintln!("{}: {} {} {}", "usages".yellow().bold(), humanize_size(ast_used), "/".bright_black(), humanize_size(ast_alloc));
+    eprintln!("{}: {} {} {}", "usages".yellow().bold(), humanize_size(ast_used + hir_used + mir_used), "/".bright_black(), humanize_size(ast_alloc + hir_alloc + mir_alloc));
 
     if info.verbose > 0 {
       eprintln!("  {}: {} {} {}", "ast".yellow(), humanize_size(ast_used), "/".bright_black(), humanize_size(ast_alloc));
-      
       if info.verbose > 1 {
         eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(ast_cre.size_used::<ast::Type>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Type>()));
         eprintln!("   {}: {} {} {}", "expr".cyan(), humanize_size(ast_cre.size_used::<ast::Expr>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Expr>()));
@@ -339,6 +252,20 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
         eprintln!("   {}: {} {} {}", "patt".cyan(), humanize_size(ast_cre.size_used::<ast::Patt>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Patt>()));
         eprintln!("   {}: {} {} {}", "thing".cyan(), humanize_size(ast_cre.size_used::<ast::Thing>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Thing>()));
         eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(ast_cre.size_used::<ast::AnyId>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::AnyId>()));
+      }
+      
+      eprintln!("  {}: {} {} {}", "hir".yellow(), humanize_size(hir_used), "/".bright_black(), humanize_size(hir_alloc));
+      if info.verbose > 1 {
+        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(hir_cre.size_used::<hir::Type>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Type>()));
+        eprintln!("   {}: {} {} {}", "expr".cyan(), humanize_size(hir_cre.size_used::<hir::Expr>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Expr>()));
+        eprintln!("   {}: {} {} {}", "item".cyan(), humanize_size(hir_cre.size_used::<hir::Item>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Item>()));
+        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(hir_cre.size_used::<hir::AnyId>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::AnyId>()));
+      }
+
+      eprintln!("  {}: {} {} {}", "mir".yellow(), humanize_size(mir_used), "/".bright_black(), humanize_size(mir_alloc));
+      if info.verbose > 1 {
+        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(mir_cre.size_used::<mir::Type>()), "/".bright_black(), humanize_size(mir_cre.size_alloc::<mir::Type>()));
+        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(mir_cre.size_used::<mir::AnyId>()), "/".bright_black(), humanize_size(mir_cre.size_alloc::<mir::AnyId>()));
       }
     }
   }

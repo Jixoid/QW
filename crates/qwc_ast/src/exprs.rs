@@ -4,7 +4,7 @@ use crate::{ExprId, Ident, PattId, Rng, TypeId};
 
 
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
   Add, Sub, Mul, Div, Rem,
 
@@ -13,13 +13,13 @@ pub enum BinaryOp {
   And, Or, Xor, Shl, Shr,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
   Neg, Poz, Not, Ref, Addr, Deref
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum ExprKind {
   // Access
   Nick   (Ident),
@@ -27,8 +27,8 @@ pub enum ExprKind {
   Member (Rng /* ExprId */),
 
   // Lit
-  Unit   (),
-  Bool   (Span),
+  Unit,
+  Bool   (Span, bool),
   Number (Span),
   String (Span),
   
@@ -88,7 +88,7 @@ pub enum ExprKind {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Expr {
   pub pos: Span,
   pub kind: ExprKind,

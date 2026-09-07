@@ -1,7 +1,7 @@
 use crate::{Ident, Rng};
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Patt {
   One(Ident),
   

@@ -1,0 +1,12 @@
+[package]
+name = "qwc_parse"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_ast = { path = "../qwc_ast" }
+qwc_lexer = { path = "../qwc_lexer" }
+qwc_arena = { path = "../qwc_arena" }
+qwc_diagnostic = { path = "../qwc_diagnostic" }
+qwc_string_interner = { path = "../qwc_string_interner" }
+thin-vec = "0.2.19"

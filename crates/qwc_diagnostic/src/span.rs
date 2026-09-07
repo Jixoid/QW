@@ -3,7 +3,7 @@ use std::{num::{NonZeroU16, NonZeroU32}, ops::Range};
 use qwc_arena::Files;
 
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Span {
   pub(crate) off: u32,
   pub(crate) len: NonZeroU16,

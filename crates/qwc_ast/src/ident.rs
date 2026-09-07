@@ -1,19 +1,21 @@
-use std::num::{NonZeroU16, NonZeroU32};
+use std::num::NonZeroU16;
+
 use qwc_arena::Files;
 use qwc_diagnostic::Span;
+use qwc_string_interner::Sid;
 
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Ident {
   off: u32,
   len: NonZeroU16,
   fid: u16,
-  sid: NonZeroU32,
+  sid: Sid,
 }
 
 impl Ident {
 
-  pub fn new(off: u32, len: NonZeroU16, fid: u16, sid: NonZeroU32) -> Self {
+  pub fn new(off: u32, len: NonZeroU16, fid: u16, sid: Sid) -> Self {
     Self{off, len, fid, sid}
   }
 
@@ -27,7 +29,7 @@ impl Ident {
   }
   
   pub fn fid(&self) -> u16 { self.fid }
-  pub fn sid(&self) -> NonZeroU32 { self.sid }
+  pub fn sid(&self) -> Sid { self.sid }
 }
 
 impl Into<Span> for Ident {

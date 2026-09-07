@@ -140,6 +140,15 @@ impl<'a> Lexer<'a> {
     )
   }
 
+  pub fn pos_extend_file(&self) -> Span {
+    Span::new(
+      0,
+      
+      NonZeroU16::new((self.fi.map().len() -8) as u16).unwrap_or(NonZeroU16::MIN),
+      self.fid,
+    )
+  }
+
 
   pub fn fid(&self) -> u16 { self.fid }
 

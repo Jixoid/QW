@@ -26,7 +26,7 @@ impl Message {
   pub fn hint(pos: impl Into<Span>, msg: &str, pars: &[&str]) -> Self  { Self::new(MsgKind::Hint, pos.into(), msg, pars) }
   pub fn note(pos: impl Into<Span>, msg: &str, pars: &[&str]) -> Self  { Self::new(MsgKind::Note, pos.into(), msg, pars) }
   
-  pub fn add_note(&mut self, m: Self) { self.notes.push(m); }
+  pub fn add_note(mut self, m: Self) -> Self { self.notes.push(m); self }
 
   pub fn display<'a>(&'a self, far: &'a Files) -> MessageDisplay<'a> { MessageDisplay(self, far) }
 }

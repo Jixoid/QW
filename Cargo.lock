@@ -7,9 +7,25 @@ name = "QW"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "qwc_diagnostic",
  "qwc_route",
  "rustc_apfloat",
 ]
+
+[[package]]
+name = "addr2line"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b"
+dependencies = [
+ "gimli",
+]
+
+[[package]]
+name = "adler2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "ahash"
@@ -84,6 +100,21 @@ name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
+name = "backtrace"
+version = "0.3.76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb531853791a215d7c62a30daf0dde835f381ab5de4589cfe7c649d2cbe92bd6"
+dependencies = [
+ "addr2line",
+ "cfg-if",
+ "libc",
+ "miniz_oxide",
+ "object",
+ "rustc-demangle",
+ "windows-link",
+]
 
 [[package]]
 name = "bitflags"
@@ -201,6 +232,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "gimli"
+version = "0.32.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+
+[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -248,9 +285,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "js-sys"
-version = "0.3.104"
+version = "0.3.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0c1080212aad755ea003d18543e8768dd432c48819efd73a7bf1e39b7a5a3a"
+checksum = "ce57d20d1ea864ce2ac172ab472d409214f4fd359f0b2a2775abdf522e2af99e"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -290,6 +327,30 @@ dependencies = [
  "libc",
  "regex-lite",
  "semver",
+]
+
+[[package]]
+name = "memchr"
+version = "2.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "miniz_oxide"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
+dependencies = [
+ "adler2",
+]
+
+[[package]]
+name = "object"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -342,19 +403,27 @@ version = "0.1.0"
 name = "qwc_ast"
 version = "0.1.0"
 dependencies = [
- "lasso",
  "owo-colors",
  "qwc_arena",
  "qwc_diagnostic",
  "qwc_lexer",
+ "qwc_string_interner",
  "rustc-hash",
  "thin-vec",
+]
+
+[[package]]
+name = "qwc_comptime"
+version = "0.1.0"
+dependencies = [
+ "qwc_hir",
 ]
 
 [[package]]
 name = "qwc_diagnostic"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
  "owo-colors",
  "qwc_arena",
 ]
@@ -369,14 +438,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "qwc_front"
+name = "qwc_hir"
+version = "0.1.0"
+dependencies = [
+ "qwc_arena",
+ "qwc_diagnostic",
+ "qwc_string_interner",
+ "rustc-hash",
+ "thin-vec",
+]
+
+[[package]]
+name = "qwc_hir_gen"
 version = "0.1.0"
 dependencies = [
  "qwc_arena",
  "qwc_ast",
+ "qwc_comptime",
  "qwc_diagnostic",
- "qwc_lexer",
- "thin-vec",
+ "qwc_hir",
+ "qwc_mangling",
+ "qwc_resolve",
+ "qwc_string_interner",
 ]
 
 [[package]]
@@ -385,6 +468,64 @@ version = "0.1.0"
 dependencies = [
  "qwc_arena",
  "qwc_diagnostic",
+]
+
+[[package]]
+name = "qwc_mangling"
+version = "0.1.0"
+dependencies = [
+ "qwc_string_interner",
+]
+
+[[package]]
+name = "qwc_mir"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "owo-colors",
+ "qwc_arena",
+ "qwc_diagnostic",
+ "qwc_lexer",
+ "qwc_string_interner",
+ "rustc-hash",
+ "thin-vec",
+]
+
+[[package]]
+name = "qwc_mir_gen"
+version = "0.1.0"
+dependencies = [
+ "qwc_comptime",
+ "qwc_diagnostic",
+ "qwc_hir",
+ "qwc_mangling",
+ "qwc_mir",
+ "qwc_string_interner",
+]
+
+[[package]]
+name = "qwc_parse"
+version = "0.1.0"
+dependencies = [
+ "qwc_arena",
+ "qwc_ast",
+ "qwc_diagnostic",
+ "qwc_lexer",
+ "qwc_string_interner",
+ "thin-vec",
+]
+
+[[package]]
+name = "qwc_resolve"
+version = "0.1.0"
+dependencies = [
+ "owo-colors",
+ "qwc_arena",
+ "qwc_ast",
+ "qwc_diagnostic",
+ "qwc_hir",
+ "qwc_string_interner",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -397,8 +538,21 @@ dependencies = [
  "qwc_ast",
  "qwc_diagnostic",
  "qwc_ds",
- "qwc_front",
+ "qwc_hir",
+ "qwc_hir_gen",
+ "qwc_mir",
+ "qwc_mir_gen",
+ "qwc_parse",
+ "qwc_resolve",
+ "qwc_string_interner",
  "uuid",
+]
+
+[[package]]
+name = "qwc_string_interner"
+version = "0.1.0"
+dependencies = [
+ "lasso",
 ]
 
 [[package]]
@@ -412,6 +566,12 @@ name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
+name = "rustc-demangle"
+version = "0.1.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b74b56ffa8bb2830709a538c2cbcae9aa062db0d2a42563bfb09bdaae44020eb"
 
 [[package]]
 name = "rustc-hash"
@@ -544,9 +704,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.127"
+version = "0.2.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b70935747edd64d89de3efa29d73789b806c15798f8e7dca4d8ac356b50ce70"
+checksum = "aecb87a33d3b0c5e3b7aa46336eaf486cffafbd281b195e4c8b80d50df2351bf"
 dependencies = [
  "cfg-if",
  "once_cell",
@@ -557,9 +717,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.127"
+version = "0.2.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77775f8f3f7217702089053b94958f8f54061a3f663417df76e19cbdcca29bc1"
+checksum = "a690d511e3c1a8b3a55e33511e3c2c00c78415cd23650f32b808627f5696b9ed"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -567,22 +727,22 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.127"
+version = "0.2.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e11d33f857dc2fb11b8bc75aee111aa9cbeb12cd9f25efd3d4c2a3dd4e235284"
+checksum = "411e4887f0071ef2d2164a9d5fdf2d20efbef78fccd3a78b0c10a1dc5295e48a"
 dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.127"
+version = "0.2.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
+checksum = "81941cd78d0c92026c33e5e01312845a4cb1e9af3407f9134b100dd03144103e"
 dependencies = [
  "unicode-ident",
 ]

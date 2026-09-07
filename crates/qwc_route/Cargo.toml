@@ -5,10 +5,16 @@ edition = "2024"
 
 [dependencies]
 qwc_ast = { path = "../qwc_ast" }
+qwc_hir = { path = "../qwc_hir" }
+qwc_mir = { path = "../qwc_mir" }
 qwc_ds = { path = "../qwc_ds" }
 qwc_arena = { path = "../qwc_arena" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
-qwc_front = { path = "../qwc_front" }
+qwc_string_interner = { path = "../qwc_string_interner" }
+qwc_parse = { path = "../qwc_parse" }
+qwc_resolve = { path = "../qwc_resolve" }
+qwc_hir_gen = { path = "../qwc_hir_gen" }
+qwc_mir_gen = { path = "../qwc_mir_gen" }
 clap = { version = "4.5", features = ["derive"] }
 uuid = { version = "1.10", features = ["v4"] }
 owo-colors = "4.4.0"

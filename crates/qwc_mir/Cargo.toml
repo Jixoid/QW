@@ -1,0 +1,14 @@
+[package]
+name = "qwc_mir"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+owo-colors = "4.4.0"
+qwc_arena = { path = "../qwc_arena" }
+qwc_lexer = { path = "../qwc_lexer" }
+qwc_diagnostic = { path = "../qwc_diagnostic" }
+qwc_string_interner = { path = "../qwc_string_interner" }
+rustc-hash = "2.1.3"
+bitflags = "2.13.1"
+thin-vec = "0.2.19"

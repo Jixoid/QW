@@ -4,7 +4,7 @@ use crate::{Expr, Item, Patt, Thing, Type};
 
 
 // AstId
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AstId<T>
 where T: AstKind
 {

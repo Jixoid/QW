@@ -11,7 +11,7 @@ pub enum FunAttrs {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum TypeKind {
   // Access
   Nick (Ident),
@@ -28,7 +28,7 @@ pub enum TypeKind {
   Vector (TypeId, ExprId),
   
   // Basic
-  Unit   (),
+  Unit,
   Range  (TypeId),
   Option (TypeId),
   Fail   (TypeId),
@@ -63,7 +63,7 @@ pub enum TypeKind {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Type {
   pub pos: Span,
   pub kind: TypeKind,
