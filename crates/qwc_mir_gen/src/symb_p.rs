@@ -12,15 +12,15 @@ pub struct SymbLow;
 
 impl SymbLow {
 
-  pub fn low(ctx: &mut Ctx, id: hir::ItemId) -> MayFail<Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  pub fn low(ctx: &mut Ctx, id: hir::ItemId) -> MayFail<Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let it: &hir::Item = src.get(id);
 
-    match *it {
-      hir::Item::RootNS{rng} => Self::low_root(ctx, rng)?,
+    match it.kind {
+      hir::ItemKind::RootNS{rng} => Self::low_root(ctx, rng)?,
 
-      hir::Item::Variable{kind, name, expr, ism} => Self::low_variable(ctx, name, kind, expr, ism)?,
+      hir::ItemKind::Variable{kind, name, expr, ism} => Self::low_variable(ctx, name, kind, expr, ism)?,
 
-      hir::Item::Function{kind, name, expr} => Self::low_function(ctx, name, kind, expr)?,
+      hir::ItemKind::Function{kind, name, expr} => Self::low_function(ctx, name, kind, expr)?,
 
       kind @_ => todo!("{kind:#?}")
     }
@@ -29,22 +29,22 @@ impl SymbLow {
   }
 
 
-  fn low_root(ctx: &mut Ctx, rng: hir::Rng) -> MayFail<Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  fn low_root(ctx: &mut Ctx, rng: hir::Rng) -> MayFail<Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let mgr = &mut vec![];
     
     for id in src.extra_get(rng) {
       let id = hir::ItemId::new_from(id);
 
-      Self::low(ctx!(cre,sum,src,sin,mgr), id)?;
+      Self::low(ctx!(cre,tin,sum,src,sin,mgr), id)?;
     }
 
     Ok(())
   }
 
-  fn low_variable(ctx: &mut Ctx, name: Sid, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> MayFail<Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  fn low_variable(ctx: &mut Ctx, name: Sid, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> MayFail<Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let sym = ManglerQW::new(sin, mgr, name);
     
-    let ety = TypeLow::low(ctx!(cre,sum,src,sin,mgr), kind)?;
+    let ety = TypeLow::low(ctx!(cre,tin,sum,src,sin,mgr), kind)?;
 
     let value = match expr.evaluate(*src) {
       Some(v) => cre.push(convert_value(v)),
@@ -65,12 +65,12 @@ impl SymbLow {
     Ok(())
   }
 
-  fn low_function(ctx: &mut Ctx, name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> MayFail<Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  fn low_function(ctx: &mut Ctx, name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> MayFail<Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let sym = ManglerQW::new(sin, mgr, name);
     
-    let ety = TypeLow::low(ctx!(cre,sum,src,sin,mgr), kind)?;
+    let ety = TypeLow::low(ctx!(cre,tin,sum,src,sin,mgr), kind)?;
 
-    let blok = BlokLow::low(ctx!(cre,sum,src,sin,mgr), expr)?;
+    let blok = BlokLow::low(ctx!(cre,tin,sum,src,sin,mgr), expr)?;
 
 
     // Post

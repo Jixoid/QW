@@ -6,7 +6,6 @@ pub trait Mangler {
 }
 
 
-
 pub struct ManglerQW;
 
 impl Mangler for ManglerQW {

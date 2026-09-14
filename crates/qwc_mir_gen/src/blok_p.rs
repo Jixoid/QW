@@ -9,7 +9,7 @@ pub struct BlokLow;
 
 impl BlokLow {
 
-  pub fn low(ctx: &mut Ctx, id: hir::ExprId) -> Result<mir::BlokId, Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  pub fn low(ctx: &mut Ctx, id: hir::ExprId) -> Result<mir::BlokId, Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let it: &hir::Expr = src.get(id);
 
     let ex = match it.kind {
@@ -22,14 +22,14 @@ impl BlokLow {
   }
 
 
-  fn low_block(ctx: &mut Ctx, stack: hir::Rng, expr: Option<hir::ExprId>) -> Result<mir::BlokId, Message> { ctx!(ctx => cre, sum, src, sin, mgr);
+  fn low_block(ctx: &mut Ctx, stack: hir::Rng, _expr: Option<hir::ExprId>) -> Result<mir::BlokId, Message> { ctx!(ctx => cre, tin, sum, src, sin, mgr);
     let stack = {
       let mut vec = vec![];
 
       for id in src.extra_get(stack) {
         let id = hir::TypeId::new_from(id);
         
-        let id = TypeLow::low(ctx!(cre,sum,src,sin,mgr), id)?;
+        let id = TypeLow::low(ctx!(cre,tin,sum,src,sin,mgr), id)?;
 
         vec.push(id);
       }

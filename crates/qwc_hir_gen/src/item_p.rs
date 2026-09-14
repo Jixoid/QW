@@ -11,13 +11,13 @@ impl ItemLow {
 
   pub fn low(ctx: &mut Ctx, id: ast::ItemId) -> Result<Option<hir::ItemId>, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
     let it: &ast::Item = src.get(id);
-    
+
     let it = match it.kind {
-      ast::ItemKind::Krate(rng) => Some(Self::low_krate(ctx, id, rng)?),
+      ast::ItemKind::Krate(rng) => Some(Self::low_krate(ctx, id, it, rng)?),
 
       ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(Self::low_module(ctx, id, it, rng)?),
       
-      ast::ItemKind::Generic{ctn: rng, ..} => Some(Self::low_generic(ctx, id, rng)?),
+      ast::ItemKind::Generic{ctn: rng, ..} => Some(Self::low_generic(ctx, id, it, rng)?),
 
 
       // Symbols
@@ -42,7 +42,7 @@ impl ItemLow {
   }
 
 
-  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
+  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
     let lscp = scp.get(&id.to_any()).unwrap();
 
     let rng = {
@@ -59,8 +59,11 @@ impl ItemLow {
 
 
     // Post
-    let this = hir::Item::RootNS {
-      rng,
+    let this = hir::Item {
+      kind: hir::ItemKind::RootNS {
+        rng,
+      },
+      vis: convert_vis(it.vis)
     };
     
     Ok(cre.push(this))
@@ -83,15 +86,18 @@ impl ItemLow {
 
 
     // Post
-    let this = hir::Item::NameSpace {
-      name: it.name.unwrap().sid(),
-      rng,
+    let this = hir::Item {
+      kind: hir::ItemKind::NameSpace {
+        name: it.name.unwrap().sid(),
+        rng,
+      },
+      vis: convert_vis(it.vis)
     };
     
     Ok(cre.push(this))
   }
 
-  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
+  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
     let lscp = scp.get(&id.to_any()).unwrap();
 
     let rng = {
@@ -108,8 +114,11 @@ impl ItemLow {
 
     
     // Post
-    let this = hir::Item::GenericNS {
-      rng
+    let this = hir::Item {
+      kind: hir::ItemKind::GenericNS {
+        rng
+      },
+      vis: convert_vis(it.vis)
     };
 
     Ok(cre.push(this))
@@ -122,10 +131,13 @@ impl ItemLow {
 
     
     // Post
-    let this = hir::Item::Function {
-      name: it.name.unwrap().sid(),
-      expr,
-      kind,
+    let this = hir::Item {
+      kind: hir::ItemKind::Function {
+        name: it.name.unwrap().sid(),
+        expr,
+        kind,
+      },
+      vis: convert_vis(it.vis)
     };
 
     Ok(cre.push(this))
@@ -139,14 +151,27 @@ impl ItemLow {
 
 
     // Post
-    let this = hir::Item::Variable {
-      name: it.name.unwrap().sid(),
-      kind,
-      expr,
-      ism,
+    let this = hir::Item {
+      kind: hir::ItemKind::Variable {
+        name: it.name.unwrap().sid(),
+        kind,
+        expr,
+        ism,
+      },
+      vis: convert_vis(it.vis),
     };
 
     Ok(cre.push(this))
   }
 
+}
+
+
+fn convert_vis(vis: ast::Visibility) -> hir::ItemVis {
+  match vis {
+    ast::Visibility::Inherited => hir::ItemVis::Private,
+    ast::Visibility::Public  => hir::ItemVis::Public,
+    ast::Visibility::Private => hir::ItemVis::Private,
+    _ => panic!()
+  }
 }

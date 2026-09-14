@@ -28,5 +28,4 @@ debug = 1
 [dependencies]
 qwc_route = { path = "crates/qwc_route" }
 qwc_diagnostic = { path = "crates/qwc_diagnostic" }
-inkwell = { version = "0.9.0", features = ["llvm22-1"] }
 rustc_apfloat = "0.2.3"

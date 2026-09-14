@@ -2,8 +2,10 @@ use std::{env, path::Path, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast::{self as ast, Visitor};
+use qwc_cgen::ICGen;
+use qwc_cgen_llvm::CGenLLVM;
 use qwc_hir::{self as hir};
-use qwc_mir::{self as mir};
+use qwc_mir::{self as mir, Layout, LayoutInfo};
 use qwc_diagnostic::Summary;
 use qwc_parse::Parse;
 use qwc_hir_gen::HGen;
@@ -170,9 +172,9 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
   Ok((hir_cre.unwrap(), time))
 }
 
-pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files) -> Result<(mir::Krate, Duration), Error> {
+pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, layinfo: &LayoutInfo) -> Result<(mir::Krate, Duration), Error> {
   let now = Instant::now();
-  let (mir_cre, sum) = MGen::low(&hir_cre, sin);
+  let (mir_cre, sum) = MGen::low(&hir_cre, sin, layinfo);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -184,6 +186,14 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files) -> 
   }
 
   Ok((mir_cre.unwrap(), time))
+}
+
+pub fn build_cgen(mir_cre: &mir::Krate) -> Result<Duration, Error> {
+  let now = Instant::now();
+  CGenLLVM::generate(mir_cre);
+  let time = now.elapsed();
+
+  Ok(time)
 }
 
 
@@ -213,26 +223,50 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   if info.check_only {
     return Ok(())
   }
+
+  
+  // Target
+  let layinfo = LayoutInfo{
+    i8_lay:   Layout::new(8,   8,  mir::LayoutBy::SYS),
+    i16_lay:  Layout::new(16,  16, mir::LayoutBy::SYS),
+    i32_lay:  Layout::new(32,  32, mir::LayoutBy::SYS),
+    i64_lay:  Layout::new(64,  64, mir::LayoutBy::SYS),
+    i128_lay: Layout::new(128, 64, mir::LayoutBy::SYS),
+
+    bf16_lay: Layout::new(16,  16, mir::LayoutBy::SYS),
+    f16_lay:  Layout::new(16,  16, mir::LayoutBy::SYS),
+    f32_lay:  Layout::new(32,  32, mir::LayoutBy::SYS),
+    f64_lay:  Layout::new(64,  64, mir::LayoutBy::SYS),
+    f128_lay: Layout::new(128, 64, mir::LayoutBy::SYS),
+
+    ptr_size: Layout::new(64, 64, mir::LayoutBy::SYS),
+  };
   
   
   // Pass 3
   if info.verbose > 0 { eprintln!("{}", "mgen".red().bold()) }
-
-  let (mir_cre, mgen_time) = build_mir_krate(&hir_cre, &sin, &far)?;
-
+  
+  let (mir_cre, mgen_time) = build_mir_krate(&hir_cre, &sin, &far, &layinfo)?;
+  
   if info.dump.contains(&DumpStage::Mir) { eprintln!("{}", mir::Dump{cre: &mir_cre}) }
+  
+  
+  // Pass 4
+  if info.verbose > 0 { eprintln!("{}", "cgen".red().bold()) }
 
+  let cgen_time = build_cgen(&mir_cre)?;
 
 
   // Extra Info
   if info.timings {
-    eprintln!("{}: {:?}", "timings".yellow().bold(), (parse_time + scope_time + hgen_time + mgen_time));
+    eprintln!("{}: {:?}", "timings".yellow().bold(), (parse_time + scope_time + hgen_time + mgen_time + cgen_time));
     
     if info.verbose > 0 {
       eprintln!("  {}: {:?}", "parse".yellow(), parse_time);
       eprintln!("  {}: {:?}", "scope".yellow(), scope_time);
       eprintln!("  {}:  {:?}", "hgen".yellow(), hgen_time);
       eprintln!("  {}:  {:?}", "mgen".yellow(), mgen_time);
+      eprintln!("  {}:  {:?}", "cgen".yellow(), cgen_time);
     }
   }
   

@@ -1,0 +1,7 @@
+[package]
+name = "qwc_cgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_mir = { path = "../qwc_mir" }

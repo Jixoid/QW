@@ -33,8 +33,7 @@ impl<'a> fmt::Display for Dump<'a> {
 
     writeln!(f, "{}", "AST Crate Dump".cyan().bold())?;
     root.dump(self.cre, self.sin, self.far, f, 0)?;
-    writeln!(f)?;
-
+    
     Ok(())
   }
 }

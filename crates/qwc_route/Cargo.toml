@@ -15,6 +15,8 @@ qwc_parse = { path = "../qwc_parse" }
 qwc_resolve = { path = "../qwc_resolve" }
 qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
+qwc_cgen = { path = "../qwc_cgen" }
+qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
 clap = { version = "4.5", features = ["derive"] }
 uuid = { version = "1.10", features = ["v4"] }
 owo-colors = "4.4.0"

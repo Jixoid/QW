@@ -1,5 +1,5 @@
 use qwc_diagnostic::Summary;
-use qwc_hir::{AnyId, Item, ItemId, Krate, Visitor};
+use qwc_hir::{AnyId, Item, ItemId, ItemKind, Krate, Visitor};
 
 use crate::{Export, ExportKind, ExportMap};
 
@@ -52,9 +52,9 @@ impl<'a> ExportCollector<'a> {
 
       // if !item.is_public() { continue; }
 
-      let (name, kind) = match item {
+      let (name, kind) = match item.kind {
         // Modüller / İsim Alanları
-        Item::NameSpace { name, .. } => (*name, ExportKind::NameSpace(id)),
+        ItemKind::NameSpace{name, ..} => (name, ExportKind::NameSpace(id)),
 
         // Tipler, Fonksiyonlar ve Değişkenler
         //Item::Fun { name, .. } => (*name, ExportKind::Fun(id)),
@@ -74,14 +74,11 @@ impl<'a> ExportCollector<'a> {
     // Kapsamı kaydet
     self.scp.map.insert(container_id, current_exports);
 
-    // Yalnızca alt NameSpace'lerin içine gir (Özyineleme)
+    // Yalnızca alt NameSpace'lerin içine gir
     for &id in &item_ids {
       let item: &Item = self.cre.get(id);
-      match item {
-        Item::NameSpace { .. } => {
-          self.process_container(id.to_any());
-        }
-
+      match item.kind {
+        ItemKind::NameSpace{..} => self.process_container(id.to_any()),
         _ => {}
       }
     }
@@ -90,13 +87,10 @@ impl<'a> ExportCollector<'a> {
 
   fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
     let item: &Item = self.cre.get(ItemId::from_any(id));
-    match item {
-      // Kök krate veya alt isim alanlarının çocuklarını çek
-      Item::NameSpace {rng, ..} => {
-        self.cre.extra_get(*rng).map(ItemId::new_from).collect()
-      }
+    match item.kind {
+      ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).map(ItemId::new_from).collect(),
 
-      _ => Vec::new(),
+      _ => vec![],
     }
   }
 }

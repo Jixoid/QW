@@ -1,0 +1,9 @@
+[package]
+name = "qwc_cgen_llvm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_mir = { path = "../qwc_mir" }
+qwc_cgen = { path = "../qwc_cgen" }
+inkwell = { version = "0.9.0", features = ["llvm22-1"] }

@@ -1,19 +1,21 @@
-use crate::{Rng, TypeId};
+use std::num::NonZeroU32;
+
+use crate::{Layout, Rng, TypeId};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum Type {
+pub enum TypeKind {
   // NST
   Unit,
   
   // Primitive
-  Int(u32, bool),
+  Int(NonZeroU32, bool),
   Float(FloatKind),
   
   Bool,
 
   // Combinated
-  Struct(Rng),
+  Struct(Rng /* TypeId */),
   
   // Sequential
   Array(TypeId, u32),
@@ -23,6 +25,12 @@ pub enum Type {
 
   // Reference
   Ptr(TypeId)
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Type {
+  pub kind: TypeKind,
+  pub layout: Layout,
 }
 
 

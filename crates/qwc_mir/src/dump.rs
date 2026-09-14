@@ -3,7 +3,7 @@ use std::fmt;
 use owo_colors::OwoColorize;
 
 use crate::{
-  AnyId, Block, BlokId, FloatKind, Krate, SymbId, Symbol, SymbolKind, SymbolStat, Type, TypeId, Value, id::{MirId, NodeKind, SpecAny, ValuId},
+  AnyId, Block, BlokId, FloatKind, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Type, TypeId, TypeKind, Value, id::{MirId, NodeKind, SpecAny, ValuId},
 };
 
 
@@ -90,39 +90,37 @@ impl DumpHandler for Symbol {
 
 impl DumpHandler for Type {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    match self {
-      Type::Unit => write!(f, "{}", "()".bright_black())?,
-      Type::Bool => write!(f, "{}", "bool".yellow())?,
+    match self.kind {
+      TypeKind::Unit => write!(f, "{}", "()".bright_black())?,
+      TypeKind::Bool => write!(f, "{}", "bool".yellow())?,
 
-      Type::Ptr(elem) => {
+      TypeKind::Ptr(elem) => {
         write!(f, "{}", "*".bright_black())?;
         elem.dump(cre, f, indent)?;
       }
 
-      Type::Int(bits, signed) => {
-        let prefix = if *signed { "i" } else { "u" };
+      TypeKind::Int(bits, signed) => {
+        let prefix = if signed { "i" } else { "u" };
         write!(f, "{}{}", prefix.yellow(), bits.to_string().yellow())?;
       }
 
-      Type::Float(kind) => kind.dump(cre, f, indent)?,
+      TypeKind::Float(kind) => kind.dump(cre, f, indent)?,
 
-      Type::Array(elem, count) => {
+      TypeKind::Array(elem, count) => {
         write!(f, "{}", "[".bright_black())?;
         elem.dump(cre, f, indent)?;
-        write!(
-          f,
-          "{}{}{}",
+        write!(f, "{}{}{}",
           "; ".bright_black(),
           count.to_string().bright_magenta(),
           "]".bright_black()
         )?;
       }
 
-      Type::Fun { args, ret } => {
+      TypeKind::Fun { args, ret } => {
         write!(f, "{}", "fun".blue().bold())?;
         write!(f, "{}", "(".bright_black())?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(*args) {
+        for (id, kind) in cre.extra_get(args) {
           if !first {
             write!(f, "{}", ", ".bright_black())?;
           }
@@ -137,10 +135,10 @@ impl DumpHandler for Type {
         ret.dump(cre, f, indent)?;
       }
 
-      Type::Struct(rng) => {
+      TypeKind::Struct(rng) => {
         write!(f, "{} {{ ", "struct".blue().bold())?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(*rng) {
+        for (id, kind) in cre.extra_get(rng) {
           if !first {
             write!(f, "{}", ", ".bright_black())?;
           }
@@ -187,7 +185,10 @@ impl DumpHandler for Block {
 
       first = false;
       if kind == NodeKind::Type {
-        TypeId::new_from((id, kind)).dump(cre, f, indent)?;
+        let it: &Type = cre.get(TypeId::new_from((id, kind)));
+        
+        it.dump(cre, f, indent)?;
+        it.layout.dump(cre, f, indent)?;
       } else {
         write!(f, "<unknown>")?;
       }
@@ -202,9 +203,12 @@ impl DumpHandler for Block {
 impl DumpHandler for SymbolStat {
   fn dump(&self, _cre: &Krate, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     match self {
-      SymbolStat::Export => write!(f, "{}", "export".green().bold()),
-      SymbolStat::Import => write!(f, "{}", "import".blue().bold()),
+      SymbolStat::Normal  => {},
+      SymbolStat::Private => write!(f, "{}", "priv".green().bold())?,
+      SymbolStat::Export  => write!(f, "{}", "export".green().bold())?,
+      SymbolStat::Import  => write!(f, "{}", "import".blue().bold())?,
     }
+    Ok(())
   }
 }
 
@@ -218,6 +222,12 @@ impl DumpHandler for FloatKind {
       FloatKind::F128 => "f128",
     };
     write!(f, "{}", name.yellow())
+  }
+}
+
+impl DumpHandler for Layout {
+  fn dump(&self, _cre: &Krate, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
+    write!(f, "({}:{})", self.size(), self.size())
   }
 }
 
