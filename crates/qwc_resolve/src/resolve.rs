@@ -1,5 +1,5 @@
 use qwc_arena::Files;
-use qwc_diagnostic::{Message, Span};
+use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast as ast;
 
 use crate::{Scope, ScopeKind, ScopeMap};
@@ -23,15 +23,15 @@ impl<'ast> LookupResult<'ast> {
 
 pub struct Resolver<'ast> {
   scp: &'ast ScopeMap,
-  far: &'ast Files,
+  //far: &'ast Files,
   current: &'ast Scope,
 }
 
 
 impl<'ast> Resolver<'ast> {
 
-  pub fn new(scp: &'ast ScopeMap, far: &'ast Files, current: &'ast Scope) -> Self {
-    Self { scp, far, current }
+  pub fn new(scp: &'ast ScopeMap, _far: &'ast Files, current: &'ast Scope) -> Self {
+    Self { scp, /*far,*/ current }
   }
 
 
@@ -46,7 +46,7 @@ impl<'ast> Resolver<'ast> {
     let mut current_target = self.lookup(segments[0])?;
 
     // Kalan segmentleri eklemeli ara
-    for (i, &seg) in segments[1..].iter().enumerate() {
+    for (_i, &seg) in segments[1..].iter().enumerate() {
       /* Me Scope */
       let me_scope = match current_target.kind {
         ScopeKind::Module(id) => self.scp.get(&id.to_any()),
@@ -57,7 +57,7 @@ impl<'ast> Resolver<'ast> {
       /* Search */
       let finded = match me_scope.get(&seg.sid()) {
         Some(v) => v,
-        None => return Err(Message::error(seg, "`{}` not found in `{}` scope", &[seg.str(self.far), segments[i].str(self.far)]))
+        None => return Err(Message::error(NOTFOUND_IN_SCOPE, Label::new_pos(seg)))
       };
 
       current_target = LookupResult { kind: finded.0, span: finded.1, in_scope: me_scope }
@@ -81,7 +81,7 @@ impl<'ast> Resolver<'ast> {
     }
 
     // Hiçbir yerde bulunamadı
-    Err(Message::error(ident, "unresolved identifier: `{}`", &[ident.str(self.far)]))
+    Err(Message::error(UNRESOLVED_IDENTIFIER, Label::new_pos(ident)))
   }
 
 }

@@ -11,3 +11,4 @@ ast-internal = []
 qwc_arena = { path = "../qwc_arena" }
 owo-colors = "4.3.0"
 backtrace = "0.3.76"
+thin-vec = "0.2.19"

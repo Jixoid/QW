@@ -4,9 +4,15 @@ use crate::{ExprId, Ident};
 
 
 #[derive(Clone)]
-pub enum Attribute {
-  One(Ident),
-  Bin(Ident, Ident),
-  Set(Ident, ExprId), 
-  List(Ident, ThinVec<Attribute>),
+pub enum AttrKind {
+  One(),
+  Bin(Ident),
+  Set(ExprId), 
+  List(ThinVec<Attribute>),
+}
+
+#[derive(Clone)]
+pub struct Attribute {
+  pub ident: Ident,
+  pub kind: AttrKind,
 }

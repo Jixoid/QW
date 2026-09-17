@@ -5,9 +5,7 @@ use qwc_arena::Files;
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  id::{AstId, NodeKind, SpecAny},
-  AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt,
-  PattId, Thing, ThingId, Type, TypeId, TypeKind, UnaryOp, Visibility,
+  AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt, PattId, Thing, ThingId, Type, TypeId, TypeKind, UnaryOp, Visibility, attrs::AttrKind, id::{AstId, NodeKind, SpecAny},
 };
 
 
@@ -66,18 +64,19 @@ fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files,
 
 impl DumpHandler for Attribute {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    match self {
-      Attribute::One(key) => {
-        write!(f, "{}", key.str(far).yellow())?;
-      }
-      Attribute::Bin(key, val) => {
-        write!(f, "{}: {}", key.str(far).yellow(), val.str(far).yellow())?;
-      }
-      Attribute::Set(key, expr) => {
+    let key = self.ident;
+    
+    match &self.kind {
+      AttrKind::One() => write!(f, "{}", key.str(far).yellow())?,
+
+      AttrKind::Bin(val) => write!(f, "{}: {}", key.str(far).yellow(), val.str(far).yellow())?,
+      
+      AttrKind::Set(expr) => {
         write!(f, "{} = ", key.str(far).yellow())?;
         expr.dump(cre, sin, far, f, indent)?;
       }
-      Attribute::List(key, list) => {
+
+      AttrKind::List(list) => {
         write!(f, "{}(", key.str(far).yellow())?;
         let mut first = true;
         for attr in list {

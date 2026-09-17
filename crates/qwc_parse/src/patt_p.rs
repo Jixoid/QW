@@ -1,5 +1,5 @@
 use qwc_ast::{IdentSave, Patt, PattId};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx};
@@ -29,7 +29,7 @@ impl PattParser {
               (WK::ParenEnd, _) => break,
               (WK::Comma, _) => continue,
               
-              (_, c) => return Err(Message::error(c, "expected ',' or ')' in tuple pattern", &[])),
+              (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
             }
           }
           
@@ -52,7 +52,7 @@ impl PattParser {
               (WK::SquareBracketEnd, _) => break,
               (WK::Comma, _) => continue,
               
-              (_, c) => return Err(Message::error(c, "expected ',' or ']' in array pattern", &[])),
+              (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
             }
           }
           
@@ -62,7 +62,7 @@ impl PattParser {
         Patt::Array(rng)
       }
 
-      (_, c) => return Err(Message::error(c, "unknown pattern", &[])),
+      (_, c) => return Err(Message::error(UNKNOWN_PATTERN, Label::new_pos(c))),
     };
 
     Ok(cre.push(it))

@@ -1,5 +1,5 @@
 use qwc_ast::{Attribute, Visibility};
-use qwc_diagnostic::{Message, msg};
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::{WK, Word};
 
 use crate::{Ctx, Fail, AttrParser, ctx};
@@ -45,7 +45,7 @@ impl MetaParser {
       if let Some((w, vis)) = vis {
         if lex.peek()?.kind() == WK::Colon {
           if let Some(..) = attr {
-            return Err(Message::error(w, msg::VISIBILITY_AFTER_ATTRIBUTE, &[]))
+            return Err(Message::error(VISIBILITY_AFTER_ATTRIBUTE, Label::new_pos(w)))
           }
 
           lex.bump()?;
@@ -66,10 +66,10 @@ impl<'a> WordCheck for Word {
   fn expect_kind(self, k1: WK) -> Result<Self, Message> {
     match self.kind() == k1 {
       true  => Ok(self),
-      false => Err(Message::error(self, "expected {}, but found {}", &[
+      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}", &[
         &format!("{:?}", k1),
         &format!("{:?}", self.kind()),
-      ]))
+      ])))
     }
   }
 
@@ -77,46 +77,46 @@ impl<'a> WordCheck for Word {
   fn panic_kind(self, k1: WK) -> Fail<Message> {
     match self.kind() == k1 {
       true  => panic!(),
-      false => Err(Message::error(self, "expected {}, but found {}", &[
+      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}", &[
         &format!("{:?}", k1),
         &format!("{:?}", self.kind()),
-      ]))
+      ])))
     }
   }
 
   fn panic_kind2(self, k1: WK, k2: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 {
       true  => panic!(),
-      false => Err(Message::error(self, "expected `{}` or `{}`, but found `{}`", &[
+      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}` or `{}", &[
         &format!("{:?}", k1),
         &format!("{:?}", k2),
         &format!("{:?}", self.kind()),
-      ]))
+      ])))
     }
   }
   
   fn panic_kind3(self, k1: WK, k2: WK, k3: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 {
       true  => panic!(),
-      false => Err(Message::error(self, "expected `{}`, `{}` or `{}`, but found `{}`", &[
+      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}`, `{}` or `{}", &[
         &format!("{:?}", k1),
         &format!("{:?}", k2),
         &format!("{:?}", k3),
         &format!("{:?}", self.kind()),
-      ]))
+      ])))
     }
   }
   
   fn panic_kind4(self, k1: WK, k2: WK, k3: WK, k4: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 || self.kind() == k4 {
       true  => panic!(),
-      false => Err(Message::error(self, "expected `{}`, `{}`, `{}` or `{}`, but found `{}`", &[
+      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}`, `{}`, `{}` or `{}", &[
         &format!("{:?}", k1),
         &format!("{:?}", k2),
         &format!("{:?}", k3),
         &format!("{:?}", k4),
         &format!("{:?}", self.kind()),
-      ]))
+      ])))
     }
   }
 

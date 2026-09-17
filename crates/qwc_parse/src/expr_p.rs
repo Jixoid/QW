@@ -1,5 +1,5 @@
 use qwc_ast::{BinaryOp, Expr, ExprId, ExprKind, IdentSave, Rng, Thing, UnaryOp};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx, PattParser, TypeParser, WordCheck};
@@ -121,7 +121,7 @@ impl ExprParser {
             ctn.push(Self::pre_nick(ctx!(cre, sin, far, lex, sum))?);
           }
 
-          (WK::Scope, c) => return Err(Message::error(c, "cannot use `::` on a field access expression; use type name instead", &[])),
+          (WK::Scope, c) => return Err(Message::error(CANNOT_FIELD_ACCESS_AFTER_MEMBER, Label::new_pos(c))),
 
           _ => break
         }
@@ -317,7 +317,7 @@ impl ExprParser {
       WK::Backtick => {
         let name = match lex.get_k()? {
           (WK::Word, c) => c.ident(sin, far)?,
-          (_, c) => return Err(Message::error(c, "expected identifier after `", &[lex.str(c)])),
+          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
         };
         
         lex.get()?.expect_kind(WK::Colon)?;
@@ -678,7 +678,7 @@ impl ExprParser {
       lex.bump()?;
       let name = match lex.get_k()? {
         (WK::Word, c) => c.ident(sin, far)?,
-        (_, c) => return Err(Message::error(c, "expected identifier after `", &[lex.str(c)])),
+        (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
       };
       Some(name.into())
     } else {
@@ -708,7 +708,7 @@ impl ExprParser {
       lex.bump()?;
       let name = match lex.get_k()? {
         (WK::Word, c) => c.ident(sin, far)?,
-        (_, c) => return Err(Message::error(c, "expected identifier after `", &[lex.str(c)])),
+        (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
       };
       Some(name.into())
     } else {
@@ -738,7 +738,7 @@ impl ExprParser {
       lex.bump()?;
       let name = match lex.get_k()? {
         (WK::Word, c) => c.ident(sin, far)?,
-        (_, c) => return Err(Message::error(c, "expected identifier after `", &[lex.str(c)])),
+        (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
       };
       Some(name.into())
     } else {

@@ -1,4 +1,4 @@
-use qwc_ast::{Attribute, IdentSave};
+use qwc_ast::{AttrKind, Attribute, IdentSave};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 use thin_vec::ThinVec;
@@ -46,7 +46,7 @@ impl AttrParser {
         lex.bump()?;
         let val = lex.get()?;
 
-        Attribute::Bin(key.ident(sin, far)?, val.ident(sin, far)?)
+        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Bin(val.ident(sin, far)?)}
       }
 
       WK::ParenBeg => { // A(B,C)
@@ -66,17 +66,17 @@ impl AttrParser {
           }
         }
 
-        Attribute::List(key.ident(sin, far)?, attrs)
+        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::List(attrs)}
       }
 
       WK::Assign => { // A = $expr
         lex.bump()?;
-        let ex = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+        let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
 
-        Attribute::Set(key.ident(sin, far)?, ex)
+        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Set(expr)}
       }
 
-      _ => Attribute::One(key.ident(sin, far)?)
+      _ => Attribute{ident: key.ident(sin, far)?, kind: AttrKind::One()}
     };
 
     Ok(attr)

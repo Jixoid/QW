@@ -1,5 +1,5 @@
 use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, Visibility};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx, ExprParser, MetaParser, TypeParser, WordCheck};
@@ -27,7 +27,7 @@ impl ItemParser {
       
       (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => ItemParser::sub_itemty(ctx!(cre, sin, far, lex, sum), vis)?,
 
-      (_, c) => return Err(Message::error(c, "unknown keyword: `{}`", &[lex.str(c)])),
+      (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
     };
 
     if let Some(a) = attr { cre.attach(id, a); }
@@ -54,7 +54,7 @@ impl ItemParser {
 
       (WK::Word, _) => ItemParser::sub_let_in(ctx!(cre, sin, far, lex, sum), vis)?,
 
-      (_, c) => return Err(Message::error(c, "unknown keyword: `{}`", &[lex.str(c)])),
+      (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
     };
 
     if let Some(a) = attr { cre.attach(id, a); }
@@ -263,7 +263,7 @@ impl ItemParser {
           impls.push(fun);
         } else {
           let c = lex.get()?;
-          return Err(Message::error(c, "expected `fun`, got `{}`", &[lex.str(c)]));
+          return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(c)));
         }
       }
       
@@ -309,7 +309,7 @@ impl ItemParser {
           impls.push(fun);
         } else {
           let c = lex.get()?;
-          return Err(Message::error(c, "expected `fun`, got `{}`", &[lex.str(c)]));
+          return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(c)));
         }
       }
       
@@ -342,7 +342,7 @@ impl ItemParser {
         let hty = loop {
           let name = match lex.get_k()? {
             (WK::Word, c) => c.ident(sin, far)?,
-            (_, c) => return Err(Message::error(c, "expected identifier", &[lex.str(c)]))
+            (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c)))
           };
           names.push(name);
 
@@ -451,7 +451,7 @@ impl ItemParser {
       (WK::Super, _) => cre.push(Thing::Super),
       (WK::Word, c)  => { let a = c.ident(sin, far)?; cre.push(Thing::Name(a)) },
 
-      (_, c) => return Err(Message::error(c, "unknown use starter: {}", &[lex.str(c)])),
+      (_, c) => return Err(Message::error(UNKNOWN_USE_STARTER, Label::new_pos(c))),
     };
 
     let rng = {      
@@ -489,7 +489,7 @@ impl ItemParser {
 
       (WK::Word, c)  => { let a = c.ident(sin, far)?; cre.push(Thing::Name(a)) },
 
-      (_, c) => return Err(Message::error(c, "unknown use segment: {}", &[lex.str(c)])),
+      (_, c) => return Err(Message::error(UNKNOWN_USE_SEGMENT, Label::new_pos(c))),
     };
 
     Ok(ret)

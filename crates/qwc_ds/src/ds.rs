@@ -2,7 +2,7 @@ use core::fmt;
 use std::{collections::HashMap, fs};
 
 use qwc_arena::File;
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{CodedMsg, Label, Message};
 use qwc_lexer::{Lexer, WK, Word};
 
 
@@ -18,14 +18,14 @@ pub enum Value {
   Tup(Vec<Value>),
 }
 
-const TYPE_NOT_ARRAY: &str  = "type is not a array";
-const TYPE_NOT_STRUCT: &str = "type is not a struct";
-const EXPECTED_WORD: &str = "expected word";
-const EXPECTED_KIND: &str = "expected `{}`, but found `{}`";
-const INVALID_VALUE: &str = "invalid value: `{}`";
-const DUPLICATED_VALUE: &str = "duplicated value";
-const CANNOT_CONVERT_FLOAT: &str = "cannot convert to float";
-const CANNOT_CONVERT_INTEGER: &str = "cannot convert to integer";
+const TYPE_NOT_ARRAY: CodedMsg = CodedMsg::new_str("type is not a array");
+const TYPE_NOT_STRUCT: CodedMsg = CodedMsg::new_str("type is not a struct");
+const EXPECTED_WORD: CodedMsg = CodedMsg::new_str("expected word");
+const EXPECTED_KIND: CodedMsg = CodedMsg::new_str("expected `{}`, but found `{}`");
+const INVALID_VALUE: CodedMsg = CodedMsg::new_str("invalid value: `{}`");
+const DUPLICATED_VALUE: CodedMsg = CodedMsg::new_str("duplicated value");
+const CANNOT_CONVERT_FLOAT: CodedMsg = CodedMsg::new_str("cannot convert to float");
+const CANNOT_CONVERT_INTEGER: CodedMsg = CodedMsg::new_str("cannot convert to integer");
 
 
 #[derive(Debug)]
@@ -35,6 +35,10 @@ pub struct Error {
 
 impl From<&str> for Error {
   fn from(value: &str) -> Self { Error{ msg: value.to_string() } }
+}
+
+impl From<CodedMsg> for Error {
+  fn from(value: CodedMsg) -> Self { Error { msg: value.into() } }
 }
 
 impl fmt::Display for Error {
@@ -241,8 +245,8 @@ impl Parser {
           let str = lex.str(c);
           
           let it = match str.contains('.') {
-            true  => Value::Float(str.parse::<f64>().map_err(|_| Message::error(c, CANNOT_CONVERT_FLOAT, &[]))? * (if sig {1.} else {-1.})),
-            false => Value::Int(str.parse::<i64>().map_err(|_| Message::error(c, CANNOT_CONVERT_INTEGER, &[]))? * (if sig {1} else {-1})),
+            true  => Value::Float(str.parse::<f64>().map_err(|_| Message::error(CANNOT_CONVERT_FLOAT, Label::new_pos(c)))? * (if sig {1.} else {-1.})),
+            false => Value::Int(str.parse::<i64>().map_err(|_| Message::error(CANNOT_CONVERT_INTEGER, Label::new_pos(c)))? * (if sig {1} else {-1})),
           };
 
           (c, 4, it)
@@ -252,12 +256,12 @@ impl Parser {
         
         (WK::SquareBracketBeg, c) => (c, 16, Self::parse_array(lex)?),
 
-        (_, c) => return Err(Message::error(c, INVALID_VALUE, &[lex.str(c)]))
+        (_, c) => return Err(Message::error(INVALID_VALUE, Label::new_args(c, "value is here", &[lex.str(c)])))
       };
 
       temp_tuple.push(val);
 
-      if (mask & ma) != 0 { return Err(Message::error(c, DUPLICATED_VALUE, &[])) } else { mask |= ma }
+      if (mask & ma) != 0 { return Err(Message::error(DUPLICATED_VALUE, Label::new_pos(c))) } else { mask |= ma }
       
       match lex.peek_safe().map(|w| w.kind()) {
         Some(WK::True | WK::False | WK::String | WK::CurlyBracketBeg | WK::SquareBracketBeg | WK::Number) => {}
@@ -284,15 +288,17 @@ impl A for Word {
 
   fn expected_word(self) -> Result<Self, Message> {
     if self.kind() == WK::Word { Ok(self) }
-    else { Err(Message::error(self, EXPECTED_WORD, &[])) }
+    else { Err(Message::error(EXPECTED_WORD, Label::new_pos(self))) }
   }
 
   fn expected_kind(self, kind: WK) -> Result<Self, Message> {
     if self.kind() == kind { Ok(self) }
-    else { Err(Message::error(self, EXPECTED_KIND, &[
-      &format!("{:?}", kind),
-      &format!("{:?}", self.kind()),
-    ])) }
+    else {
+      Err(Message::error(EXPECTED_KIND, Label::new_args(self, "{},{}", &[
+        &format!("{:?}", kind),
+        &format!("{:?}", self.kind()),
+      ])))
+    }
   }
 
 }

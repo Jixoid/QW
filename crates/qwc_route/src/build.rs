@@ -200,7 +200,7 @@ pub fn build_cgen(mir_cre: &mir::Krate) -> Result<Duration, Error> {
 
 pub fn build(info: BuildInfo) -> Result<(), Error> {
   // PASS 1
-  if info.verbose > 0 { eprintln!("{}", "front".red().bold()) }
+  if info.verbose > 0 { eprintln!("{}", "parse".red().bold()) }
   
   let (ast_cre, sin, far, parse_time) = build_ast_krate(Path::new(info.path), &info)?;
   

@@ -1,7 +1,7 @@
 use core::slice;
 
 use qwc_arena::{Arena, Files};
-use qwc_diagnostic::{Message, msg};
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::{WK, Word};
 use qwc_string_interner::StrInterner;
 use rustc_hash::FxHashMap;
@@ -138,7 +138,7 @@ impl IdentSave for Word {
     
     let str = str::from_utf8(&far.get(fid).map()[(off as usize)..((off as usize)+(len.get() as usize))]).unwrap();
 
-    if kind != WK::Word { return Err(Message::error(self, msg::EXPECTED_IDENTIFIER, &[ str ])) }
+    if kind != WK::Word { return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(self))) }
   
     let sid = sin.sid(str);
 

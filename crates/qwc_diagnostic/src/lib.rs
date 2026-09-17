@@ -1,8 +1,11 @@
-mod diagnostic;
+mod diag;
 mod span;
 mod ice;
+mod sum;
+mod display;
 pub mod msg;
 
 pub use span::Span;
-pub use ice::{ICE, ice_bt};
-pub use diagnostic::{Message, MessageDisplay, Summary};
+pub use ice::*;
+pub use sum::*;
+pub use diag::*;

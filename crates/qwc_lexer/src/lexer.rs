@@ -1,7 +1,7 @@
 use std::num::NonZeroU16;
 
 use qwc_arena::File;
-use qwc_diagnostic::{Span, Message};
+use qwc_diagnostic::{Message, Span, msg::*};
 
 use crate::{WK, Word, wkind::{CHAR_LUT, CharKind}};
 
@@ -28,7 +28,7 @@ impl<'a> Lexer<'a> {
 
         let w = match w {
           Some(v) => v,
-          None => return Err(Message::fatal(Word::new_safe(self.off, 1, self.fid, WK::EOF), "file finished", &[])),
+          None => return Err(Message::fatal(FILE_FINISHED)),
         };
 
         self.cache = Some((w,o));
@@ -80,7 +80,7 @@ impl<'a> Lexer<'a> {
 
     match t {
       Some(r) => Ok(r),
-      None => Err(Message::fatal(Word::new_safe(self.off, 1, self.fid, WK::EOF), "file finished", &[])),
+      None => Err(Message::fatal(FILE_FINISHED)),
     }
   }
 
@@ -112,7 +112,7 @@ impl<'a> Lexer<'a> {
         self.off = o;
         
         if w.is_none() {
-          Err(Message::fatal(Word::new_safe(self.off, 1, self.fid, WK::EOF), "file finished", &[]))
+          Err(Message::fatal(FILE_FINISHED))
         } else {
           Ok(())
         }

@@ -4,9 +4,15 @@ use crate::{ExprId, Rng, TypeId};
 
 
 #[derive(Debug, Copy, Clone)]
+pub enum SymVis {
+  Export,
+  Import,
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum ItemVis {
-  Public,
   Private,
+  Public,
 }
 
 
@@ -24,5 +30,6 @@ pub enum ItemKind {
 #[derive(Debug, Copy, Clone)]
 pub struct Item {
   pub vis: ItemVis,
+  pub svis: Option<SymVis>,
   pub kind: ItemKind,
 }

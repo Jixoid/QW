@@ -1,4 +1,4 @@
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Label, Message, msg::EXPECTED_BUT_FOUND};
 use qwc_ast::{self as ast, Ident};
 use qwc_hir as hir;
 use qwc_resolve::{self as resolve, Resolver};
@@ -57,7 +57,7 @@ impl TypeLow {
       resolve::ScopeKind::Expr(item) => {
         let span = (src.get(item) as &ast::Item).pos;
 
-        return Err(Message::error(span, "expected type but expr", &[]))
+        return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(span)))
       }
 
       kind @_ => panic!("{kind:?}")

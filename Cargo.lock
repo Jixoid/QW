@@ -441,6 +441,7 @@ dependencies = [
  "backtrace",
  "owo-colors",
  "qwc_arena",
+ "thin-vec",
 ]
 
 [[package]]

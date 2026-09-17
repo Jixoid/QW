@@ -1,4 +1,4 @@
-use qwc_diagnostic::{Message, Span};
+use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, Value};
 use qwc_resolve::{self as resolve, Resolver};
@@ -83,7 +83,7 @@ impl ExprLow {
 
     let val = match str.parse::<i32>() {
       Ok(v) => v,
-      Err(..) => return Err(Message::error(span, "cannot convert to int: `{}`", &[str])),
+      Err(..) => return Err(Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span))),
     };
 
     // Post
@@ -104,9 +104,7 @@ impl ExprLow {
         let it: &ast::Expr = src.get(ast::ExprId::new_from(id));
         
         if let ast::ExprKind::Let{kind, ..} = it.kind {
-          if kind.is_none() {
-            return Err(Message::error(it.pos, "please specify the type", &[]))
-          }
+          if kind.is_none() { panic!() }
 
           let kind = kind.unwrap();
           let kind = TypeLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), kind)?;

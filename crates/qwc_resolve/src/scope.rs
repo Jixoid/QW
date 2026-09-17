@@ -1,7 +1,7 @@
 use qwc_ast::{AnyId, Ident, ItemId, ThingId, TypeId};
 use qwc_string_interner::Sid;
 use rustc_hash::FxHashMap;
-use qwc_diagnostic::{Message, Span, Summary};
+use qwc_diagnostic::{Label, Message, Span, Summary, msg::*};
 
 
 pub struct ScopeMap {
@@ -65,10 +65,8 @@ impl Scope {
 
     match self.map.entry(ident.sid()) {
       Entry::Occupied(entry) => {
-        let (_, prev_span) = entry.get();
-        sum.add(Message::error(ident, "duplicate identifier in this scope", &[]).add_note(
-          Message::note(*prev_span, "first definitaion is here", &[]),
-        ));
+        let (_, _) = entry.get();
+        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(ident)));
       }
       Entry::Vacant(entry) => {
         entry.insert((kind, ident.into()));

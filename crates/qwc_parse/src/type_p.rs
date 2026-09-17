@@ -1,5 +1,5 @@
 use qwc_ast::{FunAttrs, IdentSave, Rng, Thing, Type, TypeId, TypeKind, Visibility};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Label, Message, msg::{DUPLICATE_ATTRIBUTE, EXPECTED_IDENTIFIER}};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx, AttrParser, ExprParser, ItemParser, WordCheck};
@@ -246,7 +246,7 @@ impl TypeParser {
           "static" => {
             lex.bump()?;
             if attr & FunAttrs::Static as u8 != 0 {
-              sum.add(Message::warn(c, "duplicated attribute: `static`", &[]));
+              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
             }
             attr |= FunAttrs::Static as u8;
           }
@@ -254,7 +254,7 @@ impl TypeParser {
           "const" => {
             lex.bump()?;
             if attr & FunAttrs::Const as u8 != 0 {
-              sum.add(Message::warn(c, "duplicated attribute: `const`", &[]));
+              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
             }
             attr |= FunAttrs::Const as u8;
           }
@@ -262,7 +262,7 @@ impl TypeParser {
           "pure" => {
             lex.bump()?;
             if attr & FunAttrs::Pure as u8 != 0 {
-              sum.add(Message::warn(c, "duplicated attribute: `pure`", &[]));
+              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
             }
             attr |= FunAttrs::Pure as u8;
           }
@@ -443,7 +443,7 @@ impl TypeParser {
           (WK::Word, c) => c.ident(sin, far)?,
           (WK::CurlyBracketEnd, _) => break,
           
-          (_, c) => return Err(Message::error(c, "expected identifier or `}`", &[lex.str(c)])),
+          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
         let item = if lex.peek()?.kind() == WK::Assign {
@@ -492,7 +492,7 @@ impl TypeParser {
           (WK::Word, c) => c.ident(sin, far)?,
           (WK::CurlyBracketEnd, _) => break,
           
-          (_, c) => return Err(Message::error(c, "expected identifier or `}`", &[lex.str(c)])),
+          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
         let item = if lex.peek()?.kind() == WK::Assign {
@@ -541,7 +541,7 @@ impl TypeParser {
           (WK::Word, c) => c.ident(sin, far)?,
           (WK::CurlyBracketEnd, _) => break,
           
-          (_, c) => return Err(Message::error(c, "expected identifier or `}`", &[lex.str(c)])),
+          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
 
         let item = if lex.peek()?.kind() == WK::ParenBeg {
@@ -666,7 +666,7 @@ impl TypeParser {
       loop {
         let name = match lex.get_k()? {
           (WK::Word, c) => c.ident(sin, far)?,
-          (_, c) => return Err(Message::error(c, "expected identifier", &[lex.str(c)]))
+          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c)))
         };
         names.push(name);
 
