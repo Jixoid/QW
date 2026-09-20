@@ -4,22 +4,32 @@ use crate::{ExprId, Ident, PattId, Rng, TypeId};
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
   Add, Sub, Mul, Div, Rem,
 
-  Eq, Ne, Lt, Gt, Lte, Gte,
+  Eq, Ne, Lt, Gt, LtEq, GtEq,
   
-  And, Or, Xor, Shl, Shr,
+  And, Or, Xor,
+  
+  Shl, Shr,
+
+  Pipe,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
-  Neg, Poz, Not, Ref, Addr, Deref
+  Neg, Poz,
+  
+  Not,
+  
+  Ref, Addr, Deref,
+  
+  Try, Unwrap,
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExprKind {
   // Access
   Nick   (Ident),
@@ -54,9 +64,9 @@ pub enum ExprKind {
   ForIn {vars: PattId, iter: ExprId, blok: ExprId, elsb: Option<ExprId>},
   
   // Operator
-  Unary  {op: UnaryOp, val: ExprId},
-  Binary {op: BinaryOp, lhs: ExprId, rhs: ExprId},
-
+  Unary    {op: UnaryOp, val: ExprId},
+  Binary   {op: BinaryOp, lhs: ExprId, rhs: ExprId},
+  
   Assign   {lhs: ExprId, rhs: ExprId},
   AssignOp {op: BinaryOp, lhs: ExprId, rhs: ExprId},
   
@@ -75,10 +85,6 @@ pub enum ExprKind {
   Continue {label: Option<Span>},
   Die      {lvar: Span},
 
-  // Try
-  Try (ExprId),
-  Unwrap (ExprId),
-  
   // Scope
   Unsafe (ExprId),
   Relaxed (ExprId),
@@ -88,7 +94,7 @@ pub enum ExprKind {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Expr {
   pub pos: Span,
   pub kind: ExprKind,

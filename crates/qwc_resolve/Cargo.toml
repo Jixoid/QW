@@ -11,3 +11,4 @@ qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 rustc-hash = "2.1.3"
 owo-colors = "4.4.0"
+strsim = "0.11.1"

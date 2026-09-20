@@ -3,25 +3,27 @@ use qwc_diagnostic::Span;
 use crate::{ExprId, Rng, TypeId, ident::Ident};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Visibility { Inherited, Public, Private, Protected, Crate, Super, Group }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
-  // Variable
+  /// global alandaki değişken tanımları
   Let {kind: Option<TypeId>, value: ExprId, ism: bool},
 
-  // Member
+  /// struct içi değişken tanımları
   Member {kind: TypeId},
-  
-  // Function
+
+  /// global ve struct içi fonksiyon tanımları
   Fun  {kind: TypeId, blok: Option<ExprId>},
   Init {kind: TypeId, blok: Option<ExprId>, ils: Rng /* NamedExprList */},
   Fini {kind: TypeId, blok: Option<ExprId>},
   
-  // Using
+  /// using direkt tanımı
   Using (TypeId),
+
+  /// gizli struct tanımı
   ItemTy (TypeId),
   
   // Module
@@ -42,7 +44,7 @@ pub enum ItemKind {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Item {
   pub pos: Span,
   pub vis: Visibility,

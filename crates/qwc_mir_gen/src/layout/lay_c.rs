@@ -38,7 +38,7 @@ impl Layouter for LayouterC {
 
 
       // Reference
-      TypeKind::Ptr(..) => layinfo.ptr_size,
+      TypeKind::Ptr => layinfo.ptr_size,
 
       _ => todo!("{it:#?}")
     };

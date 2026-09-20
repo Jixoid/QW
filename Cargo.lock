@@ -476,6 +476,7 @@ dependencies = [
  "qwc_mangling",
  "qwc_resolve",
  "qwc_string_interner",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -543,6 +544,7 @@ dependencies = [
  "qwc_hir",
  "qwc_string_interner",
  "rustc-hash",
+ "strsim",
 ]
 
 [[package]]

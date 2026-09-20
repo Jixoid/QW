@@ -1,15 +1,29 @@
 use std::{marker::PhantomData, num::NonZeroU32};
 
-use crate::{Block, Symbol, Type, Value};
+use crate::{Block, Inst, Symbol, Type};
 
 
 // AstId
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub struct MirId<T>
 where T: MirKind
 {
   idx: NonZeroU32,
   pkind: PhantomData<T>
+}
+
+impl<T: MirKind> PartialEq for MirId<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.idx == other.idx
+  }
+}
+
+impl<T: MirKind> Eq for MirId<T> {}
+
+impl<T: MirKind> std::hash::Hash for MirId<T> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.idx.hash(state);
+  }
 }
 
 
@@ -46,8 +60,8 @@ impl<T: MirKind> Into<AnyId> for MirId<T> {
 
 pub type TypeId  = MirId<Type>;
 pub type SymbId  = MirId<Symbol>;
-pub type ValuId  = MirId<Value>;
 pub type BlokId  = MirId<Block>;
+pub type InstId  = MirId<Inst>;
 
 
 // AnyId
@@ -87,7 +101,7 @@ impl AnyId {
 
 // Trait
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeKind { Any, Type, Symb, Value, Blok }
+pub enum NodeKind { Any, Type, Symb, Blok, Inst }
 
 
 pub trait MirKind { fn kind() -> NodeKind; }
@@ -95,5 +109,5 @@ pub trait MirKind { fn kind() -> NodeKind; }
 impl MirKind for SpecAny { fn kind() -> NodeKind { NodeKind::Any } }
 impl MirKind for Type   { fn kind() -> NodeKind { NodeKind::Type } }
 impl MirKind for Symbol { fn kind() -> NodeKind { NodeKind::Symb } }
-impl MirKind for Value  { fn kind() -> NodeKind { NodeKind::Value } }
 impl MirKind for Block  { fn kind() -> NodeKind { NodeKind::Blok } }
+impl MirKind for Inst   { fn kind() -> NodeKind { NodeKind::Inst } }

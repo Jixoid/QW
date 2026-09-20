@@ -5,165 +5,177 @@ pub enum WK {
   Number,
   String,
   Word,
-  EOF,
   Unknown,
 
-  // Shift
+  // < >
+    /// <
+    Lt,
+    /// >
+    Gt,
 
-  /// <<=
-  AssignmentLeftShift,
-  /// >>=
-  AssignmentRighShift,
+    /// <=
+    LtEq,
+    /// >=
+    GtEq,
 
-  /// <<
-  ShiftLeft,
-  /// >>
-  ShiftRigh,
+    /// <<
+    Lt2,
+    /// >>
+    Gt2,
 
-  // Arithmetic
+    /// <<=
+    Lt2Eq,
+    /// >>=
+    Gt2Eq,
 
-  /// +=
-  AssignmentAdd,
-  /// -=
-  AssignmentSub,
-  /// *=
-  AssignmentMul,
-  /// /=
-  AssignmentDiv,
-  /// %=
-  AssignmentRem,
+    // <>
+    LtGt,
+    // ><
+    GtLt,
 
-  // Logical
+    // <=>
+    LtEqGt,
+    // >=<
+    GtEqLt,
 
-  /// &&=
-  AssignmentLogicalAnd,
-  /// ^^=
-  AssignmentLogicalXor,
-  /// ||=
-  AssignmentLogicalOr,
+
+  // & | ^
+    /// &
+    Amp,
+    /// |
+    Pipe,
+    /// ^
+    Caret,
+    
+    /// &&
+    Amp2,
+    /// ||
+    Pipe2,
+    /// ^^
+    Caret2,
+
+    /// &&=
+    Amp2Eq,
+    /// ||=
+    Pipe2Eq,
+    /// ^^=
+    Caret2Eq,
   
-  /// &&
-  LogicalAnd,
-  /// ^^
-  LogicalXor,
-  /// ||
-  LogicalOr,
 
-  // Bitwise
+  // + - * / %
+    /// +
+    Add,
+    /// -
+    Sub,
+    /// *
+    Mul,
+    /// /
+    Div,
+    /// %
+    Rem,
+    
+    /// +=
+    AddEq,
+    /// -=
+    SubEq,
+    /// *=
+    MulEq,
+    /// /=
+    DivEq,
+    /// %=
+    RemEq,
 
-  /// &=
-  AssignmentBitwiseAnd,
-  /// ^=
-  AssignmentBitwiseXor,
-  /// |=
-  AssignmentBitwiseOr,
+    /// +|
+    AddPipe,
+    /// -|
+    SubPipe,
+    /// *|
+    MulPipe,
+
+
+  // () [] {}
+    /// (
+    ParenL,
+    /// )
+    ParenR,
+
+    /// [
+    BracketL,
+    /// ]
+    BracketR,
+
+    /// {
+    BraceL,
+    /// }
+    BraceR,
+
+
+  // =
+    /// =
+    Eq,
+    /// ==
+    Eq2,
+
+
+  // . , : ; 
+    /// .
+    Dot,
+    /// ,
+    Comma,
+    /// :
+    Colon,
+    /// ;
+    Semicolon,
+    
+    /// ::
+    Colon2,
+    /// ..
+    Dot2,
+    /// ..=
+    Dot2Eq,
+    /// ...
+    Dot3,
   
-  /// &
-  BitwiseAnd,
-  /// ^
-  BitwiseXor,
-  /// |
-  BitwiseOr,
 
-  // Brackets
+  // !
+    /// !
+    Bang,
+    /// !!
+    Bang2,
+    /// !=
+    BangEq,
+    /// ![
+    BangAttr,
 
-  /// [
-  SquareBracketBeg,
-  /// ]
-  SquareBracketEnd,
 
-  /// {
-  CurlyBracketBeg,
-  /// }
-  CurlyBracketEnd,
+  // #
+    /// #
+    Hash,
+    /// #[
+    HashAttr,
 
-  /// (
-  ParenBeg,
-  /// )
-  ParenEnd,
+  
+  // @ ? ~ ` _
+    /// @
+    At,
+    /// ?
+    Question,
+    /// ~
+    Tilde,
+    /// `
+    Backtick,
+    /// _
+    Underscore,
 
-  /// <
-  AngleBeg,
-  /// >
-  AngleEnd,
+  
+  // Arrow
+    /// <-
+    ArrowLeft,
+    /// ->
+    ArrowRight,
+    /// =>
+    FatArrow,
 
-  // Equalities
-
-  /// ==
-  Equal,
-  /// !=
-  NotEqual,
-  /// >=
-  BiggerEqual,
-  /// <=
-  SmallerEqual,
-
-  // Punctuation
-
-  /// ::
-  Scope,
-  /// :
-  Colon,
-  /// ;
-  Semicolon,
-  /// ,
-  Comma,
-  /// .
-  Dot,
-  /// ..
-  Dot2,
-  /// #
-  Hash,
-  /// @
-  At,
-  /// ?
-  Question,
-  /// ~
-  Tilde,
-  /// `
-  Backtick,
-
-  // Assignment
-
-  /// =
-  Assign,
-
-  // Arithmetic (single)
-
-  /// +
-  Add,
-  /// -
-  Sub,
-  /// *
-  Mul,
-  /// /
-  Div,
-  /// %
-  Rem,
-
-  // Directives / Special
-
-  /// #[
-  Directive,
-  /// ![
-  Attribute,
-  /// !
-  Bang,
-
-  /// _
-  Underscore,
-
-  /// <-
-  ArrowLeft,
-  /// ->
-  ArrowRigh,
-  /// =>
-  FatArrow,
-
-  /// <<|
-  RotateLeft,
-  /// |>>
-  RotateRigh,
 
   // Keyword
   If, Ef, Else, Match, Loop, While, For, In, Let, Var,

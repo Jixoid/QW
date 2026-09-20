@@ -4,13 +4,28 @@ use crate::{Expr, Item, Type};
 
 
 // AstId
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub struct HirId<T>
-where T: HirKind
+  where T: HirKind
 {
   cid: u16,
   idx: NonZeroU32,
   pkind: PhantomData<T>
+}
+
+impl<T: HirKind> PartialEq for HirId<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.cid == other.cid && self.idx == other.idx
+  }
+}
+
+impl<T: HirKind> Eq for HirId<T> {}
+
+impl<T: HirKind> std::hash::Hash for HirId<T> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.cid.hash(state);
+    self.idx.hash(state);
+  }
 }
 
 

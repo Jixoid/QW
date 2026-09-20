@@ -3,6 +3,8 @@ use qwc_hir as hir;
 use qwc_mir::{self as mir, LayoutInfo};
 use qwc_string_interner::{Sid, StrInterner};
 
+use rustc_hash::FxHashMap;
+
 use crate::{SymbLow, ty_interner::TypeInterner};
 
 
@@ -13,18 +15,20 @@ pub struct Ctx<'ast, 'hir, 'mir, 'a> {
   pub tin: &'mir mut TypeInterner<'a>,
   pub sum: &'mir mut Summary,
   pub mgr: &'mir mut Vec<Sid>,
+  pub cmap: &'mir mut CacheMap,
+}
+
+pub struct CacheMap {
+  pub(crate) cache_type: FxHashMap<hir::TypeId, mir::TypeId>,
+  pub(crate) cache_item: FxHashMap<hir::ItemId, Option<mir::SymbId>>,
+  pub(crate) cache_blok: FxHashMap<hir::ExprId, mir::BlokId>,
 }
 
 
 #[macro_export]
 macro_rules! ctx {
-  ($ctx:expr => $cre:ident, $tin:ident, $sum:ident, $src:ident, $sin:ident, $mgr:ident) => {
-    #[allow(unused_variables)]
-    let Ctx{$cre, $tin, $sum, $src, $sin, $mgr} = $ctx;
-  };
-  
-  ($cre:ident, $tin:ident, $sum:ident, $src:ident, $sin:ident, $mgr:ident) => {
-    &mut Ctx{$cre, $tin, $sum, $src, $sin, $mgr}
+  ($mgr:ident -> $ctx:expr) => {
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, src: $ctx.src, sin: $ctx.sin, cmap: $ctx.cmap, $mgr}
   };
 }
 
@@ -38,11 +42,16 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
     let mut cre = mir::Krate::new();
     let mut sum = Summary::new();
     let mut tin = TypeInterner::new(&mut cre, layinfo);
+    let mut cmap = CacheMap {
+      cache_type: FxHashMap::default(),
+      cache_item: FxHashMap::default(),
+      cache_blok: FxHashMap::default(),
+    };
 
     let root = src.root().unwrap();
 
     let _ = SymbLow::low(
-      &mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, src, sin, mgr: &mut vec![]},
+      &mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, mgr: &mut vec![]},
       root
     ).map_err(|msg| sum.add(msg));
 

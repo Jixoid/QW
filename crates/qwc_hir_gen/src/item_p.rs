@@ -10,8 +10,10 @@ pub struct ItemLow;
 
 impl ItemLow {
 
-  pub fn low(ctx: &mut Ctx, id: ast::ItemId) -> Result<Option<hir::ItemId>, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
-    let it: &ast::Item = src.get(id);
+  pub fn low(ctx: &mut Ctx, id: ast::ItemId) -> Result<Option<hir::ItemId>, Message> {
+    if let Some(&id) = ctx.cmap.cache_item.get(&id) { return Ok(id) }
+
+    let it: &ast::Item = ctx.src.get(id);
 
     let it = match it.kind {
       ast::ItemKind::Krate(rng) => Some(Self::low_krate(ctx, id, it, rng)?),
@@ -27,7 +29,7 @@ impl ItemLow {
       ast::ItemKind::Let{kind, value, ism} => Some(Self::low_let(ctx, id, it, kind, value, ism)?),
       
       // Side Effect
-      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => {TypeLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), kind)?; None},
+      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => {TypeLow::low(ctx, kind)?; None},
       
       // Unexpected
       ast::ItemKind::ModuleUnloaded | ast::ItemKind::ImplIn{..} => panic!("ast object that should not be present"),
@@ -39,26 +41,28 @@ impl ItemLow {
       _ => todo!("{:#?}", it)
     };
 
+    ctx.cmap.cache_item.insert(id, it);
+
     Ok(it)
   }
 
 
-  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
-    let lscp = scp.get(&id.to_any()).unwrap();
+  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+    let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
-      for id in src.extra_get(rng) {
+      for id in ctx.src.extra_get(rng) {
         let id = ast::ItemId::new_from(id);
         
-        Self::low(ctx!(cre,sum,src,sin,far,scp,lscp), id)?.map(|id| ctn.push(id));
+        Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
-      cre.extra(&ctn)
+      ctx.cre.extra(&ctn)
     };
 
-    let svis = read_attrs(sin, src.get_attached(id))?;
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
 
     // Post
@@ -70,25 +74,25 @@ impl ItemLow {
       svis
     };
     
-    Ok(cre.push(this))
+    Ok(ctx.cre.push(this))
   }
 
-  fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
-    let lscp = scp.get(&id.to_any()).unwrap();
+  fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+    let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
-      for id in src.extra_get(rng) {
+      for id in ctx.src.extra_get(rng) {
         let id = ast::ItemId::new_from(id);
         
-        Self::low(ctx!(cre,sum,src,sin,far,scp,lscp), id)?.map(|id| ctn.push(id));
+        Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
-      cre.extra(&ctn)
+      ctx.cre.extra(&ctn)
     };
 
-    let svis = read_attrs(sin, src.get_attached(id))?;
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
 
     // Post
@@ -101,25 +105,25 @@ impl ItemLow {
       svis
     };
     
-    Ok(cre.push(this))
+    Ok(ctx.cre.push(this))
   }
 
-  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
-    let lscp = scp.get(&id.to_any()).unwrap();
+  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+    let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
-      for id in src.extra_get(rng) {
+      for id in ctx.src.extra_get(rng) {
         let id = ast::ItemId::new_from(id);
         
-        Self::low(ctx!(cre,sum,src,sin,far,scp,lscp), id)?.map(|id| ctn.push(id));
+        Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
-      cre.extra(&ctn)
+      ctx.cre.extra(&ctn)
     };
 
-    let svis = read_attrs(sin, src.get_attached(id))?;
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
     
     // Post
@@ -131,15 +135,15 @@ impl ItemLow {
       svis
     };
 
-    Ok(cre.push(this))
+    Ok(ctx.cre.push(this))
   }
 
-  fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
-    let kind = TypeLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), kind)?;
+  fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+    let kind = TypeLow::low(ctx, kind)?;
 
-    let expr = ExprLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), expr.unwrap())?;
+    let expr = ExprLow::low(ctx, expr.unwrap())?;
 
-    let svis = read_attrs(sin, src.get_attached(id))?;
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
     
     // Post
@@ -153,16 +157,16 @@ impl ItemLow {
       svis
     };
 
-    Ok(cre.push(this))
+    Ok(ctx.cre.push(this))
   }
 
-  fn low_let(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: Option<ast::TypeId>, expr: ast::ExprId, ism: bool) -> Result<hir::ItemId, Message> { ctx!(ctx => cre, sum, src, sin, far, scp, lscp);
+  fn low_let(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: Option<ast::TypeId>, expr: ast::ExprId, ism: bool) -> Result<hir::ItemId, Message> {
     let kind = kind.unwrap();
-    let kind = TypeLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), kind)?;
+    let kind = TypeLow::low(ctx, kind)?;
 
-    let expr = ExprLow::low(ctx!(cre,sum,src,sin,far,scp,lscp), expr)?;
+    let expr = ExprLow::low(ctx, expr)?;
 
-    let svis = read_attrs(sin, src.get_attached(id))?;
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
     
 
     // Post
@@ -177,7 +181,7 @@ impl ItemLow {
       svis,
     };
 
-    Ok(cre.push(this))
+    Ok(ctx.cre.push(this))
   }
 
 }
@@ -194,8 +198,8 @@ fn read_attrs(sin: &StrInterner, attrs: Option<&Vec<Attribute>>) -> Result<Optio
         _ if key.sid() == sin.sid_import() => {
           if let Some((pos, _)) = ivis {
             return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
-              .add_label(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add_note(ONLY_ONE_DEFINITION_REMAIN)
+              .add(Label::new(pos, FIRST_DEFINITION_HERE))
+              .add(ONLY_ONE_DEFINITION_REMAIN)
             )
           };
           ivis = Some((key, hir::SymVis::Import))
@@ -204,8 +208,8 @@ fn read_attrs(sin: &StrInterner, attrs: Option<&Vec<Attribute>>) -> Result<Optio
         _ if key.sid() == sin.sid_export() => {
           if let Some((pos, _)) = ivis {
             return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
-              .add_label(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add_note(ONLY_ONE_DEFINITION_REMAIN)
+              .add(Label::new(pos, FIRST_DEFINITION_HERE))
+              .add(ONLY_ONE_DEFINITION_REMAIN)
             )
           };
           ivis = Some((key, hir::SymVis::Export))

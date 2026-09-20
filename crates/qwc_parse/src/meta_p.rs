@@ -18,8 +18,8 @@ impl MetaParser {
         Err(..) => return Ok(()),
       };
 
-      if t.kind() == WK::CurlyBracketBeg { level += 1; continue; }
-      if t.kind() == WK::CurlyBracketEnd {
+      if t.kind() == WK::BraceL { level += 1; continue; }
+      if t.kind() == WK::BraceR {
         level -= 1;
 
         if level <= 0 { return Ok(()); }
@@ -30,7 +30,7 @@ impl MetaParser {
 
   pub fn read_start(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<(Visibility, Option<Vec<Attribute>>), Message> { ctx!(ctx => cre, sin, far, lex, sum);
     loop {
-      let attr = if lex.peek()?.kind() == WK::Attribute { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum))? } else { None };
+      let attr = if lex.peek()?.kind() == WK::BangAttr { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum))? } else { None };
 
       let vis = match lex.peek()?.kind() {
         WK::Pub   => Some((lex.get()?, Visibility::Public)),
@@ -66,10 +66,13 @@ impl<'a> WordCheck for Word {
   fn expect_kind(self, k1: WK) -> Result<Self, Message> {
     match self.kind() == k1 {
       true  => Ok(self),
-      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}", &[
-        &format!("{:?}", k1),
-        &format!("{:?}", self.kind()),
-      ])))
+      false => Err(Message::error(EXPECTED_BUT_FOUND
+        .args(&[
+          &format!("{:?}", k1),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
 
@@ -77,46 +80,58 @@ impl<'a> WordCheck for Word {
   fn panic_kind(self, k1: WK) -> Fail<Message> {
     match self.kind() == k1 {
       true  => panic!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}", &[
-        &format!("{:?}", k1),
-        &format!("{:?}", self.kind()),
-      ])))
+      false => Err(Message::error(EXPECTED_BUT_FOUND
+        .args(&[
+          &format!("{:?}", k1),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
 
   fn panic_kind2(self, k1: WK, k2: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 {
       true  => panic!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}` or `{}", &[
-        &format!("{:?}", k1),
-        &format!("{:?}", k2),
-        &format!("{:?}", self.kind()),
-      ])))
+      false => Err(Message::error(EXPECTED_BUT_FOUND2
+        .args(&[
+          &format!("{:?}", k1),
+          &format!("{:?}", k2),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
   
   fn panic_kind3(self, k1: WK, k2: WK, k3: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 {
       true  => panic!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}`, `{}` or `{}", &[
-        &format!("{:?}", k1),
-        &format!("{:?}", k2),
-        &format!("{:?}", k3),
-        &format!("{:?}", self.kind()),
-      ])))
+      false => Err(Message::error(EXPECTED_BUT_FOUND3
+        .args(&[
+          &format!("{:?}", k1),
+          &format!("{:?}", k2),
+          &format!("{:?}", k3),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
   
   fn panic_kind4(self, k1: WK, k2: WK, k3: WK, k4: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 || self.kind() == k4 {
       true  => panic!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND, Label::new_args(self, "{}`, `{}`, `{}` or `{}", &[
-        &format!("{:?}", k1),
-        &format!("{:?}", k2),
-        &format!("{:?}", k3),
-        &format!("{:?}", k4),
-        &format!("{:?}", self.kind()),
-      ])))
+      false => Err(Message::error(EXPECTED_BUT_FOUND4
+        .args(&[
+          &format!("{:?}", k1),
+          &format!("{:?}", k2),
+          &format!("{:?}", k3),
+          &format!("{:?}", k4),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
 

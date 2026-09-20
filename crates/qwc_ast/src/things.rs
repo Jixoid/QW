@@ -1,7 +1,7 @@
 use crate::{ExprId, Ident, Rng, TypeId, Visibility};
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Thing {
   Name(Ident),
   List(Rng),

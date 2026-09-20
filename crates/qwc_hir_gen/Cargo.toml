@@ -12,3 +12,4 @@ qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_resolve = { path = "../qwc_resolve" }
 qwc_mangling = { path = "../qwc_mangling" }
 qwc_comptime = { path = "../qwc_comptime" }
+rustc-hash = "2.1.3"

@@ -1,4 +1,4 @@
-use inkwell::{GlobalVisibility, builder::Builder, context::Context, llvm_sys::core::{LLVMSetLinkage, LLVMSetVisibility}, module::{Linkage, Module}, types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum}, values::{AsValueRef, FunctionValue}};
+use inkwell::{AddressSpace, GlobalVisibility, builder::Builder, context::Context, llvm_sys::core::{LLVMSetLinkage, LLVMSetVisibility}, module::{Linkage, Module}, types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum}, values::{AsValueRef, FunctionValue}};
 use qwc_mir::{Block, BlokId, Krate, Symbol, SymbolKind, SymbolStat, Type, TypeId, TypeKind, id::NodeKind};
 use qwc_cgen::*;
 
@@ -65,7 +65,10 @@ fn low_type<'ctx>(ctx: &'ctx Context, cre: &Krate, it: &Type) -> AnyTypeEnum<'ct
     TypeKind::Int(len, ..) => ctx.custom_width_int_type(len).unwrap().into(),
 
     TypeKind::Unit => ctx.struct_type(&[], true).into(),
-    TypeKind::Bool => ctx.bool_type().into(),    
+
+    TypeKind::Bool => ctx.bool_type().into(),
+
+    TypeKind::Ptr => ctx.ptr_type(AddressSpace::from(0)).into(),
 
     _ => todo!("{it:#?}")
   }
@@ -74,10 +77,12 @@ fn low_type<'ctx>(ctx: &'ctx Context, cre: &Krate, it: &Type) -> AnyTypeEnum<'ct
 
 fn low_symbol<'ctx>(ctx: &'ctx Context, mol: &Module<'ctx>, builder: &Builder<'ctx>, cre: &Krate, it: &Symbol) {
   let gs = match it.kind {
-    SymbolKind::Variable{..} => {
+    SymbolKind::Variable{ism} => {
       let ty = any_type_to_basic(low_type(ctx, cre, cre.get(it.ety)));
       
       let gv = mol.add_global(ty, None, cre.sym_str(it.name));
+
+      gv.set_constant(!ism);
 
       gv.as_value_ref()
     }

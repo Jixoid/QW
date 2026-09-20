@@ -65,8 +65,8 @@ impl Scope {
 
     match self.map.entry(ident.sid()) {
       Entry::Occupied(entry) => {
-        let (_, _) = entry.get();
-        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(ident)));
+        let (_, last) = entry.get();
+        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(ident, CONFLICTING_DEFINITION)).add(Label::new(*last, FIRST_DEFINITION_HERE)));
       }
       Entry::Vacant(entry) => {
         entry.insert((kind, ident.into()));

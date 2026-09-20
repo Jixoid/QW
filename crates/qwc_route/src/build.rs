@@ -6,7 +6,7 @@ use qwc_cgen::ICGen;
 use qwc_cgen_llvm::CGenLLVM;
 use qwc_hir::{self as hir};
 use qwc_mir::{self as mir, Layout, LayoutInfo};
-use qwc_diagnostic::Summary;
+use qwc_diagnostic::{Label, Message, Summary, msg::*};
 use qwc_parse::Parse;
 use qwc_hir_gen::HGen;
 use qwc_mir_gen::MGen;
@@ -40,10 +40,10 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     
     for id in cre.extra_get(rng) {
       let id = ast::ItemId::new_from(id);
-      let this: &ast::Item = cre.get(id);
+      let it: &ast::Item = cre.get(id);
       
-      if let ast::ItemKind::ModuleUnloaded = this.kind {
-        let name = sin.str(this.name.unwrap().sid()).to_string();
+      if let ast::ItemKind::ModuleUnloaded = it.kind {
+        let name = sin.str(it.name.unwrap().sid()).to_string();
         let path = {
           let path1 = fpath.parent().unwrap().join(name.clone() + ".qw");
           let path2 = fpath.parent().unwrap().join(&name).join("mod.qw");
@@ -51,7 +51,15 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
           match () {
             _ if path1.exists() => path1,
             _ if path2.exists() => path2,
-            _ => return Err(Error::New | format!("could not find module file (`{:?}` or `{:?}`)", path1, path2)),
+            _ => {
+              sum.add(Message::error(COULD_NOT_FIND_MODULE_FILE, 
+                Label::new(it.name.unwrap(), NOT_FOUND_IN_OR2.args(&[
+                  path1.to_str().unwrap(),
+                  path2.to_str().unwrap(),
+                ])
+              )));
+              continue;
+            }
           }
         };
         
@@ -126,9 +134,9 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   if !sum.is_empty() {
     for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
     
-    eprintln!("{}", sum);
+    eprint!("{}", sum);
 
-    if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
+    if sum.sumerr() > 0 { return Err(Error::New | "") }
   }
 
   cre.set_root(root);
@@ -149,9 +157,9 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files) -> 
     Err(sum) => {
       for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
     
-      eprintln!("{}", sum);
+      eprint!("{}", sum);
 
-      Err(Error::New | "compilation stopped")
+      Err(Error::New | "")
     }
   }
 }
@@ -164,9 +172,9 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
   if !sum.is_empty() {
     for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
     
-    eprintln!("{}", sum);
+    eprint!("{}", sum);
 
-    if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
+    if sum.sumerr() > 0 { return Err(Error::New | "") }
   }
 
   Ok((hir_cre.unwrap(), time))
@@ -180,9 +188,9 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   if !sum.is_empty() {
     for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
     
-    eprintln!("{}", sum);
+    eprint!("{}", sum);
 
-    if sum.sumerr() > 0 { return Err(Error::New | "compilation stopped") }
+    if sum.sumerr() > 0 { return Err(Error::New | "") }
   }
 
   Ok((mir_cre.unwrap(), time))

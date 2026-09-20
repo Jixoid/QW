@@ -11,7 +11,7 @@ pub enum FunAttrs {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
   // Access
   Nick (Ident),
@@ -63,7 +63,7 @@ pub enum TypeKind {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Type {
   pub pos: Span,
   pub kind: TypeKind,

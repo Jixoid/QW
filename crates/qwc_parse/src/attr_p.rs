@@ -14,19 +14,19 @@ impl AttrParser {
     let mut attrs = vec![];
 
     loop {
-      if lex.peek()?.kind() == WK::Attribute {
+      if lex.peek()?.kind() == WK::BangAttr {
         lex.bump()?;
 
         loop {
-          if lex.peek()?.kind() == WK::SquareBracketEnd { lex.bump()?; break }
+          if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
           
           attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum))?);
 
           match lex.get_k()? {
             (WK::Comma, _) => continue,
-            (WK::SquareBracketEnd, _) => break,
+            (WK::BracketR, _) => break,
           
-            (_, c) => c.panic_kind2(WK::Comma, WK::SquareBracketEnd)?
+            (_, c) => c.panic_kind2(WK::Comma, WK::BracketR)?
           }
         }
       } else {
@@ -49,27 +49,27 @@ impl AttrParser {
         Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Bin(val.ident(sin, far)?)}
       }
 
-      WK::ParenBeg => { // A(B,C)
+      WK::ParenL => { // A(B,C)
         lex.bump()?;
         let mut attrs = ThinVec::new();
 
         loop {
-          if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break }
+          if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
           
           attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum))?);
 
           match lex.get_k()? {
             (WK::Comma, _) => continue,
-            (WK::ParenEnd, _) => break,
+            (WK::ParenR, _) => break,
             
-            (_, c) => c.panic_kind2(WK::Comma, WK::ParenEnd)?
+            (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
           }
         }
 
         Attribute{ident: key.ident(sin, far)?, kind: AttrKind::List(attrs)}
       }
 
-      WK::Assign => { // A = $expr
+      WK::Eq => { // A = $expr
         lex.bump()?;
         let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
 

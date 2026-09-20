@@ -13,6 +13,7 @@ pub enum TypeKind {
   Float(FloatKind),
   
   Bool,
+  Ptr,
 
   // Combinated
   Struct(Rng /* TypeId */),
@@ -22,9 +23,6 @@ pub enum TypeKind {
   
   // Callable
   Fun{args: Rng, ret: TypeId},
-
-  // Reference
-  Ptr(TypeId)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

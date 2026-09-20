@@ -118,7 +118,7 @@ impl Krate {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Rng(pub u32, pub u32);
 
 impl Rng {

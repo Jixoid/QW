@@ -47,7 +47,7 @@ impl Layouter for LayouterQW {
 
 
       // Reference
-      TypeKind::Ptr(..) => layinfo.ptr_size,
+      TypeKind::Ptr => layinfo.ptr_size,
 
 
       // Callable

@@ -12,7 +12,7 @@ pub struct TypeInterner<'a> {
   ty_bool: TypeId,
 
   // Hash
-  ty_ptr: FxHashMap<TypeId, TypeId>,
+  ty_ptr: TypeId,
   
   // Int
   ty_i8: TypeId,
@@ -38,8 +38,7 @@ impl<'a> TypeInterner<'a> {
 
       ty_bool: cre.push(Type{kind: TypeKind::Bool, layout: Layout::new(1, 1, LayoutBy::QW)}),
 
-      // Hash
-      ty_ptr: FxHashMap::default(),
+      ty_ptr: cre.push(Type{kind: TypeKind::Ptr, layout: layinfo.ptr_size}),
       
       // Int
       ty_i8:   cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},   true), layout: layinfo.i8_lay}),
@@ -61,26 +60,7 @@ impl<'a> TypeInterner<'a> {
 
   pub fn ty_bool(&self) -> TypeId { self.ty_bool }
 
-  
-  // Hash
-  pub fn ty_ptr(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
-    use std::collections::hash_map::Entry;
-    
-    match self.ty_ptr.entry(id) {
-      Entry::Occupied(entry) => *entry.get(),
-      Entry::Vacant(entry) => {
-        let this = Type{
-          kind: TypeKind::Ptr(id),
-          layout: self.layinfo.ptr_size,
-        };
-
-        let id = cre.push(this);
-
-        entry.insert(id);
-        id
-      }
-    }
-  }
+  pub fn ty_ptr(&self) -> TypeId { self.ty_ptr }
 
 
   // Int

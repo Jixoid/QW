@@ -232,100 +232,129 @@ impl<'a> Lexer<'a> {
       if knd == CharKind::Symbol {
         let legoff = off;
 
-        let (s,k) = match [geti!(0), geti!(1), geti!(2)] {
-          [b'<',b'<',b'='] => { off += 3; (3, WK::AssignmentLeftShift) } // "<<="
-          [b'<',b'<',b'|'] => { off += 3; (3, WK::RotateLeft) } // "<<|"
-          [b'<',b'<', ..]  => { off += 2; (2, WK::ShiftLeft) } // "<<" 
-          [b'<',b'=', ..]  => { off += 2; (2, WK::SmallerEqual) } // "<="
-          [b'<',b'-', ..]  => { off += 2; (2, WK::ArrowLeft) } // "<-"
-          [b'<',..]        => { off += 1; (1, WK::AngleBeg) } // "<"
-          
-          [b'>',b'>',b'='] => { off += 3; (3, WK::AssignmentRighShift) } // ">>="
-          [b'>',b'>', ..]  => { off += 2; (2, WK::ShiftRigh) } // ">>"
-          [b'>',b'=', ..]  => { off += 2; (2, WK::BiggerEqual) } // ">="
-          [b'>',..]        => { off += 1; (1, WK::AngleEnd) } // ">"
-
-          [b'|',b'>',b'>'] => { off += 3; (3, WK::RotateRigh) } // "|>>"
-          [b'|',b'|', ..]  => { off += 2; (2, WK::LogicalOr) } // "||"
-          [b'|',b'=', ..]  => { off += 2; (2, WK::AssignmentBitwiseOr) } // "|="
-          [b'|',..]        => { off += 1; (1, WK::BitwiseOr) } // "|"
-
-          [b'-',b'>', ..]  => { off += 2; (2, WK::ArrowRigh) } // "->"
-          [b'-',b'=', ..]  => { off += 2; (2, WK::AssignmentSub) } // "-="
-          [b'-',..]        => { off += 1; (1, WK::Sub) } // "-"
-
-          [b'+',b'=', ..]  => { off += 2; (2, WK::AssignmentAdd) } // "+="
-          [b'+',..]        => { off += 1; (1, WK::Add) } // "+"
-
-          [b'*',b'=', ..]  => { off += 2; (2, WK::AssignmentMul) } // "*="
-          [b'*',..]        => { off += 1; (1, WK::Mul) } // "*"
-
-          [b'%',b'=', ..]  => { off += 2; (2, WK::AssignmentRem) } // "%="
-          [b'%',..]        => { off += 1; (1, WK::Rem) } // "%"
-
-          [b'=',b'=', ..]  => { off += 2; (2, WK::Equal) } // "=="
-          [b'=',b'>', ..]  => { off += 2; (2, WK::FatArrow) } // "=>"
-          [b'=',..]        => { off += 1; (1, WK::Assign) } // "="
-
-          [b':',b':', ..]  => { off += 2; (2, WK::Scope) } // "::"
-          [b':',..]        => { off += 1; (1, WK::Colon) } // ":"
-
-          [b'/',b'/', ..]  => { // Comment
+        let (s, k) = match [geti!(0) as char, geti!(1) as char, geti!(2) as char] {
+          // Comment
+          ['/','/', _ ]  => {
             while off < size && get!() != b'\n' { off += 1; }
             continue;
           }
-          [b'/',b'*', ..]  => { // Comment
+          ['/','*', _ ]  => {
             off += 2;
             let mut depth = 1;
             while off < size && depth > 0 {
-              if geti!(0) == b'/' && geti!(1) == b'*' {
-                depth += 1;
-                off += 2;
-              } else if geti!(0) == b'*' && geti!(1) == b'/' {
-                depth -= 1;
-                off += 2;
-              } else {
-                off += 1;
+              match [geti!(0) as char, geti!(1) as char] {
+                ['/','*'] => { depth += 1; off += 2; }
+                ['*','/'] => { depth -= 1; off += 2; }
+
+                [..] => off += 1, 
               }
             }
             continue;
           }
-          [b'/',b'=', ..]  => { off += 2; (2, WK::AssignmentDiv) } // "/="
-          [b'/',..]        => { off += 1; (1, WK::Div) } // "/"
 
-          [b'!',b'=', ..]  => { off += 2; (2, WK::NotEqual) } // "!="
-          [b'!',b'[', ..]  => { off += 2; (2, WK::Attribute) } // "!["
-          [b'!',..]        => { off += 1; (1, WK::Bang) } // "!"
 
-          [b'#',b'[', ..]  => { off += 2; (2, WK::Directive) } // "#["
-          [b'#',..]        => { off += 1; (1, WK::Hash) } // "#"
+          // < >
+          ['<','<','='] => (3, WK::Lt2Eq),
+          ['<','<', _ ] => (2, WK::Lt2),
+          ['<','>', _ ] => (2, WK::LtGt),
+          ['<','=','>'] => (3, WK::LtEqGt),
+          ['<','=', _ ] => (2, WK::LtEq),
+          ['<','-', _ ] => (2, WK::ArrowLeft),
+          ['<', _ , _ ] => (1, WK::Lt),
+          
+          ['>','>','='] => (3, WK::Gt2Eq),
+          ['>','>', _ ] => (2, WK::Gt2),
+          ['>','<', _ ] => (2, WK::GtLt),
+          ['>','=','<'] => (3, WK::GtEqLt),
+          ['>','=', _ ] => (2, WK::GtEq),
+          ['>', _ , _ ] => (1, WK::Gt),
+          
 
-          [b'.',b'.', ..]  => { off += 2; (2, WK::Dot2) } // ".."
-          [b'.',..]        => { off += 1; (1, WK::Dot) } // "."
+          // & | ^
+          ['&','&','='] => (3, WK::Amp2Eq),
+          ['&','&', _ ] => (2, WK::Amp2),
+          ['&', _ , _ ] => (1, WK::Amp),
+          
+          ['|','|','='] => (3, WK::Pipe2Eq),
+          ['|','|', _ ] => (2, WK::Pipe2),
+          ['|', _ , _ ] => (1, WK::Pipe),
+          
+          ['^','^','='] => (3, WK::Caret2Eq),
+          ['^','^', _ ] => (2, WK::Caret2),
+          ['^', _ , _ ] => (1, WK::Caret),
+          
 
-          [b'&',b'&', ..]  => { off += 2; (2, WK::LogicalAnd) } // "&&"
-          [b'&',b'=', ..]  => { off += 2; (2, WK::AssignmentBitwiseAnd) } // "&="
-          [b'&',..]        => { off += 1; (1, WK::BitwiseAnd) } // "&"
+          // + - * / %
+          ['+','|', _ ] => (2, WK::AddPipe),
+          ['+','=', _ ] => (2, WK::AddEq),
+          ['+', _ , _ ] => (1, WK::Add),
+          
+          ['-','|', _ ] => (2, WK::SubPipe),
+          ['-','>', _ ] => (2, WK::ArrowRight),
+          ['-','=', _ ] => (2, WK::SubEq),
+          ['-', _ , _ ] => (1, WK::Sub),
+          
+          ['*','|', _ ] => (2, WK::MulPipe),
+          ['*','=', _ ] => (2, WK::MulEq),
+          ['*', _ , _ ] => (1, WK::Mul),
+          
+          ['/','=', _ ] => (2, WK::DivEq),
+          ['/', _ , _ ] => (1, WK::Div),
+          
+          ['%','=', _ ] => (2, WK::RemEq),
+          ['%', _ , _ ] => (1, WK::Rem),
+          
 
-          [b'^',b'^', ..]  => { off += 2; (2, WK::LogicalXor) } // "^^"
-          [b'^',b'=', ..]  => { off += 2; (2, WK::AssignmentBitwiseXor) } // "^="
-          [b'^',..]        => { off += 1; (1, WK::BitwiseXor) } // "^"
+          // () [] {}
+          ['(', _ , _ ] => (1, WK::ParenL),
+          [')', _ , _ ] => (1, WK::ParenR),
+          ['[', _ , _ ] => (1, WK::BracketL),
+          [']', _ , _ ] => (1, WK::BracketR),
+          ['{', _ , _ ] => (1, WK::BraceL),
+          ['}', _ , _ ] => (1, WK::BraceR),
 
-          [b'[',..] => { off += 1; (1, WK::SquareBracketBeg) } // "["
-          [b']',..] => { off += 1; (1, WK::SquareBracketEnd) } // "]"
-          [b'{',..] => { off += 1; (1, WK::CurlyBracketBeg) }  // "{"
-          [b'}',..] => { off += 1; (1, WK::CurlyBracketEnd) }  // "}"
-          [b'(',..] => { off += 1; (1, WK::ParenBeg) }         // "("
-          [b')',..] => { off += 1; (1, WK::ParenEnd) }         // ")"
-          [b';',..] => { off += 1; (1, WK::Semicolon) } // ";"
-          [b',',..] => { off += 1; (1, WK::Comma) }     // ","
-          [b'@',..] => { off += 1; (1, WK::At) }        // "@"
-          [b'?',..] => { off += 1; (1, WK::Question) }  // "?"
-          [b'~',..] => { off += 1; (1, WK::Tilde) }     // "~"
-          [b'`',..] => { off += 1; (1, WK::Backtick) }  // "`"
+          
+          // =
+          ['=','=', _ ] => (2, WK::Eq2),
+          ['=','>', _ ] => (2, WK::FatArrow),
+          ['=', _ , _ ] => (1, WK::Eq),
 
-          [..] => { off += 1; (1, WK::Unknown) }
+
+          // . , : ;
+          ['.','.','.'] => (3, WK::Dot3),
+          ['.','.','='] => (3, WK::Dot2Eq),
+          ['.','.', _ ] => (2, WK::Dot2),
+          ['.', _ , _ ] => (1, WK::Dot),
+          [',', _ , _ ] => (1, WK::Comma),
+          [':',':', _ ] => (2, WK::Colon2),
+          [':', _ , _ ] => (1, WK::Colon),
+          [';', _ , _ ] => (1, WK::Semicolon),
+
+
+          // !
+          ['!','[', _ ] => (2, WK::BangAttr),
+          ['!','=', _ ] => (2, WK::BangEq),
+          ['!','!', _ ] => (2, WK::Bang2),
+          ['!', _ , _ ] => (1, WK::Bang),
+
+
+          // #
+          ['#','[', _ ] => (2, WK::HashAttr),
+          ['#', _ , _ ] => (1, WK::Hash),
+
+
+          // @ ? ~ ` _
+          ['@', _ , _ ] => (1, WK::At),
+          ['?', _ , _ ] => (1, WK::Question),
+          ['~', _ , _ ] => (1, WK::Tilde),
+          ['`', _ , _ ] => (1, WK::Backtick),
+          ['_', _ , _ ] => (1, WK::Underscore),
+
+          [..] => (1, WK::Unknown),
         };
+
+
+        off += s;
 
         return (Some(Word::new_safe(legoff, s, self.fid, k)), off);
       }

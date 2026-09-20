@@ -1,5 +1,5 @@
 use qwc_ast::{FunAttrs, IdentSave, Rng, Thing, Type, TypeId, TypeKind, Visibility};
-use qwc_diagnostic::{Label, Message, msg::{DUPLICATE_ATTRIBUTE, EXPECTED_IDENTIFIER}};
+use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx, AttrParser, ExprParser, ItemParser, WordCheck};
@@ -19,12 +19,12 @@ impl TypeParser {
       WK::Bang     => Self::pre_fail(ctx!(cre, sin, far, lex, sum))?,
       WK::Dot2     => Self::pre_range(ctx!(cre, sin, far, lex, sum))?,
 
-      WK::BitwiseAnd => Self::pre_ref(ctx!(cre, sin, far, lex, sum))?,
-      WK::BitwiseXor => Self::pre_ptr(ctx!(cre, sin, far, lex, sum))?,
+      WK::Amp   => Self::pre_ref(ctx!(cre, sin, far, lex, sum))?,
+      WK::Caret => Self::pre_ptr(ctx!(cre, sin, far, lex, sum))?,
       
-      WK::SquareBracketBeg => Self::pre_slice_array_vector(ctx!(cre, sin, far, lex, sum))?,
+      WK::BracketL => Self::pre_slice_array_vector(ctx!(cre, sin, far, lex, sum))?,
 
-      WK::ParenBeg => Self::pre_tuple(ctx!(cre, sin, far, lex, sum))?,
+      WK::ParenL => Self::pre_tuple(ctx!(cre, sin, far, lex, sum))?,
 
       WK::Fun => Self::pre_fun(ctx!(cre, sin, far, lex, sum), true)?,
 
@@ -36,9 +36,9 @@ impl TypeParser {
 
     loop {
       lhs = match lex.peek()?.kind() {
-        WK::Scope => Self::post_scope(ctx!(cre, sin, far, lex, sum), lhs)?,
+        WK::Colon2 => Self::post_scope(ctx!(cre, sin, far, lex, sum), lhs)?,
         
-        WK::AngleBeg => Self::post_specialize(ctx!(cre, sin, far, lex, sum), lhs)?,
+        WK::Lt => Self::post_specialize(ctx!(cre, sin, far, lex, sum), lhs)?,
 
         _ => break
       };
@@ -62,7 +62,7 @@ impl TypeParser {
       let mut ctn = vec![lhs, sub];
 
       loop {
-        if lex.peek()?.kind() == WK::Scope {
+        if lex.peek()?.kind() == WK::Colon2 {
           lex.bump()?;
 
           ctn.push(Self::pre_nick(ctx!(cre, sin, far, lex, sum))?);
@@ -87,7 +87,7 @@ impl TypeParser {
   fn post_specialize(ctx: &mut Ctx, lhs: TypeId) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    let args = if lex.peek()?.kind() == WK::AngleEnd {
+    let args = if lex.peek()?.kind() == WK::Gt {
       lex.bump()?;
       Rng::empty()
     } else {
@@ -95,7 +95,7 @@ impl TypeParser {
 
       loop {
         let arg = match lex.peek_k()? {
-          (WK::String | WK::Number | WK::CurlyBracketBeg, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?.to_any(),
+          (WK::String | WK::Number | WK::BraceL, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?.to_any(),
           
           _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?.to_any(),
         };
@@ -103,11 +103,11 @@ impl TypeParser {
         args.push(arg);
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::AngleEnd { lex.bump()?; break },
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::Gt { lex.bump()?; break },
           
-          (WK::AngleEnd, _) => break,
+          (WK::Gt, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::AngleEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::Gt)?,
         }
       }
 
@@ -274,7 +274,7 @@ impl TypeParser {
       attr
     };
 
-    let ret = if lex.peek()?.kind() == WK::ArrowRigh {
+    let ret = if lex.peek()?.kind() == WK::ArrowRight {
       lex.bump()?;
       Some(Self::read_type(ctx!(cre, sin, far, lex, sum))?)
     } else {
@@ -298,12 +298,12 @@ impl TypeParser {
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum))?;
 
     let kind = match lex.get_k()? {
-      (WK::SquareBracketEnd, _) => TypeKind::Slice(sub),
+      (WK::BracketR, _) => TypeKind::Slice(sub),
 
       (WK::Semicolon, _) => {
         let ext = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
 
-        lex.get()?.expect_kind(WK::SquareBracketEnd)?;
+        lex.get()?.expect_kind(WK::BracketR)?;
 
         TypeKind::Array(sub, ext)
       }
@@ -311,12 +311,12 @@ impl TypeParser {
       (WK::Mul, _) => {
         let ext = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
 
-        lex.get()?.expect_kind(WK::SquareBracketEnd)?;
+        lex.get()?.expect_kind(WK::BracketR)?;
 
         TypeKind::Vector(sub, ext)
       }
 
-      (_, c) => c.panic_kind3(WK::SquareBracketEnd, WK::Semicolon, WK::Mul)?
+      (_, c) => c.panic_kind3(WK::BracketR, WK::Semicolon, WK::Mul)?
     };
     
 
@@ -333,7 +333,7 @@ impl TypeParser {
     let start = lex.get()?;
 
     // Unit
-    if lex.peek()?.kind() == WK::ParenEnd {
+    if lex.peek()?.kind() == WK::ParenR {
       lex.bump()?;
 
       // Post
@@ -348,22 +348,22 @@ impl TypeParser {
     let kind = Self::read_type(ctx!(cre, sin, far, lex, sum))?;
 
     match lex.get_k()? {
-      (WK::ParenEnd, _) => Ok(kind), // (X)
+      (WK::ParenR, _) => Ok(kind), // (X)
 
       (WK::Comma, _) => { // (X, ...)
         let mut vals = vec![ kind ];
         let mut is_tuple = false;
         
         loop {
-          if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break }
+          if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
           
           vals.push(Self::read_type(ctx!(cre, sin, far, lex, sum))?);
           
           match lex.get_k()? {
-            (WK::ParenEnd, _) => break,
+            (WK::ParenR, _) => break,
             (WK::Comma, _) => { is_tuple = true; continue; }
             
-            (_, c) => c.panic_kind2(WK::Comma, WK::ParenEnd)?
+            (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
           }
         }
         
@@ -381,7 +381,7 @@ impl TypeParser {
         }
       }
 
-      (_, c) => c.panic_kind2(WK::ParenEnd, WK::Comma)?
+      (_, c) => c.panic_kind2(WK::ParenR, WK::Comma)?
     }
   }
 
@@ -406,13 +406,13 @@ impl TypeParser {
     let start = lex.peek()?;
     let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum))?;
 
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let rng = {
       let mut ctn = vec![];
 
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), &mut Visibility::Inherited)? );
       }
@@ -433,7 +433,7 @@ impl TypeParser {
   pub fn sub_enum(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.peek()?;
     
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
@@ -441,12 +441,12 @@ impl TypeParser {
       loop {
         let name = match lex.get_k()? {
           (WK::Word, c) => c.ident(sin, far)?,
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::BraceR, _) => break,
           
           (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
-        let item = if lex.peek()?.kind() == WK::Assign {
+        let item = if lex.peek()?.kind() == WK::Eq {
           lex.bump()?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
           
@@ -458,11 +458,11 @@ impl TypeParser {
         vals.push(cre.push(item));
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break },
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
 
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::BraceR, _) => break,
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::CurlyBracketEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -482,7 +482,7 @@ impl TypeParser {
   pub fn sub_flags(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.peek()?;
     
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
@@ -490,12 +490,12 @@ impl TypeParser {
       loop {
         let name = match lex.get_k()? {
           (WK::Word, c) => c.ident(sin, far)?,
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::BraceR, _) => break,
           
           (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
-        let item = if lex.peek()?.kind() == WK::Assign {
+        let item = if lex.peek()?.kind() == WK::Eq {
           lex.bump()?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
           
@@ -507,11 +507,11 @@ impl TypeParser {
         vals.push(cre.push(item));
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break },
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
 
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::BraceR, _) => break,
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::CurlyBracketEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -531,7 +531,7 @@ impl TypeParser {
   pub fn sub_variant(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.peek()?;
     
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
@@ -539,12 +539,12 @@ impl TypeParser {
       loop {
         let name = match lex.get_k()? {
           (WK::Word, c) => c.ident(sin, far)?,
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::BraceR, _) => break,
           
           (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
 
-        let item = if lex.peek()?.kind() == WK::ParenBeg {
+        let item = if lex.peek()?.kind() == WK::ParenL {
           let payload_type = TypeParser::pre_tuple(ctx!(cre, sin, far, lex, sum))?;
           
           Thing::NamedType(name, payload_type)
@@ -555,10 +555,10 @@ impl TypeParser {
         vals.push(cre.push(item));
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break },
-          (WK::CurlyBracketEnd, _) => break,
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
+          (WK::BraceR, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::CurlyBracketEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -579,14 +579,14 @@ impl TypeParser {
     let start = lex.peek()?;
     let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum))?;
 
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let rng = {
       let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
 
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), defvis)? );
       }
@@ -608,14 +608,14 @@ impl TypeParser {
     let start = lex.peek()?;
     let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum))?;
 
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let rng = {
       let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
 
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), defvis)? );
       }
@@ -656,11 +656,11 @@ impl TypeParser {
   }
 
   fn read_fun_args(ctx: &mut Ctx) -> Result<Rng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    lex.get()?.expect_kind(WK::ParenBeg)?;
+    lex.get()?.expect_kind(WK::ParenL)?;
     
     let mut args = vec![];
     loop {
-      if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break; }
+      if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break; }
       
       let mut names = vec![];
       loop {
@@ -687,10 +687,10 @@ impl TypeParser {
       }
 
       match lex.get_k()? {
-        (WK::ParenEnd, _) => break,
+        (WK::ParenR, _) => break,
         (WK::Comma, _) => continue,
 
-        (_, c) => c.panic_kind2(WK::Comma, WK::ParenBeg)?
+        (_, c) => c.panic_kind2(WK::Comma, WK::ParenL)?
       }
     }
 

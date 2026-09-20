@@ -5,7 +5,7 @@ use qwc_diagnostic::Span;
 use qwc_string_interner::Sid;
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ident {
   off: u32,
   len: NonZeroU16,

@@ -937,8 +937,10 @@ impl DumpHandler for Expr {
           UnaryOp::Poz => "+",
           UnaryOp::Not => "!",
           UnaryOp::Ref => "&",
+          UnaryOp::Try => "?",
           UnaryOp::Addr => "@",
-          UnaryOp::Deref => "*",
+          UnaryOp::Deref => "^",
+          UnaryOp::Unwrap => "!!",
         };
         write!(f, "{}", op_str.red())?;
         val.dump(cre, sin, far, f, indent)?;
@@ -951,17 +953,23 @@ impl DumpHandler for Expr {
           BinaryOp::Mul => "*",
           BinaryOp::Div => "/",
           BinaryOp::Rem => "%",
+
           BinaryOp::Eq => "==",
           BinaryOp::Ne => "!=",
+          
           BinaryOp::Lt => "<",
           BinaryOp::Gt => ">",
-          BinaryOp::Lte => "<=",
-          BinaryOp::Gte => ">=",
+          BinaryOp::LtEq => "<=",
+          BinaryOp::GtEq => ">=",
+          
           BinaryOp::And => "&&",
-          BinaryOp::Or => "||",
-          BinaryOp::Xor => "^",
+          BinaryOp::Or  => "||",
+          BinaryOp::Xor => "^^",
+
           BinaryOp::Shl => "<<",
           BinaryOp::Shr => ">>",
+
+          BinaryOp::Pipe => "|",
         };
         write!(f, "(")?;
         lhs.dump(cre, sin, far, f, indent)?;
@@ -983,17 +991,23 @@ impl DumpHandler for Expr {
           BinaryOp::Mul => "*=",
           BinaryOp::Div => "/=",
           BinaryOp::Rem => "%=",
+
           BinaryOp::Eq => "==",
           BinaryOp::Ne => "!=",
+          
           BinaryOp::Lt => "<=",
           BinaryOp::Gt => ">=",
-          BinaryOp::Lte => "<=",
-          BinaryOp::Gte => ">=",
-          BinaryOp::And => "&=",
-          BinaryOp::Or => "|=",
-          BinaryOp::Xor => "^=",
+          BinaryOp::LtEq => "<=",
+          BinaryOp::GtEq => ">=",
+          
+          BinaryOp::And => "&&=",
+          BinaryOp::Or  => "||=",
+          BinaryOp::Xor => "^^=",
+          
           BinaryOp::Shl => "<<=",
           BinaryOp::Shr => ">>=",
+
+          BinaryOp::Pipe => panic!(),
         };
         lhs.dump(cre, sin, far, f, indent)?;
         write!(f, " {} ", op_str.red())?;
@@ -1081,16 +1095,6 @@ impl DumpHandler for Expr {
 
       ExprKind::Die { lvar } => {
         write!(f, "{} {}", "die".red().bold(), lvar.str(far))?;
-      }
-
-      ExprKind::Try(sub) => {
-        sub.dump(cre, sin, far, f, indent)?;
-        write!(f, "{}", "?".red())?;
-      }
-
-      ExprKind::Unwrap(sub) => {
-        sub.dump(cre, sin, far, f, indent)?;
-        write!(f, "{}", "!".red())?;
       }
 
       ExprKind::Unsafe(sub) => {

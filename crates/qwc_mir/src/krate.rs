@@ -2,15 +2,15 @@ use core::slice;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, Block, BlokId, SymbId, Symbol, Type, TypeId, Value, id::{MirId, MirKind, NodeKind, SpecAny, ValuId}};
+use crate::{AnyId, Block, BlokId, Inst, SymbId, Symbol, Type, TypeId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
 
 
 pub struct Krate {
   // Arena
   list_type: Arena<Type>,
   list_symb: Arena<Symbol>,
-  list_valu: Arena<Value>,
   list_blok: Arena<Block>,
+  list_inst: Arena<Inst>,
 
   extra_data: (Arena<MirId<SpecAny>>, Arena<NodeKind>),
 
@@ -25,8 +25,8 @@ impl Krate {
     Self{
       list_type: Arena::new(),
       list_symb: Arena::new(),
-      list_valu: Arena::new(),
       list_blok: Arena::new(),
+      list_inst: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
 
@@ -110,11 +110,11 @@ impl Krate {
   pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Symbol>(&self) + Self::size_used::<Value>(&self) + Self::size_used::<Block>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(&self) + Self::size_used::<Symbol>(&self) + Self::size_used::<Block>(&self) + Self::size_used::<Inst>(&self) + Self::size_used::<AnyId>(&self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Symbol>(&self) + Self::size_alloc::<Value>(&self) + Self::size_alloc::<Block>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Symbol>(&self) + Self::size_alloc::<Block>(&self) + Self::size_alloc::<Inst>(&self) + Self::size_alloc::<AnyId>(&self)
   }
 
 }
@@ -159,16 +159,6 @@ impl ArenaNode for Symbol {
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_symb.iter_mut() }
 }
 
-impl ArenaNode for Value {
-  type Id = ValuId;
-
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_valu.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_valu[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_valu[id.idx() as usize] }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_valu.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_valu.iter_mut() }
-}
-
 impl ArenaNode for Block {
   type Id = BlokId;
 
@@ -177,6 +167,16 @@ impl ArenaNode for Block {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_blok[id.idx() as usize] }
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_blok.iter() }
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_blok.iter_mut() }
+}
+
+impl ArenaNode for Inst {
+  type Id = InstId;
+
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_inst.push(obj)).unwrap()) }
+  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_inst[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_inst[id.idx() as usize] }
+  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_inst.iter() }
+  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_inst.iter_mut() }
 }
 
 
@@ -196,14 +196,14 @@ impl SizeApi for Symbol {
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_symb.allocated_len() }
 }
 
-impl SizeApi for Value {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_valu.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_valu.allocated_len() }
-}
-
 impl SizeApi for Block {
   fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_blok.len() }
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_blok.allocated_len() }
+}
+
+impl SizeApi for Inst {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_inst.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_inst.allocated_len() }
 }
 
 impl SizeApi for AnyId {

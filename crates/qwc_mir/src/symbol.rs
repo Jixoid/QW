@@ -1,14 +1,14 @@
-use crate::{BlokId, TypeId, id::ValuId};
+use crate::{BlokId, TypeId};
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SymbolKind {
-  Variable{ism: bool, value: ValuId},
+  Variable{ism: bool},
   Function{blok: BlokId},
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum SymbolStat {
   Private, // Private, only in module
   Normal, // Inter-Modules
@@ -17,7 +17,7 @@ pub enum SymbolStat {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Symbol {
   pub name: u32,
   pub kind: SymbolKind,

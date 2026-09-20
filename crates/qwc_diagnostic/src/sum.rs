@@ -51,18 +51,20 @@ impl<'a> IntoIterator for &'a Summary {
 }
 
 impl<'a> fmt::Display for Summary {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if !self.is_empty() {
-      let mut str = format!("{}{} ", "summary".bright_yellow().bold(), ":".bright_black());
-
       let mut parts = Vec::new();
-      if self.fatal != 0 { parts.push(format!("{}{} {}", "fatal".bright_red().bold(), ":".bright_black(), self.fatal)); }
-      if self.error != 0 { parts.push(format!("{}{} {}", "error".bright_red().bold(), ":".bright_black(), self.error)); }
-      if self.warn != 0 { parts.push(format!("{}{} {}", "warn".bright_yellow().bold(), ":".bright_black(), self.warn)); }
-      if self.hint != 0 { parts.push(format!("{}{} {}", "hint".bright_green().bold(), ":".bright_black(), self.hint)); }
-      str += &parts.join(", ");
+      if self.fatal != 0 { parts.push(format!("{} {}", self.fatal, "fatal")); }
+      if self.error != 0 { parts.push(format!("{} {}", self.error, "error")); }
+      if self.warn != 0  { parts.push(format!("{} {}", self.warn, "warn")); }
+      if self.hint != 0  { parts.push(format!("{} {}", self.hint, "hint")); }
+      let str = parts.join(", ");
       
-      write!(f, "{}", str)?
+      if self.sumerr() == 0 {
+        write!(f, "{}{} {} {}", "hint".yellow().bold(), ":".bright_black(), "compilation was completed with these", str)?
+      } else {
+        write!(f, "{}{} {} {}", "fatal".red().bold(), ":".bright_black(), "could not compile due to", str)?
+      }
     }
 
     Ok(())

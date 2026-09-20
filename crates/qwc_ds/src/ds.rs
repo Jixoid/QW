@@ -2,7 +2,7 @@ use core::fmt;
 use std::{collections::HashMap, fs};
 
 use qwc_arena::File;
-use qwc_diagnostic::{CodedMsg, Label, Message};
+use qwc_diagnostic::{CodedMsg, FmtMsg, Label, Message};
 use qwc_lexer::{Lexer, WK, Word};
 
 
@@ -18,14 +18,16 @@ pub enum Value {
   Tup(Vec<Value>),
 }
 
-const TYPE_NOT_ARRAY: CodedMsg = CodedMsg::new_str("type is not a array");
-const TYPE_NOT_STRUCT: CodedMsg = CodedMsg::new_str("type is not a struct");
-const EXPECTED_WORD: CodedMsg = CodedMsg::new_str("expected word");
-const EXPECTED_KIND: CodedMsg = CodedMsg::new_str("expected `{}`, but found `{}`");
-const INVALID_VALUE: CodedMsg = CodedMsg::new_str("invalid value: `{}`");
-const DUPLICATED_VALUE: CodedMsg = CodedMsg::new_str("duplicated value");
-const CANNOT_CONVERT_FLOAT: CodedMsg = CodedMsg::new_str("cannot convert to float");
+const TYPE_NOT_ARRAY:         CodedMsg = CodedMsg::new_str("type is not a array");
+const TYPE_NOT_STRUCT:        CodedMsg = CodedMsg::new_str("type is not a struct");
+const EXPECTED_WORD:          CodedMsg = CodedMsg::new_str("expected word");
+const EXPECTED_KIND2:         CodedMsg = CodedMsg::new_str("expected `{}` or `{}`, but found `{}`");
+const INVALID_VALUE:          CodedMsg = CodedMsg::new_str("invalid value: `{}`");
+const DUPLICATED_VALUE:       CodedMsg = CodedMsg::new_str("duplicated value");
+const CANNOT_CONVERT_FLOAT:   CodedMsg = CodedMsg::new_str("cannot convert to float");
 const CANNOT_CONVERT_INTEGER: CodedMsg = CodedMsg::new_str("cannot convert to integer");
+
+const VALUE_IS_HERE:          FmtMsg = FmtMsg::new("value is here");
 
 
 #[derive(Debug)]
@@ -178,14 +180,14 @@ impl Parser {
     let mut ctn = HashMap::new();
     
     if !is_root {
-      lex.get()?.expected_kind(WK::CurlyBracketBeg)?;
+      lex.get()?.expected_kind(WK::BraceL)?;
     }
 
     loop {
       if is_root {
         if let None = lex.peek_safe() { break }
       } else {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
       }
 
       let name = lex.get()?.expected_word()?;
@@ -209,11 +211,11 @@ impl Parser {
 
   fn parse_array(lex: &mut Lexer) -> Result<Value, Message> {
     let mut ctn = vec![];
-    lex.get()?.expected_kind(WK::SquareBracketBeg)?;
+    lex.get()?.expected_kind(WK::BracketL)?;
 
 
     loop {
-      if lex.peek()?.kind() == WK::SquareBracketEnd { lex.bump()?; break }
+      if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
 
       let it = Self::parse_value(lex)?;
 
@@ -252,11 +254,11 @@ impl Parser {
           (c, 4, it)
         }
         
-        (WK::CurlyBracketBeg, c) => (c, 8, Self::parse_struct(lex, false)?),
+        (WK::BraceL, c) => (c, 8, Self::parse_struct(lex, false)?),
         
-        (WK::SquareBracketBeg, c) => (c, 16, Self::parse_array(lex)?),
+        (WK::BracketL, c) => (c, 16, Self::parse_array(lex)?),
 
-        (_, c) => return Err(Message::error(INVALID_VALUE, Label::new_args(c, "value is here", &[lex.str(c)])))
+        (_, c) => return Err(Message::error(INVALID_VALUE.args(&[lex.str(c)]), Label::new(c, VALUE_IS_HERE)))
       };
 
       temp_tuple.push(val);
@@ -264,7 +266,7 @@ impl Parser {
       if (mask & ma) != 0 { return Err(Message::error(DUPLICATED_VALUE, Label::new_pos(c))) } else { mask |= ma }
       
       match lex.peek_safe().map(|w| w.kind()) {
-        Some(WK::True | WK::False | WK::String | WK::CurlyBracketBeg | WK::SquareBracketBeg | WK::Number) => {}
+        Some(WK::True | WK::False | WK::String | WK::BraceL | WK::BracketL | WK::Number) => {}
         _ => break,
       }
     }
@@ -294,10 +296,13 @@ impl A for Word {
   fn expected_kind(self, kind: WK) -> Result<Self, Message> {
     if self.kind() == kind { Ok(self) }
     else {
-      Err(Message::error(EXPECTED_KIND, Label::new_args(self, "{},{}", &[
-        &format!("{:?}", kind),
-        &format!("{:?}", self.kind()),
-      ])))
+      Err(Message::error(EXPECTED_KIND2
+        .args(&[
+          &format!("{:?}", kind),
+          &format!("{:?}", self.kind()),
+        ]),
+        Label::new_pos(self)
+      ))
     }
   }
 

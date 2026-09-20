@@ -14,65 +14,65 @@ impl ExprParser {
     Self::read_expr_sub(ctx, 0)
   }
 
-  fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let mut lhs = match lex.peek()?.kind() {
-      WK::CurlyBracketBeg | WK::Backtick => Self::pre_block(ctx!(cre, sin, far, lex, sum))?,
+  fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Result<ExprId, Message> {
+    let mut lhs = match ctx.lex.peek()?.kind() {
+      WK::BraceL | WK::Backtick => Self::pre_block(ctx)?,
 
-      WK::True | WK::False => Self::pre_bool(ctx!(cre, sin, far, lex, sum))?,
-      WK::Number => Self::pre_number(ctx!(cre, sin, far, lex, sum))?,
-      WK::String => Self::pre_string(ctx!(cre, sin, far, lex, sum))?,
+      WK::True | WK::False => Self::pre_bool(ctx)?,
+      WK::Number => Self::pre_number(ctx)?,
+      WK::String => Self::pre_string(ctx)?,
 
-      WK::ParenBeg => Self::pre_tuple(ctx!(cre, sin, far, lex, sum))?,
-      WK::SquareBracketBeg => Self::pre_propagate(ctx!(cre, sin, far, lex, sum))?,
+      WK::ParenL => Self::pre_tuple(ctx)?,
+      WK::BracketL => Self::pre_propagate(ctx)?,
 
-      WK::If    => Self::pre_if(ctx!(cre, sin, far, lex, sum))?,
-      WK::Match => Self::pre_match(ctx!(cre, sin, far, lex, sum))?,
-      WK::Loop  => Self::pre_loop(ctx!(cre, sin, far, lex, sum))?,
-      WK::While => Self::pre_while(ctx!(cre, sin, far, lex, sum))?,
-      WK::For   => Self::pre_for(ctx!(cre, sin, far, lex, sum))?,
+      WK::If    => Self::pre_if(ctx)?,
+      WK::Match => Self::pre_match(ctx)?,
+      WK::Loop  => Self::pre_loop(ctx)?,
+      WK::While => Self::pre_while(ctx)?,
+      WK::For   => Self::pre_for(ctx)?,
       
-      WK::Ret      => Self::pre_ret(ctx!(cre, sin, far, lex, sum))?,
-      WK::Break    => Self::pre_break(ctx!(cre, sin, far, lex, sum))?,
-      WK::Continue => Self::pre_continue(ctx!(cre, sin, far, lex, sum))?,
+      WK::Ret      => Self::pre_ret(ctx)?,
+      WK::Break    => Self::pre_break(ctx)?,
+      WK::Continue => Self::pre_continue(ctx)?,
       
-      WK::Unsafe  => Self::pre_unsafe(ctx!(cre, sin, far, lex, sum))?,
-      WK::Relaxed => Self::pre_relaxed(ctx!(cre, sin, far, lex, sum))?,
+      WK::Unsafe  => Self::pre_unsafe(ctx)?,
+      WK::Relaxed => Self::pre_relaxed(ctx)?,
 
-      WK::SelfB => Self::pre_self_b(ctx!(cre, sin, far, lex, sum))?,
-      WK::SelfS => Self::pre_self_s(ctx!(cre, sin, far, lex, sum))?,
+      WK::SelfB => Self::pre_self_b(ctx)?,
+      WK::SelfS => Self::pre_self_s(ctx)?,
       
-      WK::Let | WK::Var => Self::pre_let(ctx!(cre, sin, far, lex, sum))?,
+      WK::Let | WK::Var => Self::pre_let(ctx)?,
       
-      WK::Sub | WK::Add | WK::Bang | WK::BitwiseAnd | WK::At => Self::pre_unary(ctx!(cre, sin, far, lex, sum))?,
+      WK::Sub | WK::Add | WK::Bang => Self::pre_unary(ctx)?,
 
-      _ => Self::pre_nick(ctx!(cre, sin, far, lex, sum))?,
+      _ => Self::pre_nick(ctx)?,
     };
 
     loop {
-      lhs = match lex.peek()?.kind() {
-        WK::Dot => Self::post_member_spec(ctx!(cre, sin, far, lex, sum), lhs)?,
+      lhs = match ctx.lex.peek()?.kind() {
+        WK::Dot => Self::post_member(ctx, lhs)?,
 
-        WK::Scope => Self::post_scope(ctx!(cre, sin, far, lex, sum), lhs)?,
+        WK::Colon2 => Self::post_scope_spec(ctx, lhs)?,
 
-        WK::ParenBeg         => Self::post_call(ctx!(cre, sin, far, lex, sum), lhs)?,
-        WK::SquareBracketBeg => Self::post_index(ctx!(cre, sin, far, lex, sum), lhs)?,
+        WK::ParenL   => Self::post_call(ctx, lhs)?,
+        WK::BracketL => Self::post_index(ctx, lhs)?,
 
-        WK::Bang     => Self::post_unwrap(ctx!(cre, sin, far, lex, sum), lhs)?,
-        WK::Question => Self::post_try(ctx!(cre, sin, far, lex, sum), lhs)?,
+        WK::Bang2 | WK::Question |
+        WK::Amp | WK::Caret => Self::post_unary(ctx, lhs)?,
 
         _ => break
       }
     }
 
     loop {
-      let op_tok = lex.peek()?;
+      let op_tok = ctx.lex.peek()?;
       
       let (_, r_bp) = match Self::get_infix_bp(op_tok.kind()) {
-        Some((l, r)) if l >= min_bp => { lex.bump()?; (l, r) },
+        Some((l, r)) if l >= min_bp => { ctx.lex.bump()?; (l, r) },
         _ => break,
       };
 
-      let rhs = Self::read_expr_sub(ctx!(cre, sin, far, lex, sum), r_bp)?;
+      let rhs = Self::read_expr_sub(ctx, r_bp)?;
       
       let kind = match Self::parse_binary_op(op_tok.kind()) {
         BinOp::Bin(op)      => ExprKind::Binary{op, lhs, rhs},
@@ -83,11 +83,11 @@ impl ExprParser {
       };
 
       let this = Expr{
-        pos: lex.pos_extend(op_tok),
+        pos: ctx.lex.pos_extend(op_tok),
         kind 
       };
 
-      lhs = cre.push(this);
+      lhs = ctx.cre.push(this);
     }
 
     Ok(lhs)
@@ -96,18 +96,18 @@ impl ExprParser {
 
 
   // Ex
-  fn post_member_spec(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn post_scope_spec(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     lex.get()?;
 
     match lex.peek()?.kind() {
-      WK::AngleBeg => Self::post_specialize(ctx!(cre, sin, far, lex, sum), lhs),
-      _ => Self::post_member(ctx!(cre, sin, far, lex, sum), lhs),
+      WK::Lt => Self::post_specialize(ctx!(cre, sin, far, lex, sum), lhs),
+      _ => Self::post_scope(ctx!(cre, sin, far, lex, sum), lhs),
     }
   }
 
 
   fn post_member(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.peek()?;
+    let start = lex.get()?;
 
     let rng = {
       let sub = Self::pre_nick(ctx!(cre, sin, far, lex, sum))?;
@@ -121,7 +121,7 @@ impl ExprParser {
             ctn.push(Self::pre_nick(ctx!(cre, sin, far, lex, sum))?);
           }
 
-          (WK::Scope, c) => return Err(Message::error(CANNOT_FIELD_ACCESS_AFTER_MEMBER, Label::new_pos(c))),
+          (WK::Colon2, c) => return Err(Message::error(CANNOT_FIELD_ACCESS_AFTER_MEMBER, Label::new_pos(c))),
 
           _ => break
         }
@@ -141,7 +141,7 @@ impl ExprParser {
   }
 
   fn post_scope(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
+    let start = lex.peek()?;
 
     let rng = {
       let sub = Self::pre_nick(ctx!(cre, sin, far, lex, sum))?;
@@ -149,7 +149,7 @@ impl ExprParser {
       let mut ctn = vec![lhs, sub];
 
       loop {
-        if lex.peek()?.kind() == WK::Scope {
+        if lex.peek()?.kind() == WK::Colon2 {
           lex.bump()?;
           ctn.push(Self::pre_nick(ctx!(cre, sin, far, lex, sum))?);
         } else {
@@ -170,11 +170,51 @@ impl ExprParser {
     Ok(cre.push(this))
   }
 
+  fn post_specialize(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+    let start = lex.get()?;
+
+    let args = if lex.peek()?.kind() == WK::Gt {
+      lex.bump()?;
+      Rng::empty()
+    } else {
+      let mut args = vec![];
+
+      loop {
+        let arg = match lex.peek_k()? {
+          (WK::String | WK::Number | WK::BraceL, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?.to_any(),
+          
+          _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?.to_any(),
+        };
+        
+        args.push(arg);
+
+        match lex.get_k()? {
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::Gt { lex.bump()?; break },
+          
+          (WK::Gt, _) => break,
+
+          (_, c) => c.panic_kind2(WK::Comma, WK::Gt)?,
+        }
+      }
+
+      cre.extra_any(&args)
+    };
+
+    
+    // Post
+    let this = Expr{
+      pos: lex.pos_extend(start),
+      kind: ExprKind::Spec{ callee: lhs, args }
+    };
+
+    Ok(cre.push(this))
+  }
+
 
   fn post_call(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    let args = if lex.peek()?.kind() == WK::ParenEnd {
+    let args = if lex.peek()?.kind() == WK::ParenR {
       lex.bump()?;
       Rng::empty()
     } else {
@@ -184,11 +224,11 @@ impl ExprParser {
         args.push(Self::read_expr(ctx!(cre, sin, far, lex, sum))?);
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break },
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break },
           
-          (WK::ParenEnd, _) => break,
+          (WK::ParenR, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::ParenEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?,
         }
       }
 
@@ -208,7 +248,7 @@ impl ExprParser {
   fn post_index(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    let args = if lex.peek()?.kind() == WK::SquareBracketEnd {
+    let args = if lex.peek()?.kind() == WK::BracketR {
       lex.bump()?;
       Rng::empty()
     } else {
@@ -218,11 +258,11 @@ impl ExprParser {
         args.push(Self::read_expr(ctx!(cre, sin, far, lex, sum))?);
 
         match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::SquareBracketEnd { lex.bump()?; break },
+          (WK::Comma, _) => if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break },
           
-          (WK::SquareBracketEnd, _) => break,
+          (WK::BracketR, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::SquareBracketEnd)?,
+          (_, c) => c.panic_kind2(WK::Comma, WK::BracketR)?,
         }
       }
 
@@ -240,71 +280,21 @@ impl ExprParser {
   }
 
 
-  fn post_try(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn post_unary(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
 
-    // Post
-    let this = Expr{
-      pos: lex.pos_extend(start),
-      kind: ExprKind::Try(lhs)
-    };
-
-    Ok(cre.push(this))
-  }
-
-  fn post_unwrap(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
-
-    // Post
-    let this = Expr{
-      pos: lex.pos_extend(start),
-      kind: ExprKind::Unwrap(lhs)
-    };
-
-    Ok(cre.push(this))
-  }
-
-
-  fn post_specialize(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
-
-    let args = if lex.peek()?.kind() == WK::AngleEnd {
-      lex.bump()?;
-      Rng::empty()
-    } else {
-      let mut args = vec![];
-
-      loop {
-        let arg = match lex.peek_k()? {
-          (WK::String | WK::Number | WK::CurlyBracketBeg, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?.to_any(),
-          
-          _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?.to_any(),
-        };
-        
-        args.push(arg);
-
-        match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::AngleEnd { lex.bump()?; break },
-          
-          (WK::AngleEnd, _) => break,
-
-          (_, c) => c.panic_kind2(WK::Comma, WK::AngleEnd)?,
-        }
-      }
-
-      cre.extra_any(&args)
-    };
-
+    let op = Self::parse_unary_op(start.kind());
     
+
     // Post
     let this = Expr{
       pos: lex.pos_extend(start),
-      kind: ExprKind::Spec{ callee: lhs, args }
+      kind: ExprKind::Unary{ op, val: lhs }
     };
 
     Ok(cre.push(this))
   }
-
+  
   
 
   // Sub
@@ -312,7 +302,7 @@ impl ExprParser {
     let start = lex.get()?;
 
     let label = match start.kind() {
-      WK::CurlyBracketBeg => None,
+      WK::BraceL => None,
 
       WK::Backtick => {
         let name = match lex.get_k()? {
@@ -321,12 +311,12 @@ impl ExprParser {
         };
         
         lex.get()?.expect_kind(WK::Colon)?;
-        lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+        lex.get()?.expect_kind(WK::BraceL)?;
         
         Some(name.into())
       }
       
-      _ => start.panic_kind2(WK::Backtick, WK::CurlyBracketBeg)?
+      _ => start.panic_kind2(WK::Backtick, WK::BraceL)?
     };
 
     let (rng, expr) = {
@@ -334,14 +324,14 @@ impl ExprParser {
       let mut expr = None;
       
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         let ex_id = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
         
         match lex.peek_k()? {
           (WK::Semicolon, _) => { lex.bump()?; ctn.push(ex_id); },
           
-          (WK::CurlyBracketEnd, _) => { expr = Some(ex_id); }
+          (WK::BraceR, _) => { expr = Some(ex_id); }
           
           (_, c) => {
             if cre.get::<Expr>(ex_id).is_like_blok() {
@@ -433,7 +423,7 @@ impl ExprParser {
     let start = lex.get()?;
 
     // Unit
-    if lex.peek()?.kind() == WK::ParenEnd {
+    if lex.peek()?.kind() == WK::ParenR {
       lex.bump()?;
 
       // Post
@@ -448,40 +438,37 @@ impl ExprParser {
     let expr = Self::read_expr(ctx!(cre, sin, far, lex, sum))?;
         
     match lex.get_k()? {
-      (WK::ParenEnd, _) => Ok(expr), // (X)
+      (WK::ParenR, _) => Ok(expr), // (X)
 
       (WK::Comma, _) => { // (X, ...)
         let mut vals = vec![ expr ];
-        let mut is_tuple = false;
         
         loop {
-          if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break }
+          if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
           
           vals.push(Self::read_expr(ctx!(cre, sin, far, lex, sum))?);
           
           match lex.get_k()? {
-            (WK::ParenEnd, _) => break,
-            (WK::Comma, _) => { is_tuple = true; continue; }
+            (WK::ParenR, _) => break,
+            (WK::Comma, _) => continue,
             
-            (_, c) => c.panic_kind2(WK::Comma, WK::ParenEnd)?
+            (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
           }
         }
         
-        if is_tuple || vals.len() != 1 {
-          let rng = cre.extra(&vals);
+        let rng = cre.extra(&vals);
 
-          let this = Expr{
-            pos: lex.pos_extend(start),
-            kind: ExprKind::Tuple(rng)
-          };
-          
-          Ok(cre.push(this))
-        } else {
-          Ok(vals[0])
-        }
+
+        // Post
+        let this = Expr{
+          pos: lex.pos_extend(start),
+          kind: ExprKind::Tuple(rng)
+        };
+        
+        Ok(cre.push(this))
       }
 
-      (_, c) => c.panic_kind2(WK::ParenEnd, WK::Comma)?
+      (_, c) => c.panic_kind2(WK::ParenR, WK::Comma)?
     }
   }
 
@@ -493,21 +480,21 @@ impl ExprParser {
       let mut prpg = None;
       
       loop {
-        if lex.peek()?.kind() == WK::SquareBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
         
         vals.push(Self::read_expr(ctx!(cre, sin, far, lex, sum))?);
         
         match lex.get_k()? {
-          (WK::SquareBracketEnd, _) => break,
+          (WK::BracketR, _) => break,
           (WK::Comma, _) => continue,
 
           (WK::Semicolon, _) => {
             prpg = Some(Self::read_expr(ctx!(cre, sin, far, lex, sum))?);
-            lex.get()?.expect_kind(WK::SquareBracketEnd)?;
+            lex.get()?.expect_kind(WK::BracketR)?;
             break
           }
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::SquareBracketEnd)?
+          (_, c) => c.panic_kind2(WK::Comma, WK::BracketR)?
         }
       }
       
@@ -561,12 +548,12 @@ impl ExprParser {
     let cond = Self::read_expr(ctx!(cre, sin, far, lex, sum))?;
     
     let arms = {
-      lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+      lex.get()?.expect_kind(WK::BraceL)?;
       
       let mut arm_ids = vec![];
       
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         let pat = Self::read_expr(ctx!(cre, sin, far, lex, sum))?;
         lex.get()?.expect_kind(WK::FatArrow)?;
@@ -576,10 +563,10 @@ impl ExprParser {
         arm_ids.push(cre.push(arm));
         
         match lex.peek_k()? {
-          (WK::CurlyBracketEnd, _) => { lex.bump()?; break }
+          (WK::BraceR, _) => { lex.bump()?; break }
           (WK::Comma, _) => { lex.bump()?; }
 
-          (_, c) => c.panic_kind2(WK::CurlyBracketEnd, WK::Comma)?
+          (_, c) => c.panic_kind2(WK::BraceR, WK::Comma)?
         }
       }
 
@@ -799,7 +786,7 @@ impl ExprParser {
       None
     };
 
-    let init = if lex.peek()?.kind() == WK::Assign {
+    let init = if lex.peek()?.kind() == WK::Eq {
       lex.bump()?;
       Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
     }
@@ -856,25 +843,36 @@ impl ExprParser {
     use WK::*;
 
     match op {
-      Assign | ArrowLeft | AssignmentAdd | AssignmentSub | AssignmentMul | AssignmentDiv | AssignmentRem |
-      AssignmentBitwiseAnd | AssignmentBitwiseOr | AssignmentBitwiseXor | AssignmentLeftShift | AssignmentRighShift => Some((10, 11)),
+      // Assign, Exchange
+      Eq | ArrowLeft => Some((11, 10)),
       
-      Dot2 => Some((15, 15)),
+      // Combinated Assign
+      Lt2Eq | Gt2Eq |
+      Amp2Eq | Pipe2Eq | Caret2Eq |
+      AddEq | SubEq | MulEq | DivEq | RemEq => Some((11, 10)),
+
+      // Logical
+      Pipe2  => Some((20, 21)),
+      Caret2 => Some((22, 23)),
+      Amp2   => Some((24, 25)),
       
-      LogicalOr  => Some((20, 21)),
-      LogicalXor => Some((22, 23)),
-      LogicalAnd => Some((24, 25)),
+      // Equality
+      Eq2 | BangEq => Some((30, 31)),
       
-      Equal | NotEqual | AngleBeg | AngleEnd | BiggerEqual | SmallerEqual => Some((30, 31)),
+      // Size Comparisons
+      Lt | Gt | LtEq | GtEq => Some((35, 36)),
       
-      BitwiseOr  => Some((40, 41)),
-      BitwiseXor => Some((42, 43)),
-      BitwiseAnd => Some((44, 45)),
+      // Pipe Stream
+      Pipe  => Some((40, 41)),
       
-      ShiftLeft | ShiftRigh => Some((50, 51)),
+      // Range
+      Dot2 | Dot2Eq => Some((45, 46)),
       
+      // Shift
+      Lt2 | Gt2 => Some((50, 51)),
+      
+      // Arithmetic
       Add | Sub => Some((60, 61)),
-      
       Mul | Div | Rem => Some((70, 71)),
       
       _ => None,
@@ -883,45 +881,66 @@ impl ExprParser {
 
   fn parse_unary_op(op: WK) -> UnaryOp {
     match op {
+      // Prefix
       WK::Sub  => UnaryOp::Neg,
       WK::Add  => UnaryOp::Poz,
       WK::Bang => UnaryOp::Not,
-      WK::BitwiseAnd => UnaryOp::Ref,
-      WK::At => UnaryOp::Addr,
+
+      // Postfix
+      WK::Question => UnaryOp::Try,
+      WK::Bang2    => UnaryOp::Unwrap,
+      WK::Amp      => UnaryOp::Ref,
+      WK::Caret    => UnaryOp::Deref,
+
       _ => unreachable!("Unknown unary operator: {:?}", op),
     }
   }
 
   fn parse_binary_op(op: WK) -> BinOp {
     match op {
+      // Arithmetic
       WK::Add => BinOp::Bin(BinaryOp::Add),
       WK::Sub => BinOp::Bin(BinaryOp::Sub),
       WK::Mul => BinOp::Bin(BinaryOp::Mul),
       WK::Div => BinOp::Bin(BinaryOp::Div),
       WK::Rem => BinOp::Bin(BinaryOp::Rem),
+      
+      WK::AddEq => BinOp::AssignOp(BinaryOp::Add),
+      WK::SubEq => BinOp::AssignOp(BinaryOp::Sub),
+      WK::MulEq => BinOp::AssignOp(BinaryOp::Mul),
+      WK::DivEq => BinOp::AssignOp(BinaryOp::Div),
+      WK::RemEq => BinOp::AssignOp(BinaryOp::Rem),
 
-      WK::Equal => BinOp::Bin(BinaryOp::Eq),
-      WK::NotEqual => BinOp::Bin(BinaryOp::Ne),
-      WK::AngleBeg => BinOp::Bin(BinaryOp::Lt),
-      WK::AngleEnd => BinOp::Bin(BinaryOp::Gt),
-      WK::SmallerEqual => BinOp::Bin(BinaryOp::Lte),
-      WK::BiggerEqual => BinOp::Bin(BinaryOp::Gte),
+      // Shift
+      WK::Lt2 => BinOp::Bin(BinaryOp::Shl),
+      WK::Gt2 => BinOp::Bin(BinaryOp::Shr),
+
+      WK::Lt2Eq => BinOp::AssignOp(BinaryOp::Shl),
+      WK::Gt2Eq => BinOp::AssignOp(BinaryOp::Shr),
+
+      // Comparison
+      WK::Eq2    => BinOp::Bin(BinaryOp::Eq),
+      WK::BangEq => BinOp::Bin(BinaryOp::Ne),
       
-      WK::LogicalAnd => BinOp::Bin(BinaryOp::And),
-      WK::LogicalOr => BinOp::Bin(BinaryOp::Or),
+      WK::Lt => BinOp::Bin(BinaryOp::Lt),
+      WK::Gt => BinOp::Bin(BinaryOp::Gt),
+      WK::LtEq => BinOp::Bin(BinaryOp::LtEq),
+      WK::GtEq => BinOp::Bin(BinaryOp::GtEq),
       
-      WK::AssignmentAdd => BinOp::AssignOp(BinaryOp::Add),
-      WK::AssignmentSub => BinOp::AssignOp(BinaryOp::Sub),
-      WK::AssignmentMul => BinOp::AssignOp(BinaryOp::Mul),
-      WK::AssignmentDiv => BinOp::AssignOp(BinaryOp::Div),
-      WK::AssignmentRem => BinOp::AssignOp(BinaryOp::Rem),
-      WK::AssignmentBitwiseAnd => BinOp::AssignOp(BinaryOp::And),
-      WK::AssignmentBitwiseOr  => BinOp::AssignOp(BinaryOp::Or),
-      WK::AssignmentBitwiseXor => BinOp::AssignOp(BinaryOp::Xor),
-      WK::AssignmentLeftShift  => BinOp::AssignOp(BinaryOp::Shl),
-      WK::AssignmentRighShift  => BinOp::AssignOp(BinaryOp::Shr),
+      // Logical
+      WK::Amp2   => BinOp::Bin(BinaryOp::And),
+      WK::Pipe2  => BinOp::Bin(BinaryOp::Or),
+      WK::Caret2 => BinOp::Bin(BinaryOp::Xor),
       
-      WK::Assign => BinOp::Assign,
+      WK::Amp2Eq   => BinOp::AssignOp(BinaryOp::And),
+      WK::Pipe2Eq  => BinOp::AssignOp(BinaryOp::Or),
+      WK::Caret2Eq => BinOp::AssignOp(BinaryOp::Xor),
+
+      // Pipe
+      WK::Pipe => BinOp::Bin(BinaryOp::Pipe),
+      
+      // Special
+      WK::Eq => BinOp::Assign,
       WK::ArrowLeft => BinOp::Exchange,
 
       _ => unreachable!("unknown binary operator: {:?}", op),

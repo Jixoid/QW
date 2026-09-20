@@ -16,17 +16,17 @@ impl PattParser {
       (WK::Underscore, _) => Patt::Under,
       (WK::Dot2, _) => Patt::Rest,
 
-      (WK::ParenBeg, _) => {
+      (WK::ParenL, _) => {
         let rng = {
           let mut subs = vec![];
           
           loop {
-            if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break }
+            if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
             
             subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum))?);
             
             match lex.get_k()? {
-              (WK::ParenEnd, _) => break,
+              (WK::ParenR, _) => break,
               (WK::Comma, _) => continue,
               
               (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
@@ -39,17 +39,17 @@ impl PattParser {
         Patt::Tuple(rng)
       }
 
-      (WK::SquareBracketBeg, _) => {
+      (WK::BracketL, _) => {
         let rng = {
           let mut subs = vec![];
           
           loop {
-            if lex.peek()?.kind() == WK::SquareBracketEnd { lex.bump()?; break }
+            if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
             
             subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum))?);
             
             match lex.get_k()? {
-              (WK::SquareBracketEnd, _) => break,
+              (WK::BracketR, _) => break,
               (WK::Comma, _) => continue,
               
               (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),

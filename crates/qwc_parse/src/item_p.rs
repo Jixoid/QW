@@ -75,7 +75,7 @@ impl ItemParser {
       None
     };
 
-    lex.get()?.expect_kind(WK::Assign)?;
+    lex.get()?.expect_kind(WK::Eq)?;
 
     let value = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
 
@@ -87,7 +87,7 @@ impl ItemParser {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
-      kind: ItemKind::Let{kind, value, ism: start.kind() == WK::Mut}
+      kind: ItemKind::Let{kind, value, ism: start.kind() == WK::Var}
     };
     
     Ok(cre.push(this))
@@ -117,7 +117,7 @@ impl ItemParser {
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
     
-    lex.get()?.expect_kind(WK::Assign)?;
+    lex.get()?.expect_kind(WK::Eq)?;
     let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
     lex.get()?.expect_kind(WK::Semicolon)?;
 
@@ -140,10 +140,10 @@ impl ItemParser {
     let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum))?;
 
     let blok = match lex.peek_k()? {
-      (WK::CurlyBracketBeg | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
+      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
       (WK::Semicolon, _) => { lex.bump()?; None },
 
-      (_, c) => c.panic_kind2(WK::CurlyBracketBeg, WK::Semicolon)?
+      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
     };
 
 
@@ -171,11 +171,11 @@ impl ItemParser {
       loop {
         let name = if let (WK::Word, c) = lex.peek_k()? { lex.bump()?; c.ident(sin, far)? } else { break };
         
-        lex.get()?.expect_kind(WK::ParenBeg)?;
+        lex.get()?.expect_kind(WK::ParenL)?;
         
         let v = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
         
-        lex.get()?.expect_kind(WK::ParenEnd)?;
+        lex.get()?.expect_kind(WK::ParenR)?;
         
         let it = Thing::NamedExpr(name, v);
         ils.push(cre.push(it));
@@ -189,10 +189,10 @@ impl ItemParser {
     };
 
     let blok = match lex.peek_k()? {
-      (WK::CurlyBracketBeg | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
+      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
       (WK::Semicolon, _) => { lex.bump()?; None },
 
-      (_, c) => c.panic_kind2(WK::CurlyBracketBeg, WK::Semicolon)?
+      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
     };
 
 
@@ -214,10 +214,10 @@ impl ItemParser {
     let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum))?;
 
     let blok = match lex.peek_k()? {
-      (WK::CurlyBracketBeg | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
+      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
       (WK::Semicolon, _) => { lex.bump()?; None },
 
-      (_, c) => c.panic_kind2(WK::CurlyBracketBeg, WK::Semicolon)?
+      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
     };
 
 
@@ -243,14 +243,14 @@ impl ItemParser {
       None
     };
 
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let ctn = {
       let mut impls = vec![];
       let defvis = &mut Visibility::Inherited;
       
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
         
@@ -289,14 +289,14 @@ impl ItemParser {
 
     let trait_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
 
-    lex.get()?.expect_kind(WK::CurlyBracketBeg)?;
+    lex.get()?.expect_kind(WK::BraceL)?;
 
     let ctn = {
       let mut impls = vec![];
       let defvis = &mut Visibility::Inherited;
       
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
         
@@ -330,13 +330,13 @@ impl ItemParser {
   
   fn sub_generic(ctx: &mut Ctx, mut vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
-    lex.get()?.expect_kind(WK::AngleBeg)?;
+    lex.get()?.expect_kind(WK::Lt)?;
     
     let params = {
       let mut args = vec![];
 
       loop {
-        if lex.peek()?.kind() == WK::ParenEnd { lex.bump()?; break; }
+        if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break; }
         
         let mut names = vec![];
         let hty = loop {
@@ -350,9 +350,9 @@ impl ItemParser {
             (WK::Comma, _) => {lex.bump()?; continue},
             (WK::Colon, _) => {lex.bump()?; break true},
             (WK::Semicolon, _) => {lex.bump()?; break false},
-            (WK::AngleEnd, _) => break false,
+            (WK::Gt, _) => break false,
 
-            (_, c) => c.panic_kind4(WK::Colon, WK::Comma, WK::AngleEnd, WK::Semicolon)?
+            (_, c) => c.panic_kind4(WK::Colon, WK::Comma, WK::Gt, WK::Semicolon)?
           }
         };
 
@@ -368,10 +368,10 @@ impl ItemParser {
         }
 
         match lex.get_k()? {
-          (WK::AngleEnd, _) => break,
+          (WK::Gt, _) => break,
           (WK::Comma, _) => continue,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::AngleEnd)?
+          (_, c) => c.panic_kind2(WK::Comma, WK::Gt)?
         }
       }
 
@@ -393,10 +393,10 @@ impl ItemParser {
           tys.push(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?);
           
           match lex.get_k()? {
-            (WK::BitwiseOr, _) => continue,
+            (WK::Pipe, _) => continue,
             (WK::Semicolon, _) => break,
 
-            (_, c) => c.panic_kind2(WK::BitwiseOr, WK::Semicolon)?
+            (_, c) => c.panic_kind2(WK::Pipe, WK::Semicolon)?
           }
         }
         
@@ -412,12 +412,12 @@ impl ItemParser {
       Rng::empty()
     };
     
-    let ctn = if lex.peek()?.kind() == WK::CurlyBracketBeg {
+    let ctn = if lex.peek()?.kind() == WK::BraceL {
       lex.bump()?;
 
       let mut ctn = vec![];
       loop {
-        if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
         let id = Self::read_item(ctx!(cre, sin, far, lex, sum), &mut vis)?;
 
@@ -460,9 +460,9 @@ impl ItemParser {
       loop {
         match lex.get_k()? {
           (WK::Semicolon, _) => break,
-          (WK::Scope, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum))?),
+          (WK::Colon2, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum))?),
         
-          (_, c) => c.panic_kind2(WK::Scope, WK::Semicolon)?,
+          (_, c) => c.panic_kind2(WK::Colon2, WK::Semicolon)?,
         }
       }
 
@@ -502,12 +502,12 @@ impl ItemParser {
     let ctn = match lex.get_k()? {
       (WK::Semicolon, _) => None,
 
-      (WK::CurlyBracketBeg, _) => {
+      (WK::BraceL, _) => {
         let mut ctn = vec![];
         let defvis = &mut Visibility::Inherited;
 
         loop {
-          if lex.peek()?.kind() == WK::CurlyBracketEnd { lex.bump()?; break }
+          if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
           
           let id = Self::read_item(ctx!(cre, sin, far, lex, sum), defvis)?;
 
@@ -517,7 +517,7 @@ impl ItemParser {
         Some(cre.extra(&ctn))
       }
 
-      (_, c) => c.panic_kind2(WK::Semicolon, WK::CurlyBracketBeg)?
+      (_, c) => c.panic_kind2(WK::Semicolon, WK::BraceL)?
     };
 
 
