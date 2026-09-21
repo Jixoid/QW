@@ -425,6 +425,7 @@ dependencies = [
  "inkwell",
  "qwc_cgen",
  "qwc_mir",
+ "rustc-hash",
 ]
 
 [[package]]

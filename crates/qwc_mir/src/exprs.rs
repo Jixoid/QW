@@ -18,7 +18,15 @@ impl fmt::Display for SSA {
 }
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum Value {
+  SSA(SSA),
+  Const(Const),
+  GlobalRef(SymbId),
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Const {
   // ZST
   Unit,
@@ -31,28 +39,22 @@ pub enum Const {
 
 #[derive(Debug, Copy, Clone)]
 pub enum Expr {
-  Const(Const),
-  
-  Use(SSA),
-  
-  Binary(SSA, SSA),
+  Binary(Value, Value),
 
-  GlobalRef(SymbId),
+  Store{target: Value, kind: TypeId, value: Value},
+  Load{target: Value, kind: TypeId},
 
-  Store{target: SSA, kind: TypeId, value: SSA},
-  Load{target: SSA, kind: TypeId},
+  Return(Value),
 }
 
 impl Expr {
   pub fn have_result(&self) -> bool {
     match self {
-      Expr::Const(..) => true,
-      Expr::Use(..) => true,
       Expr::Binary(..) => true,
-      Expr::GlobalRef(..) => true,
       Expr::Load{..} => true,
 
       Expr::Store{..} => false,
+      Expr::Return(..) => false,
     }
   }
 }

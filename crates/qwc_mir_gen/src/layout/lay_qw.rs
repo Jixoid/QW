@@ -13,7 +13,7 @@ impl Layouter for LayouterQW {
           
           for id in krate.extra_get(rng) {
             let it: &Type = krate.get(TypeId::new_from(id));
-            let lay = Self::layout(&it.kind, layinfo, krate);
+            let lay = it.layout;
             
             if !lay.is_zst() { var.push((it, lay)) }
           }
@@ -40,7 +40,7 @@ impl Layouter for LayouterQW {
 
       // Sequential
       TypeKind::Array(ty, count) => {
-        let lay = Self::layout(&(krate.get(ty) as &Type).kind, layinfo, krate);
+        let lay = (krate.get(ty) as &Type).layout;
 
         Layout::new(lay.aligned_size() * (count as usize), lay.align().get(), Self::lay_by())
       }

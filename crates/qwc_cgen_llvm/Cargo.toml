@@ -7,3 +7,4 @@ edition = "2024"
 qwc_mir = { path = "../qwc_mir" }
 qwc_cgen = { path = "../qwc_cgen" }
 inkwell = { version = "0.9.0", features = ["llvm22-1"] }
+rustc-hash = "2.1.3"

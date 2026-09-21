@@ -18,9 +18,10 @@ impl Span {
   }
 
 
-  #[cfg(feature = "lexer-internal")]
-  #[cfg(feature = "ast-internal")]
-  pub fn to(&self) -> (u32, NonZeroU16, u16) { (self.off, self.len, self.fid) }
+  #[cfg(any(feature = "lexer-internal", feature = "ast-internal"))]
+  pub fn to(&self) -> (u32, NonZeroU16, u16) {
+    (self.off, self.len, self.fid)
+  }
 
 
   pub fn str<'a>(&self, far: &'a Files) -> &'a str {

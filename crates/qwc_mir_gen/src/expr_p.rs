@@ -1,6 +1,6 @@
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
-use qwc_mir as mir;
+use qwc_mir::{self as mir, Value};
 
 use crate::{BlockBuilder, Ctx, SymbLow, type_p::TypeLow};
 
@@ -9,15 +9,18 @@ pub struct ExprLow;
 
 impl ExprLow {
 
-  pub fn low(ctx: &mut Ctx, bbld: &mut BlockBuilder, id: hir::ExprId) -> Result<Option<mir::SSA>, Message> {
+  pub fn low(ctx: &mut Ctx, bbld: &mut BlockBuilder, id: hir::ExprId) -> Result<Option<Value>, Message> {
     let it: &hir::Expr = ctx.src.get(id);
 
     let it = match it.kind {
-      hir::ExprKind::Const(val) => Self::low_const(ctx, bbld, val)?,
+      // Value
+      hir::ExprKind::Const(val) => Some(Self::low_const(ctx, val)?),
 
+      hir::ExprKind::GlobalRef(item) => Some(Self::low_global_ref(ctx, item)?),
+      
+      
+      // Non Return Expr
       hir::ExprKind::Assign{lhs, rhs} => {Self::low_assign(ctx, bbld, lhs, rhs)?; None},
-
-      hir::ExprKind::GlobalRef(item) => Self::low_global_ref(ctx, bbld, item)?,
 
       c @_ => todo!("{c:#?}")
     };
@@ -26,7 +29,7 @@ impl ExprLow {
   }
 
 
-  fn low_const(_ctx: &mut Ctx, bbld: &mut BlockBuilder, val: hir::Const) -> Result<Option<mir::SSA>, Message> {
+  fn low_const(_ctx: &mut Ctx, val: hir::Const) -> Result<Value, Message> {
     let cons = match val {
       hir::Const::Unit => mir::Const::Unit,
       
@@ -35,11 +38,22 @@ impl ExprLow {
 
     
     // Post
-    let this = mir::Expr::Const(
+    let this = Value::Const(
       cons
     );
 
-    Ok(bbld.emit(this))
+    Ok(this)
+  }
+
+  fn low_global_ref(ctx: &mut Ctx, item: hir::ItemId) -> Result<Value, Message> {
+    let item = SymbLow::low(ctx, item)?.unwrap();
+
+    // Post
+    let this = Value::GlobalRef(
+      item
+    );
+
+    Ok(this)
   }
 
 
@@ -61,18 +75,6 @@ impl ExprLow {
     bbld.emit(this);
     
     Ok(())
-  }
-
-
-  fn low_global_ref(ctx: &mut Ctx, bbld: &mut BlockBuilder, item: hir::ItemId) -> Result<Option<mir::SSA>, Message> {
-    let item = SymbLow::low(ctx, item)?.unwrap();
-
-    // Post
-    let this = mir::Expr::GlobalRef(
-      item
-    );
-
-    Ok(bbld.emit(this))
   }
 
 }

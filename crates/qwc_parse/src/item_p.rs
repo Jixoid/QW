@@ -97,6 +97,8 @@ impl ItemParser {
     let start = lex.peek()?;
     let name = lex.get()?.ident(sin, far)?;
 
+    lex.get()?.expect_kind(WK::Colon)?;
+
     let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
 
     lex.get()?.expect_kind(WK::Semicolon)?;

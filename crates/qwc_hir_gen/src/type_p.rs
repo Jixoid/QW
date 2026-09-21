@@ -102,12 +102,9 @@ impl TypeLow {
         let it: &ast::Item = ctx.src.get(ast::ItemId::new_from(id));
         
         match it.kind {
-          ast::ItemKind::Let{kind, ..} => {
-            if let Some(kind) = kind {
-              let id = Self::low(ctx, kind)?;
-
-              ctn.push(id);
-            }
+          ast::ItemKind::Member{kind} => {
+            let id = Self::low(ctx, kind)?;
+            ctn.push(id);
           }
 
           _ => todo!("{:#?}", it)

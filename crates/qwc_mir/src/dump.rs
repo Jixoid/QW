@@ -3,7 +3,7 @@ use std::fmt;
 use owo_colors::OwoColorize;
 
 use crate::{
-  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Type, TypeId, TypeKind, id::{InstId, MirId, NodeKind, SpecAny},
+  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
 };
 
 
@@ -165,10 +165,6 @@ impl DumpHandler for Block {
       it.dump(cre, f, indent)?;
       writeln!(f)?;
     }
-
-    if let Some(ret) = self.ret {
-      writeln!(f, "{}{} {}{}", " ".repeat(indent+2), "ret".blue().bold(), ret, ";".bright_black())?;
-    }
     
     write!(f, "}}")?;
 
@@ -188,16 +184,18 @@ impl DumpHandler for Inst {
 impl DumpHandler for Expr {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
-      Expr::Const(cons) => cons.dump(cre, f, indent)?,
-
-      Expr::GlobalRef(symb) => write!(f, "{}{}", "@".bright_yellow(), cre.sym_str((cre.get(symb) as &Symbol).name).bright_yellow())?,
-
       Expr::Store{target, kind, value} => {
         write!(f, "{} ", "store".blue().bold())?;
         kind.dump(cre, f, indent)?;
-        write!(f, " {}", value)?; 
-        
-        write!(f, ", {} {}", "ptr", target)?;
+        write!(f, ", ")?;
+        value.dump(cre, f, indent)?;
+        write!(f, " -> ")?;
+        target.dump(cre, f, indent)?;
+      }
+
+      Expr::Return(value) => {
+        write!(f, "{} ", "ret".blue().bold())?;
+        value.dump(cre, f, indent)?;
       }
 
       _ => todo!("{self:#?}")
@@ -213,6 +211,20 @@ impl DumpHandler for Const {
       Const::Unit => write!(f, "{}", "()".yellow())?,
 
       _ => todo!("{self:#?}")
+    }
+
+    Ok(())
+  }
+}
+
+impl DumpHandler for Value {
+  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    match *self {
+      Value::SSA(it) => write!(f, "{}", it)?,
+      
+      Value::Const(it) => it.dump(cre, f, indent)?,
+
+      Value::GlobalRef(it) => write!(f, "{}{}", "@".bright_yellow(), cre.sym_str((cre.get(it) as &Symbol).name).bright_yellow())?,
     }
 
     Ok(())

@@ -34,22 +34,37 @@ impl BlokLow {
       ExprLow::low(ctx, &mut bbld, id)?;
     }
 
-    let ret = match expr {
-      Some(eid) => ExprLow::low(ctx, &mut bbld, eid)?,
-      None => None,
+
+    if let Some(expr) = expr {
+      let ret = ExprLow::low(ctx, &mut bbld, expr)?;
+
+      ret.map(|ret| {
+        // Post
+        let this = mir::Expr::Return(ret);
+
+        bbld.emit(this)
+      });
     };
 
-    let mut inst_ids = Vec::with_capacity(bbld.insts.len());
-    for inst in bbld.insts {
-      inst_ids.push(ctx.cre.push(inst));
-    }
-    let insts_rng = ctx.cre.extra(&inst_ids);
-    let stack_rng = ctx.cre.extra(&bbld.stack);
+    let insts = {
+      let mut insts = vec![];
+      
+      for &inst in &bbld.insts {
+        let id = ctx.cre.push(inst);
+        
+        insts.push(id);
+      }
 
+      ctx.cre.extra(&insts)
+    };
+    
+    let stack = ctx.cre.extra(&bbld.stack);
+
+
+    // Post
     let this = mir::Block {
-      insts: insts_rng,
-      stack: stack_rng,
-      ret,
+      insts,
+      stack,
     };
 
     Ok(ctx.cre.push(this))

@@ -22,7 +22,7 @@ pub enum TypeKind {
   Array(TypeId, u32),
   
   // Callable
-  Fun{args: Rng, ret: TypeId},
+  Fun{args: Rng /* TypeId */, ret: TypeId},
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
