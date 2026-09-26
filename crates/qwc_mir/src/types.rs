@@ -20,6 +20,7 @@ pub enum TypeKind {
   
   // Sequential
   Array(TypeId, u32),
+  Slice(TypeId),
   
   // Callable
   Fun{args: Rng /* TypeId */, ret: TypeId},

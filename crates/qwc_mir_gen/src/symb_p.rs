@@ -20,8 +20,10 @@ impl SymbLow {
       hir::ItemKind::RootNS{rng} => {Self::low_root(ctx, rng)?; None},
       hir::ItemKind::NameSpace{rng, name} => {Self::low_namespace(ctx, rng, name)?; None}
 
+      qwc_hir::ItemKind::Using{kind, ..} => {TypeLow::low(ctx, kind)?; None}
+
       hir::ItemKind::Variable{kind, name, expr, ism} => Some(Self::low_variable(ctx, it, name, kind, expr, ism)?),
-      hir::ItemKind::Function{kind, name, expr} => Some(Self::low_function(ctx, name, kind, expr)?),
+      hir::ItemKind::Function{kind, name, expr} => Some(Self::low_function(ctx, it, name, kind, expr)?),
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -59,7 +61,7 @@ impl SymbLow {
   }
 
 
-  fn low_variable(ctx: &mut Ctx, _it: &hir::Item, name: Sid, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> Result<mir::SymbId, Message> {
+  fn low_variable(ctx: &mut Ctx, it: &hir::Item, name: Sid, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> Result<mir::SymbId, Message> {
     let sym = ManglerQW::new(ctx.sin, ctx.mgr, name);
     
     let ety = TypeLow::low(ctx, kind)?;
@@ -70,7 +72,7 @@ impl SymbLow {
     // Post
     let this = mir::Symbol {
       name: ctx.cre.sym(&sym),
-      stat: mir::SymbolStat::Export,
+      stat: convert_vis(it),
       ety,
       kind: mir::SymbolKind::Variable{ ism }
     };
@@ -78,23 +80,48 @@ impl SymbLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn low_function(ctx: &mut Ctx, name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> Result<mir::SymbId, Message> {
+  fn low_function(ctx: &mut Ctx, it: &hir::Item, name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> Result<mir::SymbId, Message> {
     let sym = ManglerQW::new(ctx.sin, ctx.mgr, name);
     
     let ety = TypeLow::low(ctx, kind)?;
 
-    let blok = BlokLow::low(ctx, expr)?;
+    let is_ret_unit = {
+      let ty: &mir::Type = ctx.cre.get(ety);
+      match ty.kind {
+        mir::TypeKind::Fun { ret, .. } => {
+          let ret_ty: &mir::Type = ctx.cre.get(ret);
+          matches!(ret_ty.kind, mir::TypeKind::Unit)
+        }
+        _ => false,
+      }
+    };
+
+    let (entry, blocks, stack) = BlokLow::low_fn(ctx, expr, is_ret_unit)?;
 
 
     // Post
     let this = mir::Symbol {
       name: ctx.cre.sym(&sym),
-      stat: mir::SymbolStat::Export,
+      stat: convert_vis(it),
       ety,
-      kind: mir::SymbolKind::Function{ blok }
+      kind: mir::SymbolKind::Function{ entry, blocks, stack }
     };
 
     Ok(ctx.cre.push(this))
   }
   
+}
+
+
+fn convert_vis(it: &hir::Item) -> mir::SymbolStat {
+  match it.vis {
+    hir::ItemVis::Private => mir::SymbolStat::Private,
+
+    hir::ItemVis::Public => match it.svis {
+      None => mir::SymbolStat::Internal,
+
+      Some(hir::SymVis::Import) => mir::SymbolStat::Import,
+      Some(hir::SymVis::Export) => mir::SymbolStat::Export,
+    }
+  }
 }

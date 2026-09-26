@@ -1,13 +1,5 @@
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroU64};
 
-use crate::{Krate, TypeKind};
-
-
-pub trait Layouter {
-  fn layout(it: &TypeKind, layinfo: &LayoutInfo, krate: &Krate) -> Layout;
-
-  fn lay_by() -> LayoutBy;
-}
 
 pub struct LayoutInfo {
   pub ptr_size: Layout,
@@ -27,9 +19,17 @@ pub struct LayoutInfo {
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum LayoutKind {
+  SST{align: NonZeroU32, size: NonZeroU64},
+  ZST,
+  DST{align: NonZeroU32},
+  DSAT,
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Layout {
-  size: usize,
-  align: NonZeroUsize,
+  kind: LayoutKind,
   by: LayoutBy,
 }
 
@@ -41,56 +41,113 @@ pub enum LayoutBy { SYS, QW, C }
 
 impl Layout {
 
-  pub const fn new(size: usize, align: usize, by: LayoutBy) -> Self {
-    let align = NonZeroUsize::new(align).unwrap();
-    assert!(align.get().is_power_of_two());
-    Self { size, align, by }
+  // new_*
+  pub const fn new_sst(size: u64, align: u32, by: LayoutBy) -> Self {
+    assert!(align.is_power_of_two());
+    
+    let size = NonZeroU64::new(size).unwrap();
+    let align = NonZeroU32::new(align).unwrap();
+
+    Layout {
+      kind: LayoutKind::SST{ align, size },
+      by
+    }
+  }
+
+  pub const fn new_zst(by: LayoutBy) -> Self {
+    Layout {
+      kind: LayoutKind::ZST,
+      by
+    }
+  }
+
+  pub const fn new_dst(align: u32, by: LayoutBy) -> Self {
+    assert!(align.is_power_of_two());
+    
+    let align = NonZeroU32::new(align).unwrap();
+
+    Layout {
+      kind: LayoutKind::DST{ align },
+      by
+    }
+  }
+
+  pub const fn new_dsat(by: LayoutBy) -> Self {
+    Layout {
+      kind: LayoutKind::DSAT,
+      by
+    }
   }
 
 
-  pub const fn is_zst(&self) -> bool {
-    self.size == 0
-  }
-
-
-  pub const fn size(&self) -> usize {
-    self.size
+  // is_*
+  pub const fn is_sst(&self) -> bool {
+    matches!(self.kind, LayoutKind::SST{..})
   }
   
-  pub const fn size_byte(&self) -> usize {
-    self.size.div_ceil(8)
+  pub const fn is_zst(&self) -> bool {
+    matches!(self.kind, LayoutKind::ZST{..})
+  }
+
+  pub const fn is_dst(&self) -> bool {
+    matches!(self.kind, LayoutKind::DST{..})
+  }
+
+  pub const fn is_dsat(&self) -> bool {
+    matches!(self.kind, LayoutKind::DSAT{..})
   }
 
 
-  pub const fn align(&self) -> NonZeroUsize {
-    self.align
+  // get
+  pub const fn size(&self) -> Option<u64> {
+    match self.kind {
+      LayoutKind::SST{size, ..} => Some(size.get()),
+      _ => None
+    }
+  }
+  
+
+  pub const fn align(&self) -> Option<u32> {
+    match self.kind {
+      LayoutKind::SST{align, ..} => Some(align.get()),
+      LayoutKind::DST{align} => Some(align.get()),
+      _ => None
+    }
   }
 
-  pub const fn align_byte(&self) -> NonZeroUsize {
-    self.align.div_ceil(unsafe {NonZeroUsize::new_unchecked(8)})
+
+  pub const fn aligned_size(&self) -> Option<u64> {
+    if let Some(size) = self.size() {
+      if let Some(align) = self.align() {
+        let align = align as u64;
+
+        return Some((size +align -1) & !(align -1))
+      }
+    }
+
+    None
   }
 
 
-  pub const fn aligned_size(&self) -> usize {
-    let a = self.align.get();
-    (self.size + a -1) & !(a -1)
+  pub const fn align_to(&self, offset: u64) -> Option<u64> {
+    if let Some(align) = self.align() {
+      let align = align as u64;
+      debug_assert!(align.is_power_of_two());
+
+      return Some((offset +align -1) & !(align -1))
+    }
+    
+    None
   }
 
-  pub const fn aligned_size_byte(&self) -> usize {
-    self.aligned_size().div_ceil(8)
+
+  // sub
+  pub const fn kind(&self) -> LayoutKind {
+    self.kind
   }
 
-
-  pub const fn align_to(&self, offset: usize) -> usize {
-    let a = self.align.get();
-    debug_assert!(a.is_power_of_two());
-    (offset + a -1) & !(a -1)
-  }
-
-  pub const fn align_to_byte(&self, offset: usize) -> usize {
-    let a = self.align_byte().get();
-    debug_assert!(a.is_power_of_two());
-    (offset + a -1) & !(a -1)
+  pub const fn by(&self) -> LayoutBy {
+    self.by
   }
 
 }

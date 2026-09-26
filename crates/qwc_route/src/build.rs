@@ -1,23 +1,24 @@
-use std::{env, path::Path, time::{Duration, Instant}};
+use std::{env, fs, io::Write, path::Path, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
-use qwc_ast::{self as ast, Visitor};
+use qwc_ast as ast;
 use qwc_cgen::ICGen;
 use qwc_cgen_llvm::CGenLLVM;
-use qwc_hir::{self as hir};
-use qwc_mir::{self as mir, Layout, LayoutInfo};
+use qwc_hir as hir;
+use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
 use qwc_parse::Parse;
 use qwc_hir_gen::HGen;
 use qwc_mir_gen::MGen;
-use qwc_resolve::ScopeMap;
+use qwc_resolve::{ExportMap, Imod, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
+use qwc_unit::Unit;
 
 use crate::{BuildVariant, DumpStage, Error, parse_conf};
 
 
 pub struct BuildInfo<'a> {
-  pub path: &'a str,
+  pub path: &'a Path,
   pub variant: BuildVariant,
   pub verbose: u8,
   pub timings: bool,
@@ -39,7 +40,6 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     let mut submods_to_load = vec![];
     
     for id in cre.extra_get(rng) {
-      let id = ast::ItemId::new_from(id);
       let it: &ast::Item = cre.get(id);
       
       if let ast::ItemKind::ModuleUnloaded = it.kind {
@@ -101,9 +101,10 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   let mut sin = StrInterner::new();
 
   let legcurpath = env::current_dir()?;
-  env::set_current_dir(fpath)?;
+  let abs_fpath = fpath.canonicalize().unwrap_or_else(|_| fpath.to_path_buf());
+  env::set_current_dir(&abs_fpath)?;
 
-  let conf = parse_conf(fpath, &mut far)?;
+  let conf = parse_conf(&abs_fpath, &mut far)?;
   
   let entry_file = {
     let path1 = Path::new("src/main.qw");
@@ -146,10 +147,9 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   Ok((cre, sin, far, time))
 }
 
-pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files) -> Result<(ScopeMap, Duration), Error> {
-
+pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imods: &[Imod<'_>]) -> Result<(ScopeMap, Duration), Error> {
   let now = Instant::now();
-  let ret = ScopeMap::visit(&ast_cre, &sin, &far);
+  let ret = ScopeCollector::collect(ast_cre, sin, imods);
   let time = now.elapsed();
 
   match ret {
@@ -164,9 +164,9 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files) -> 
   }
 }
 
-pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap) -> Result<(hir::Krate, Duration), Error> {
+pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, imods: &[hir::CID], ideps: &mut hir::Deps) -> Result<(hir::CID, Duration), Error> {
   let now = Instant::now();
-  let (hir_cre, sum) = HGen::low(&ast_cre, sin, far, ast_scp);
+  let (hir_cid, sum) = HGen::low(&ast_cre, sin, far, ast_scp, imods, ideps);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -177,10 +177,29 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
     if sum.sumerr() > 0 { return Err(Error::New | "") }
   }
 
-  Ok((hir_cre.unwrap(), time))
+  Ok((hir_cid.unwrap(), time))
 }
 
-pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, layinfo: &LayoutInfo) -> Result<(mir::Krate, Duration), Error> {
+pub fn build_hir_export(hir_cre: &hir::Krate, far: &Files) -> Result<(ExportMap, Duration), Error> {
+  use hir::Visitor;
+
+  let now = Instant::now();
+  let ret = ExportMap::visit(hir_cre);
+  let time = now.elapsed();
+
+  match ret {
+    Ok(v) => Ok((v, time)),
+    Err(sum) => {
+      for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    
+      eprint!("{}", sum);
+
+      Err(Error::New | "")
+    }
+  }
+}
+
+pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo) -> Result<(mir::Krate, Duration), Error> {
   let now = Instant::now();
   let (mir_cre, sum) = MGen::low(&hir_cre, sin, layinfo);
   let time = now.elapsed();
@@ -196,9 +215,11 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(mir_cre: &mir::Krate) -> Result<Duration, Error> {
+pub fn build_cgen(mir_cre: &mir::Krate, fpath: &Path) -> Result<Duration, Error> {
   let now = Instant::now();
-  CGenLLVM::generate(mir_cre);
+  
+  CGenLLVM::generate(mir_cre, fpath).map_err(|err| Error::Str(err))?;
+
   let time = now.elapsed();
 
   Ok(time)
@@ -207,77 +228,157 @@ pub fn build_cgen(mir_cre: &mir::Krate) -> Result<Duration, Error> {
 
 
 pub fn build(info: BuildInfo) -> Result<(), Error> {
-  // PASS 1
-  if info.verbose > 0 { eprintln!("{}", "parse".red().bold()) }
+  // Layout
+  let hir_layinfo = hir::LayoutInfo{
+    bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+
+    i8_lay:   hir::Layout::new_static(hir::LayoutBy::SYS),
+    i16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    i32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    i64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    i128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+
+    bf16_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+    f16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    f32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    f64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
+    f128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+
+    ptr_size: hir::Layout::new_static(hir::LayoutBy::SYS),
+  };
+
+  let mir_layinfo = mir::LayoutInfo{
+    i8_lay:   mir::Layout::new_sst(1,  1,  mir::LayoutBy::SYS),
+    i16_lay:  mir::Layout::new_sst(2,  2,  mir::LayoutBy::SYS),
+    i32_lay:  mir::Layout::new_sst(4,  4,  mir::LayoutBy::SYS),
+    i64_lay:  mir::Layout::new_sst(8,  8,  mir::LayoutBy::SYS),
+    i128_lay: mir::Layout::new_sst(16, 16, mir::LayoutBy::SYS),
+
+    bf16_lay: mir::Layout::new_sst(1,  1,  mir::LayoutBy::SYS),
+    f16_lay:  mir::Layout::new_sst(2,  2,  mir::LayoutBy::SYS),
+    f32_lay:  mir::Layout::new_sst(4,  4,  mir::LayoutBy::SYS),
+    f64_lay:  mir::Layout::new_sst(8,  8,  mir::LayoutBy::SYS),
+    f128_lay: mir::Layout::new_sst(16, 16, mir::LayoutBy::SYS),
+
+    ptr_size: mir::Layout::new_sst(8, 8, mir::LayoutBy::SYS),
+  };
+
+
+  // PASS 1 (parse)
+  if info.verbose > 0 { eprintln!("{}", "PASS 1 (parse)".red().bold()) }
   
-  let (ast_cre, sin, far, parse_time) = build_ast_krate(Path::new(info.path), &info)?;
+  let (ast_cre, mut sin, far, time_pass1_parse) = build_ast_krate(info.path, &info)?;
   
   if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
-  
-  
-  // PASS 1 + ScopeMap
-  if info.verbose > 0 { eprintln!("{}", "scope".red().bold()) }
-  
-  let (ast_scp, scope_time) = build_ast_scope(&ast_cre, &sin, &far)?;
-  
-  if info.dump.contains(&DumpStage::Scope) { eprintln!("{}", qwc_resolve::dupm_scp::Dump{scp: &ast_scp, sin: &sin, root: ast_cre.root().unwrap().to_any()}) }
-  
-  
-  // PASS 2
-  if info.verbose > 0 { eprintln!("{}", "hgen".red().bold()) }
-  
-  let (hir_cre, hgen_time) = build_hir_krate(&ast_cre, &sin, &far, &ast_scp)?;
-  
-  if info.check_only {
-    return Ok(())
-  }
+
+
+  // Core & Imods
+  let mut deps = hir::Deps::new();
+  let core_cid = deps.get_next_id();
+  let (core_cre, core_exp) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+  deps.add(core_cre);
+  let core_name = sin.sid("core");
+  let imods = [Imod::new(core_name, &core_exp)];
+  let imod_cids = [core_cid];
 
   
-  // Target
-  let layinfo = LayoutInfo{
-    i8_lay:   Layout::new(8,   8,  mir::LayoutBy::SYS),
-    i16_lay:  Layout::new(16,  16, mir::LayoutBy::SYS),
-    i32_lay:  Layout::new(32,  32, mir::LayoutBy::SYS),
-    i64_lay:  Layout::new(64,  64, mir::LayoutBy::SYS),
-    i128_lay: Layout::new(128, 64, mir::LayoutBy::SYS),
+  // PASS 1 (scope)
+  if info.verbose > 0 { eprintln!("{}", "PASS 1 (scope)".red().bold()) }
+  
+  let (scp, time_pass1_scope) = build_ast_scope(&ast_cre, &sin, &far, &imods)?;
+  
+  if info.dump.contains(&DumpStage::Scope) { eprintln!("{}", qwc_resolve::dupm_scp::Dump{scp: &scp, sin: &sin, root: ast_cre.root().unwrap().to_any()}) }
+  
+  
+  // PASS 2 (hgen)
+  if info.verbose > 0 { eprintln!("{}", "PASS 2 (hgen)".red().bold()) }
+  
+  let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, &imod_cids, &mut deps)?;
+  let hir_cre = deps.get(hir_cid);
+  
+  if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, sin: &sin}) }
+  
+  if info.check_only { return Ok(()) }
 
-    bf16_lay: Layout::new(16,  16, mir::LayoutBy::SYS),
-    f16_lay:  Layout::new(16,  16, mir::LayoutBy::SYS),
-    f32_lay:  Layout::new(32,  32, mir::LayoutBy::SYS),
-    f64_lay:  Layout::new(64,  64, mir::LayoutBy::SYS),
-    f128_lay: Layout::new(128, 64, mir::LayoutBy::SYS),
 
-    ptr_size: Layout::new(64, 64, mir::LayoutBy::SYS),
-  };
+  // DROP scp
+  drop(scp);
   
   
-  // Pass 3
-  if info.verbose > 0 { eprintln!("{}", "mgen".red().bold()) }
+  // PASS 2 (export)
+  if info.verbose > 0 { eprintln!("{}", "PASS 2 (export)".red().bold()) }
   
-  let (mir_cre, mgen_time) = build_mir_krate(&hir_cre, &sin, &far, &layinfo)?;
+  let (exp, time_pass2_export) = build_hir_export(hir_cre, &far)?;
+  
+  if info.dump.contains(&DumpStage::Export) { eprintln!("{}", qwc_resolve::dump_exp::Dump{exp: &exp, cre: hir_cre, sin: &sin, root: hir_cre.root().unwrap().to_any()}) }
+
+
+  // QWU save
+  let mut qwu = fs::File::create(info.path.join("build").join("out.qwu"))?;
+
+  Unit::serialize(&mut qwu, hir_cre, &exp)?;
+
+  qwu.flush()?;
+
+  
+  // Pass 3 (mgen)
+  if info.verbose > 0 { eprintln!("{}", "PASS 3 (mgen)".red().bold()) }
+  
+  let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &sin, &far, &mir_layinfo)?;
   
   if info.dump.contains(&DumpStage::Mir) { eprintln!("{}", mir::Dump{cre: &mir_cre}) }
   
   
-  // Pass 4
-  if info.verbose > 0 { eprintln!("{}", "cgen".red().bold()) }
+  // Pass 4 (cgen)
+  if info.verbose > 0 { eprintln!("{}", "PASS 4 (cgen)".red().bold()) }
+  
+  if !info.path.join("build").exists() {
+    fs::create_dir(info.path.join("build"))?;
+  }
+  
+  let time_pass4_cgen = build_cgen(&mir_cre, &info.path.join("build").join("out.ll"))?;
+  
+  if info.dump.contains(&DumpStage::Lir) { eprintln!("{}", fs::read_to_string(info.path.join("build").join("out.ll"))?) }
 
-  let cgen_time = build_cgen(&mir_cre)?;
 
-
-  // Extra Info
+  // Timings
   if info.timings {
-    eprintln!("{}: {:?}", "timings".yellow().bold(), (parse_time + scope_time + hgen_time + mgen_time + cgen_time));
+    let pass1 = time_pass1_parse + time_pass1_scope;
+    let pass2 = time_pass2_hgen + time_pass2_export;
+    let pass3 = time_pass3_mgen;
+    let pass4 = time_pass4_cgen;
+
+    eprintln!("{}{} {:?}", "timings".yellow().bold(), ":".bright_black(), (pass1 + pass2 + pass3 + pass4));
     
     if info.verbose > 0 {
-      eprintln!("  {}: {:?}", "parse".yellow(), parse_time);
-      eprintln!("  {}: {:?}", "scope".yellow(), scope_time);
-      eprintln!("  {}:  {:?}", "hgen".yellow(), hgen_time);
-      eprintln!("  {}:  {:?}", "mgen".yellow(), mgen_time);
-      eprintln!("  {}:  {:?}", "cgen".yellow(), cgen_time);
+      eprintln!("  {}{} {:?}", "pass 1".yellow(), ":".bright_black(), pass1);
+      if info.verbose > 1 {
+        eprintln!("    {}{} {:?}", "parse".cyan(), ":".bright_black(), time_pass1_parse);
+        eprintln!("    {}{} {:?}", "scope".cyan(), ":".bright_black(), time_pass1_scope);
+      }
+      
+      eprintln!("  {}{} {:?}", "pass 2".yellow(), ":".bright_black(), pass2);
+      if info.verbose > 1 {
+        eprintln!("    {}{} {:?}", "hgen".cyan(), ":".bright_black(), time_pass2_hgen);
+        eprintln!("    {}{} {:?}", "export".cyan(), ":".bright_black(), time_pass2_export);
+      }
+      
+      eprintln!("  {}{} {:?}", "pass 3".yellow(), ":".bright_black(), pass3);
+      if info.verbose > 1 {
+        eprintln!("    {}{} {:?}", "mgen".cyan(), ":".bright_black(), time_pass3_mgen);
+      }
+      
+      eprintln!("  {}{} {:?}", "pass 4".yellow(), ":".bright_black(), pass4);
+      if info.verbose > 1 {
+        eprintln!("    {}{} {:?}", "cgen".cyan(), ":".bright_black(), time_pass4_cgen);
+      }
+      
+      eprintln!()
     }
   }
   
+
+  // Usages
   if info.usages {
     let (ast_used, ast_alloc) = (ast_cre.size_all_used(), ast_cre.size_all_alloc());
     let (hir_used, hir_alloc) = (hir_cre.size_all_used(), hir_cre.size_all_alloc());
@@ -288,32 +389,38 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     if info.verbose > 0 {
       eprintln!("  {}: {} {} {}", "ast".yellow(), humanize_size(ast_used), "/".bright_black(), humanize_size(ast_alloc));
       if info.verbose > 1 {
-        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(ast_cre.size_used::<ast::Type>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Type>()));
-        eprintln!("   {}: {} {} {}", "expr".cyan(), humanize_size(ast_cre.size_used::<ast::Expr>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Expr>()));
-        eprintln!("   {}: {} {} {}", "item".cyan(), humanize_size(ast_cre.size_used::<ast::Item>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Item>()));
-        eprintln!("   {}: {} {} {}", "patt".cyan(), humanize_size(ast_cre.size_used::<ast::Patt>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Patt>()));
-        eprintln!("   {}: {} {} {}", "thing".cyan(), humanize_size(ast_cre.size_used::<ast::Thing>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::Thing>()));
-        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(ast_cre.size_used::<ast::AnyId>()), "/".bright_black(), humanize_size(ast_cre.size_alloc::<ast::AnyId>()));
+        eprintln!("    {}: {}", "type".cyan(), humanize_size(ast_cre.size_used::<ast::Type>()));
+        eprintln!("    {}: {}", "expr".cyan(), humanize_size(ast_cre.size_used::<ast::Expr>()));
+        eprintln!("    {}: {}", "item".cyan(), humanize_size(ast_cre.size_used::<ast::Item>()));
+        eprintln!("    {}: {}", "patt".cyan(), humanize_size(ast_cre.size_used::<ast::Patt>()));
+        eprintln!("    {}: {}", "thing".cyan(), humanize_size(ast_cre.size_used::<ast::Thing>()));
+        eprintln!("    {}: {}", "extra".cyan(), humanize_size(ast_cre.size_used::<ast::AnyId>()));
       }
       
       eprintln!("  {}: {} {} {}", "hir".yellow(), humanize_size(hir_used), "/".bright_black(), humanize_size(hir_alloc));
       if info.verbose > 1 {
-        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(hir_cre.size_used::<hir::Type>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Type>()));
-        eprintln!("   {}: {} {} {}", "expr".cyan(), humanize_size(hir_cre.size_used::<hir::Expr>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Expr>()));
-        eprintln!("   {}: {} {} {}", "item".cyan(), humanize_size(hir_cre.size_used::<hir::Item>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::Item>()));
-        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(hir_cre.size_used::<hir::AnyId>()), "/".bright_black(), humanize_size(hir_cre.size_alloc::<hir::AnyId>()));
+        eprintln!("    {}: {}", "type".cyan(), humanize_size(hir_cre.size_used::<hir::Type>()));
+        eprintln!("    {}: {}", "expr".cyan(), humanize_size(hir_cre.size_used::<hir::Expr>()));
+        eprintln!("    {}: {}", "item".cyan(), humanize_size(hir_cre.size_used::<hir::Item>()));
+        eprintln!("    {}: {}", "extra".cyan(), humanize_size(hir_cre.size_used::<hir::AnyId>()));
       }
 
       eprintln!("  {}: {} {} {}", "mir".yellow(), humanize_size(mir_used), "/".bright_black(), humanize_size(mir_alloc));
       if info.verbose > 1 {
-        eprintln!("   {}: {} {} {}", "type".cyan(), humanize_size(mir_cre.size_used::<mir::Type>()), "/".bright_black(), humanize_size(mir_cre.size_alloc::<mir::Type>()));
-        eprintln!("   {}: {} {} {}", "extra".cyan(), humanize_size(mir_cre.size_used::<mir::AnyId>()), "/".bright_black(), humanize_size(mir_cre.size_alloc::<mir::AnyId>()));
+        eprintln!("    {}: {}", "type".cyan(), humanize_size(mir_cre.size_used::<mir::Type>()));
+        eprintln!("    {}: {}", "symb".cyan(), humanize_size(mir_cre.size_used::<mir::Symbol>()));
+        eprintln!("    {}: {}", "blok".cyan(), humanize_size(mir_cre.size_used::<mir::Block>()));
+        eprintln!("    {}: {}", "inst".cyan(), humanize_size(mir_cre.size_used::<mir::Inst>()));
+        eprintln!("    {}: {}", "extra".cyan(), humanize_size(mir_cre.size_used::<mir::AnyId>()));
       }
+
+      eprintln!()
     }
   }
 
   Ok(())
 }
+
 
 fn humanize_size(size: usize) -> String {
   let (val, set) = 'a: {

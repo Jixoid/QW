@@ -1,3 +1,8 @@
-mod icgen;
+use std::path::Path;
 
-pub use icgen::*;
+use qwc_mir as mir;
+
+
+pub trait ICGen {
+  fn generate(mir: &mir::Krate, fpath: &Path) -> Result<(), String>;
+}

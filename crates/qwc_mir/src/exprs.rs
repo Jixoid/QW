@@ -23,6 +23,7 @@ pub enum Value {
   SSA(SSA),
   Const(Const),
   GlobalRef(SymbId),
+  StackRef(u32),
 }
 
 
@@ -43,8 +44,6 @@ pub enum Expr {
 
   Store{target: Value, kind: TypeId, value: Value},
   Load{target: Value, kind: TypeId},
-
-  Return(Value),
 }
 
 impl Expr {
@@ -54,7 +53,6 @@ impl Expr {
       Expr::Load{..} => true,
 
       Expr::Store{..} => false,
-      Expr::Return(..) => false,
     }
   }
 }

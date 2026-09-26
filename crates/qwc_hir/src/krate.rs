@@ -1,43 +1,78 @@
-use core::slice;
+use std::{num::NonZero, slice};
+use serde::Serialize;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, Expr, Item, ItemId, Type, TypeId, id::{HirId, HirKind, ExprId, NodeKind, SpecAny}, ty_interner::TypeInterner};
+use crate::{AnyId, Expr, Item, ItemId, Type, TypeId, id::{HirId, HirKind, ExprId, NodeKind, SpecAny}};
 
 
+
+#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct CID (pub(crate) NonZero<u16>);
+
+
+pub struct Deps {
+  imod: Vec<Krate>,
+}
+
+impl Deps {
+  pub fn new() -> Self {
+    Self { imod: vec![] }
+  }
+
+
+  pub fn add(&mut self, cre: Krate) -> CID {
+    self.imod.push(cre);
+
+    CID( NonZero::<u16>::new(u16::try_from(self.imod.len()).unwrap()).unwrap() )
+  }
+
+  pub fn get_next_id(&mut self) -> CID {
+    CID( NonZero::<u16>::new(u16::try_from(self.imod.len() +1).unwrap()).unwrap() )
+  }
+
+  pub fn get(&self, cid: CID) -> &Krate {
+    &self.imod[cid.0.get() as usize -1]
+  }
+}
+
+
+
+#[derive(Serialize)]
 pub struct Krate {
   // Root
   root: Option<ItemId>,
 
+  // cid
+  cid: CID,
+
   // Arena
-  pub(super) list_type: Arena<Type>,
+  list_type: Arena<Type>,
   list_expr: Arena<Expr>,
   list_item: Arena<Item>,
 
   extra_data: (Arena<HirId<SpecAny>>, Arena<NodeKind>),
-
-  // Type Interning
-  pub(super) tyin: Option<TypeInterner>,
 }
 
 impl Krate {
 
-  pub fn new() -> Self {
-    let mut ret = Self{
+  // New
+  pub fn new(cid: CID) -> Self {
+    Self{
       root: None,
-      
+
+      cid,
+
       list_type: Arena::new(),
       list_expr: Arena::new(),
       list_item: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
+    }
+  }
 
-      tyin: None,
-    };
-
-    ret.tyin = Some(TypeInterner::new(&mut ret));
-
-    ret
+  pub fn cid(&self) -> CID {
+    self.cid
   }
 
 
@@ -128,25 +163,25 @@ pub trait ArenaNode {
 impl ArenaNode for Type {
   type Id = TypeId;
 
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(0, u32::try_from(krate.list_type.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_type[id.idx() as usize] }
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_type.push(obj)).unwrap()) }
+  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_type[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_type[id.idx() as usize] }
 }
 
 impl ArenaNode for Expr {
   type Id = ExprId;
 
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(0, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_expr[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_expr[id.idx() as usize] }
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
+  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_expr[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_expr[id.idx() as usize] }
 }
 
 impl ArenaNode for Item {
   type Id = ItemId;
 
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(0, u32::try_from(krate.list_item.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_item[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_item[id.idx() as usize] }
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_item.push(obj)).unwrap()) }
+  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_item[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_item[id.idx() as usize] }
 }
 
 

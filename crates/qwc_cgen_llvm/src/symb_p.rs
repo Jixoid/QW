@@ -1,5 +1,5 @@
 use inkwell::{GlobalVisibility, module::Linkage};
-use qwc_mir::{AnyId, Block, SymbId, Symbol, SymbolKind, SymbolStat, Type, id::NodeKind};
+use qwc_mir::{AnyId, SymbId, Symbol, SymbolKind, SymbolStat, Type, id::NodeKind};
 
 use crate::{blok_p::BlokLow, context::{CGenCtx, SymbolVal}, type_p::TypeLow};
 
@@ -24,7 +24,7 @@ impl SymbLow {
             SymbolStat::Private => {
               gv.set_linkage(Linkage::Private);
             }
-            SymbolStat::Normal => {
+            SymbolStat::Internal => {
               gv.set_linkage(Linkage::External);
               gv.set_visibility(GlobalVisibility::Hidden);
             }
@@ -49,7 +49,7 @@ impl SymbLow {
             SymbolStat::Private => {
               fv.set_linkage(Linkage::Private);
             }
-            SymbolStat::Normal => {
+            SymbolStat::Internal => {
               fv.set_linkage(Linkage::External);
               fv.as_global_value().set_visibility(GlobalVisibility::Hidden);
             }
@@ -84,12 +84,11 @@ impl SymbLow {
           }
         }
 
-        SymbolKind::Function{blok} => {
+        SymbolKind::Function{entry, blocks, stack} => {
           if it.stat != SymbolStat::Import {
             if let Some(SymbolVal::Function(fv)) = cgen.symbols.get(&symb_id).copied() {
-              let blok: &Block = cgen.cre.get(blok);
               let ty: &Type = cgen.cre.get(it.ety);
-              BlokLow::low(cgen, fv, ty, blok);
+              BlokLow::low(cgen, fv, ty, entry, blocks, stack);
             }
           }
         }

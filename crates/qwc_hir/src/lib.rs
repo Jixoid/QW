@@ -4,11 +4,14 @@ mod items;
 mod types;
 mod exprs;
 mod dpath;
+mod layout;
 mod visitor;
-mod ty_interner;
+pub mod dump;
 
 pub use dpath::DPath;
-pub use krate::{Krate, Rng};
-pub use id::{AnyId, TypeId, ExprId, ItemId};
+pub use krate::{Krate, Rng, Deps, CID};
+pub use id::{AnyId, TypeId, ExprId, ItemId, NodeKind};
 pub use {items::*, types::*, exprs::* };
+pub use layout::*;
 pub use visitor::Visitor;
+pub use dump::{Dump, DumpHandler};

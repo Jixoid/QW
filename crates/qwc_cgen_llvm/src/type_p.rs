@@ -46,6 +46,8 @@ impl TypeLow {
         elem_ty.array_type(count).into()
       }
 
+      TypeKind::Slice(..) => panic!(),
+
       TypeKind::Struct(rng) => {
         let mut types: Vec<BasicTypeEnum> = Vec::new();
         for (id, kind) in cre.extra_get(rng) {

@@ -9,5 +9,6 @@ qwc_arena = { path = "../qwc_arena" }
 qwc_lexer = { path = "../qwc_lexer", features = ["ast-internal"] }
 qwc_diagnostic = { path = "../qwc_diagnostic", features = ["ast-internal"] }
 qwc_string_interner = { path = "../qwc_string_interner" }
+qwc_dump = { path = "../qwc_dump" }
 rustc-hash = "2.1.3"
 thin-vec = "0.2.19"

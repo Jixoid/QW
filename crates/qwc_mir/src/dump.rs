@@ -1,9 +1,10 @@
 use std::fmt;
 
 use owo_colors::OwoColorize;
+use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 
 use crate::{
-  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
+  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
 };
 
 
@@ -20,7 +21,7 @@ impl<'a> fmt::Display for Dump<'a> {
     writeln!(f, "{}", "MIR Crate Dump".cyan().bold())?;
 
     if self.cre.symbols_len() == 0 && self.cre.types_len() == 0 {
-      writeln!(f, "  {}", "<empty crate>".bright_black())?;
+      writeln!(f, "  {}", punct("<empty crate>"))?;
       return Ok(());
     }
 
@@ -34,55 +35,53 @@ impl<'a> fmt::Display for Dump<'a> {
 }
 
 
-impl DumpHandler for SymbId {
-  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    let symb: &Symbol = cre.get(*self);
-    symb.dump(cre, f, indent)
-  }
-}
 
-impl DumpHandler for TypeId {
-  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    let ty: &Type = cre.get(*self);
-    ty.dump(cre, f, indent)
-  }
-}
-
-impl DumpHandler for BlokId {
-  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    let ty: &Block = cre.get(*self);
-    ty.dump(cre, f, indent)
-  }
-}
-
-impl DumpHandler for InstId {
-  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    let ty: &Inst = cre.get(*self);
-    ty.dump(cre, f, indent)
-  }
-}
-
-
+// Object
 impl DumpHandler for Symbol {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    write_indent(f, indent)?;
     self.stat.dump(cre, f, indent)?;
 
     match self.kind {
-      SymbolKind::Function{ blok } => {
-        write!(f, " {} {}{} ", "rx".blue().bold(), cre.sym_str(self.name).white().bold(), ":".bright_black())?;
+      SymbolKind::Function{ entry, blocks, stack } => {
+        write!(f, "{} {}{} ", kw("fun"), name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, f, indent)?;
-        write!(f, " ")?;
-        blok.dump(cre, f, indent)?;
+        writeln!(f, " {{")?;
+
+        let mut slot_idx = 0;
+        for (id, kind) in cre.extra_get(stack) {
+          if kind == NodeKind::Type {
+            let ty_id = TypeId::new_from((id, kind));
+            write_indent(f, indent + 1)?;
+            write!(f, "{}{} ", tmpval(format!("${}", slot_idx)), punct(":"))?;
+            ty_id.dump(cre, f, indent + 2)?;
+            writeln!(f)?;
+            slot_idx += 1;
+          }
+        }
+
+        for (id, kind) in cre.extra_get(blocks) {
+          if kind == NodeKind::Blok {
+            let b_id = BlokId::new_from((id, kind));
+            let is_entry = b_id == entry;
+            write_indent(f, indent + 1)?;
+            write!(f, "bb{}{}{} ", b_id.idx(), if is_entry { " (entry)" } else { "" }, punct(":"))?;
+            b_id.dump(cre, f, indent + 1)?;
+            writeln!(f)?;
+          }
+        }
+
+        write_indent(f, indent)?;
+        write!(f, "}}")?;
       }
       
       SymbolKind::Variable{ism} => {
-        write!(f, " {} {}{} ", if ism {"rw"} else {"ro"}.blue().bold(), cre.sym_str(self.name).white().bold(), ":".bright_black())?;
+        let kw_sym = if ism { kw("var") } else { kw("let") };
+        write!(f, "{} {}{} ", kw_sym, name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, f, indent)?;
-        write!(f, " {} ", "=".bright_black())?;
-        //value.dump(cre, f, indent)?;
+        write!(f, " {} ", op("="))?;
       }
     }
-    
     
     Ok(())
   }
@@ -90,36 +89,41 @@ impl DumpHandler for Symbol {
 
 impl DumpHandler for Type {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    match self.kind {
-      TypeKind::Unit => write!(f, "{}", "()".green())?,
+    self.layout.dump(cre, f, indent)?;
 
-      TypeKind::Bool => write!(f, "{}", "bool".green())?,
-      TypeKind::Ptr => write!(f, "{}", "ptr".green())?,
+    write!(f, " ")?;
+    
+    match self.kind {
+      TypeKind::Unit => write!(f, "{}", punct("()"))?,
+
+      TypeKind::Bool => write!(f, "{}", ty("bool"))?,
+      TypeKind::Ptr => write!(f, "{}", ty("ptr"))?,
 
       TypeKind::Int(bits, signed) => {
         let prefix = if signed { "i" } else { "u" };
-        write!(f, "{}{}", prefix.yellow(), bits.to_string().yellow())?;
+        write!(f, "{}{}", ty(prefix), ty(bits))?;
       }
 
       TypeKind::Float(kind) => kind.dump(cre, f, indent)?,
 
       TypeKind::Array(elem, count) => {
-        write!(f, "{}", "[".bright_black())?;
+        write!(f, "{}", punct("["))?;
         elem.dump(cre, f, indent)?;
-        write!(f, "{}{}{}",
-          "; ".bright_black(),
-          count.to_string().bright_magenta(),
-          "]".bright_black()
-        )?;
+        write!(f, "{} {}{}", punct(";"), lit_num(count), punct("]"))?;
+      }
+
+      TypeKind::Slice(elem) => {
+        write!(f, "{}", punct("["))?;
+        elem.dump(cre, f, indent)?;
+        write!(f, "{}", punct("]"))?;
       }
 
       TypeKind::Fun { args, ret } => {
-        write!(f, "{}", "fun".blue().bold())?;
-        write!(f, "{}", "(".bright_black())?;
+        write!(f, "{}{}", ty("fun"), punct("("))?;
         let mut first = true;
         for (id, kind) in cre.extra_get(args) {
           if !first {
-            write!(f, "{}", ", ".bright_black())?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           if kind == NodeKind::Type {
@@ -128,16 +132,16 @@ impl DumpHandler for Type {
             write!(f, "<unknown>")?;
           }
         }
-        write!(f, "{}{}", ")".bright_black(), " -> ".blue())?;
+        write!(f, "{} {} ", punct(")"), op("->"))?;
         ret.dump(cre, f, indent)?;
       }
 
       TypeKind::Struct(rng) => {
-        write!(f, "{} {{ ", "struct".blue().bold())?;
+        write!(f, "{} {{ ", kw("struct"))?;
         let mut first = true;
         for (id, kind) in cre.extra_get(rng) {
           if !first {
-            write!(f, "{}", ", ".bright_black())?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           if kind == NodeKind::Type {
@@ -158,24 +162,55 @@ impl DumpHandler for Block {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     writeln!(f, "{{")?;
 
-    for id in cre.extra_get(self.insts) {
-      let it: &Inst = cre.get(InstId::new_from(id));
-
-      write!(f, "{}", " ".repeat(indent+2))?;
-      it.dump(cre, f, indent)?;
+    for (id, kind) in cre.extra_get(self.insts) {
+      let it: &Inst = cre.get(InstId::new_from((id, kind)));
+      
+      write_indent(f, indent +1)?;
+      it.dump(cre, f, indent +1)?;
       writeln!(f)?;
     }
+
+    write_indent(f, indent +1)?;
+    self.term.dump(cre, f, indent +1)?;
+    writeln!(f)?;
     
+    write_indent(f, indent)?;
     write!(f, "}}")?;
 
     Ok(())
   }
 }
 
+impl DumpHandler for Terminator {
+  fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    match self {
+      Terminator::Jump(target) => {
+        write!(f, "{} bb{}", kw("jump"), target.idx())
+      }
+      Terminator::Branch { cond, then_bb, else_bb } => {
+        write!(f, "{} ", kw("branch"))?;
+        cond.dump(cre, f, indent)?;
+        write!(f, "{} bb{}, bb{}", punct(","), then_bb.idx(), else_bb.idx())
+      }
+      Terminator::Return(val) => {
+        write!(f, "{}", kw("ret"))?;
+        if let Some(val) = val {
+          write!(f, " ")?;
+          val.dump(cre, f, indent)?;
+        }
+        Ok(())
+      }
+      Terminator::Unreachable => {
+        write!(f, "{}", "unreachable".red().bold())
+      }
+    }
+  }
+}
+
 impl DumpHandler for Inst {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     if let Some(dest) = self.dest {
-      write!(f, "{} {} ", dest, "=".bright_black())?;
+      write!(f, "{} {} ", dest, op("="))?;
     }
     self.kind.dump(cre, f, indent)
   }
@@ -185,20 +220,27 @@ impl DumpHandler for Expr {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
       Expr::Store{target, kind, value} => {
-        write!(f, "{} ", "store".blue().bold())?;
+        write!(f, "{} ", kw("store"))?;
         kind.dump(cre, f, indent)?;
-        write!(f, ", ")?;
+        write!(f, "{} ", punct(","))?;
         value.dump(cre, f, indent)?;
-        write!(f, " -> ")?;
+        write!(f, " {} ", op("->"))?;
         target.dump(cre, f, indent)?;
       }
 
-      Expr::Return(value) => {
-        write!(f, "{} ", "ret".blue().bold())?;
-        value.dump(cre, f, indent)?;
+      Expr::Load{target, kind} => {
+        write!(f, "{} ", kw("load"))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " {} ", op("<-"))?;
+        target.dump(cre, f, indent)?;
       }
 
-      _ => todo!("{self:#?}")
+      Expr::Binary(lhs, rhs) => {
+        write!(f, "{} ", kw("binary"))?;
+        lhs.dump(cre, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        rhs.dump(cre, f, indent)?;
+      }
     }
     
     Ok(())
@@ -208,9 +250,9 @@ impl DumpHandler for Expr {
 impl DumpHandler for Const {
   fn dump(&self, _cre: &Krate, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     match *self {
-      Const::Unit => write!(f, "{}", "()".yellow())?,
-
-      _ => todo!("{self:#?}")
+      Const::Unit => write!(f, "{}", punct("()"))?,
+      Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
+      Const::Int(i) => write!(f, "{}", lit_num(i))?,
     }
 
     Ok(())
@@ -224,7 +266,12 @@ impl DumpHandler for Value {
       
       Value::Const(it) => it.dump(cre, f, indent)?,
 
-      Value::GlobalRef(it) => write!(f, "{}{}", "@".bright_yellow(), cre.sym_str((cre.get(it) as &Symbol).name).bright_yellow())?,
+      Value::GlobalRef(it) => {
+        let sym: &Symbol = cre.get(it);
+        write!(f, "{}", tmpval(format!("@{}", cre.sym_str(sym.name))))?;
+      }
+
+      Value::StackRef(idx) => write!(f, "{}", tmpval(format!("${}", idx)))?,
     }
 
     Ok(())
@@ -232,13 +279,15 @@ impl DumpHandler for Value {
 }
 
 
+
+// Others
 impl DumpHandler for SymbolStat {
   fn dump(&self, _cre: &Krate, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     match self {
-      SymbolStat::Normal  => {},
-      SymbolStat::Private => write!(f, "{}", "priv".green().bold())?,
-      SymbolStat::Export  => write!(f, "{}", "export".green().bold())?,
-      SymbolStat::Import  => write!(f, "{}", "import".blue().bold())?,
+      SymbolStat::Private  => write!(f, "{} ", kw("private"))?,
+      SymbolStat::Internal => write!(f, "{} ", kw("internal"))?,
+      SymbolStat::Export  => write!(f, "{} ", kw("export"))?,
+      SymbolStat::Import  => write!(f, "{} ", kw("import"))?,
     }
     Ok(())
   }
@@ -253,16 +302,45 @@ impl DumpHandler for FloatKind {
       FloatKind::F64 => "f64",
       FloatKind::F128 => "f128",
     };
-    write!(f, "{}", name.yellow())
+    write!(f, "{}", ty(name))
   }
 }
 
 impl DumpHandler for Layout {
   fn dump(&self, _cre: &Krate, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
-    write!(f, "({}:{})", self.size(), self.size())
+    write!(f, "{}", punct("![layout("))?;
+    
+    match self.kind() {
+      LayoutKind::SST {align, size} => write!(f, "{}{}{}{}{}{}", punct("sst"), punct("("), punct(size), punct(":"), punct(align), punct(")"))?,
+      LayoutKind::ZST  => write!(f, "{}", punct("zst"))?,
+      LayoutKind::DST {align} => write!(f, "{}{}{}{}", punct("dst"), punct("("), align, punct(")"))?,
+      LayoutKind::DSAT => write!(f, "{}", punct("dsat"))?,
+    }
+
+    write!(f, "{}", punct(")]"))?;
+
+    Ok(())
   }
 }
 
+
+
+// IDs
+macro_rules! impl_dump_id {
+  ($id_ty:ident, $node_ty:ident) => {
+    impl DumpHandler for $id_ty {
+      fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        let node: &$node_ty = cre.get(*self);
+        node.dump(cre, f, indent)
+      }
+    }
+  };
+}
+
+impl_dump_id!(SymbId, Symbol);
+impl_dump_id!(TypeId, Type);
+impl_dump_id!(BlokId, Block);
+impl_dump_id!(InstId, Inst);
 
 impl DumpHandler for (MirId<SpecAny>, NodeKind) {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {

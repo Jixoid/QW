@@ -1,5 +1,5 @@
 use inkwell::values::FunctionValue;
-use qwc_mir::{Block, Inst, InstId, Type, TypeId, TypeKind};
+use qwc_mir::{Block, BlokId, Inst, InstId, Rng, Terminator, Type, TypeId, TypeKind};
 
 use crate::{context::CGenCtx, fn_ctx::FnCtx, type_p::{any_type_to_basic, TypeLow}, value_p::ValueLow};
 
@@ -8,7 +8,7 @@ pub struct BlokLow;
 
 impl BlokLow {
 
-  pub fn low<'ctx>(cgen: &mut CGenCtx<'ctx, '_>, fv: FunctionValue<'ctx>, ty: &Type, blok: &Block) {
+  pub fn low<'ctx>(cgen: &mut CGenCtx<'ctx, '_>, fv: FunctionValue<'ctx>, ty: &Type, entry: BlokId, blocks: Rng, stack: Rng) {
     let (ret_ty_id, is_ret_unit) = match ty.kind {
       TypeKind::Fun {ret, ..} => {
         let ret_ty: &Type = cgen.cre.get(ret);
@@ -19,30 +19,82 @@ impl BlokLow {
 
     let mut fn_ctx = FnCtx::new(fv, ret_ty_id, is_ret_unit);
 
-    let bb = cgen.ctx.append_basic_block(fv, "entry");
-    cgen.builder.position_at_end(bb);
+    let mut bb_map: rustc_hash::FxHashMap<BlokId, inkwell::basic_block::BasicBlock<'ctx>> = rustc_hash::FxHashMap::default();
 
+    let entry_bb = cgen.ctx.append_basic_block(fv, "entry");
+    bb_map.insert(entry, entry_bb);
+
+    for (id, kind) in cgen.cre.extra_get(blocks) {
+      if kind == qwc_mir::id::NodeKind::Blok {
+        let b_id = BlokId::new_from((id, kind));
+        if b_id != entry {
+          let llvm_bb = cgen.ctx.append_basic_block(fv, &format!("bb_{}", b_id.idx()));
+          bb_map.insert(b_id, llvm_bb);
+        }
+      }
+    }
 
     // Stack
-    for id in cgen.cre.extra_get(blok.stack) {
-      let it: &Type = cgen.cre.get(TypeId::new_from(id));
-      let ty = any_type_to_basic(TypeLow::low(cgen.ctx, cgen.cre, it));
-      let ptr = cgen.builder.build_alloca(ty, "").unwrap();
-      fn_ctx.stack_slots.push(ptr);
+    cgen.builder.position_at_end(entry_bb);
+    for (id, kind) in cgen.cre.extra_get(stack) {
+      if kind == qwc_mir::id::NodeKind::Type {
+        let it: &Type = cgen.cre.get(TypeId::new_from((id, kind)));
+        let ty = any_type_to_basic(TypeLow::low(cgen.ctx, cgen.cre, it));
+        let ptr = cgen.builder.build_alloca(ty, "").unwrap();
+        fn_ctx.stack_slots.push(ptr);
+      }
     }
 
-    // Insts
-    for id in cgen.cre.extra_get(blok.insts) {
-      let it: &Inst = cgen.cre.get(InstId::new_from(id));
-      Self::low_inst(cgen, &mut fn_ctx, it);
-    }
+    // Populate each block
+    for (id, kind) in cgen.cre.extra_get(blocks) {
+      if kind == qwc_mir::id::NodeKind::Blok {
+        let b_id = BlokId::new_from((id, kind));
+        let blok: &Block = cgen.cre.get(b_id);
+        let llvm_bb = bb_map[&b_id];
+        cgen.builder.position_at_end(llvm_bb);
 
-    // Ensure basic block terminator
-    if bb.get_terminator().is_none() {
-      if fn_ctx.is_ret_unit {
-        cgen.builder.build_return(None).unwrap();
-      } else {
-        cgen.builder.build_unreachable().unwrap();
+        for (inst_id, kind) in cgen.cre.extra_get(blok.insts) {
+          if kind == qwc_mir::id::NodeKind::Inst {
+            let it: &Inst = cgen.cre.get(InstId::new_from((inst_id, kind)));
+            Self::low_inst(cgen, &mut fn_ctx, it);
+          }
+        }
+
+        match blok.term {
+          Terminator::Jump(target) => {
+            let target_bb = bb_map[&target];
+            cgen.builder.build_unconditional_branch(target_bb).unwrap();
+          }
+          Terminator::Branch { cond, then_bb, else_bb } => {
+            let cond_val = ValueLow::low(cgen, &fn_ctx, &cond).into_int_value();
+            let llvm_then = bb_map[&then_bb];
+            let llvm_else = bb_map[&else_bb];
+            cgen.builder.build_conditional_branch(cond_val, llvm_then, llvm_else).unwrap();
+          }
+          Terminator::Return(val) => {
+            if fn_ctx.is_ret_unit {
+              cgen.builder.build_return(None).unwrap();
+            } else {
+              let ret_val: Option<inkwell::values::BasicValueEnum<'ctx>> = match val {
+                None => None,
+                Some(val) => Some(ValueLow::low(cgen, &fn_ctx, &val)),
+              };
+              let ret_ref = ret_val.as_ref().map(|v| v as &dyn inkwell::values::BasicValue);
+              cgen.builder.build_return(ret_ref).unwrap();
+            }
+          }
+          Terminator::Unreachable => {
+            cgen.builder.build_unreachable().unwrap();
+          }
+        }
+
+        if llvm_bb.get_terminator().is_none() {
+          if fn_ctx.is_ret_unit {
+            cgen.builder.build_return(None).unwrap();
+          } else {
+            cgen.builder.build_unreachable().unwrap();
+          }
+        }
       }
     }
   }
@@ -65,15 +117,6 @@ impl BlokLow {
 
         if let Some(dest) = inst.dest {
           fn_ctx.ssa_map.insert(dest, loaded);
-        }
-      }
-
-      qwc_mir::Expr::Return(val) => {
-        if fn_ctx.is_ret_unit {
-          cgen.builder.build_return(None).unwrap();
-        } else {
-          let ret_val = ValueLow::low(cgen, fn_ctx, &val);
-          cgen.builder.build_return(Some(&ret_val)).unwrap();
         }
       }
 

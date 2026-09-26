@@ -10,54 +10,25 @@ pub struct ItemParser;
 impl ItemParser {
 
   // Public
-  pub fn read_item(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let (vis, attr) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
+  pub fn read_item(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<ItemId, Message> {
+    let (vis, attr) = MetaParser::read_start(ctx, defvis)?;
 
-    let id = match lex.peek_k()? {
+    let id = match ctx.lex.peek_k()? {
       (WK::Let |
-       WK::Var, _)     => ItemParser::sub_let     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Using, _)   => ItemParser::sub_using   (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Fun, _)     => ItemParser::sub_fun     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Init, _)    => ItemParser::sub_init    (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Fini, _)    => ItemParser::sub_fini    (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Impl, _)    => ItemParser::sub_impl    (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Generic, _) => ItemParser::sub_generic (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Use, _)     => ItemParser::sub_use     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Mod, _)     => ItemParser::sub_mod     (ctx!(cre, sin, far, lex, sum), vis)?,
+       WK::Var, _)     => Self::sub_let     (ctx, vis)?,
+      (WK::Using, _)   => Self::sub_using   (ctx, vis)?,
+      (WK::Fun, _)     => Self::sub_fun     (ctx, vis)?,
+      (WK::Impl, _)    => Self::sub_impl    (ctx, vis)?,
+      (WK::Generic, _) => Self::sub_generic (ctx, vis)?,
+      (WK::Use, _)     => Self::sub_use     (ctx, vis)?,
+      (WK::Mod, _)     => Self::sub_mod     (ctx, vis)?,
       
-      (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => ItemParser::sub_itemty(ctx!(cre, sin, far, lex, sum), vis)?,
+      (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => Self::sub_itemty(ctx, vis)?,
 
       (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
     };
 
-    if let Some(a) = attr { cre.attach(id, a); }
-    
-    Ok(id)
-  }
-
-  pub fn read_item_in(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let (vis, attr) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
-
-    let id = match lex.peek_k()? {
-      (WK::Let |
-       WK::Var, _)     => ItemParser::sub_let     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Using, _)   => ItemParser::sub_using   (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Fun, _)     => ItemParser::sub_fun     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Init, _)    => ItemParser::sub_init    (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Fini, _)    => ItemParser::sub_fini    (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Impl, _)    => ItemParser::sub_impl_in (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Generic, _) => ItemParser::sub_generic (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Use, _)     => ItemParser::sub_use     (ctx!(cre, sin, far, lex, sum), vis)?,
-      (WK::Mod, _)     => ItemParser::sub_mod     (ctx!(cre, sin, far, lex, sum), vis)?,
-      
-      (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => ItemParser::sub_itemty(ctx!(cre, sin, far, lex, sum), vis)?,
-
-      (WK::Word, _) => ItemParser::sub_let_in(ctx!(cre, sin, far, lex, sum), vis)?,
-
-      (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
-    };
-
-    if let Some(a) = attr { cre.attach(id, a); }
+    if let Some(a) = attr { ctx.cre.attach(id, a); }
     
     Ok(id)
   }
@@ -93,28 +64,6 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn sub_let_in(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.peek()?;
-    let name = lex.get()?.ident(sin, far)?;
-
-    lex.get()?.expect_kind(WK::Colon)?;
-
-    let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
-
-    lex.get()?.expect_kind(WK::Semicolon)?;
-
-
-    // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: Some(name),
-      kind: ItemKind::Member {kind}
-    };
-    
-    Ok(cre.push(this))
-  }
-
   fn sub_using(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
@@ -134,7 +83,7 @@ impl ItemParser {
 
     Ok(cre.push(this))
   }
-
+  
   fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
@@ -157,80 +106,6 @@ impl ItemParser {
       kind: ItemKind::Fun{ kind, blok },
     };
     
-    Ok(cre.push(this))
-  }
-
-  fn sub_init(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
-
-    let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum))?;
-
-    let ils = if lex.peek()?.kind() == WK::Colon {
-      lex.bump()?;
-      let mut ils = vec![];
-      
-      loop {
-        let name = if let (WK::Word, c) = lex.peek_k()? { lex.bump()?; c.ident(sin, far)? } else { break };
-        
-        lex.get()?.expect_kind(WK::ParenL)?;
-        
-        let v = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
-        
-        lex.get()?.expect_kind(WK::ParenR)?;
-        
-        let it = Thing::NamedExpr(name, v);
-        ils.push(cre.push(it));
-        
-        if lex.peek()?.kind() == WK::Comma { lex.bump()? } else { break }
-      }
-      
-      cre.extra(&ils)
-    } else {
-      Rng::empty()
-    };
-
-    let blok = match lex.peek_k()? {
-      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
-      (WK::Semicolon, _) => { lex.bump()?; None },
-
-      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
-    };
-
-
-    // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: Some(name),
-      kind: ItemKind::Init{ kind, blok, ils }
-    };
-
-    Ok(cre.push(this))
-  }
-  
-  fn sub_fini(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
-
-    let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum))?;
-
-    let blok = match lex.peek_k()? {
-      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
-      (WK::Semicolon, _) => { lex.bump()?; None },
-
-      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
-    };
-
-
-    // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: Some(name),
-      kind: ItemKind::Fini{ kind, blok }
-    };
-
     Ok(cre.push(this))
   }
 
@@ -279,52 +154,6 @@ impl ItemParser {
       vis,
       name: None,
       kind: ItemKind::Impl{ type_ty, trait_ty, ctn },
-    };
-    
-    Ok(cre.push(this))
-  }
-  
-  fn sub_impl_in(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-    let start = lex.get()?;
-
-    lex.get()?.expect_kind(WK::Colon)?;
-
-    let trait_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
-
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let ctn = {
-      let mut impls = vec![];
-      let defvis = &mut Visibility::Inherited;
-      
-      loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
-        
-        let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
-        
-        let next_kw = lex.peek_k()?;
-        if next_kw.0 == WK::Fun {
-          let fun = ItemParser::sub_fun(ctx!(cre, sin, far, lex, sum), vis)?;
-          
-          if let Some(a) = attrs { cre.attach(fun, a); }
-          
-          impls.push(fun);
-        } else {
-          let c = lex.get()?;
-          return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(c)));
-        }
-      }
-      
-      cre.extra(&impls)
-    };
-
-
-    // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: None,
-      kind: ItemKind::ImplIn{ trait_ty, ctn },
     };
     
     Ok(cre.push(this))

@@ -21,17 +21,19 @@ pub use value_p::ValueLow;
 pub struct CGenLLVM;
 
 impl ICGen for CGenLLVM {
-  fn generate(cre: &Krate) {
+  fn generate(cre: &Krate, fpath: &Path) -> Result<(), String> {
     let ctx = Context::create();
     let mol = Self::compile_to_module(&ctx, "main", cre);
 
-    if let Err(err) = mol.verify() {
-      eprintln!("LLVM module verification failed:\n{}", err.to_string());
-    }
+    mol.verify().map_err(|err| err.to_string())?;
 
-    mol.print_to_stderr();
+    mol.print_to_file(fpath).map_err(|err| err.to_string())?;
+    
+    Ok(())
   }
 }
+
+
 
 impl CGenLLVM {
 

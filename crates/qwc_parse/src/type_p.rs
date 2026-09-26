@@ -1,8 +1,8 @@
-use qwc_ast::{FunAttrs, IdentSave, Rng, Thing, Type, TypeId, TypeKind, Visibility};
+use qwc_ast::{AnyRng, FunAttrs, IdentSave, Rng, Thing, ThingRng, Type, TypeId, TypeKind, TypeRng, Visibility};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
-use crate::{parse::Ctx, ctx, AttrParser, ExprParser, ItemParser, WordCheck};
+use crate::{AttrParser, ExprParser, WordCheck, ctx, FieldParser, parse::Ctx};
 
 
 
@@ -89,7 +89,7 @@ impl TypeParser {
 
     let args = if lex.peek()?.kind() == WK::Gt {
       lex.bump()?;
-      Rng::empty()
+      AnyRng::empty()
     } else {
       let mut args = vec![];
 
@@ -414,7 +414,7 @@ impl TypeParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), &mut Visibility::Inherited)? );
+        ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum), &mut Visibility::Inherited)? );
       }
 
       cre.extra(&ctn)
@@ -588,7 +588,7 @@ impl TypeParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), defvis)? );
+        ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum), defvis)? );
       }
 
       cre.extra(&ctn)
@@ -617,7 +617,7 @@ impl TypeParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        ctn.push( ItemParser::read_item_in(ctx!(cre, sin, far, lex, sum), defvis)? );
+        ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum), defvis)? );
       }
 
       cre.extra(&ctn)
@@ -636,7 +636,7 @@ impl TypeParser {
 
 
   // Tool
-  fn read_bases(ctx: &mut Ctx) -> Result<Rng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn read_bases(ctx: &mut Ctx) -> Result<TypeRng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     if lex.peek()?.kind() == WK::Colon {
       lex.bump()?;
 
@@ -655,7 +655,7 @@ impl TypeParser {
     }
   }
 
-  fn read_fun_args(ctx: &mut Ctx) -> Result<Rng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn read_fun_args(ctx: &mut Ctx) -> Result<ThingRng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     lex.get()?.expect_kind(WK::ParenL)?;
     
     let mut args = vec![];

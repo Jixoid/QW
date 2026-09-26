@@ -1,17 +1,22 @@
-use std::{marker::PhantomData, num::NonZeroU32};
+use std::{marker::PhantomData, num::NonZero};
 
-use crate::{Expr, Item, Type};
+use serde::Serialize;
+
+use crate::{Expr, Item, Type, krate::CID};
 
 
 // AstId
-#[derive(Debug, Copy, Clone)]
+#[derive(Serialize, Debug, Copy, Clone)]
 pub struct HirId<T>
   where T: HirKind
 {
-  cid: u16,
-  idx: NonZeroU32,
+  cid: CID,
+  idx: NonZero<u32>,
+  
+  #[serde(skip)]
   pkind: PhantomData<T>
 }
+
 
 impl<T: HirKind> PartialEq for HirId<T> {
   fn eq(&self, other: &Self) -> bool {
@@ -31,8 +36,8 @@ impl<T: HirKind> std::hash::Hash for HirId<T> {
 
 impl<T: HirKind> HirId<T> {
 
-  pub(crate) fn new(cid: u16, idx: u32) -> Self {
-    Self{cid, idx: NonZeroU32::new(idx+1).unwrap(), pkind: PhantomData}
+  pub(crate) fn new(cid: CID, idx: u32) -> Self {
+    Self{cid, idx: NonZero::<u32>::new(idx+1).unwrap(), pkind: PhantomData}
   }
 
   pub fn new_from(id: (HirId<SpecAny>, NodeKind)) -> Self {
@@ -45,13 +50,13 @@ impl<T: HirKind> HirId<T> {
     self.idx.get()-1
   }
 
-  pub(crate) fn cid(&self) -> u16 {
+  pub fn cid(&self) -> CID {
     self.cid
   }
 
 
   pub fn to_any(&self) -> AnyId {
-    AnyId::new(self.cid(), self.idx(), T::kind())
+    AnyId::new(self.cid, self.idx(), T::kind())
   }
 
   pub fn from_any(id: AnyId) -> Self {
@@ -73,17 +78,17 @@ pub type ItemId  = HirId<Item>;
 // AnyId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)] pub struct SpecAny;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AnyId {
-  cid: u16,
-  idx: NonZeroU32,
+  cid: CID,
+  idx: NonZero<u32>,
   kind: NodeKind,
 }
 
 impl AnyId {
 
-  pub fn new(cid: u16, idx: u32, kind: NodeKind) -> Self {
-    Self{ cid, idx: NonZeroU32::new(idx).unwrap(), kind }
+  pub fn new(cid: CID, idx: u32, kind: NodeKind) -> Self {
+    Self{ cid, idx: NonZero::<u32>::new(idx+1).unwrap(), kind }
   }
 
   pub fn new_from(id: (HirId<SpecAny>, NodeKind)) -> Self {
@@ -95,7 +100,7 @@ impl AnyId {
     self.idx.get()-1
   }
 
-  pub(crate) fn cid(&self) -> u16 {
+  pub fn cid(&self) -> CID {
     self.cid
   }
 
@@ -112,7 +117,7 @@ impl AnyId {
 
 
 // Trait
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NodeKind { Any, Type, Expr, Item }
 
 

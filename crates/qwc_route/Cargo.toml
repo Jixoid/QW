@@ -8,7 +8,9 @@ qwc_ast = { path = "../qwc_ast" }
 qwc_hir = { path = "../qwc_hir" }
 qwc_mir = { path = "../qwc_mir" }
 qwc_ds = { path = "../qwc_ds" }
+qwc_unit = { path = "../qwc_unit" }
 qwc_arena = { path = "../qwc_arena" }
+qwc_intrinsic = { path = "../qwc_intrinsic" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_parse = { path = "../qwc_parse" }

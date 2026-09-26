@@ -1,9 +1,10 @@
 use std::num::NonZeroU32;
 
 use lasso::{Key, Rodeo, Spur};
+use serde::Serialize;
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Sid (NonZeroU32);
 
 impl From<NonZeroU32> for Sid {

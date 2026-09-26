@@ -1,4 +1,4 @@
-use crate::{Ident, Rng};
+use crate::{Ident, PattRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -10,6 +10,6 @@ pub enum Patt {
   /// ..
   Rest,
   
-  Tuple(Rng),
-  Array(Rng),
+  Tuple(PattRng),
+  Array(PattRng),
 }

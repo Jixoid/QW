@@ -12,5 +12,6 @@ type MayFail<T> = Result<(), T>;
 use mgen::Ctx;
 use {symb_p::*, type_p::*, blok_p::*, expr_p::*};
 use builder::*;
+use layout::Layouter;
 
 pub use mgen::{MGen, CacheMap};

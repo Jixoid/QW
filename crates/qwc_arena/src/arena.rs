@@ -1,13 +1,58 @@
+use core::slice;
 use std::{mem, ops::Range};
+
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 
 const PAGE_SIZE: usize = 1 * 1024 * 1024; // 1 MB
 
+
 pub struct Arena<T>
-where T: Copy
+  where T: Copy
 {
 	data: Vec<Vec<T>>,
   len: usize,
 }
+
+impl<T: Copy> Serialize for Arena<T> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    let mut state = serializer.serialize_struct("Arena", 2)?;
+    state.serialize_field("len", &self.len)?;
+
+    struct RawBytesHelper<'a, T: Copy>(&'a [Vec<T>], usize);
+
+    impl<'a, T: Copy> Serialize for RawBytesHelper<'a, T> {
+      fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+      where
+        S: Serializer,
+      {
+        let total_bytes = self.1 * size_of::<T>();
+        
+        let mut bytes = Vec::with_capacity(total_bytes);
+        for chunk in self.0 {
+          let chunk_byte_len = chunk.len() * size_of::<T>();
+          if chunk_byte_len == 0 { continue }
+
+          let byte_slice = unsafe {
+            slice::from_raw_parts(
+              chunk.as_ptr() as *const u8,
+              chunk_byte_len,
+            )
+          };
+          bytes.extend_from_slice(byte_slice);
+        }
+
+        s.serialize_bytes(&bytes)
+      }
+    }
+
+    state.serialize_field("bytes", &RawBytesHelper(&self.data, self.len))?;
+    state.end()
+  }
+}
+
 
 impl<T: Copy> Arena<T> {
 

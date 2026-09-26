@@ -1,10 +1,10 @@
-use crate::{ExprId, Ident, Rng, TypeId, Visibility};
+use crate::{ExprId, ExprRng, Ident, ThingRng, TypeId, TypeRng, Visibility};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Thing {
   Name(Ident),
-  List(Rng),
+  List(ThingRng),
 
   Wildcard, Crate, Super,
   
@@ -15,8 +15,8 @@ pub enum Thing {
   
   NamedTypeVis(Ident, Visibility, TypeId),
 
-  NamedTypeList(Ident, Rng /* TypeId */),
-  NamedExprList(Ident, Rng /* ExprId */),
+  NamedTypeList(Ident, TypeRng),
+  NamedExprList(Ident, ExprRng),
 
   MatchArm(ExprId /* pat */, ExprId /* body */),
 }

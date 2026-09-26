@@ -34,7 +34,7 @@ pub struct Parse;
 
 impl Parse {
 
-  pub fn parse(cre: &mut Krate, sin: &mut StrInterner, far: &Files, fi: &File) -> (Span, ast::Rng, Summary) {
+  pub fn parse(cre: &mut Krate, sin: &mut StrInterner, far: &Files, fi: &File) -> (Span, ast::ItemRng, Summary) {
     let lex = &mut Lexer::new(fi);
     let mut sum = Summary::new();
     

@@ -21,7 +21,6 @@ pub struct Ctx<'ast, 'hir, 'mir, 'a> {
 pub struct CacheMap {
   pub(crate) cache_type: FxHashMap<hir::TypeId, mir::TypeId>,
   pub(crate) cache_item: FxHashMap<hir::ItemId, Option<mir::SymbId>>,
-  pub(crate) cache_blok: FxHashMap<hir::ExprId, mir::BlokId>,
 }
 
 
@@ -45,7 +44,6 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
     let mut cmap = CacheMap {
       cache_type: FxHashMap::default(),
       cache_item: FxHashMap::default(),
-      cache_blok: FxHashMap::default(),
     };
 
     let root = src.root().unwrap();

@@ -1,6 +1,6 @@
 use qwc_diagnostic::Span;
 
-use crate::{ExprId, Ident, Rng, TypeId};
+use crate::{ExprId, FieldRng, Ident, ThingRng, TypeId, TypeRng, AnyRng};
 
 
 
@@ -15,12 +15,11 @@ pub enum FunAttrs {
 pub enum TypeKind {
   // Access
   Nick (Ident),
-  Path (Rng /* TypeId */),
+  Path (TypeRng),
 
   // Pointer
   Ptr (TypeId, bool),
   Ref (TypeId, bool),
-  LVa (TypeId, bool),
   
   // Heap
   Array  (TypeId, ExprId),
@@ -39,27 +38,27 @@ pub enum TypeKind {
 
   // Variant
   Result  {sub: TypeId, err: TypeId},
-  Variant (Rng /* Name | NamedType */),
+  Variant (ThingRng /* Name | NamedType */),
 
   // Enum
-  Enum  (Rng /* Name | NamedExpr */),
-  Flags (Rng /* Name | NamedExpr */),
+  Enum  (ThingRng /* Name | NamedExpr */),
+  Flags (ThingRng /* Name | NamedExpr */),
 
   // Data
-  Struct (Rng /* ItemId */),
-  Tuple  (Rng /* TypeVis */),
+  Struct (FieldRng),
+  Tuple  (TypeRng),
 
   // Impl
-  Iface (Rng /* ItemId */),
-  Trait (Rng /* ItemId */),
+  Iface (FieldRng),
+  Trait (FieldRng),
 
   // Function
-  Fun {args: Rng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
-  Init{args: Rng /* NamedType */, attr: u8 /* FunAttrs */},
-  Fini{args: Rng /* NamedType */, attr: u8 /* FunAttrs */},
+  Fun {args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
+  Init{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
+  Fini{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
 
   // Specialize
-  Spec{base: TypeId, args: Rng /* TypeId | ExprId */},
+  Spec{base: TypeId, args: AnyRng /* TypeId | ExprId */},
 }
 
 

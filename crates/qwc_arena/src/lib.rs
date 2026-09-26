@@ -33,13 +33,10 @@ impl Files {
     let mut map = fs::read(fpath).unwrap();
     map.resize(map.len() + 8, 0);
 
-    //let name = String::from(Path::new(&fpath).file_stem().and_then(|s| s.to_str()).unwrap_or(""));
-
     let fi = File{
       fid: u16::try_from(self.arena.len()).unwrap(),
       fpath: fpath.to_str().unwrap().to_string(),
       map,
-      //name,
     };
 
     self.arena.push(fi);

@@ -1,4 +1,4 @@
-use qwc_ast::{BinaryOp, Expr, ExprId, ExprKind, IdentSave, Rng, Thing, UnaryOp};
+use qwc_ast::{AnyRng, BinaryOp, Expr, ExprId, ExprKind, IdentSave, Rng, Thing, UnaryOp};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -78,7 +78,7 @@ impl ExprParser {
         BinOp::Bin(op)      => ExprKind::Binary{op, lhs, rhs},
         BinOp::AssignOp(op) => ExprKind::AssignOp{op, lhs, rhs},
 
-        BinOp::Assign   => ExprKind::Assign{lhs, rhs},
+        BinOp::Assign   => ExprKind::Assign{lhs, rhs, op_span: op_tok.into()},
         BinOp::Exchange => ExprKind::Exchange{lhs, rhs},
       };
 
@@ -175,7 +175,7 @@ impl ExprParser {
 
     let args = if lex.peek()?.kind() == WK::Gt {
       lex.bump()?;
-      Rng::empty()
+      AnyRng::empty()
     } else {
       let mut args = vec![];
 

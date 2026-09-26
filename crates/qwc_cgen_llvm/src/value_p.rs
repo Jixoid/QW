@@ -32,6 +32,10 @@ impl ValueLow {
         SymbolVal::Global(gv) => gv.as_pointer_value().as_basic_value_enum(),
         SymbolVal::Function(fv) => fv.as_global_value().as_pointer_value().as_basic_value_enum(),
       },
+
+      Value::StackRef(idx) => {
+        fn_ctx.stack_slots[*idx as usize].as_basic_value_enum()
+      }
     }
   }
 

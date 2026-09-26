@@ -1,8 +1,8 @@
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
-use qwc_mir::{self as mir, Layouter};
+use qwc_mir as mir;
 
-use crate::{Ctx, layout::LayouterQW};
+use crate::{Ctx, Layouter};
 
 
 pub struct TypeLow;
@@ -14,14 +14,21 @@ impl TypeLow {
 
     let it: &hir::Type = ctx.src.get(id);
 
-    let ty = match *it {
-      hir::Type::Unit => ctx.tin.ty_unit(),
+    let ty = match it.kind {
+      // ZST
+      hir::TypeKind::Unit => ctx.tin.ty_unit(),
 
-      hir::Type::Ref(id) => {Self::low(ctx, id)?; ctx.tin.ty_ptr()},
+      // Primitive
+      hir::TypeKind::Ref(id, _) => {Self::low(ctx, id)?; ctx.tin.ty_ptr()},
 
-      hir::Type::Struct(rng) => Self::low_struct(ctx, rng)?,
+      hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
+      hir::TypeKind::Bool => ctx.tin.ty_bool(),
 
-      hir::Type::Fun{args, ret} => Self::low_fun(ctx, args, ret)?,
+      // Combinated
+      hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
+
+      // Callable
+      hir::TypeKind::Fun{args, ret} => Self::low_fun(ctx, args, ret)?,
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -29,6 +36,20 @@ impl TypeLow {
     ctx.cmap.cache_type.insert(id, ty);
 
     Ok(ty)
+  }
+
+
+  fn low_int(ctx: &mut Ctx, len: u16) -> Result<mir::TypeId, Message> {
+    let it = match len {
+      8   => ctx.tin.ty_i8(),
+      16  => ctx.tin.ty_i16(),
+      32  => ctx.tin.ty_i32(),
+      64  => ctx.tin.ty_i64(),
+      128 => ctx.tin.ty_i128(),
+      _ => panic!()
+    };
+
+    Ok(it)
   }
 
 
@@ -53,7 +74,7 @@ impl TypeLow {
 
     let this = mir::Type {
       kind,
-      layout: LayouterQW::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
     };
 
     Ok(ctx.cre.push(this))
@@ -83,7 +104,7 @@ impl TypeLow {
 
     let this = mir::Type{
       kind,
-      layout: LayouterQW::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
     };
 
     

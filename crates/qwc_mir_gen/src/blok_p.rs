@@ -2,72 +2,41 @@ use qwc_diagnostic::Message;
 use qwc_hir as hir;
 use qwc_mir as mir;
 
-use crate::{BlockBuilder, Ctx, ExprLow};
+use crate::{builder::{FnBuilder, RawTerminator}, Ctx, ExprLow};
 
 
 pub struct BlokLow;
 
 impl BlokLow {
 
-  pub fn low(ctx: &mut Ctx, id: hir::ExprId) -> Result<mir::BlokId, Message> {
-    if let Some(&id) = ctx.cmap.cache_blok.get(&id) { return Ok(id) }
+  pub fn low_fn(ctx: &mut Ctx, id: hir::ExprId, is_ret_unit: bool) -> Result<(mir::BlokId, mir::Rng, mir::Rng), Message> {
+    let mut fbld = FnBuilder::new();
 
     let it: &hir::Expr = ctx.src.get(id);
 
-    let ex = match it.kind {
-      hir::ExprKind::Block{stmt, expr} => Self::low_block(ctx, stmt, expr)?,
+    match it.kind {
+      hir::ExprKind::Block{stmt, expr} => {
+        for s_id in ctx.src.extra_get(stmt) {
+          let s_id = hir::ExprId::new_from(s_id);
+          ExprLow::low(ctx, &mut fbld, s_id)?;
+        }
 
-      kind @_ => todo!("{kind:#?}")
-    };
-
-    ctx.cmap.cache_blok.insert(id, ex);
-
-    Ok(ex)
-  }
-
-
-  fn low_block(ctx: &mut Ctx, stmt: hir::Rng, expr: Option<hir::ExprId>) -> Result<mir::BlokId, Message> {
-    let mut bbld = BlockBuilder::new();
-
-    for id in ctx.src.extra_get(stmt) {
-      let id = hir::ExprId::new_from(id);
-      ExprLow::low(ctx, &mut bbld, id)?;
+        if let Some(expr) = expr {
+          let ret = ExprLow::low(ctx, &mut fbld, expr)?;
+          if !fbld.is_current_terminated() {
+            fbld.terminate(RawTerminator::Return(ret));
+          }
+        }
+      }
+      _ => {
+        let ret = ExprLow::low(ctx, &mut fbld, id)?;
+        if !fbld.is_current_terminated() {
+          fbld.terminate(RawTerminator::Return(ret));
+        }
+      }
     }
 
-
-    if let Some(expr) = expr {
-      let ret = ExprLow::low(ctx, &mut bbld, expr)?;
-
-      ret.map(|ret| {
-        // Post
-        let this = mir::Expr::Return(ret);
-
-        bbld.emit(this)
-      });
-    };
-
-    let insts = {
-      let mut insts = vec![];
-      
-      for &inst in &bbld.insts {
-        let id = ctx.cre.push(inst);
-        
-        insts.push(id);
-      }
-
-      ctx.cre.extra(&insts)
-    };
-    
-    let stack = ctx.cre.extra(&bbld.stack);
-
-
-    // Post
-    let this = mir::Block {
-      insts,
-      stack,
-    };
-
-    Ok(ctx.cre.push(this))
+    Ok(fbld.finish(ctx.cre, is_ret_unit))
   }
 
 }

@@ -1,7 +1,6 @@
 use std::num::NonZeroU32;
 
 use qwc_mir::{Krate, Layout, LayoutBy, LayoutInfo, Type, TypeId, TypeKind};
-use rustc_hash::FxHashMap;
 
 
 pub struct TypeInterner<'a> {
@@ -20,12 +19,6 @@ pub struct TypeInterner<'a> {
   ty_i32: TypeId,
   ty_i64: TypeId,
   ty_i128: TypeId,
-
-  ty_u8: TypeId,
-  ty_u16: TypeId,
-  ty_u32: TypeId,
-  ty_u64: TypeId,
-  ty_u128: TypeId,
 }
 
 
@@ -34,9 +27,9 @@ impl<'a> TypeInterner<'a> {
     Self {
       layinfo,
 
-      ty_unit: cre.push(Type{kind: TypeKind::Unit, layout: Layout::new(0, 1, LayoutBy::QW)}),
+      ty_unit: cre.push(Type{kind: TypeKind::Unit, layout: Layout::new_zst(LayoutBy::QW)}),
 
-      ty_bool: cre.push(Type{kind: TypeKind::Bool, layout: Layout::new(1, 1, LayoutBy::QW)}),
+      ty_bool: cre.push(Type{kind: TypeKind::Bool, layout: Layout::new_sst(1, 1, LayoutBy::QW)}),
 
       ty_ptr: cre.push(Type{kind: TypeKind::Ptr, layout: layinfo.ptr_size}),
       
@@ -46,12 +39,6 @@ impl<'a> TypeInterner<'a> {
       ty_i32:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)},  true), layout: layinfo.i32_lay}),
       ty_i64:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)},  true), layout: layinfo.i64_lay}),
       ty_i128: cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(128)}, true), layout: layinfo.i128_lay}),
-
-      ty_u8:   cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},   false), layout: layinfo.i8_lay}),
-      ty_u16:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(16)},  false), layout: layinfo.i16_lay}),
-      ty_u32:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)},  false), layout: layinfo.i32_lay}),
-      ty_u64:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)},  false), layout: layinfo.i64_lay}),
-      ty_u128: cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(128)}, false), layout: layinfo.i128_lay}),
     }
   }
 
@@ -69,10 +56,4 @@ impl<'a> TypeInterner<'a> {
   pub fn ty_i32(&self) -> TypeId  { self.ty_i32 }
   pub fn ty_i64(&self) -> TypeId  { self.ty_i64 }
   pub fn ty_i128(&self) -> TypeId { self.ty_i128 }
-
-  pub fn ty_u8(&self) -> TypeId   { self.ty_u8 }
-  pub fn ty_u16(&self) -> TypeId  { self.ty_u16 }
-  pub fn ty_u32(&self) -> TypeId  { self.ty_u32 }
-  pub fn ty_u64(&self) -> TypeId  { self.ty_u64 }
-  pub fn ty_u128(&self) -> TypeId { self.ty_u128 }
 }

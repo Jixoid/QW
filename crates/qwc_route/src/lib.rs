@@ -96,6 +96,9 @@ enum MainCommands {
     /// Use verbose output
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    #[arg(long, value_delimiter = ',', value_enum)]
+    dump: Vec<DumpStage>,
   },
 
   /*
@@ -137,7 +140,7 @@ fn main_cmd(cmd: MainCommands) {
     
     MainCommands::Build{path, variant, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
-        path: path.to_str().unwrap_or(""),
+        path: &path,
         variant,
         verbose,
         timings,
@@ -155,14 +158,14 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Check{path, verbose, timings, usages} => {
+    MainCommands::Check{path, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
-        path: path.to_str().unwrap_or(""),
+        path: &path,
         variant: BuildVariant::Debug,
         verbose,
         timings,
         usages,
-        dump: vec![],
+        dump,
         check_only: true,
       };
 
@@ -194,5 +197,7 @@ enum DumpStage {
   Ast,
   Scope,
   Hir,
+  Export,
   Mir,
+  Lir,
 }

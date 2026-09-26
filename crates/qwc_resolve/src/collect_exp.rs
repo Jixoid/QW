@@ -4,7 +4,6 @@ use qwc_hir::{AnyId, Item, ItemId, ItemKind, Krate, Visitor};
 use crate::{Export, ExportKind, ExportMap};
 
 
-
 impl Visitor for ExportMap {
   type Type = Self;
 
@@ -12,6 +11,7 @@ impl Visitor for ExportMap {
     ExportCollector::collect(cre)
   }
 }
+
 
 pub struct ExportCollector<'a> {
   cre: &'a Krate,
@@ -24,7 +24,7 @@ impl<'a> ExportCollector<'a> {
   pub fn collect(cre: &'a Krate) -> Result<ExportMap, Summary> {
     let mut collector = Self {
       cre,
-      scp: ExportMap::new(),
+      scp: ExportMap::new(cre.cid(), cre.root()),
       sum: Summary::new(),
     };
 
@@ -56,14 +56,9 @@ impl<'a> ExportCollector<'a> {
         // Modüller / İsim Alanları
         ItemKind::NameSpace{name, ..} => (name, ExportKind::NameSpace(id)),
 
-        // Tipler, Fonksiyonlar ve Değişkenler
-        //Item::Fun { name, .. } => (*name, ExportKind::Fun(id)),
-        //Item::Type { name, .. } | Item::Struct { name, .. } => (*name, ExportKind::Type(id)),
-        //Item::Using { name, .. } => (*name, ExportKind::Alias(id)),
-        //Item::Const { name, .. } => (*name, ExportKind::Const(id)),
+        ItemKind::Using{name, kind} => (name, ExportKind::Type(kind)),
 
-        // Generic Fonksiyon/Yapı tanımları (Generic kabuğun kendisi export edilir)
-        //Item::GenericNS { name, .. } => (*name, ExportKind::Generic(id)),
+        ItemKind::Variable{name, kind: ty, ..} | ItemKind::Function{name, kind: ty, ..} => (name, ExportKind::Expr(id, ty)),
 
         _ => todo!("{item:#?}"),
       };
@@ -88,7 +83,7 @@ impl<'a> ExportCollector<'a> {
   fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
     let item: &Item = self.cre.get(ItemId::from_any(id));
     match item.kind {
-      ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).map(ItemId::new_from).collect(),
+      ItemKind::RootNS{rng} | ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).map(ItemId::new_from).collect(),
 
       _ => vec![],
     }

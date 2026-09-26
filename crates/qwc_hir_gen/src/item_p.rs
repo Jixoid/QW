@@ -22,23 +22,22 @@ impl ItemLow {
       
       ast::ItemKind::Generic{ctn: rng, ..} => Some(Self::low_generic(ctx, id, it, rng)?),
 
+      
+      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => Some(Self::low_using(ctx, id, it, kind)?),
+      
+
 
       // Symbols
       ast::ItemKind::Fun{kind, blok} => Some(Self::low_fun(ctx, id, it, kind, blok)?),
 
       ast::ItemKind::Let{kind, value, ism} => Some(Self::low_let(ctx, id, it, kind, value, ism)?),
       
-      // Side Effect
-      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => {TypeLow::low(ctx, kind)?; None},
-      
       // Unexpected
-      ast::ItemKind::ModuleUnloaded | ast::ItemKind::ImplIn{..} => panic!("ast object that should not be present"),
+      ast::ItemKind::ModuleUnloaded => panic!("ast object that should not be present"),
       
       // Ignore
       ast::ItemKind::Impl{..} => None,
       ast::ItemKind::Import(..) => None,
-      
-      _ => todo!("{:#?}", it)
     };
 
     ctx.cmap.cache_item.insert(id, it);
@@ -47,15 +46,13 @@ impl ItemLow {
   }
 
 
-  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+  fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(rng) {
-        let id = ast::ItemId::new_from(id);
-        
         Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
@@ -77,15 +74,13 @@ impl ItemLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+  fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(rng) {
-        let id = ast::ItemId::new_from(id);
-        
         Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
@@ -108,15 +103,13 @@ impl ItemLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Rng) -> Result<hir::ItemId, Message> {
+  fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
     let rng = {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(rng) {
-        let id = ast::ItemId::new_from(id);
-        
         Self::low(ctx!(lscp -> ctx), id)?.map(|id| ctn.push(id));
       }
 
@@ -138,10 +131,34 @@ impl ItemLow {
     Ok(ctx.cre.push(this))
   }
 
+
+  fn low_using(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Result<hir::ItemId, Message> {
+    let kind = TypeLow::low(ctx, kind)?;
+
+    let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
+
+
+    // Post
+    let this = hir::Item {
+      kind: hir::ItemKind::Using {
+        name: it.name.unwrap().sid(),
+        kind,
+      },
+      vis: convert_vis(it.vis),
+      svis,
+    };
+
+    Ok(ctx.cre.push(this))
+  }
+
+
   fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
     let kind = TypeLow::low(ctx, kind)?;
 
-    let expr = ExprLow::low(ctx, expr.unwrap())?;
+    let mut loc = qwc_resolve::LocalScopeManager::new();
+    let expr = {
+      ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?
+    };
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 

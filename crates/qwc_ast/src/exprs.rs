@@ -1,6 +1,6 @@
 use qwc_diagnostic::Span;
 
-use crate::{ExprId, Ident, PattId, Rng, TypeId};
+use crate::{ExprId, ExprRng, Ident, PattId, ThingRng, TypeId, id::AnyRng};
 
 
 
@@ -33,8 +33,8 @@ pub enum UnaryOp {
 pub enum ExprKind {
   // Access
   Nick   (Ident),
-  Path   (Rng /* ExprId */),
-  Member (Rng /* ExprId */),
+  Path   (ExprRng),
+  Member (ExprRng),
 
   // Lit
   Unit,
@@ -47,16 +47,16 @@ pub enum ExprKind {
   SelfS(),
 
   // Data
-  Tuple (Rng /* ExprId */),
-  Array (Rng /* ExprId */),
-  Propagate (Rng /* ExprId */, ExprId),
+  Tuple (ExprRng),
+  Array (ExprRng),
+  Propagate (ExprRng, ExprId),
 
   // Block
-  Block {label: Option<Span>, rng: Rng /* ExprId */, expr: Option<ExprId>},
+  Block {label: Option<Span>, rng: ExprRng, expr: Option<ExprId>},
 
   // Branch
   If    {cond: ExprId, then: ExprId, elsb: Option<ExprId>},
-  Match {cond: ExprId, arms: Rng /* MatchArm */},
+  Match {cond: ExprId, arms: ThingRng},
   
   // Loop
   While {cond: ExprId, blok: ExprId, elsb: Option<ExprId>},
@@ -67,14 +67,14 @@ pub enum ExprKind {
   Unary    {op: UnaryOp, val: ExprId},
   Binary   {op: BinaryOp, lhs: ExprId, rhs: ExprId},
   
-  Assign   {lhs: ExprId, rhs: ExprId},
+  Assign   {lhs: ExprId, rhs: ExprId, op_span: Span},
   AssignOp {op: BinaryOp, lhs: ExprId, rhs: ExprId},
   
   Exchange {lhs: ExprId, rhs: ExprId},
 
   // Call
-  Call  {callee: ExprId, args: Rng /* ExprId */},
-  Index {callee: ExprId, args: Rng /* ExprId */},
+  Call  {callee: ExprId, args: ExprRng},
+  Index {callee: ExprId, args: ExprRng},
 
   // Variable
   Let {item: PattId, kind: Option<TypeId>, init: Option<ExprId>, ism: bool},
@@ -90,7 +90,7 @@ pub enum ExprKind {
   Relaxed (ExprId),
   
   // Specialize
-  Spec{callee: ExprId, args: Rng /* TypeId | ExprId */},
+  Spec{callee: ExprId, args: AnyRng},
 }
 
 

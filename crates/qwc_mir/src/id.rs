@@ -38,7 +38,7 @@ impl<T: MirKind> MirId<T> {
     MirId::<T>::new(id.0.idx())
   }
 
-  pub(crate) fn idx(&self) -> u32 {
+  pub fn idx(&self) -> u32 {
     self.idx.get()-1
   }
 

@@ -1,12 +1,12 @@
 use std::{marker::PhantomData, num::NonZeroU32};
 
-use crate::{Expr, Item, Patt, Thing, Type};
+use crate::{Expr, Field, Item, Patt, Thing, Type};
 
 
 // AstId
 #[derive(Debug, Copy, Clone)]
 pub struct AstId<T>
-where T: AstKind
+  where T: AstKind
 {
   idx: NonZeroU32,
   pkind: PhantomData<T>
@@ -62,7 +62,73 @@ pub type TypeId  = AstId<Type>;
 pub type ExprId  = AstId<Expr>;
 pub type ItemId  = AstId<Item>;
 pub type PattId  = AstId<Patt>;
+pub type FieldId = AstId<Field>;
 pub type ThingId = AstId<Thing>;
+
+
+
+// Rng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Rng<T>
+  where T: AstKind
+{
+  start: u32,
+  end: u32,
+  pkind: PhantomData<T>,
+}
+
+impl<T: AstKind> Rng<T> {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end, pkind: PhantomData }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0, pkind: PhantomData}
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
+pub type TypeRng  = Rng<Type>;
+pub type ExprRng  = Rng<Expr>;
+pub type ItemRng  = Rng<Item>;
+pub type PattRng  = Rng<Patt>;
+pub type FieldRng = Rng<Field>;
+pub type ThingRng = Rng<Thing>;
+
+
+
+// AnyRng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct AnyRng {
+  start: u32,
+  end: u32,
+}
+
+impl AnyRng {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0 }
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
 
 
 // AnyId
@@ -102,14 +168,15 @@ impl AnyId {
 
 // Trait
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeKind { Any, Type, Expr, Item, Patt, Thing }
+pub enum NodeKind { Any, Type, Expr, Item, Patt, Thing, Field }
 
 
 pub trait AstKind { fn kind() -> NodeKind; }
 
 impl AstKind for SpecAny { fn kind() -> NodeKind { NodeKind::Any } }
-impl AstKind for Type { fn kind() -> NodeKind { NodeKind::Type } }
-impl AstKind for Expr { fn kind() -> NodeKind { NodeKind::Expr } }
-impl AstKind for Item { fn kind() -> NodeKind { NodeKind::Item } }
-impl AstKind for Patt { fn kind() -> NodeKind { NodeKind::Patt } }
+impl AstKind for Type  { fn kind() -> NodeKind { NodeKind::Type } }
+impl AstKind for Expr  { fn kind() -> NodeKind { NodeKind::Expr } }
+impl AstKind for Item  { fn kind() -> NodeKind { NodeKind::Item } }
+impl AstKind for Patt  { fn kind() -> NodeKind { NodeKind::Patt } }
+impl AstKind for Field { fn kind() -> NodeKind { NodeKind::Field } }
 impl AstKind for Thing { fn kind() -> NodeKind { NodeKind::Thing } }

@@ -9,6 +9,8 @@ qwc_hir = { path = "../qwc_hir" }
 qwc_arena = { path = "../qwc_arena" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
+qwc_dump = { path = "../qwc_dump" }
 rustc-hash = "2.1.3"
 owo-colors = "4.4.0"
 strsim = "0.11.1"
+serde = { version = "1.0.229", features = ["derive"] }

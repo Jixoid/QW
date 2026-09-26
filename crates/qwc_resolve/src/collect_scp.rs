@@ -3,35 +3,43 @@ use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeKi
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
-use crate::{Scope, ScopeKind, ScopeMap, scope::ImportDef};
+use crate::{Imod, Scope, ScopeKindAst, ScopeMap, import, scope::{ImportDef, ImportSegment}};
 
 
 impl Visitor for ScopeMap {
   type Type = Self;
 
-  fn visit(cre: &Krate, _: &StrInterner, _: &Files) -> Result<Self::Type, Summary> {
-    ScopeCollector::collect(cre)
+  fn visit(cre: &Krate, sin: &StrInterner, _: &Files) -> Result<Self::Type, Summary> {
+    ScopeCollector::collect(cre, sin, &[])
   }
 }
 
 
-pub struct ScopeCollector<'a> {
+pub struct ScopeCollector<'a, 'imod> {
   cre: &'a Krate,
+  sin: &'a StrInterner,
+  imods: &'a [Imod<'imod>],
   scp: ScopeMap,
   sum: Summary,
 }
 
-impl<'a> ScopeCollector<'a> {
+impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
-  pub fn collect(cre: &'a Krate) -> Result<ScopeMap, Summary> {
+  pub fn collect(cre: &'a Krate, sin: &'a StrInterner, imods: &'a [Imod<'imod>]) -> Result<ScopeMap, Summary> {
     let mut collector = Self {
       cre,
+      sin,
+      imods,
       scp: ScopeMap::new(),
       sum: Summary::new(),
     };
 
     if let Some(root_id) = cre.root() {
       collector.process_container(root_id.to_any(), None);
+    }
+
+    if collector.sum.is_empty() {
+      import::resolve_imports(&mut collector.scp, collector.cre, collector.sin, collector.imods, &mut collector.sum);
     }
 
     if collector.sum.is_empty() {
@@ -52,33 +60,37 @@ impl<'a> ScopeCollector<'a> {
       let item: &Item = self.cre.get(id);
       
       let kind = match item.kind {
-        ItemKind::Module(..) | ItemKind::ModuleFile(..) => ScopeKind::Module(id),
+        ItemKind::Module(..) | ItemKind::ModuleFile(..) => ScopeKindAst::Module(id),
         
-        ItemKind::Using(kind ) | ItemKind::ItemTy(kind) => ScopeKind::Type(kind),
+        ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
         
-        ItemKind::Let{..} | ItemKind::Fun{..} => ScopeKind::Expr(id),
+        ItemKind::Let{..} | ItemKind::Fun{..} => ScopeKindAst::Expr(id),
 
         // No Named / continue
         ItemKind::Import(rng) => {
-          let mut path = vec![];
+          let mut segments = vec![];
           let mut glob = false;
 
           for id in self.cre.extra_get(rng) {
-            let it: &Thing = self.cre.get(ThingId::new_from(id));
+            let it: &Thing = self.cre.get(id);
 
             match it {
-              Thing::Name(ident) => path.push(*ident),
+              Thing::Crate => segments.push(ImportSegment::Crate),
+              Thing::Super => segments.push(ImportSegment::Super),
+              Thing::Name(ident) => segments.push(ImportSegment::Name(*ident)),
               Thing::Wildcard => { glob = true; break }
-              _ => todo!()
+              _ => todo!("{it:#?}")
             }
           }
 
-          if path.is_empty() { panic!() }
+          if segments.is_empty() && !glob { panic!("empty import path"); }
 
-          current_scope.import.push(ImportDef::Unsolved{
-            path,
-            glob
-          });
+          current_scope.import.push(ImportDef::new(
+            item.pos,
+            item.vis,
+            segments,
+            glob,
+          ));
 
           continue
         }
@@ -97,7 +109,7 @@ impl<'a> ScopeCollector<'a> {
 
         match self.cre.get(param_id) as &Thing {
           Thing::Name(name) => {
-            let it = ScopeKind::TypeParam(param_id);
+            let it = ScopeKindAst::TypeParam(param_id);
 
             current_scope.insert(*name, it, &mut self.sum);
           }
@@ -106,8 +118,8 @@ impl<'a> ScopeCollector<'a> {
             let ty_obj: &Type = self.cre.get(*kind);
 
             let it = match ty_obj.kind {
-              TypeKind::Type() => ScopeKind::TypeParam(param_id),
-              _ => ScopeKind::ExprParam(param_id),
+              TypeKind::Type() => ScopeKindAst::TypeParam(param_id),
+              _ => ScopeKindAst::ExprParam(param_id),
             };
 
             current_scope.insert(*name, it, &mut self.sum);
@@ -141,11 +153,11 @@ impl<'a> ScopeCollector<'a> {
     let item: &Item = self.cre.get(ItemId::from_any(id));
     match item.kind {
       ItemKind::Krate(rng) | ItemKind::Module(rng) | ItemKind::ModuleFile(rng, ..) => {
-        self.cre.extra_get(rng).map(ItemId::new_from).collect()
+        self.cre.extra_get(rng).collect()
       }
       
       ItemKind::Generic{ctn, ..} => {
-        self.cre.extra_get(ctn).map(ItemId::new_from).collect()
+        self.cre.extra_get(ctn).collect()
       }
 
       _ => vec![],
@@ -154,8 +166,8 @@ impl<'a> ScopeCollector<'a> {
 
   fn get_generic_params(&self, id: AnyId) -> Option<Vec<ThingId>> {
     let item: &Item = self.cre.get(ItemId::from_any(id));
-    if let ItemKind::Generic { params, .. } = item.kind {
-      Some(self.cre.extra_get(params).map(ThingId::new_from).collect())
+    if let ItemKind::Generic{params, ..} = item.kind {
+      Some(self.cre.extra_get(params).collect())
     } else {
       None
     }

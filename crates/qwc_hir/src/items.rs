@@ -15,6 +15,8 @@ pub enum ItemKind {
   RootNS{rng: Rng /* ItemId */},
   NameSpace{rng: Rng /* ItemId */, name: Sid},
   GenericNS{rng: Rng /* ItemId */},
+
+  Using{kind: TypeId, name: Sid},
   
   Variable{kind: TypeId, expr: ExprId, name: Sid, ism: bool},
   Function{kind: TypeId, expr: ExprId, name: Sid},
@@ -34,6 +36,18 @@ impl Item {
   }
   
   pub fn symbol_kind(&self) -> Option<TypeId> {
-    match self.kind { ItemKind::Function{kind, ..} | ItemKind::Variable{kind, ..} => Some(kind), _ => None }
+    match self.kind {
+      ItemKind::Function{kind, ..} | ItemKind::Variable{kind, ..} => Some(kind),
+      _ => None
+    }
+  }
+
+  pub fn assignable(&self) -> Option<bool> {
+    match self.kind {
+      ItemKind::Function{..} => Some(false),
+      ItemKind::Variable{ism, ..} => Some(ism),
+
+      _ => None,
+    }
   }
 }

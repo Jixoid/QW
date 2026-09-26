@@ -1,0 +1,9 @@
+[package]
+name = "qwc_intrinsic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_hir = { path = "../qwc_hir" }
+qwc_resolve = { path = "../qwc_resolve" }
+qwc_string_interner = { path = "../qwc_string_interner" }

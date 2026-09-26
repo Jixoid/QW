@@ -1,12 +1,12 @@
 use core::slice;
+use rustc_hash::FxHashMap;
 
 use qwc_arena::{Arena, Files};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::{WK, Word};
 use qwc_string_interner::StrInterner;
-use rustc_hash::FxHashMap;
 
-use crate::{AnyId, Attribute, Expr, ExprId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, Attribute, Expr, ExprId, Field, FieldId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, Rng, SpecAny}};
 
 
 pub struct Krate {
@@ -18,6 +18,7 @@ pub struct Krate {
   list_expr: Arena<Expr>,
   list_item: Arena<Item>,
   list_patt: Arena<Patt>,
+  list_fiel: Arena<Field>,
   list_thig: Arena<Thing>,
 
   extra_data: (Arena<AstId<SpecAny>>, Arena<NodeKind>),
@@ -37,6 +38,7 @@ impl Krate {
       list_expr: Arena::new(),
       list_item: Arena::new(),
       list_patt: Arena::new(),
+      list_fiel: Arena::new(),
       list_thig: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
@@ -63,7 +65,7 @@ impl Krate {
 
 
   // Extra
-  pub fn extra<T: AstKind>(&mut self, vec: &[AstId<T>]) -> Rng {
+  pub fn extra<T: AstKind>(&mut self, vec: &[AstId<T>]) -> Rng<T> {
     let (ids, kds) = &mut self.extra_data;
 
     let vec = unsafe { slice::from_raw_parts(vec.as_ptr() as *const AstId<SpecAny>, vec.len()) };
@@ -72,28 +74,41 @@ impl Krate {
     let krng = kds.extend_fill(T::kind(), vec.len());
     debug_assert_eq!(irng, krng);
 
-    Rng(u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
+    Rng::new(u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
   }
 
-  pub fn extra_any(&mut self, vec: &[AnyId]) -> Rng {
+  pub fn extra_any(&mut self, vec: &[AnyId]) -> AnyRng {
     let (ids, kds) = &mut self.extra_data;
     let start = ids.len();
+    
     for any in vec {
       ids.push(any.id());
       kds.push(any.kind());
     }
-    Rng(u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
+    
+    AnyRng::new(u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
   }
 
-  pub fn extra_get(&self, rng: Rng) -> impl Iterator<Item = (AstId<SpecAny>, NodeKind)> {
+  pub fn extra_get<T: AstKind>(&self, rng: Rng<T>) -> impl Iterator<Item = AstId<T>> {
     let (ids, kinds) = &self.extra_data;
-    let range = (rng.0 as usize)..(rng.1 as usize);
+    let range = rng.range();
 
     std::iter::zip(
       ids.range(range.clone()),
       kinds.range(range),
     )
-    .map(|(&id, &kind)| (id, kind))
+    .map(|(&id, &kind)| AstId::<T>::new_from((id, kind)))
+  }
+
+  pub fn extra_any_get(&self, rng: AnyRng) -> impl Iterator<Item = AnyId> {
+    let (ids, kinds) = &self.extra_data;
+    let range = rng.range();
+
+    std::iter::zip(
+      ids.range(range.clone()),
+      kinds.range(range),
+    )
+    .map(|(&id, &kind)| AnyId::new_from((id, kind)))
   }
 
 
@@ -108,21 +123,13 @@ impl Krate {
   pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Field>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<AnyId>(&self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Field>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<AnyId>(&self)
   }
 
-}
-
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Rng(pub u32, pub u32);
-
-impl Rng {
-  pub fn empty() -> Self { Self(0,0) }
 }
 
 
@@ -188,6 +195,14 @@ impl ArenaNode for Patt {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_patt[id.idx() as usize] }
 }
 
+impl ArenaNode for Field {
+  type Id = FieldId;
+
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_fiel.push(obj)).unwrap()) }
+  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_fiel[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_fiel[id.idx() as usize] }
+}
+
 impl ArenaNode for Thing {
   type Id = ThingId;
 
@@ -235,6 +250,11 @@ impl SizeApi for Item {
 impl SizeApi for Patt {
   fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_patt.len() }
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_patt.allocated_len() }
+}
+
+impl SizeApi for Field {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_fiel.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_fiel.allocated_len() }
 }
 
 impl SizeApi for Thing {
