@@ -38,9 +38,6 @@ impl TypeLow {
       
       // Reference
       Ref(id, ism) => {let id = Self::low(ctx, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
-
-      // RT contract
-      Trait(rng) => Self::low_trait(ctx, rng)?,
       
       _ => todo!("{:#?}", it)
     };
@@ -268,25 +265,6 @@ impl TypeLow {
     };
     
     Ok(ctx.cre.push(this))
-  }
-
-
-  fn low_trait(_ctx: &mut Ctx, _rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-    //let mut funs = vec![];
-
-    //for id in ctx.src.extra_get(rng) {
-    //  let id = FieldLow::low(ctx, id)?.unwrap();
-    //  let it: &hir::Item = ctx.cre.get(id);
-    //
-    //  match it.kind {
-    //    hir::ItemKind::Function{..} => funs.push(id),
-    //
-    //    _ => todo!("{:#?}", it.kind)
-    //  }
-    //}
-    
-
-    todo!()
   }
 
 }

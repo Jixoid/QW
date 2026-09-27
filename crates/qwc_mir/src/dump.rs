@@ -4,7 +4,7 @@ use owo_colors::OwoColorize;
 use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 
 use crate::{
-  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
+  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SSA, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
 };
 
 
@@ -35,7 +35,6 @@ impl<'a> fmt::Display for Dump<'a> {
 }
 
 
-
 // Object
 impl DumpHandler for Symbol {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
@@ -49,26 +48,20 @@ impl DumpHandler for Symbol {
         writeln!(f, " {{")?;
 
         let mut slot_idx = 0;
-        for (id, kind) in cre.extra_get(stack) {
-          if kind == NodeKind::Type {
-            let ty_id = TypeId::new_from((id, kind));
-            write_indent(f, indent + 1)?;
-            write!(f, "{}{} ", tmpval(format!("${}", slot_idx)), punct(":"))?;
-            ty_id.dump(cre, f, indent + 2)?;
-            writeln!(f)?;
-            slot_idx += 1;
-          }
+        for id in cre.extra_get(stack) {
+          write_indent(f, indent + 1)?;
+          write!(f, "{}{} ", tmpval(format!("${}", slot_idx)), punct(":"))?;
+          id.dump(cre, f, indent + 2)?;
+          writeln!(f)?;
+          slot_idx += 1;
         }
 
-        for (id, kind) in cre.extra_get(blocks) {
-          if kind == NodeKind::Blok {
-            let b_id = BlokId::new_from((id, kind));
-            let is_entry = b_id == entry;
-            write_indent(f, indent + 1)?;
-            write!(f, "bb{}{}{} ", b_id.idx(), if is_entry { " (entry)" } else { "" }, punct(":"))?;
-            b_id.dump(cre, f, indent + 1)?;
-            writeln!(f)?;
-          }
+        for id in cre.extra_get(blocks) {
+          let is_entry = id == entry;
+          write_indent(f, indent + 1)?;
+          write!(f, "{}{}{} ", format!("#{}", id.idx()).purple().bold(), punct(if is_entry { " (entry)" } else { "" }), punct(":"))?;
+          id.dump(cre, f, indent + 1)?;
+          writeln!(f)?;
         }
 
         write_indent(f, indent)?;
@@ -89,10 +82,6 @@ impl DumpHandler for Symbol {
 
 impl DumpHandler for Type {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    self.layout.dump(cre, f, indent)?;
-
-    write!(f, " ")?;
-    
     match self.kind {
       TypeKind::Unit => write!(f, "{}", punct("()"))?,
 
@@ -121,16 +110,11 @@ impl DumpHandler for Type {
       TypeKind::Fun { args, ret } => {
         write!(f, "{}{}", ty("fun"), punct("("))?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(args) {
-          if !first {
-            write!(f, "{} ", punct(","))?;
-          }
+        for id in cre.extra_get(args) {
+          if !first { write!(f, "{} ", punct(","))? }
           first = false;
-          if kind == NodeKind::Type {
-            TypeId::new_from((id, kind)).dump(cre, f, indent)?;
-          } else {
-            write!(f, "<unknown>")?;
-          }
+
+          id.dump(cre, f, indent)?;
         }
         write!(f, "{} {} ", punct(")"), op("->"))?;
         ret.dump(cre, f, indent)?;
@@ -139,16 +123,11 @@ impl DumpHandler for Type {
       TypeKind::Struct(rng) => {
         write!(f, "{} {{ ", kw("struct"))?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(rng) {
-          if !first {
-            write!(f, "{} ", punct(","))?;
-          }
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))? }
           first = false;
-          if kind == NodeKind::Type {
-            TypeId::new_from((id, kind)).dump(cre, f, indent)?;
-          } else {
-            write!(f, "<unknown>")?;
-          }
+
+          id.dump(cre, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -160,10 +139,10 @@ impl DumpHandler for Type {
 
 impl DumpHandler for Block {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    writeln!(f, "{{")?;
+    writeln!(f, "{}", punct("{"))?;
 
-    for (id, kind) in cre.extra_get(self.insts) {
-      let it: &Inst = cre.get(InstId::new_from((id, kind)));
+    for id in cre.extra_get(self.insts) {
+      let it: &Inst = cre.get(id);
       
       write_indent(f, indent +1)?;
       it.dump(cre, f, indent +1)?;
@@ -175,7 +154,7 @@ impl DumpHandler for Block {
     writeln!(f)?;
     
     write_indent(f, indent)?;
-    write!(f, "}}")?;
+    write!(f, "{}", punct("}"))?;
 
     Ok(())
   }
@@ -185,12 +164,12 @@ impl DumpHandler for Terminator {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self {
       Terminator::Jump(target) => {
-        write!(f, "{} bb{}", kw("jump"), target.idx())
+        write!(f, "{} {}", kw("jump"), format!("#{}", target.idx()).purple().bold())
       }
       Terminator::Branch { cond, then_bb, else_bb } => {
         write!(f, "{} ", kw("branch"))?;
         cond.dump(cre, f, indent)?;
-        write!(f, "{} bb{}, bb{}", punct(","), then_bb.idx(), else_bb.idx())
+        write!(f, "{} {}, {}", punct(","), format!("#{}", then_bb.idx()).purple().bold(), format!("#{}", else_bb.idx()).purple().bold())
       }
       Terminator::Return(val) => {
         write!(f, "{}", kw("ret"))?;
@@ -222,25 +201,79 @@ impl DumpHandler for Expr {
       Expr::Store{target, kind, value} => {
         write!(f, "{} ", kw("store"))?;
         kind.dump(cre, f, indent)?;
-        write!(f, "{} ", punct(","))?;
+        
+        write!(f, " ")?;
         value.dump(cre, f, indent)?;
-        write!(f, " {} ", op("->"))?;
+
+        write!(f, "{} ", op(","))?;
         target.dump(cre, f, indent)?;
       }
 
       Expr::Load{target, kind} => {
         write!(f, "{} ", kw("load"))?;
         kind.dump(cre, f, indent)?;
-        write!(f, " {} ", op("<-"))?;
+        write!(f, " ")?;
+
         target.dump(cre, f, indent)?;
       }
 
-      Expr::Binary(lhs, rhs) => {
-        write!(f, "{} ", kw("binary"))?;
+      
+      Expr::IntArithmetic{op, flg, flg2, kind, lhs, rhs} => {
+        use crate::IntArithmeticOp::*;
+        use crate::IntArithmeticFlg::*;
+        use crate::IntArithmeticFlg2::*;
+
+        let op = match op { Add => "add", Sub => "sub", Mul => "mul", Div => "div", Rem => "rem" };
+        let flg = match flg { Overflow => "", Checked => ".checked", Saturating => ".saturating" };
+        let flg2 = match flg2 { Signed => ".i", Unsigned => ".u" };
+        write!(f, "{}{}{} ", kw(op), kw(flg2), kw(flg))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " ")?;
+
         lhs.dump(cre, f, indent)?;
         write!(f, "{} ", punct(","))?;
         rhs.dump(cre, f, indent)?;
       }
+    
+      Expr::IntCondition{op, flg2, kind, lhs, rhs} => {
+        use crate::IntConditionOp::*;
+        use crate::IntConditionFlg2::*;
+
+        let op = match op { GtEq => ".ge", LtEq => ".le", Gt => ".gt", Lt => ".ls", Eq => ".eq", Ne => ".ne" };
+        let flg2 = match flg2 { Signed => ".i", Unsigned => ".u" };
+        write!(f, "{}{}{} ", kw("cmp"), kw(flg2), kw(op))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " ")?;
+
+        lhs.dump(cre, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        rhs.dump(cre, f, indent)?;
+      }
+    
+      Expr::IntLogic{op, kind, lhs, rhs} => {
+        use crate::IntLogicOp::*;
+
+        let op = match op { And => "and", Or => "or", Xor => "xor" };
+        write!(f, "{} ", kw(op))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " ")?;
+
+        lhs.dump(cre, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        rhs.dump(cre, f, indent)?;
+      }
+
+      Expr::IntUnary{op, kind, val} => {
+        use crate::IntUnaryOp::*;
+
+        let op = match op { Not => "not" };
+        write!(f, "{} ", kw(op))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " ")?;
+
+        val.dump(cre, f, indent)?;
+      }
+    
     }
     
     Ok(())
@@ -277,7 +310,6 @@ impl DumpHandler for Value {
     Ok(())
   }
 }
-
 
 
 // Others
@@ -323,6 +355,9 @@ impl DumpHandler for Layout {
   }
 }
 
+impl fmt::Display for SSA {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", format!("%{}", self.0).purple().bold()) }
+}
 
 
 // IDs

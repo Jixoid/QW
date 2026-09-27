@@ -686,7 +686,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::While { cond, blok, elsb } => {
-        write!(f, "{} ", "while".blue())?;
+        write!(f, "{} ", "while".blue().bold())?;
         cond.dump(cre, sin, far, f, indent)?;
         write!(f, " ")?;
         blok.dump(cre, sin, far, f, indent)?;
@@ -697,10 +697,10 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Loop { blok, elsb } => {
-        write!(f, "{} ", "loop".blue())?;
+        write!(f, "{} ", "loop".blue().bold())?;
         blok.dump(cre, sin, far, f, indent)?;
         if let Some(el) = elsb {
-          write!(f, " {} ", "else".blue())?;
+          write!(f, " {} ", "else".blue().bold())?;
           el.dump(cre, sin, far, f, indent)?;
         }
       }
@@ -779,7 +779,7 @@ impl DumpHandler for Expr {
         rhs.dump(cre, sin, far, f, indent)?;
       }
 
-      ExprKind::AssignOp { op: aop, lhs, rhs } => {
+      ExprKind::AssignOp { op: aop, lhs, rhs, op_span: _ } => {
         let op_str = match aop {
           BinaryOp::Add => "+=",
           BinaryOp::Sub => "-=",
@@ -853,7 +853,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Return { label, val } => {
-        write!(f, "{}", "ret".blue().bold())?;
+        write!(f, "{}", "ret".blue().bold().bold())?;
         if let Some(lbl) = label {
           write!(f, " `{}", lbl.str(far).bright_black())?;
         }
@@ -864,7 +864,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Break { label, val } => {
-        write!(f, "{}", "break".blue())?;
+        write!(f, "{}", "break".blue().bold())?;
         if let Some(lbl) = label {
           write!(f, " `{}", lbl.str(far).bright_black())?;
         }

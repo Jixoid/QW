@@ -6,7 +6,7 @@ use crate::{Block, Inst, Symbol, Type};
 // AstId
 #[derive(Debug, Copy, Clone)]
 pub struct MirId<T>
-where T: MirKind
+  where T: MirKind
 {
   idx: NonZeroU32,
   pkind: PhantomData<T>
@@ -62,6 +62,69 @@ pub type TypeId  = MirId<Type>;
 pub type SymbId  = MirId<Symbol>;
 pub type BlokId  = MirId<Block>;
 pub type InstId  = MirId<Inst>;
+
+
+
+// Rng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Rng<T>
+  where T: MirKind
+{
+  start: u32,
+  end: u32,
+  pkind: PhantomData<T>,
+}
+
+impl<T: MirKind> Rng<T> {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end, pkind: PhantomData }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0, pkind: PhantomData}
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
+pub type TypeRng = Rng<Type>;
+pub type SymbRng = Rng<Symbol>;
+pub type BlokRng = Rng<Block>;
+pub type InstRng = Rng<Inst>;
+
+
+
+// AnyRng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct AnyRng {
+  start: u32,
+  end: u32,
+}
+
+impl AnyRng {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0 }
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
 
 
 // AnyId

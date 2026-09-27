@@ -53,13 +53,11 @@ impl TypeLow {
   }
 
 
-  fn low_struct(ctx: &mut Ctx, rng: hir::Rng) -> Result<mir::TypeId, Message> {
+  fn low_struct(ctx: &mut Ctx, rng: hir::TypeRng) -> Result<mir::TypeId, Message> {
     let rng = {
       let mut sub = vec![];
 
       for id in ctx.src.extra_get(rng) {
-        let id = hir::TypeId::new_from(id);
-
         let id = TypeLow::low(ctx, id)?;
 
         sub.push(id);
@@ -81,13 +79,11 @@ impl TypeLow {
   }
 
 
-  fn low_fun(ctx: &mut Ctx, args: hir::Rng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
+  fn low_fun(ctx: &mut Ctx, args: hir::TypeRng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
     let args = {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(args) {
-        let id = hir::TypeId::new_from(id);
-        
         ctn.push(Self::low(ctx, id)?);
       }
 

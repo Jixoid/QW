@@ -1,0 +1,46 @@
+use crate::hgen::Ctx;
+
+use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_hir::{self as hir, Const, ExprCategory};
+
+
+// ZST
+pub fn low_unit(ctx: &mut Ctx) -> Result<hir::ExprId, Message> {
+  // Post
+  let this = hir::Expr{
+    kind: hir::ExprKind::Const(Const::Unit),
+    category: ExprCategory::RValue,
+    ety: ctx.tin.ty_unit()
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+
+// Primitive
+pub fn low_bool(ctx: &mut Ctx, val: bool) -> Result<hir::ExprId, Message> {
+  // Post
+  let this = hir::Expr{
+    kind: hir::ExprKind::Const(Const::Bool(val)),
+    category: ExprCategory::RValue,
+    ety: ctx.tin.ty_bool()
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+pub fn low_number(ctx: &mut Ctx, span: Span) -> Result<hir::ExprId, Message> {
+  let str = span.str(ctx.far);
+
+  let val = str.parse::<i32>().map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?;
+
+
+  // Post
+  let this = hir::Expr{
+    kind: hir::ExprKind::Const(Const::Int(val)),
+    category: ExprCategory::RValue,
+    ety: ctx.tin.ty_i32()
+  };
+
+  Ok(ctx.cre.push(this))
+}

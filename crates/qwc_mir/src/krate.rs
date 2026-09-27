@@ -2,7 +2,7 @@ use core::slice;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, Block, BlokId, Inst, SymbId, Symbol, Type, TypeId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, Block, BlokId, Inst, Rng, SymbId, Symbol, Type, TypeId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
 
 
 pub struct Krate {
@@ -44,7 +44,7 @@ impl Krate {
 
 
   // Extra
-  pub fn extra<T: MirKind>(&mut self, vec: &[MirId<T>]) -> Rng {
+  pub fn extra<T: MirKind>(&mut self, vec: &[MirId<T>]) -> Rng<T> {
     let (ids, kds) = &mut self.extra_data;
 
     let vec = unsafe { slice::from_raw_parts(vec.as_ptr() as *const MirId<SpecAny>, vec.len()) };
@@ -53,28 +53,39 @@ impl Krate {
     let krng = kds.extend_fill(T::kind(), vec.len());
     debug_assert_eq!(irng, krng);
 
-    Rng(u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
+    Rng::new(u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
   }
 
-  pub fn extra_any(&mut self, vec: &[AnyId]) -> Rng {
+  pub fn extra_any(&mut self, vec: &[AnyId]) -> AnyRng {
     let (ids, kds) = &mut self.extra_data;
     let start = ids.len();
     for any in vec {
       ids.push(any.id());
       kds.push(any.kind());
     }
-    Rng(u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
+    AnyRng::new(u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
   }
 
-  pub fn extra_get(&self, rng: Rng) -> impl Iterator<Item = (MirId<SpecAny>, NodeKind)> {
+  pub fn extra_get<T: MirKind>(&self, rng: Rng<T>) -> impl Iterator<Item = MirId<T>> {
     let (ids, kinds) = &self.extra_data;
-    let range = (rng.0 as usize)..(rng.1 as usize);
+    let range = rng.range();
 
     std::iter::zip(
       ids.range(range.clone()),
       kinds.range(range),
     )
-    .map(|(&id, &kind)| (id, kind))
+    .map(|(&id, &kind)| MirId::<T>::new_from((id, kind)))
+  }
+  
+  pub fn extra_any_get(&self, rng: AnyRng) -> impl Iterator<Item = AnyId> {
+    let (ids, kinds) = &self.extra_data;
+    let range = rng.range();
+
+    std::iter::zip(
+      ids.range(range.clone()),
+      kinds.range(range),
+    )
+    .map(|(&id, &kind)| AnyId::new_from((id, kind)))
   }
 
 
@@ -119,13 +130,6 @@ impl Krate {
 
 }
 
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Rng(pub u32, pub u32);
-
-impl Rng {
-  pub fn empty() -> Self { Self(0,0) }
-}
 
 
 // push & get

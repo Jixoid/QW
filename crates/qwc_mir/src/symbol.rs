@@ -1,4 +1,4 @@
-use crate::{BlokId, Rng, TypeId};
+use crate::{BlokId, BlokRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -6,8 +6,8 @@ pub enum SymbolKind {
   Variable{ism: bool},
   Function{
     entry: BlokId,
-    blocks: Rng, /* BlokId */
-    stack: Rng,  /* TypeId */
+    blocks: BlokRng,
+    stack: TypeRng,
   },
 }
 

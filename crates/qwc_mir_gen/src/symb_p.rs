@@ -4,7 +4,7 @@ use qwc_mir as mir;
 use qwc_mangling::{Mangler, ManglerQW};
 use qwc_string_interner::Sid;
 
-use crate::{BlokLow, Ctx, MayFail, TypeLow, BlockBuilder, ctx, expr_p::ExprLow};
+use crate::{BlokLow, Ctx, MayFail, TypeLow, FnBuilder, ctx, expr_p::ExprLow};
 
 
 pub struct SymbLow;
@@ -34,24 +34,20 @@ impl SymbLow {
   }
 
 
-  fn low_root(ctx: &mut Ctx, rng: hir::Rng) -> MayFail<Message> {
+  fn low_root(ctx: &mut Ctx, rng: hir::ItemRng) -> MayFail<Message> {
     let mgr = &mut vec![];
     
     for id in ctx.src.extra_get(rng) {
-      let id = hir::ItemId::new_from(id);
-
       Self::low(ctx!(mgr -> ctx), id)?;
     }
 
     Ok(())
   }
   
-  fn low_namespace(ctx: &mut Ctx, rng: hir::Rng, name: Sid) -> MayFail<Message> {
+  fn low_namespace(ctx: &mut Ctx, rng: hir::ItemRng, name: Sid) -> MayFail<Message> {
     ctx.mgr.push(name);
     
     for id in ctx.src.extra_get(rng) {
-      let id = hir::ItemId::new_from(id);
-
       Self::low(ctx, id)?;
     }
 
@@ -66,7 +62,7 @@ impl SymbLow {
     
     let ety = TypeLow::low(ctx, kind)?;
 
-    let _value = ExprLow::low(ctx, &mut BlockBuilder::new(), expr)?;
+    let _value = ExprLow::low(ctx, &mut FnBuilder::new(), expr)?;
 
 
     // Post
@@ -96,7 +92,13 @@ impl SymbLow {
       }
     };
 
-    let (entry, blocks, stack) = BlokLow::low_fn(ctx, expr, is_ret_unit)?;
+    let param_tys: Vec<mir::TypeId> = if let mir::TypeKind::Fun{args, ..} = (ctx.cre.get(ety) as &mir::Type).kind {
+      ctx.cre.extra_get(args).collect()
+    } else {
+      unreachable!()
+    };
+
+    let (entry, blocks, stack) = BlokLow::low_fn(ctx, expr, is_ret_unit, &param_tys)?;
 
 
     // Post

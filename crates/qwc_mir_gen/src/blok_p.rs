@@ -9,29 +9,34 @@ pub struct BlokLow;
 
 impl BlokLow {
 
-  pub fn low_fn(ctx: &mut Ctx, id: hir::ExprId, is_ret_unit: bool) -> Result<(mir::BlokId, mir::Rng, mir::Rng), Message> {
+  pub fn low_fn(ctx: &mut Ctx, id: hir::ExprId, is_ret_unit: bool, param_tys: &[mir::TypeId]) -> Result<(mir::BlokId, mir::BlokRng, mir::TypeRng), Message> {
     let mut fbld = FnBuilder::new();
+
+    for (local_id, &param_ty) in param_tys.iter().enumerate() {
+      let slot = fbld.alloc_stack(param_ty);
+      fbld.local_to_slot.insert(local_id as u32, slot);
+    }
 
     let it: &hir::Expr = ctx.src.get(id);
 
     match it.kind {
       hir::ExprKind::Block{stmt, expr} => {
-        for s_id in ctx.src.extra_get(stmt) {
-          let s_id = hir::ExprId::new_from(s_id);
-          ExprLow::low(ctx, &mut fbld, s_id)?;
+        for id in ctx.src.extra_get(stmt) {
+          ExprLow::low(ctx, &mut fbld, id)?;
         }
 
         if let Some(expr) = expr {
           let ret = ExprLow::low(ctx, &mut fbld, expr)?;
           if !fbld.is_current_terminated() {
-            fbld.terminate(RawTerminator::Return(ret));
+            RawTerminator::Return(ret).terminate(&mut fbld);
           }
         }
       }
+
       _ => {
         let ret = ExprLow::low(ctx, &mut fbld, id)?;
         if !fbld.is_current_terminated() {
-          fbld.terminate(RawTerminator::Return(ret));
+          RawTerminator::Return(ret).terminate(&mut fbld);
         }
       }
     }

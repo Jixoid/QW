@@ -2,21 +2,21 @@ use qwc_diagnostic::Message;
 use qwc_hir as hir;
 use qwc_mir::{self as mir, Value};
 
-use crate::{BlockBuilder, Ctx, SymbLow, type_p::TypeLow, builder::{LoopFrame, RawTerminator}};
+use crate::{FnBuilder, Ctx, SymbLow, builder::{ExprEmit, LoopFrame, RawTerminator}, type_p::TypeLow};
 
 
 pub struct ExprLow;
 
 impl ExprLow {
 
-  pub fn low(ctx: &mut Ctx, bbld: &mut BlockBuilder, id: hir::ExprId) -> Result<Option<Value>, Message> {
+  pub fn low(ctx: &mut Ctx, bbld: &mut FnBuilder, id: hir::ExprId) -> Result<Option<Value>, Message> {
     let it: &hir::Expr = ctx.src.get(id);
 
     use hir::ExprKind::*;
 
     let it = match it.kind {
       // Const
-      Const(val) => Some(Self::low_const(ctx, val)?),
+      Const(val) => Some(Self::low_const(val)?),
 
       // MemRef
       GlobalRef(item) => Some(Self::low_global_ref(ctx, item)?),
@@ -42,6 +42,16 @@ impl ExprLow {
       // Branch
       If{cond, then, elsb} => Self::low_if(ctx, bbld, it, cond, then, elsb)?,
 
+      // Integer
+      IntArithmetic{op, flg, lhs, rhs} => Some(Self::low_int_arithmetic(ctx, bbld, op, flg, lhs, rhs)?),
+      AssignIntArithmetic{op, flg, lhs, rhs} => {Self::low_int_arithmetic_op(ctx, bbld, op, flg, lhs, rhs)?; None},
+
+      IntCondition{op, lhs, rhs} => Some(Self::low_int_condition(ctx, bbld, op, lhs, rhs)?),
+
+      // Logic
+      BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, bbld, op, lhs, rhs)?),
+      BoolNot(val) => Some(Self::low_bool_not(ctx, bbld, val)?),
+
       c @_ => todo!("{c:#?}")
     };
 
@@ -50,15 +60,14 @@ impl ExprLow {
 
 
   // Const
-  fn low_const(_ctx: &mut Ctx, val: hir::Const) -> Result<Value, Message> {
-    let cons = match val {
+  fn low_const(val: hir::Const) -> Result<Value, Message> {
+    let this = match val {
       hir::Const::Unit => mir::Const::Unit,
       hir::Const::Bool(b) => mir::Const::Bool(b),
       hir::Const::Int(i) => mir::Const::Int(i),
     };
 
-    let this = Value::Const(cons);
-    Ok(this)
+    Ok(this.into())
   }
 
 
@@ -68,14 +77,12 @@ impl ExprLow {
 
 
     // Post
-    let this = Value::GlobalRef(
-      item
-    );
+    let this = Value::GlobalRef(item);
     
     Ok(this)
   }
 
-  fn low_local_ref(ctx: &mut Ctx, bbld: &mut BlockBuilder, it: &hir::Expr, local: u32) -> Result<Value, Message> {
+  fn low_local_ref(ctx: &mut Ctx, bbld: &mut FnBuilder, it: &hir::Expr, local: u32) -> Result<Value, Message> {
     let slot = *bbld.local_to_slot.get(&local).expect("local variable stack slot not found");
     let ty = TypeLow::low(ctx, it.ety)?;
     
@@ -86,12 +93,12 @@ impl ExprLow {
       kind: ty,
     };
 
-    Ok(Value::SSA(bbld.emit(this).unwrap()))
+    Ok(bbld.emit(this).unwrap().into())
   }
 
 
   // Variable
-  fn low_let(ctx: &mut Ctx, bbld: &mut BlockBuilder, local: u32, init: hir::ExprId) -> Result<(), Message> {
+  fn low_let(ctx: &mut Ctx, bbld: &mut FnBuilder, local: u32, init: hir::ExprId) -> Result<(), Message> {
     let init_hir: &hir::Expr = ctx.src.get(init);
     let ty = TypeLow::low(ctx, init_hir.ety)?;
     let slot = bbld.alloc_stack(ty);
@@ -112,41 +119,39 @@ impl ExprLow {
 
 
   // Block
-  fn low_block(ctx: &mut Ctx, bbld: &mut BlockBuilder, stmt: hir::Rng, expr: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
+  fn low_block(ctx: &mut Ctx, bbld: &mut FnBuilder, stmt: hir::ExprRng, expr: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
     for id in ctx.src.extra_get(stmt) {
-      let id = hir::ExprId::new_from(id);
       ExprLow::low(ctx, bbld, id)?;
     }
 
     if let Some(expr) = expr {
       ExprLow::low(ctx, bbld, expr)
     } else {
-      Ok(Some(Value::Const(mir::Const::Unit)))
+      Ok(Some(mir::Const::Unit.into()))
     }
   }
 
 
   // Assign
-  fn low_assign(ctx: &mut Ctx, bbld: &mut BlockBuilder, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<(), Message> {
+  fn low_assign(ctx: &mut Ctx, bbld: &mut FnBuilder, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<(), Message> {
     let target = Self::low_lval(ctx, bbld, lhs)?;
     let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
     let value = ExprLow::low(ctx, bbld, rhs)?.unwrap();
 
 
     // Post
-    let this = mir::Expr::Store{
-      target,
-      kind,
-      value,
-    };
+    mir::Expr::Store{
+      target, 
+      kind, 
+      value
+    }.emit(bbld);
     
-    bbld.emit(this);
     Ok(())
   }
 
 
   // Loop
-  fn low_loop(ctx: &mut Ctx, bbld: &mut BlockBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
+  fn low_loop(ctx: &mut Ctx, bbld: &mut FnBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
     let loop_ty = TypeLow::low(ctx, it.ety)?;
     let is_unit_or_never = {
       let ty: &mir::Type = ctx.cre.get(loop_ty);
@@ -221,7 +226,7 @@ impl ExprLow {
     }
   }
 
-  fn low_lval(ctx: &mut Ctx, bbld: &mut BlockBuilder, id: hir::ExprId) -> Result<Value, Message> {
+  fn low_lval(ctx: &mut Ctx, bbld: &mut FnBuilder, id: hir::ExprId) -> Result<Value, Message> {
     let it: &hir::Expr = ctx.src.get(id);
     match it.kind {
       hir::ExprKind::LocalRef(local) => {
@@ -239,59 +244,57 @@ impl ExprLow {
 
 
   // Route
-  fn low_return(ctx: &mut Ctx, bbld: &mut BlockBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
+  fn low_return(ctx: &mut Ctx, bbld: &mut FnBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
     let val = match val {
       None => None,
       Some(val) => Some(ExprLow::low(ctx, bbld, val)?.unwrap()),
     };
 
-    bbld.terminate(RawTerminator::Return(val));
+    RawTerminator::Return(val).terminate(bbld);
+    
     let dead_bb = bbld.create_block();
     bbld.switch_to(dead_bb);
+    
     Ok(())
   }
 
-  fn low_break(ctx: &mut Ctx, bbld: &mut BlockBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
-    let frame = bbld.peek_loop().cloned();
-    let frame = match frame {
-      Some(f) => f,
-      None => panic!("break used outside of loop"),
-    };
+  fn low_break(ctx: &mut Ctx, bbld: &mut FnBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
+    let frame = bbld.peek_loop().cloned().expect("break used outside of loop");
 
     if let Some(val_id) = val {
       if let Some(slot) = frame.result_slot {
         if let Some(v) = ExprLow::low(ctx, bbld, val_id)? {
-          bbld.emit(mir::Expr::Store {
+          mir::Expr::Store {
             target: Value::StackRef(slot),
             kind: frame.result_ty,
             value: v,
-          });
+          }.emit(bbld);
         }
       }
     }
 
-    bbld.terminate(RawTerminator::Jump(frame.exit_bb));
+    RawTerminator::Jump(frame.exit_bb).terminate(bbld);
+    
     let dead_bb = bbld.create_block();
     bbld.switch_to(dead_bb);
+
     Ok(())
   }
 
-  fn low_continue(_ctx: &mut Ctx, bbld: &mut BlockBuilder) -> Result<(), Message> {
-    let frame = bbld.peek_loop().cloned();
-    let frame = match frame {
-      Some(f) => f,
-      None => panic!("continue used outside of loop"),
-    };
+  fn low_continue(_ctx: &mut Ctx, bbld: &mut FnBuilder) -> Result<(), Message> {
+    let frame = bbld.peek_loop().cloned().expect("continue used outside of loop");
 
-    bbld.terminate(RawTerminator::Jump(frame.continue_bb));
+    RawTerminator::Jump(frame.continue_bb).terminate(bbld);
+    
     let dead_bb = bbld.create_block();
     bbld.switch_to(dead_bb);
+
     Ok(())
   }
 
 
   // Branch
-  fn low_if(ctx: &mut Ctx, bbld: &mut BlockBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
+  fn low_if(ctx: &mut Ctx, bbld: &mut FnBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
     let if_ty = TypeLow::low(ctx, it.ety)?;
     let is_unit_or_never = {
       let ty: &mir::Type = ctx.cre.get(if_ty);
@@ -362,6 +365,171 @@ impl ExprLow {
     } else {
       Ok(Some(Value::Const(mir::Const::Unit)))
     }
+  }
+
+
+  // Integer
+  fn low_int_arithmetic(ctx: &mut Ctx, bbld: &mut FnBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
+    let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+    let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
+    let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+    let kind_ty: &mir::Type = ctx.cre.get(kind);
+
+
+    let op = match op {
+      hir::IntArithmeticOp::Add => mir::IntArithmeticOp::Add,
+      hir::IntArithmeticOp::Sub => mir::IntArithmeticOp::Sub,
+      hir::IntArithmeticOp::Mul => mir::IntArithmeticOp::Mul,
+      hir::IntArithmeticOp::Div => mir::IntArithmeticOp::Div,
+      hir::IntArithmeticOp::Rem => mir::IntArithmeticOp::Rem,
+    };
+
+    assert_eq!(flg, hir::IntArithmeticFlg::Overflow);
+    let flg = mir::IntArithmeticFlg::Overflow;
+
+    let flg2 = match kind_ty.kind {
+      mir::TypeKind::Int(_, true)  => mir::IntArithmeticFlg2::Signed,
+      mir::TypeKind::Int(_, false) => mir::IntArithmeticFlg2::Unsigned,
+      
+      _ => unreachable!()
+    };
+
+
+    // Post
+    let this = mir::Expr::IntArithmetic {
+      op,
+      flg,
+      flg2,
+      kind,
+      lhs,
+      rhs
+    }.emit(bbld).unwrap();
+
+    Ok(this.into())
+  }
+
+  fn low_int_arithmetic_op(ctx: &mut Ctx, bbld: &mut FnBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<(), Message> {
+    let target = Self::low_lval(ctx, bbld, lhs)?;
+    let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+    let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+    let kind_ty: &mir::Type = ctx.cre.get(kind);
+    
+    let op = match op {
+      hir::IntArithmeticOp::Add => mir::IntArithmeticOp::Add,
+      hir::IntArithmeticOp::Sub => mir::IntArithmeticOp::Sub,
+      hir::IntArithmeticOp::Mul => mir::IntArithmeticOp::Mul,
+      hir::IntArithmeticOp::Div => mir::IntArithmeticOp::Div,
+      hir::IntArithmeticOp::Rem => mir::IntArithmeticOp::Rem,
+    };
+
+    assert_eq!(flg, hir::IntArithmeticFlg::Overflow);
+    let flg = mir::IntArithmeticFlg::Overflow;
+
+    let flg2 = match kind_ty.kind {
+      mir::TypeKind::Int(_, true)  => mir::IntArithmeticFlg2::Signed,
+      mir::TypeKind::Int(_, false) => mir::IntArithmeticFlg2::Unsigned,
+      
+      _ => unreachable!()
+    };
+
+
+    // Post
+    let lhs = mir::Expr::Load {
+      target,
+      kind,
+    }.emit(bbld).unwrap().into();
+
+    let value = mir::Expr::IntArithmetic {
+      op,
+      flg,
+      flg2,
+      kind,
+      lhs,
+      rhs
+    }.emit(bbld).unwrap().into();
+
+    mir::Expr::Store {
+      target,
+      kind,
+      value,
+    }.emit(bbld);
+
+    Ok(())
+  }
+
+
+  fn low_int_condition(ctx: &mut Ctx, bbld: &mut FnBuilder, op: hir::IntConditionOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
+    let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+    let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
+    let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+    let kind_ty: &mir::Type = ctx.cre.get(kind);
+
+    let op = match op {
+      hir::IntConditionOp::GtEq => mir::IntConditionOp::GtEq,
+      hir::IntConditionOp::LtEq => mir::IntConditionOp::LtEq,
+      hir::IntConditionOp::Gt   => mir::IntConditionOp::Gt,
+      hir::IntConditionOp::Lt   => mir::IntConditionOp::Lt,
+      hir::IntConditionOp::Eq   => mir::IntConditionOp::Eq,
+      hir::IntConditionOp::Ne   => mir::IntConditionOp::Ne,
+    };
+
+    let flg2 = match kind_ty.kind {
+      mir::TypeKind::Int(_, true)  => mir::IntConditionFlg2::Signed,
+      mir::TypeKind::Int(_, false) => mir::IntConditionFlg2::Unsigned,
+      
+      _ => unreachable!()
+    };
+
+
+    // Post
+    let this = mir::Expr::IntCondition {
+      op,
+      flg2,
+      kind,
+      lhs,
+      rhs
+    }.emit(bbld).unwrap();
+
+    Ok(this.into())
+  }
+
+
+  // Logic
+  fn low_bool_logic(ctx: &mut Ctx, bbld: &mut FnBuilder, op: hir::BoolLogicOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
+    let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+    let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
+    let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+
+    let op = match op {
+      hir::BoolLogicOp::And => mir::IntLogicOp::And,
+      hir::BoolLogicOp::Or  => mir::IntLogicOp::Or,
+      hir::BoolLogicOp::Xor => mir::IntLogicOp::Xor,
+    };
+
+
+    // Post
+    let this = mir::Expr::IntLogic {
+      op,
+      kind,
+      lhs,
+      rhs
+    }.emit(bbld).unwrap();
+
+    Ok(this.into())
+  }
+
+  fn low_bool_not(ctx: &mut Ctx, bbld: &mut FnBuilder, val: hir::ExprId) -> Result<Value, Message> {
+    let kind = TypeLow::low(ctx, (ctx.src.get(val) as &hir::Expr).ety)?;
+    let val = ExprLow::low(ctx, bbld, val)?.unwrap();
+
+    // Post
+    let this = mir::Expr::IntUnary {
+      op: qwc_mir::IntUnaryOp::Not,
+      kind,
+      val,
+    }.emit(bbld).unwrap();
+
+    Ok(this.into())
   }
 
 }

@@ -55,9 +55,7 @@ impl DumpHandler for Item {
     match self.kind {
       ItemKind::RootNS {rng} => {
         writeln!(f, "{} {{", kw("root"))?;
-        for (id, kind) in cre.extra_get(rng) {
-          let id = ItemId::new_from((id, kind));
-          
+        for id in cre.extra_get(rng) {
           id.dump(cre, sin, f, indent +1)?;
         }
         write_indent(f, indent)?;
@@ -68,9 +66,7 @@ impl DumpHandler for Item {
         let name_str = sin.str(ns_name);
 
         writeln!(f, "{} {} {{", kw("namespace"), name(name_str))?;
-        for (id, kind) in cre.extra_get(rng) {
-          let id = ItemId::new_from((id, kind));
-
+        for id in cre.extra_get(rng) {
           id.dump(cre, sin, f, indent +1)?;
         }
         write_indent(f, indent)?;
@@ -79,11 +75,8 @@ impl DumpHandler for Item {
 
       ItemKind::GenericNS { rng } => {
         writeln!(f, "{} {{", kw("generic"))?;
-        for (cid, kind) in cre.extra_get(rng) {
-          if kind == NodeKind::Item {
-            let item_id = ItemId::new_from((cid, kind));
-            item_id.dump(cre, sin, f, indent + 1)?;
-          }
+        for id in cre.extra_get(rng) {
+          id.dump(cre, sin, f, indent +1)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -137,6 +130,8 @@ impl DumpHandler for Type {
       TypeKind::Unit => write!(f, "{}", punct("()"))?,
       TypeKind::Never => write!(f, "{}", op("!"))?,
 
+      TypeKind::Bit(bits) => write!(f, "b{}", bits)?,
+      
       TypeKind::Int(bits, signed) => write!(f, "{}{}", if signed { "i" } else { "u" }, bits)?,
 
       TypeKind::Float(bits) => write!(f, "f{}", bits)?,
@@ -146,23 +141,16 @@ impl DumpHandler for Type {
         write!(f, "{}", s)?;
       }
 
-
       TypeKind::Bool => write!(f, "{}", ty("bool"))?,
-      
 
       TypeKind::Struct(rng) => {
         write!(f, "{} {{ ", kw("struct"))?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(rng) {
-          if !first {
-            write!(f, "{} ", punct(","))?;
-          }
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))? }
           first = false;
-          if kind == NodeKind::Type {
-            TypeId::new_from((id, kind)).dump(cre, sin, f, indent)?;
-          } else {
-            write!(f, "<unknown>")?;
-          }
+
+          id.dump(cre, sin, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -178,16 +166,11 @@ impl DumpHandler for Type {
       TypeKind::Fun { args, ret } => {
         write!(f, "{}{}", ty("fun"), punct("("))?;
         let mut first = true;
-        for (id, kind) in cre.extra_get(args) {
-          if !first {
-            write!(f, "{} ", punct(","))?;
-          }
+        for id in cre.extra_get(args) {
+          if !first { write!(f, "{} ", punct(","))? }
           first = false;
-          if kind == NodeKind::Type {
-            TypeId::new_from((id, kind)).dump(cre, sin, f, indent)?;
-          } else {
-            write!(f, "<unknown>")?;
-          }
+
+          id.dump(cre, sin, f, indent)?;
         }
         write!(f, "{} {} ", punct(")"), op("->"))?;
         ret.dump(cre, sin, f, indent)?;
@@ -266,17 +249,14 @@ impl DumpHandler for Expr {
 
       ExprKind::Block { stmt, expr } => {
         writeln!(f, "{{")?;
-        for (sid, kind) in cre.extra_get(stmt) {
-          if kind == NodeKind::Expr {
-            let expr_id = ExprId::new_from((sid, kind));
-            write_indent(f, indent + 1)?;
-            expr_id.dump(cre, sin, f, indent + 1)?;
-            let ex: &Expr = cre.get(expr_id);
-            if matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. }) {
-              writeln!(f)?;
-            } else {
-              writeln!(f, "{}", punct(";"))?;
-            }
+        for id in cre.extra_get(stmt) {
+          write_indent(f, indent + 1)?;
+          id.dump(cre, sin, f, indent + 1)?;
+          let ex: &Expr = cre.get(id);
+          if matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. }) {
+            writeln!(f)?;
+          } else {
+            writeln!(f, "{}", punct(";"))?;
           }
         }
         if let Some(last) = expr {
@@ -303,7 +283,7 @@ impl DumpHandler for Expr {
         }
       }
 
-      ExprKind::Return(val) => {
+      ExprKind::Return (val) => {
         write!(f, "{}", kw("ret"))?;
         if let Some(v) = val {
           write!(f, " ")?;
@@ -311,7 +291,7 @@ impl DumpHandler for Expr {
         }
       }
 
-      ExprKind::Break(val) => {
+      ExprKind::Break (val) => {
         write!(f, "{}", kw("break"))?;
         if let Some(v) = val {
           write!(f, " ")?;
@@ -324,9 +304,9 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::If { cond, then, elsb } => {
-        write!(f, "{} ", kw("if"))?;
+        write!(f, "{} {}", kw("if"), punct("("))?;
         cond.dump(cre, sin, f, indent)?;
-        write!(f, " ")?;
+        write!(f, "{} ", punct(")"))?;
         then.dump(cre, sin, f, indent)?;
         
         if let Some(elsb) = elsb {
@@ -334,6 +314,69 @@ impl DumpHandler for Expr {
           elsb.dump(cre, sin, f, indent)?;
         }
       }
+    
+
+      // Integer
+      ExprKind::IntArithmetic { op, flg, lhs, rhs } => {
+        lhs.dump(cre, sin, f, indent)?;
+        
+        use crate::IntArithmeticOp::*;
+        use crate::IntArithmeticFlg::*;
+        
+        let op = match op { Add => '+', Sub => '-', Mul => '*', Div => '/', Rem => '%' };
+        let flg = match flg { Overflow => "", Checked => "?", Saturating => "|" };
+        
+        write!(f, " {}{} ", punct(op), punct(flg))?;
+        
+        rhs.dump(cre, sin, f, indent)?;
+      }
+
+      ExprKind::AssignIntArithmetic { op, flg, lhs, rhs } => {
+        lhs.dump(cre, sin, f, indent)?;
+        
+        use crate::IntArithmeticOp::*;
+        use crate::IntArithmeticFlg::*;
+        
+        let op = match op { Add => '+', Sub => '-', Mul => '*', Div => '/', Rem => '%' };
+        let flg = match flg { Overflow => "", Checked => "?", Saturating => "|" };
+        
+        write!(f, " {}{}{} ", punct(op), punct(flg), punct("="))?;
+        
+        rhs.dump(cre, sin, f, indent)?;
+      }
+      
+      ExprKind::IntCondition { op, lhs, rhs } => {
+        lhs.dump(cre, sin, f, indent)?;
+        
+        use crate::IntConditionOp::*;
+        
+        let op = match op { Gt => ">", Lt => "<", GtEq => ">=", LtEq => "<=", Eq => "==", Ne => "!=" };
+        
+        write!(f, " {} ", punct(op))?;
+        
+        rhs.dump(cre, sin, f, indent)?;
+      }
+
+
+      // Logic
+      ExprKind::BoolLogic { op, lhs, rhs } => {
+        lhs.dump(cre, sin, f, indent)?;
+        
+        use crate::BoolLogicOp::*;
+        
+        let op = match op { And => "&&", Or => "||", Xor => "^^" };
+        
+        write!(f, " {} ", punct(op))?;
+        
+        rhs.dump(cre, sin, f, indent)?;
+      }
+
+      ExprKind::BoolNot (val) => {
+        write!(f, "{}", "!(".bright_black())?;
+        val.dump(cre, sin, f, indent)?;
+        write!(f, "{}", ")".bright_black())?;
+      }
+
     }
 
     Ok(())

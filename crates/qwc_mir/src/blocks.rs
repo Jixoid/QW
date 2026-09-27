@@ -1,9 +1,9 @@
-use crate::{BlokId, Rng, Value};
+use crate::{BlokId, InstRng, Value};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
-  pub insts: Rng, /* InstId */
+  pub insts: InstRng,
   pub term: Terminator,
 }
 

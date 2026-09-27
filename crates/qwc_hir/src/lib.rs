@@ -9,8 +9,8 @@ mod visitor;
 pub mod dump;
 
 pub use dpath::DPath;
-pub use krate::{Krate, Rng, Deps, CID};
-pub use id::{AnyId, TypeId, ExprId, ItemId, NodeKind};
+pub use krate::{Krate, Deps, CID};
+pub use id::{AnyId, TypeId, ExprId, ItemId, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng};
 pub use {items::*, types::*, exprs::* };
 pub use layout::*;
 pub use visitor::Visitor;

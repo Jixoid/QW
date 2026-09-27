@@ -1,4 +1,4 @@
-use crate::{ExprId, ItemId, Rng, TypeId};
+use crate::{ExprId, ExprRng, ItemId, TypeId};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -10,6 +10,29 @@ pub enum Const {
   Bool(bool),
   Int(i32),
 }
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum IntArithmeticFlg {
+  Overflow, Checked, Saturating
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum IntArithmeticOp {
+  Add, Sub, Mul, Div, Rem
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum IntConditionOp {
+  Gt, Lt, GtEq, LtEq, Eq, Ne
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum BoolLogicOp {
+  And, Or, Xor
+}
+
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -28,7 +51,7 @@ pub enum ExprKind {
   Let{local: u32, init: ExprId},
 
   // Code
-  Block{stmt: Rng /* ExprId */, expr: Option<ExprId>},
+  Block{stmt: ExprRng, expr: Option<ExprId>},
 
   // Assign
   Assign{lhs: ExprId, rhs: ExprId},
@@ -43,7 +66,18 @@ pub enum ExprKind {
 
   // Branch
   If{cond: ExprId, then: ExprId, elsb: Option<ExprId>},
+
+  // Integer
+  IntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
+  AssignIntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
+
+  IntCondition{op: IntConditionOp, lhs: ExprId, rhs: ExprId},
+
+  // Bool
+  BoolLogic{op: BoolLogicOp, lhs: ExprId, rhs: ExprId},
+  BoolNot(ExprId),
 }
+
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

@@ -1,4 +1,4 @@
-use qwc_mir::{Krate, Layout, LayoutBy, LayoutInfo, LayoutKind, Rng, Type, TypeId, TypeKind};
+use qwc_mir::{Krate, Layout, LayoutBy, LayoutInfo, LayoutKind, Type, TypeId, TypeKind, TypeRng};
 
 
 pub struct Layouter;
@@ -40,12 +40,12 @@ impl Layouter {
 }
 
 
-fn lay_qw_struct(cre: &Krate, layby: LayoutBy, rng: Rng) -> Layout {
+fn lay_qw_struct(cre: &Krate, layby: LayoutBy, rng: TypeRng) -> Layout {
   let var = {
     let mut var = vec![];
     
     for id in cre.extra_get(rng) {
-      let it: &Type = cre.get(TypeId::new_from(id));
+      let it: &Type = cre.get(id);
       let lay = it.layout;
 
       match lay.kind() {
@@ -79,13 +79,13 @@ fn lay_qw_struct(cre: &Krate, layby: LayoutBy, rng: Rng) -> Layout {
   }
 }
 
-fn lay_c_struct(cre: &Krate, layby: LayoutBy, rng: Rng) -> Layout {
+fn lay_c_struct(cre: &Krate, layby: LayoutBy, rng: TypeRng) -> Layout {
   let (align, size) = {
     let mut align: u32 = 1;
     let mut off: u64 = 0;
     
     for id in cre.extra_get(rng) {
-      let it: &Type = cre.get(TypeId::new_from(id));
+      let it: &Type = cre.get(id);
       let lay = it.layout;
 
       match lay.kind() {

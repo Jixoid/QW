@@ -87,8 +87,12 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       hir::TypeKind::Unit => "()".to_string(),
       hir::TypeKind::Never => "!".to_string(),
       hir::TypeKind::Bool => "bool".to_string(),
+
+      hir::TypeKind::Bit(bits) => format!("b{}", bits),
+      
       hir::TypeKind::Int(bits, true) => format!("i{}", bits),
       hir::TypeKind::Int(bits, false) => format!("u{}", bits),
+
       hir::TypeKind::ArchInt(true) => "isize".to_string(),
       hir::TypeKind::ArchInt(false) => "usize".to_string(),
       hir::TypeKind::Float(bits) => format!("f{}", bits),
@@ -120,13 +124,8 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         let krate = self.get_krate(id.cid());
         let fields: Vec<String> = krate
           .extra_get(rng)
-          .filter_map(|(id, kind)| {
-            if kind == hir::NodeKind::Type {
-              let tid = hir::TypeId::new_from((id, kind));
-              Some(self.type_name(tid))
-            } else {
-              None
-            }
+          .filter_map(|id| {
+            Some(self.type_name(id))
           })
           .collect();
         format!("struct {{ {} }}", fields.join(", "))
@@ -135,13 +134,8 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         let krate = self.get_krate(id.cid());
         let arg_types: Vec<String> = krate
           .extra_get(args)
-          .filter_map(|(id, kind)| {
-            if kind == hir::NodeKind::Type {
-              let tid = hir::TypeId::new_from((id, kind));
-              Some(self.type_name(tid))
-            } else {
-              None
-            }
+          .filter_map(|id| {
+            Some(self.type_name(id))
           })
           .collect();
         let ret_name = self.type_name(ret);

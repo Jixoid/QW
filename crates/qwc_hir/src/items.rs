@@ -1,6 +1,6 @@
 use qwc_string_interner::Sid;
 
-use crate::{ExprId, Rng, TypeId};
+use crate::{ExprId, ItemRng, TypeId};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -12,9 +12,9 @@ pub enum ItemVis { Private, Public }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
-  RootNS{rng: Rng /* ItemId */},
-  NameSpace{rng: Rng /* ItemId */, name: Sid},
-  GenericNS{rng: Rng /* ItemId */},
+  RootNS{rng: ItemRng},
+  NameSpace{rng: ItemRng, name: Sid},
+  GenericNS{rng: ItemRng},
 
   Using{kind: TypeId, name: Sid},
   

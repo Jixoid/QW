@@ -68,7 +68,7 @@ pub enum ExprKind {
   Binary   {op: BinaryOp, lhs: ExprId, rhs: ExprId},
   
   Assign   {lhs: ExprId, rhs: ExprId, op_span: Span},
-  AssignOp {op: BinaryOp, lhs: ExprId, rhs: ExprId},
+  AssignOp {op: BinaryOp, lhs: ExprId, rhs: ExprId, op_span: Span},
   
   Exchange {lhs: ExprId, rhs: ExprId},
 

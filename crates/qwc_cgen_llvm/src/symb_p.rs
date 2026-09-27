@@ -1,23 +1,23 @@
 use inkwell::{GlobalVisibility, module::Linkage};
 use qwc_mir::{AnyId, SymbId, Symbol, SymbolKind, SymbolStat, Type, id::NodeKind};
 
-use crate::{blok_p::BlokLow, context::{CGenCtx, SymbolVal}, type_p::TypeLow};
+use crate::{CtxI, CtxM, BlokLow, cgen::SymbolVal, TypeLow};
 
 
 pub struct SymbLow;
 
 impl SymbLow {
 
-  pub fn declare_symbols<'ctx>(cgen: &mut CGenCtx<'ctx, '_>) {
-    for idx in 0..cgen.cre.symbols_len() {
+  pub fn declare_symbols<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>) {
+    for idx in 0..ictx.cre.symbols_len() {
       let symb_id = SymbId::from_any(AnyId::new(idx as u32, NodeKind::Symb));
-      let it: &Symbol = cgen.cre.get(symb_id);
-      let name = cgen.cre.sym_str(it.name);
+      let it: &Symbol = ictx.cre.get(symb_id);
+      let name = ictx.cre.sym_str(it.name);
 
       match it.kind {
         SymbolKind::Variable { ism } => {
-          let ty = TypeLow::low_basic_cached(cgen.ctx, cgen.cre, it.ety, &mut cgen.type_cache);
-          let gv = cgen.mol.add_global(ty, None, name);
+          let ty = TypeLow::low_basic_cached(uctx, ictx, it.ety);
+          let gv = ictx.mol.add_global(ty, None, name);
           gv.set_constant(!ism);
 
           match it.stat {
@@ -37,13 +37,13 @@ impl SymbLow {
             }
           }
 
-          cgen.symbols.insert(symb_id, SymbolVal::Global(gv));
+          uctx.symbols.insert(symb_id, SymbolVal::Global(gv));
         }
 
         SymbolKind::Function { .. } => {
-          let fn_any_ty = TypeLow::low(cgen.ctx, cgen.cre, cgen.cre.get(it.ety));
+          let fn_any_ty = TypeLow::low(ictx, ictx.cre.get(it.ety));
           let fn_ty = fn_any_ty.into_function_type();
-          let fv = cgen.mol.add_function(name, fn_ty, None);
+          let fv = ictx.mol.add_function(name, fn_ty, None);
 
           match it.stat {
             SymbolStat::Private => {
@@ -62,23 +62,23 @@ impl SymbLow {
             }
           }
 
-          cgen.symbols.insert(symb_id, SymbolVal::Function(fv));
+          uctx.symbols.insert(symb_id, SymbolVal::Function(fv));
         }
       }
     }
   }
 
 
-  pub fn define_symbols<'ctx>(cgen: &mut CGenCtx<'ctx, '_>) {
-    for idx in 0..cgen.cre.symbols_len() {
+  pub fn define_symbols<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>) {
+    for idx in 0..ictx.cre.symbols_len() {
       let symb_id = SymbId::from_any(AnyId::new(idx as u32, NodeKind::Symb));
-      let it: &Symbol = cgen.cre.get(symb_id);
+      let it: &Symbol = ictx.cre.get(symb_id);
 
       match it.kind {
         SymbolKind::Variable{..} => {
           if it.stat != SymbolStat::Import {
-            if let Some(SymbolVal::Global(gv)) = cgen.symbols.get(&symb_id).copied() {
-              let ty = TypeLow::low_basic_cached(cgen.ctx, cgen.cre, it.ety, &mut cgen.type_cache);
+            if let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
+              let ty = TypeLow::low_basic_cached(uctx, ictx, it.ety);
               gv.set_initializer(&ty.const_zero());
             }
           }
@@ -86,9 +86,9 @@ impl SymbLow {
 
         SymbolKind::Function{entry, blocks, stack} => {
           if it.stat != SymbolStat::Import {
-            if let Some(SymbolVal::Function(fv)) = cgen.symbols.get(&symb_id).copied() {
-              let ty: &Type = cgen.cre.get(it.ety);
-              BlokLow::low(cgen, fv, ty, entry, blocks, stack);
+            if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&symb_id).copied() {
+              let ty: &Type = ictx.cre.get(it.ety);
+              BlokLow::low_fn(uctx, ictx, fv, ty, entry, blocks, stack);
             }
           }
         }

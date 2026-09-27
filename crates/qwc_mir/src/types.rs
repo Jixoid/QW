@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use crate::{Layout, Rng, TypeId};
+use crate::{Layout, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -16,14 +16,14 @@ pub enum TypeKind {
   Ptr,
 
   // Combinated
-  Struct(Rng /* TypeId */),
+  Struct(TypeRng),
   
   // Sequential
   Array(TypeId, u32),
   Slice(TypeId),
   
   // Callable
-  Fun{args: Rng /* TypeId */, ret: TypeId},
+  Fun{args: TypeRng, ret: TypeId},
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

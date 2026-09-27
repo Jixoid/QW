@@ -3,7 +3,6 @@ use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast as ast;
 use qwc_cgen::ICGen;
-use qwc_cgen_llvm::CGenLLVM;
 use qwc_hir as hir;
 use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
@@ -218,7 +217,7 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
 pub fn build_cgen(mir_cre: &mir::Krate, fpath: &Path) -> Result<Duration, Error> {
   let now = Instant::now();
   
-  CGenLLVM::generate(mir_cre, fpath).map_err(|err| Error::Str(err))?;
+  qwc_cgen_llvm::CGen::generate(mir_cre, fpath).map_err(|err| Error::Str(err))?;
 
   let time = now.elapsed();
 

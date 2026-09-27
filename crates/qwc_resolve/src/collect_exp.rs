@@ -83,7 +83,7 @@ impl<'a> ExportCollector<'a> {
   fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
     let item: &Item = self.cre.get(ItemId::from_any(id));
     match item.kind {
-      ItemKind::RootNS{rng} | ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).map(ItemId::new_from).collect(),
+      ItemKind::RootNS{rng} | ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).collect(),
 
       _ => vec![],
     }

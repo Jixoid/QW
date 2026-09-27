@@ -153,12 +153,28 @@ impl ItemLow {
 
 
   fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
-    let kind = TypeLow::low(ctx, kind)?;
-
+    let hir_kind = TypeLow::low(ctx, kind)?;
     let mut loc = qwc_resolve::LocalScopeManager::new();
-    let expr = {
-      ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?
-    };
+
+    
+    // Args
+    let ast::TypeKind::Fun{args: ast_args, ..} = (ctx.src.get(kind) as &ast::Type).kind else { unreachable!() };
+    let hir::TypeKind::Fun{args: hir_args, .. } = (ctx.cre.get(hir_kind) as &hir::Type).kind else { unreachable!() };
+      
+    for (thing_id, arg_id) in ctx.src.extra_get(ast_args).zip(ctx.cre.extra_get(hir_args)) {
+      let thing: &ast::Thing = ctx.src.get(thing_id);
+      if let ast::Thing::NamedType(name, _) = *thing {
+        if let Some(old_id) = loc.lookup(&name.sid()) {
+          let old_span = loc.get_local(old_id).span;
+          return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(name)).add(Label::new(old_span, FIRST_DEFINITION_HERE)));
+        }
+
+        loc.insert(name.sid(), arg_id, false, name.into());
+      }
+    }
+
+
+    let expr = ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?;
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
@@ -168,7 +184,7 @@ impl ItemLow {
       kind: hir::ItemKind::Function {
         name: it.name.unwrap().sid(),
         expr,
-        kind,
+        kind: hir_kind,
       },
       vis: convert_vis(it.vis),
       svis

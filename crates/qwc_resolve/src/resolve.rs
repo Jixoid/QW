@@ -114,12 +114,11 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
           };
 
           let mut found = None;
-          for child in krate.extra_get(rng) {
-            let child_id = hir::ItemId::new_from(child);
-            let child_item: &hir::Item = krate.get(child_id);
+          for id in krate.extra_get(rng) {
+            let child_item: &hir::Item = krate.get(id);
             match child_item.kind {
               hir::ItemKind::NameSpace{name, ..} if name == seg.sid() => {
-                found = Some(ScopeKind::Hir(ScopeKindHir::Module(child_id)));
+                found = Some(ScopeKind::Hir(ScopeKindHir::Module(id)));
                 break;
               }
               hir::ItemKind::Using{name, kind} if name == seg.sid() => {
@@ -127,7 +126,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
                 break;
               }
               hir::ItemKind::Variable{name, kind: ty, ..} | hir::ItemKind::Function{name, kind: ty, ..} if name == seg.sid() => {
-                found = Some(ScopeKind::Hir(ScopeKindHir::Expr(child_id, ty)));
+                found = Some(ScopeKind::Hir(ScopeKindHir::Expr(id, ty)));
                 break;
               }
               _ => {}

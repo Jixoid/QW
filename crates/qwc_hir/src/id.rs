@@ -75,6 +75,68 @@ pub type ExprId  = HirId<Expr>;
 pub type ItemId  = HirId<Item>;
 
 
+
+// Rng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Rng<T>
+  where T: HirKind
+{
+  start: u32,
+  end: u32,
+  pkind: PhantomData<T>,
+}
+
+impl<T: HirKind> Rng<T> {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end, pkind: PhantomData }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0, pkind: PhantomData}
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
+pub type TypeRng = Rng<Type>;
+pub type ExprRng = Rng<Expr>;
+pub type ItemRng = Rng<Item>;
+
+
+
+// AnyRng
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct AnyRng {
+  start: u32,
+  end: u32,
+}
+
+impl AnyRng {
+  pub fn new(start: u32, end: u32) -> Self {
+    Self { start, end }
+  }
+
+  pub fn range(&self) -> std::ops::Range<usize> {
+    (self.start as usize)..(self.end as usize)
+  }
+
+  pub fn empty() -> Self {
+    Self{start: 0, end: 0 }
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.start == self.end
+  }
+}
+
+
+
 // AnyId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)] pub struct SpecAny;
 

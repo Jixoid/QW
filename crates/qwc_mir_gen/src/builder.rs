@@ -62,6 +62,7 @@ impl FnBuilder {
     }
   }
 
+
   pub fn create_block(&mut self) -> BlockHandle {
     let idx = self.blocks.len();
     self.blocks.push(BasicBlockData {
@@ -75,13 +76,11 @@ impl FnBuilder {
     self.current_bb = bb;
   }
 
-  pub fn is_current_terminated(&self) -> bool {
-    self.blocks[self.current_bb.0].term.is_some()
-  }
 
   pub fn emit(&mut self, expr: mir::Expr) -> Option<mir::SSA> {
     if self.is_current_terminated() {
-      return None;
+      panic!("already finished");
+      //return None;
     }
 
     let ret = if expr.have_result() {
@@ -92,21 +91,30 @@ impl FnBuilder {
       None
     };
 
-    self.blocks[self.current_bb.0].insts.push(mir::Inst { kind: expr, dest: ret });
+    self.blocks[self.current_bb.0].insts.push(mir::Inst{ kind: expr, dest: ret });
     ret
+  }
+
+
+  pub fn is_current_terminated(&self) -> bool {
+    self.blocks[self.current_bb.0].term.is_some()
   }
 
   pub fn terminate(&mut self, term: RawTerminator) {
     if !self.is_current_terminated() {
       self.blocks[self.current_bb.0].term = Some(term);
+    } else {
+      panic!("already terminated")
     }
   }
 
+  
   pub fn alloc_stack(&mut self, ty: mir::TypeId) -> u32 {
     let idx = self.stack.len() as u32;
     self.stack.push(ty);
     idx
   }
+
 
   pub fn push_loop(&mut self, frame: LoopFrame) {
     self.loop_stack.push(frame);
@@ -119,8 +127,9 @@ impl FnBuilder {
   pub fn peek_loop(&self) -> Option<&LoopFrame> {
     self.loop_stack.last()
   }
+  
 
-  pub fn finish(self, cre: &mut mir::Krate, is_ret_unit: bool) -> (mir::BlokId, mir::Rng, mir::Rng) {
+  pub fn finish(self, cre: &mut mir::Krate, is_ret_unit: bool) -> (mir::BlokId, mir::BlokRng, mir::TypeRng) {
     let count = self.blocks.len();
 
     let mut block_ids: Vec<mir::BlokId> = Vec::with_capacity(count);
@@ -187,4 +196,15 @@ impl FnBuilder {
 }
 
 
-pub type BlockBuilder = FnBuilder;
+pub trait ExprEmit {
+  fn emit(self, bbld: &mut FnBuilder) -> Option<mir::SSA>;
+}
+
+impl ExprEmit for mir::Expr {
+  fn emit(self, bbld: &mut FnBuilder) -> Option<qwc_mir::SSA> { bbld.emit(self) }
+}
+
+
+impl RawTerminator {
+  pub fn terminate(self, bbld: &mut FnBuilder) { bbld.terminate(self); }
+}
