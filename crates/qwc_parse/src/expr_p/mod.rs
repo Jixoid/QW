@@ -25,6 +25,7 @@ impl ExprParser {
   }
 
   fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Result<ExprId, Message> {
+    // Starter / Pre Unary
     let mut lhs = match ctx.lex.peek()?.kind() {
       // Literal
       WK::SelfB => literal_p::pre_self_big(ctx)?,
@@ -67,23 +68,31 @@ impl ExprParser {
       _ => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(ctx.lex.get()?))),
     };
 
+    // Post Unary
     loop {
-      lhs = match ctx.lex.peek()?.kind() {
-        WK::Dot => postfix_p::post_member(ctx, lhs)?,
+      let start = ctx.cre.get(lhs).pos;
 
-        WK::Colon2 => postfix_p::post_scope_spec(ctx, lhs)?,
+      lhs = match ctx.lex.peek()?.kind() {
+        // Access
+        WK::Dot => postfix_p::post_member(ctx, start, lhs)?,
+
+        WK::Colon2 => postfix_p::post_scope_spec(ctx, start, lhs)?,
 
         // Operator
-        WK::Bang2 | WK::Question | WK::Amp | WK::Caret => operator_p::post_unary(ctx, lhs)?,
+        WK::Bang2 | WK::Question | WK::Amp | WK::Caret => operator_p::post_unary(ctx, start, lhs)?,
 
-        WK::ParenL   => operator_p::post_call(ctx, lhs)?,
-        WK::BracketL => operator_p::post_index(ctx, lhs)?,
+        // Call & Index
+        WK::ParenL   => operator_p::post_call(ctx, start, lhs)?,
+        WK::BracketL => operator_p::post_index(ctx, start, lhs)?,
 
         _ => break
       }
     }
 
+    // Binary
     loop {
+      let start = ctx.cre.get(lhs).pos;
+
       let op_tok = ctx.lex.peek()?;
       
       let (_, r_bp) = match helper::get_infix_bp(op_tok.kind()) {
@@ -102,7 +111,7 @@ impl ExprParser {
       };
 
       let this = Expr{
-        pos: ctx.lex.pos_extend(op_tok),
+        pos: ctx.lex.pos_extend(start),
         kind 
       };
 

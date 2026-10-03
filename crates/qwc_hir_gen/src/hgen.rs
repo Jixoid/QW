@@ -29,6 +29,7 @@ pub struct CacheMap {
   pub(crate) cache_item: FxHashMap<ast::ItemId, Option<hir::ItemId>>,
   pub(crate) cache_expr: FxHashMap<ast::ExprId, hir::ExprId>,
   pub(crate) cache_type_import: FxHashMap<hir::TypeId, hir::TypeId>,
+  pub(crate) self_ty: Option<hir::TypeId>,
 }
 
 impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
@@ -76,14 +77,25 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     }
   }
 
+
   pub fn get_type(&self, id: hir::TypeId) -> &hir::Type {
     self.get_krate(id.cid()).get(id)
+  }
+
+
+  pub fn expr_name(&self, _id: hir::ExprId) -> String {
+    todo!()
   }
 
   pub fn type_name(&self, id: hir::TypeId) -> String {
     let ty = self.get_type(id);
     match ty.kind {
+      // Generic
       hir::TypeKind::GenericType => "<generic>".to_string(),
+      hir::TypeKind::SelfT => "Self".to_string(),
+
+
+      // Primitive
       hir::TypeKind::Unit => "()".to_string(),
       hir::TypeKind::Never => "!".to_string(),
       hir::TypeKind::Bool => "bool".to_string(),
@@ -92,45 +104,41 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       
       hir::TypeKind::Int(bits, true) => format!("i{}", bits),
       hir::TypeKind::Int(bits, false) => format!("u{}", bits),
+      
+      hir::TypeKind::Float(bits) => format!("f{}", bits),
 
+      hir::TypeKind::Meta(kind) => format!("#{}", self.type_name(kind)),
+      hir::TypeKind::Option(sub) => format!("?{}", self.type_name(sub)),
+      
       hir::TypeKind::ArchInt(true) => "isize".to_string(),
       hir::TypeKind::ArchInt(false) => "usize".to_string(),
-      hir::TypeKind::Float(bits) => format!("f{}", bits),
-      hir::TypeKind::Ref(sub, ism) => {
-        if ism {
-          format!("&mut {}", self.type_name(sub))
-        } else {
-          format!("&{}", self.type_name(sub))
-        }
-      }
-      hir::TypeKind::Ptr(sub, ism) => {
-        if ism {
-          format!("^mut {}", self.type_name(sub))
-        } else {
-          format!("^{}", self.type_name(sub))
-        }
-      }
+
+
+      // Reference
+      hir::TypeKind::Ref(sub, ism) => format!("&{}{}", if ism {"mut "} else {""}, self.type_name(sub)),
+      hir::TypeKind::Ptr(sub, ism) => format!("^{}{}", if ism {"mut "} else {""}, self.type_name(sub)),
+      
+
+      // Vector
+      hir::TypeKind::VScale(sub) => format!("[{} *]", self.type_name(sub)),
+
+      hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sub), self.expr_name(len)),
+      
+
+      // Array
       hir::TypeKind::Slice(sub) => format!("[{}]", self.type_name(sub)),
-      hir::TypeKind::Option(sub) => format!("?{}", self.type_name(sub)),
-      hir::TypeKind::Array(sub, len) => {
-        let expr: &hir::Expr = self.get_krate(len.cid()).get(len);
-        let len_str = match expr.kind {
-          hir::ExprKind::Const(hir::Const::Int(n)) => n.to_string(),
-          _ => "_".to_string(),
-        };
-        format!("[{}; {}]", self.type_name(sub), len_str)
-      }
-      hir::TypeKind::Struct(rng) => {
-        let krate = self.get_krate(id.cid());
-        let fields: Vec<String> = krate
-          .extra_get(rng)
-          .filter_map(|id| {
-            Some(self.type_name(id))
-          })
-          .collect();
-        format!("struct {{ {} }}", fields.join(", "))
-      }
-      hir::TypeKind::Fun { args, ret } => {
+      
+      hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sub), self.expr_name(len)),
+      
+      
+      // Combinated
+      hir::TypeKind::Struct(..) => format!("struct {{}}"),
+      hir::TypeKind::Tuple(..) => format!("tuple {{}}"),
+      hir::TypeKind::Iface(..) => format!("iface {{}}"),
+
+
+      // Function
+      hir::TypeKind::Fun{args, ret} => {
         let krate = self.get_krate(id.cid());
         let arg_types: Vec<String> = krate
           .extra_get(args)
@@ -169,7 +177,7 @@ impl<'ast, 'hir, 'imod> HGen {
     
     let mut tin = TypeInterner::new(&mut cre);
     let mut sum = Summary::new();
-    let mut cmap = CacheMap{ cache_type: FxHashMap::default(), cache_item: FxHashMap::default(), cache_expr: FxHashMap::default(), cache_type_import: FxHashMap::default() };
+    let mut cmap = CacheMap{ cache_type: FxHashMap::default(), cache_item: FxHashMap::default(), cache_expr: FxHashMap::default(), cache_type_import: FxHashMap::default(), self_ty: None };
     let mut loc = LocalScopeManager::new();
     
     let root = src.root().unwrap();

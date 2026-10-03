@@ -5,15 +5,13 @@ use crate::{ExprId, FieldRng, Ident, ThingRng, TypeId, TypeRng, AnyRng};
 
 
 pub enum FunAttrs {
-  Static = 0x01,
-  Const  = 0x02,
-  Pure   = 0x04,
+  Pure = 0x01,
 }
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
-  // Access
+  // Must Resolve
   Nick (Ident),
   Path (TypeRng),
 
@@ -21,22 +19,25 @@ pub enum TypeKind {
   Ptr (TypeId, bool),
   Ref (TypeId, bool),
   
-  // Heap
-  Array  (TypeId, ExprId),
-  Slice  (TypeId),
+  /// Vector
   Vector (TypeId, ExprId),
+  VScale (TypeId),
+
+  // Sequential
+  Array (TypeId, ExprId),
+  Slice (TypeId),
+  
+  // Must Context
+  Type,
+  SelfT,
   
   // Basic
   Unit,
-  Range  (TypeId),
-  Option (TypeId),
-  Fail   (TypeId),
-
-  // Intrinsic
-  Type (),
-  SelfT(),
+  Range (TypeId),
 
   // Variant
+  Fail    (TypeId),
+  Option  (TypeId),
   Result  {sub: TypeId, err: TypeId},
   Variant (ThingRng /* Name | NamedType */),
 
@@ -44,7 +45,7 @@ pub enum TypeKind {
   Enum  (ThingRng /* Name | NamedExpr */),
   Flags (ThingRng /* Name | NamedExpr */),
 
-  // Data
+  // Combinated
   Struct (FieldRng),
   Tuple  (TypeRng),
 
@@ -53,7 +54,7 @@ pub enum TypeKind {
   Trait (FieldRng),
 
   // Function
-  Fun {args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
+  Fun {self_kind: Option<TypeId>, args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
   Init{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
   Fini{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
 

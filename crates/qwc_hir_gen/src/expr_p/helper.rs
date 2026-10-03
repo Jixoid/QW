@@ -42,8 +42,8 @@ pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::ExprId, elsb: Option
 }
 
 pub fn verify_assignable(ctx: &Ctx, lhs_ast: ast::ExprId, lhs_hir: hir::ExprId, op_span: Span) -> Result<(), Message> {
-  let lhs_ast: &ast::Expr = ctx.src.get(lhs_ast);
-  let lhs_hir: &hir::Expr = ctx.cre.get(lhs_hir);
+  let lhs_ast = ctx.src.get(lhs_ast);
+  let lhs_hir = ctx.cre.get(lhs_hir);
 
 
   match lhs_hir.category {

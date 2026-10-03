@@ -247,6 +247,8 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   };
 
   let mir_layinfo = mir::LayoutInfo{
+    arch_bit: mir::ArchBit::B64,
+
     i8_lay:   mir::Layout::new_sst(1,  1,  mir::LayoutBy::SYS),
     i16_lay:  mir::Layout::new_sst(2,  2,  mir::LayoutBy::SYS),
     i32_lay:  mir::Layout::new_sst(4,  4,  mir::LayoutBy::SYS),
@@ -325,7 +327,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   
   let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &sin, &far, &mir_layinfo)?;
   
-  if info.dump.contains(&DumpStage::Mir) { eprintln!("{}", mir::Dump{cre: &mir_cre}) }
+  if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre}) }
   
   
   // Pass 4 (cgen)

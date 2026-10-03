@@ -40,49 +40,53 @@ pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) ->
 
 // Variable
 pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Result<hir::ExprId, Message> {
-  let patt: &ast::Patt = ctx.src.get(item);
-  let (name, span) = match patt {
+  let (name, span) = match ctx.src.get(item) as &ast::Patt {
     ast::Patt::One(ident) => (ident.sid(), (*ident).into()),
     _ => todo!("patterns in let bindings not implemented yet"),
   };
 
-  let init_id = match init {
-    Some(id) => id,
-    None => {
-      let name_str = ctx.sin.str(name);
-      return Err(Message::error(VARIABLE_REQUIRES_INITIALIZER
-        .args(&[
-          name_str
-        ]),
-        Label::new_pos(pos),
-      ));
-    }
-  };
+  let init = init.ok_or_else(|| Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(pos)))?;
+  let init_hir = ExprLow::low(ctx, init)?;
+  let init_ty = ctx.cre.get(init_hir).ety;
 
-  let init_hir = ExprLow::low(ctx, init_id)?;
-  let init_ty = (ctx.cre.get(init_hir) as &hir::Expr).ety;
+  let (kind, pos) = if let Some(kind) = kind {
+    let init_pos = ctx.src.get(init).pos;
+    let kind_pos = ctx.src.get(kind).pos;
 
-  let var_ty = if let Some(kind_id) = kind {
-    let declared_ty = TypeLow::low(ctx, kind_id)?;
-    if init_ty != declared_ty {
-      todo!("{:#?}, {:#?}",
-        ctx.cre.get(declared_ty) as &hir::Type,
-        ctx.cre.get(init_ty) as &hir::Type,
+    let kind_ty = TypeLow::low(ctx, kind)?;
+
+    if init_ty != kind_ty {
+      return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(kind_ty), &ctx.type_name(init_ty)]),
+        Label::new(kind_pos, X_DEFINED_HERE.args(&[&ctx.type_name(kind_ty)])))
+          .add(Label::new(init_pos, CONFLICTING_DEFINITION))
       );
     }
-    declared_ty
+
+    (kind_ty, kind_pos)
   } else {
-    init_ty
+    let init_pos = ctx.src.get(init).pos;
+
+    (init_ty, init_pos)
   };
 
-  let local_id = ctx.loc.insert(name, var_ty, ism, span);
+  
+  // Local Push
+  let local_id = ctx.loc.insert(name, kind, ism, span);
 
+  // is DST
+  if ctx.cre.get(kind).layout.is_dynamic() {
+    return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
+  }
+  
+  if ctx.cre.get(kind).layout.is_meta() {
+    return Err(Message::error(META_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
+  }
+
+
+  // Post
   let this = hir::Expr {
-    kind: hir::ExprKind::Let {
-      local: local_id,
-      init: init_hir,
-    },
-    category: ExprCategory::lvalue(ism),
+    kind: hir::ExprKind::Let { local: local_id, init: init_hir},
+    category: ExprCategory::RValue,
     ety: ctx.tin.ty_unit(),
   };
 

@@ -8,7 +8,7 @@ use crate::{ExprLow, hgen::Ctx};
 
 // Condition
 pub fn low_if(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, then: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
-  let cond_ast: &ast::Expr = ctx.src.get(cond);
+  let cond_ast = ctx.src.get(cond);
   let cond = ExprLow::low(ctx, cond)?;
   let cond_ty = (ctx.cre.get(cond) as &hir::Expr).ety;
 

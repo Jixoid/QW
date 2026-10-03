@@ -1,4 +1,4 @@
-use qwc_mir as mir;
+use qwc_mir::{self as mir, SSA, TypeId, Value};
 use rustc_hash::FxHashMap;
 
 
@@ -22,6 +22,7 @@ pub enum RawTerminator {
 #[derive(Debug, Clone)]
 pub struct BasicBlockData {
   pub insts: Vec<mir::Inst>,
+  pub pre_insts: Vec<mir::Inst>,
   pub term: Option<RawTerminator>,
 }
 
@@ -30,36 +31,46 @@ pub struct BasicBlockData {
 pub struct LoopFrame {
   pub continue_bb: BlockHandle,
   pub exit_bb: BlockHandle,
-  pub result_slot: Option<u32>,
+  pub result_slot: Option<SSA>,
   pub result_ty: mir::TypeId,
 }
 
 
-pub struct FnBuilder {
+pub struct FunBuilder {
   pub blocks: Vec<BasicBlockData>,
   pub current_bb: BlockHandle,
-  pub stack: Vec<mir::TypeId>,
   next_ssa: u32,
   pub loop_stack: Vec<LoopFrame>,
-  pub local_to_slot: FxHashMap<u32, u32>,
+  pub local_to_alloca: FxHashMap<u32, mir::Value>,
 }
 
 
-impl FnBuilder {
+impl FunBuilder {
 
   pub fn new() -> Self {
     let entry = BasicBlockData {
       insts: vec![],
+      pre_insts: vec![],
       term: None,
     };
     Self {
       blocks: vec![entry],
       current_bb: BlockHandle(0),
-      stack: vec![],
       next_ssa: 0,
       loop_stack: vec![],
-      local_to_slot: FxHashMap::default(),
+      local_to_alloca: FxHashMap::default(),
     }
+  }
+
+
+  pub fn build_alloca(&mut self, kind: TypeId) -> Value {
+    let dest = mir::SSA::new(self.next_ssa);
+    self.next_ssa += 1;
+    self.blocks[0].pre_insts.push(mir::Inst {
+      kind: mir::Expr::Alloca { kind },
+      dest: Some(dest),
+    });
+    dest.into()
   }
 
 
@@ -67,6 +78,7 @@ impl FnBuilder {
     let idx = self.blocks.len();
     self.blocks.push(BasicBlockData {
       insts: vec![],
+      pre_insts: vec![],
       term: None,
     });
     BlockHandle(idx)
@@ -108,13 +120,6 @@ impl FnBuilder {
     }
   }
 
-  
-  pub fn alloc_stack(&mut self, ty: mir::TypeId) -> u32 {
-    let idx = self.stack.len() as u32;
-    self.stack.push(ty);
-    idx
-  }
-
 
   pub fn push_loop(&mut self, frame: LoopFrame) {
     self.loop_stack.push(frame);
@@ -129,7 +134,7 @@ impl FnBuilder {
   }
   
 
-  pub fn finish(self, cre: &mut mir::Krate, is_ret_unit: bool) -> (mir::BlokId, mir::BlokRng, mir::TypeRng) {
+  pub fn finish(self, cre: &mut mir::Krate, is_ret_unit: bool) -> (mir::BlokId, mir::BlokRng) {
     let count = self.blocks.len();
 
     let mut block_ids: Vec<mir::BlokId> = Vec::with_capacity(count);
@@ -142,8 +147,8 @@ impl FnBuilder {
     }
 
     for (i, block_data) in self.blocks.into_iter().enumerate() {
-      let mut inst_ids = Vec::with_capacity(block_data.insts.len());
-      for inst in block_data.insts {
+      let mut inst_ids = Vec::with_capacity(block_data.pre_insts.len() + block_data.insts.len());
+      for inst in block_data.pre_insts.into_iter().chain(block_data.insts.into_iter()) {
         let id = cre.push(inst);
         inst_ids.push(id);
       }
@@ -177,12 +182,6 @@ impl FnBuilder {
       };
     }
 
-    let stack = if self.stack.is_empty() {
-      mir::Rng::empty()
-    } else {
-      cre.extra(&self.stack)
-    };
-
     let blocks = if block_ids.is_empty() {
       mir::Rng::empty()
     } else {
@@ -190,21 +189,21 @@ impl FnBuilder {
     };
 
     let entry = block_ids[0];
-    (entry, blocks, stack)
+    (entry, blocks)
   }
 
 }
 
 
 pub trait ExprEmit {
-  fn emit(self, bbld: &mut FnBuilder) -> Option<mir::SSA>;
+  fn emit(self, bbld: &mut FunBuilder) -> Option<mir::SSA>;
 }
 
 impl ExprEmit for mir::Expr {
-  fn emit(self, bbld: &mut FnBuilder) -> Option<qwc_mir::SSA> { bbld.emit(self) }
+  fn emit(self, bbld: &mut FunBuilder) -> Option<qwc_mir::SSA> { bbld.emit(self) }
 }
 
 
 impl RawTerminator {
-  pub fn terminate(self, bbld: &mut FnBuilder) { bbld.terminate(self); }
+  pub fn terminate(self, bbld: &mut FunBuilder) { bbld.terminate(self); }
 }

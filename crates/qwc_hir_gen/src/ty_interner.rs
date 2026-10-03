@@ -27,7 +27,12 @@ pub struct TypeInterner {
   ty_u128: TypeId,
   
   // Sub
+  ty_meta: FxHashMap<TypeId, TypeId>,
+  
   ty_ref: FxHashMap<(TypeId, bool), TypeId>,
+
+  ty_slice: FxHashMap<TypeId, TypeId>,
+  ty_vscale: FxHashMap<TypeId, TypeId>,
 
   ty_option: FxHashMap<TypeId, TypeId>,
 }
@@ -60,7 +65,10 @@ impl TypeInterner {
       ty_u128: cre.push(Type{kind: TypeKind::Int(128, false), layout: Layout::new_static(LayoutBy::SYS)}),
 
       // Sub
+      ty_meta: FxHashMap::default(),
       ty_ref: FxHashMap::default(),
+      ty_slice: FxHashMap::default(),
+      ty_vscale: FxHashMap::default(),
       ty_option: FxHashMap::default(),
     }
   }
@@ -89,17 +97,72 @@ impl TypeInterner {
   pub fn ty_u128(&self) -> TypeId { self.ty_u128 }
 
   // Sub
+  pub fn ty_meta(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_meta.entry(id) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let this = Type{
+          kind: TypeKind::Meta(id),
+          layout: Layout::new_meta(LayoutBy::QW),
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
   pub fn ty_ref(&mut self, cre: &mut Krate, id: TypeId, ism: bool) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let layout = (cre.get(id) as &Type).layout;
-
         let this = Type{
           kind: TypeKind::Ref(id, ism),
-          layout,
+          layout: Layout::new_static(LayoutBy::QW),
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
+  pub fn ty_slice(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_slice.entry(id) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let this = Type{
+          kind: TypeKind::Slice(id),
+          layout: Layout::new_static(LayoutBy::QW),
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
+  pub fn ty_vscale(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_vscale.entry(id) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let this = Type{
+          kind: TypeKind::VScale(id),
+          layout: Layout::new_static(LayoutBy::QW),
         };
 
         let id = cre.push(this);
@@ -116,7 +179,7 @@ impl TypeInterner {
     match self.ty_option.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let layout = (cre.get(id) as &Type).layout;
+        let layout = cre.get(id).layout;
 
         let this = Type{
           kind: TypeKind::Option(id),
@@ -132,3 +195,4 @@ impl TypeInterner {
   }
 
 }
+

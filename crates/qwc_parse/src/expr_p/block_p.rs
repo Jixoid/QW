@@ -44,7 +44,7 @@ impl ExprParser {
           (WK::BraceR, _) => { expr = Some(ex_id); }
           
           (_, c) => {
-            if cre.get::<Expr>(ex_id).is_like_blok() {
+            if cre.get(ex_id).is_like_blok() {
               ctn.push(ex_id);
             } else {
               c.panic_kind(WK::Semicolon)?;

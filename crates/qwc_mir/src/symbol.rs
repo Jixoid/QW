@@ -1,4 +1,4 @@
-use crate::{BlokId, BlokRng, TypeId, TypeRng};
+use crate::{BlokId, BlokRng, SymbRng, TypeId};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -7,7 +7,11 @@ pub enum SymbolKind {
   Function{
     entry: BlokId,
     blocks: BlokRng,
-    stack: TypeRng,
+  },
+  Vmt {
+    size: u64,
+    align: u64,
+    table: SymbRng,
   },
 }
 

@@ -82,6 +82,10 @@ impl<T: AstKind> Rng<T> {
     Self { start, end, pkind: PhantomData }
   }
 
+  pub fn count(&self) -> u32 {
+    self.end - self.start
+  }
+  
   pub fn range(&self) -> std::ops::Range<usize> {
     (self.start as usize)..(self.end as usize)
   }

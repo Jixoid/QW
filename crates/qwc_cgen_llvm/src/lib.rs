@@ -11,7 +11,7 @@ use fn_ctx::FnCtx;
 use symb_p::SymbLow;
 use blok_p::BlokLow;
 use inst_p::InstLow;
-use type_p::{TypeLow, any_type_to_basic};
+use type_p::TypeLow;
 use value_p::ValueLow;
 
 pub use cgen::CGenLLVM as CGen;

@@ -26,9 +26,9 @@ pub fn low_loop(ctx: &mut Ctx, it: &ast::Expr, blok: ast::ExprId, elsb: Option<a
 }
 
 pub fn low_while(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, blok: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
-  let cond_ast: &ast::Expr = ctx.src.get(cond);
+  let cond_ast = ctx.src.get(cond);
   let cond = ExprLow::low(ctx, cond)?;
-  let cond_ty = (ctx.cre.get(cond) as &hir::Expr).ety;
+  let cond_ty = ctx.cre.get(cond).ety;
 
   if cond_ty != ctx.tin.ty_bool() {
     let found_ty = ctx.type_name(cond_ty);

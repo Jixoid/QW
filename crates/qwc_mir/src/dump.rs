@@ -4,7 +4,7 @@ use owo_colors::OwoColorize;
 use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 
 use crate::{
-  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SSA, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, id::{InstId, MirId, NodeKind, SpecAny},
+  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SSA, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny},
 };
 
 
@@ -27,7 +27,7 @@ impl<'a> fmt::Display for Dump<'a> {
 
     for symb in self.cre.symbols() {
       symb.dump(self.cre, f, 0)?;
-      writeln!(f)?;
+      writeln!(f, "\n")?;
     }
 
     Ok(())
@@ -42,19 +42,10 @@ impl DumpHandler for Symbol {
     self.stat.dump(cre, f, indent)?;
 
     match self.kind {
-      SymbolKind::Function{ entry, blocks, stack } => {
+      SymbolKind::Function{ entry, blocks } => {
         write!(f, "{} {}{} ", kw("fun"), name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, f, indent)?;
         writeln!(f, " {{")?;
-
-        let mut slot_idx = 0;
-        for id in cre.extra_get(stack) {
-          write_indent(f, indent + 1)?;
-          write!(f, "{}{} ", tmpval(format!("${}", slot_idx)), punct(":"))?;
-          id.dump(cre, f, indent + 2)?;
-          writeln!(f)?;
-          slot_idx += 1;
-        }
 
         for id in cre.extra_get(blocks) {
           let is_entry = id == entry;
@@ -73,6 +64,27 @@ impl DumpHandler for Symbol {
         write!(f, "{} {}{} ", kw_sym, name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, f, indent)?;
         write!(f, " {} ", op("="))?;
+      }
+
+      SymbolKind::Vmt { size, align, table } => {
+        write!(f, "{} {}{} ", kw("vmt"), name(cre.sym_str(self.name)), punct(":"))?;
+        self.ety.dump(cre, f, indent)?;
+        write!(f, " {} {}", op("="), punct("{"))?;
+        write!(
+          f,
+          " {}: {}, {}: {}, {}: {}",
+          name("size"),
+          lit_num(size),
+          name("align"),
+          lit_num(align),
+          name("fini"),
+          kw("null")
+        )?;
+        for id in cre.extra_get(table) {
+          let it = cre.get(id);
+          write!(f, "{}{}", punct(", "), name(format!("@{}", cre.sym_str(it.name))))?;
+        }
+        write!(f, " {}", punct("}"))?;
       }
     }
     
@@ -198,6 +210,12 @@ impl DumpHandler for Inst {
 impl DumpHandler for Expr {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
+      Expr::Alloca { kind } => {
+        write!(f, "{} ", kw("alloca"))?;
+        kind.dump(cre, f, indent)?;
+      }
+
+
       Expr::Store{target, kind, value} => {
         write!(f, "{} ", kw("store"))?;
         kind.dump(cre, f, indent)?;
@@ -215,6 +233,29 @@ impl DumpHandler for Expr {
         write!(f, " ")?;
 
         target.dump(cre, f, indent)?;
+      }
+
+
+      Expr::Call{callee, args} => {
+        write!(f, "{} ", kw("call"))?;
+        callee.dump(cre, f, indent)?;
+        
+        write!(f, " {}", punct("("))?;
+        for id in cre.extra_get(args) {
+          id.dump(cre, f, indent)?;
+
+          write!(f, "{}", punct(","))?;
+        }
+        write!(f, "{}", punct(")"))?;
+      }
+
+
+      Expr::Gep { target, kind, idx } => {
+        write!(f, "{} ", kw("gep"))?;
+        kind.dump(cre, f, indent)?;
+        write!(f, " ")?;
+        target.dump(cre, f, indent)?;
+        write!(f, ", {}", idx)?;
       }
 
       
@@ -304,7 +345,7 @@ impl DumpHandler for Value {
         write!(f, "{}", tmpval(format!("@{}", cre.sym_str(sym.name))))?;
       }
 
-      Value::StackRef(idx) => write!(f, "{}", tmpval(format!("${}", idx)))?,
+      Value::Param(idx) => write!(f, "{}", tmpval(format!("arg({})", idx)))?,
     }
 
     Ok(())
@@ -372,10 +413,11 @@ macro_rules! impl_dump_id {
   };
 }
 
-impl_dump_id!(SymbId, Symbol);
-impl_dump_id!(TypeId, Type);
-impl_dump_id!(BlokId, Block);
-impl_dump_id!(InstId, Inst);
+impl_dump_id!(SymbId,  Symbol);
+impl_dump_id!(TypeId,  Type);
+impl_dump_id!(BlokId,  Block);
+impl_dump_id!(InstId,  Inst);
+impl_dump_id!(ValueId, Value);
 
 impl DumpHandler for (MirId<SpecAny>, NodeKind) {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
@@ -384,6 +426,7 @@ impl DumpHandler for (MirId<SpecAny>, NodeKind) {
       NodeKind::Symb  => SymbId::new_from(*self).dump(cre, f, indent),
       NodeKind::Blok  => BlokId::new_from(*self).dump(cre, f, indent),
       NodeKind::Inst  => InstId::new_from(*self).dump(cre, f, indent),
+      NodeKind::Value => ValueId::new_from(*self).dump(cre, f, indent),
       NodeKind::Any => write!(f, "<any>"),
     }
   }

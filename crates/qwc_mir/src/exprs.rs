@@ -1,4 +1,4 @@
-use crate::{SymbId, TypeId};
+use crate::{SymbId, TypeId, ValueRng};
 
 
 
@@ -20,7 +20,7 @@ pub enum Value {
   SSA(SSA),
   Const(Const),
   GlobalRef(SymbId),
-  StackRef(u32),
+  Param(u32),
 }
 
 impl Into<Value> for SSA {
@@ -75,25 +75,37 @@ pub enum IntUnaryOp { Not }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-  Store{target: Value, kind: TypeId, value: Value},
-  Load{target: Value, kind: TypeId},
+  Alloca {kind: TypeId},
+  
+  Store {target: Value, kind: TypeId, value: Value},
+  Load {target: Value, kind: TypeId},
 
-  IntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, flg2: IntArithmeticFlg2, kind: TypeId, lhs: Value, rhs: Value},
-  IntCondition{op: IntConditionOp, flg2: IntConditionFlg2, kind: TypeId, lhs: Value, rhs: Value},
-  IntLogic{op: IntLogicOp, kind: TypeId, lhs: Value, rhs: Value},
-  IntUnary{op: IntUnaryOp, kind: TypeId, val: Value},
+  Call {callee: Value, args: ValueRng},
+
+  Gep {target: Value, kind: TypeId, idx: u32},
+
+  IntArithmetic {op: IntArithmeticOp, flg: IntArithmeticFlg, flg2: IntArithmeticFlg2, kind: TypeId, lhs: Value, rhs: Value},
+  IntCondition {op: IntConditionOp, flg2: IntConditionFlg2, kind: TypeId, lhs: Value, rhs: Value},
+  IntLogic {op: IntLogicOp, kind: TypeId, lhs: Value, rhs: Value},
+  IntUnary {op: IntUnaryOp, kind: TypeId, val: Value},
 }
 
 impl Expr {
   pub fn have_result(&self) -> bool {
     match self {
+      Expr::Alloca{..} => true,
+
       Expr::Load{..} => true,
+      Expr::Store{..} => false,
+
+      Expr::Call{..} => true,
+
+      Expr::Gep{..} => true,
+
       Expr::IntArithmetic{..} => true,
       Expr::IntCondition{..} => true,
       Expr::IntLogic{..} => true,
       Expr::IntUnary{..} => true,
-
-      Expr::Store{..} => false,
     }
   }
 }

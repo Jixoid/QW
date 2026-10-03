@@ -118,7 +118,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
             let ty_obj: &Type = self.cre.get(*kind);
 
             let it = match ty_obj.kind {
-              TypeKind::Type() => ScopeKindAst::TypeParam(param_id),
+              TypeKind::Type => ScopeKindAst::TypeParam(param_id),
               _ => ScopeKindAst::ExprParam(param_id),
             };
 

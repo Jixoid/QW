@@ -2,7 +2,7 @@ use std::{marker::PhantomData, num::NonZero};
 
 use serde::Serialize;
 
-use crate::{Expr, Item, Type, krate::CID};
+use crate::{Expr, Item, Thing, Type, krate::CID};
 
 
 // AstId
@@ -73,6 +73,7 @@ impl<T: HirKind> Into<AnyId> for HirId<T> {
 pub type TypeId  = HirId<Type>;
 pub type ExprId  = HirId<Expr>;
 pub type ItemId  = HirId<Item>;
+pub type ThingId = HirId<Thing>;
 
 
 
@@ -91,6 +92,10 @@ impl<T: HirKind> Rng<T> {
     Self { start, end, pkind: PhantomData }
   }
 
+  pub fn count(&self) -> u32 {
+    self.end - self.start
+  }
+
   pub fn range(&self) -> std::ops::Range<usize> {
     (self.start as usize)..(self.end as usize)
   }
@@ -104,9 +109,10 @@ impl<T: HirKind> Rng<T> {
   }
 }
 
-pub type TypeRng = Rng<Type>;
-pub type ExprRng = Rng<Expr>;
-pub type ItemRng = Rng<Item>;
+pub type TypeRng  = Rng<Type>;
+pub type ExprRng  = Rng<Expr>;
+pub type ItemRng  = Rng<Item>;
+pub type ThingRng = Rng<Thing>;
 
 
 
@@ -180,12 +186,13 @@ impl AnyId {
 
 // Trait
 #[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeKind { Any, Type, Expr, Item }
+pub enum NodeKind { Any, Type, Expr, Item, Thing }
 
 
 pub trait HirKind { fn kind() -> NodeKind; }
 
 impl HirKind for SpecAny { fn kind() -> NodeKind { NodeKind::Any } }
-impl HirKind for Type { fn kind() -> NodeKind { NodeKind::Type } }
-impl HirKind for Expr { fn kind() -> NodeKind { NodeKind::Expr } }
-impl HirKind for Item { fn kind() -> NodeKind { NodeKind::Item } }
+impl HirKind for Type  { fn kind() -> NodeKind { NodeKind::Type } }
+impl HirKind for Expr  { fn kind() -> NodeKind { NodeKind::Expr } }
+impl HirKind for Item  { fn kind() -> NodeKind { NodeKind::Item } }
+impl HirKind for Thing { fn kind() -> NodeKind { NodeKind::Thing } }

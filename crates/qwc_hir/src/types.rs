@@ -1,41 +1,50 @@
-use crate::{ExprId, Layout, TypeId, TypeRng};
+use crate::{ExprId, Layout, ThingRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
-  // Virtual Generic
+  // Generic
   GenericType,
+  SelfT,
   
-  // ZST
+  // Basic
   Unit,
-  
-  // Never
   Never,
   
   // Primitive
-  Bit(u16),
   Int(u16, bool),
   ArchInt(bool),
   Float(u16),
-  
+  Bit(u16),
   Bool,
 
-  // Combinated
-  Struct(TypeRng),
-  
-  // Sequential
-  Array(TypeId, ExprId),
-  
-  // Callable
-  Fun{args: TypeRng, ret: TypeId},
+  // Meta
+  Meta(TypeId),
   
   // Reference
   Ref(TypeId, bool /* ism */),
   Ptr(TypeId, bool /* ism */),
-  Slice(TypeId),
+  
+  // VScale
+  Vector(TypeId, ExprId),
+  VScale(TypeId),
 
-  // Option
+  // Sequential
+  Array(TypeId, ExprId),
+  Slice(TypeId),
+  
+  // Combinated
+  Struct(ThingRng),
+  Tuple(TypeRng),
+  
+  // Interface
+  Iface(ThingRng),
+
+  // Variant
   Option(TypeId),
+  
+  // Callable
+  Fun{args: TypeRng, ret: TypeId},
 }
 
 

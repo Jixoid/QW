@@ -64,13 +64,16 @@ pub enum ExprKind {
   ForIn {vars: PattId, iter: ExprId, blok: ExprId, elsb: Option<ExprId>},
   
   // Operator
-  Unary    {op: UnaryOp, val: ExprId},
-  Binary   {op: BinaryOp, lhs: ExprId, rhs: ExprId},
+  Unary  {op: UnaryOp, val: ExprId},
+  Binary {op: BinaryOp, lhs: ExprId, rhs: ExprId},
   
   Assign   {lhs: ExprId, rhs: ExprId, op_span: Span},
   AssignOp {op: BinaryOp, lhs: ExprId, rhs: ExprId, op_span: Span},
   
   Exchange {lhs: ExprId, rhs: ExprId},
+
+  // Field Create
+  FieldCreate {lhs: ExprId, fields: ThingRng, brace_span: Span},
 
   // Call
   Call  {callee: ExprId, args: ExprRng},

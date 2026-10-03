@@ -60,6 +60,8 @@ impl<'a> ExportCollector<'a> {
 
         ItemKind::Variable{name, kind: ty, ..} | ItemKind::Function{name, kind: ty, ..} => (name, ExportKind::Expr(id, ty)),
 
+        ItemKind::Impl { .. } => continue,
+
         _ => todo!("{item:#?}"),
       };
 

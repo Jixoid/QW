@@ -22,11 +22,18 @@ pub enum IntArithmeticOp {
   Add, Sub, Mul, Div, Rem
 }
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum IntConditionOp {
-  Gt, Lt, GtEq, LtEq, Eq, Ne
+  Eq, Ne, Gt, Lt, GtEq, LtEq
 }
+
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum FloatArithmeticOp {
+  Add, Sub, Mul, Div, Rem
+}
+
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BoolLogicOp {
@@ -41,6 +48,7 @@ pub enum ExprKind {
   
   Const(Const),
 
+  Ref(ExprId),
   Deref(ExprId),
 
   // Ref
@@ -52,6 +60,9 @@ pub enum ExprKind {
 
   // Code
   Block{stmt: ExprRng, expr: Option<ExprId>},
+
+  // TypeOf
+  TypeOf{kind: TypeId},
 
   // Assign
   Assign{lhs: ExprId, rhs: ExprId},
@@ -67,11 +78,21 @@ pub enum ExprKind {
   // Branch
   If{cond: ExprId, then: ExprId, elsb: Option<ExprId>},
 
+  // Call
+  Call{callee: ExprId, args: ExprRng},
+
+  // Field
+  Field{target: ExprId, idx: u32},
+  CombinatedInit{kind: TypeId, fields: ExprRng},
+
   // Integer
   IntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
   AssignIntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
 
   IntCondition{op: IntConditionOp, lhs: ExprId, rhs: ExprId},
+
+  // Floating
+  FloatArithmetic{op: FloatArithmeticOp, lhs: ExprId, rhs: ExprId},
 
   // Bool
   BoolLogic{op: BoolLogicOp, lhs: ExprId, rhs: ExprId},
@@ -90,6 +111,10 @@ pub enum ExprCategory {
 impl ExprCategory {
   pub fn lvalue(ism: bool) -> Self {
     if ism { ExprCategory::LValueMut } else { ExprCategory::LValueImm }
+  }
+
+  pub fn is_lvalue(&self) -> bool {
+    matches!(self, ExprCategory::LValueImm | ExprCategory::LValueMut)
   }
 }
 

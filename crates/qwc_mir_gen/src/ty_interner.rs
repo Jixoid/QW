@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use qwc_mir::{Krate, Layout, LayoutBy, LayoutInfo, Type, TypeId, TypeKind};
+use qwc_mir::{self as mir, Krate, Layout, LayoutBy, LayoutInfo, Type, TypeId, TypeKind};
 
 
 pub struct TypeInterner<'a> {
@@ -19,6 +19,12 @@ pub struct TypeInterner<'a> {
   ty_i32: TypeId,
   ty_i64: TypeId,
   ty_i128: TypeId,
+  
+  // Float
+  ty_f16: TypeId,
+  ty_f32: TypeId,
+  ty_f64: TypeId,
+  ty_f128: TypeId,
 }
 
 
@@ -39,6 +45,12 @@ impl<'a> TypeInterner<'a> {
       ty_i32:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)},  true), layout: layinfo.i32_lay}),
       ty_i64:  cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)},  true), layout: layinfo.i64_lay}),
       ty_i128: cre.push(Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(128)}, true), layout: layinfo.i128_lay}),
+
+      // Float
+      ty_f16:  cre.push(Type{kind: TypeKind::Float(mir::FloatKind::F16), layout: layinfo.f16_lay}),
+      ty_f32:  cre.push(Type{kind: TypeKind::Float(mir::FloatKind::F32), layout: layinfo.f32_lay}),
+      ty_f64:  cre.push(Type{kind: TypeKind::Float(mir::FloatKind::F64), layout: layinfo.f64_lay}),
+      ty_f128: cre.push(Type{kind: TypeKind::Float(mir::FloatKind::F128), layout: layinfo.f128_lay}),
     }
   }
 
@@ -51,9 +63,26 @@ impl<'a> TypeInterner<'a> {
 
 
   // Int
+  pub fn ty_arch_int(&self) -> TypeId {
+    use mir::ArchBit::*;
+
+    match self.layinfo.arch_bit {
+      B8  => self.ty_i8,
+      B16 => self.ty_i16,
+      B32 => self.ty_i32,
+      B64 => self.ty_i64,
+    }
+  }
+
   pub fn ty_i8(&self) -> TypeId   { self.ty_i8 }
   pub fn ty_i16(&self) -> TypeId  { self.ty_i16 }
   pub fn ty_i32(&self) -> TypeId  { self.ty_i32 }
   pub fn ty_i64(&self) -> TypeId  { self.ty_i64 }
   pub fn ty_i128(&self) -> TypeId { self.ty_i128 }
+
+  // Float
+  pub fn ty_f16(&self) -> TypeId  { self.ty_f16 }
+  pub fn ty_f32(&self) -> TypeId  { self.ty_f32 }
+  pub fn ty_f64(&self) -> TypeId  { self.ty_f64 }
+  pub fn ty_f128(&self) -> TypeId { self.ty_f128 }
 }

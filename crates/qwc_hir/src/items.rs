@@ -12,14 +12,16 @@ pub enum ItemVis { Private, Public }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
-  RootNS{rng: ItemRng},
-  NameSpace{rng: ItemRng, name: Sid},
-  GenericNS{rng: ItemRng},
+  RootNS {rng: ItemRng},
+  NameSpace {rng: ItemRng, name: Sid},
+  GenericNS {rng: ItemRng},
 
-  Using{kind: TypeId, name: Sid},
+  Using {kind: TypeId, name: Sid},
   
-  Variable{kind: TypeId, expr: ExprId, name: Sid, ism: bool},
-  Function{kind: TypeId, expr: ExprId, name: Sid},
+  Variable {kind: TypeId, expr: ExprId, name: Sid, ism: bool},
+  Function {kind: TypeId, expr: ExprId, name: Sid},
+
+  Impl {struct_ty: TypeId, iface_ty: Option<TypeId>, methods: ItemRng},
 }
 
 

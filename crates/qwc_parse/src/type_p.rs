@@ -1,4 +1,4 @@
-use qwc_ast::{AnyRng, FunAttrs, IdentSave, Rng, Thing, ThingRng, Type, TypeId, TypeKind, TypeRng, Visibility};
+use qwc_ast::{AnyRng, IdentSave, Rng, Thing, ThingRng, Type, TypeId, TypeKind, TypeRng, Visibility};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -133,7 +133,7 @@ impl TypeParser {
     // Post
     let this = Type{
       pos: lex.pos_extend(start),
-      kind: TypeKind::SelfT()
+      kind: TypeKind::SelfT,
     };
 
     Ok(cre.push(this))
@@ -145,7 +145,7 @@ impl TypeParser {
     // Post
     let this = Type{
       pos: lex.pos_extend(start),
-      kind: TypeKind::Type()
+      kind: TypeKind::Type,
     };
 
     Ok(cre.push(this))
@@ -235,44 +235,7 @@ impl TypeParser {
   fn pre_fun(ctx: &mut Ctx, is_sub: bool) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
     let start = if is_sub { lex.get()? } else { lex.peek()? };
 
-    let args = Self::read_fun_args(ctx!(cre, sin, far, lex, sum))?;
-
-    let attr = {
-      let mut attr: u8 = 0;
-      
-      while let (WK::Word, c) = lex.peek_k()? {
-        let str = lex.str(c);
-        match str {
-          "static" => {
-            lex.bump()?;
-            if attr & FunAttrs::Static as u8 != 0 {
-              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
-            }
-            attr |= FunAttrs::Static as u8;
-          }
-          
-          "const" => {
-            lex.bump()?;
-            if attr & FunAttrs::Const as u8 != 0 {
-              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
-            }
-            attr |= FunAttrs::Const as u8;
-          }
-          
-          "pure" => {
-            lex.bump()?;
-            if attr & FunAttrs::Pure as u8 != 0 {
-              sum.add(Message::warn(DUPLICATE_ATTRIBUTE, Label::new_pos(c)));
-            }
-            attr |= FunAttrs::Pure as u8;
-          }
-          
-          _ => break
-        }
-      }
-
-      attr
-    };
+    let (self_kind, args) = Self::read_fun_args(ctx!(cre, sin, far, lex, sum))?;
 
     let ret = if lex.peek()?.kind() == WK::ArrowRight {
       lex.bump()?;
@@ -285,7 +248,7 @@ impl TypeParser {
     // Post
     let this = Type{
       pos: lex.pos_extend(start),
-      kind: TypeKind::Fun{ args, ret, attr }
+      kind: TypeKind::Fun{ self_kind, args, ret, attr: 0 }
     };
 
     Ok(cre.push(this))
@@ -309,11 +272,15 @@ impl TypeParser {
       }
 
       (WK::Mul, _) => {
-        let ext = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+        let ext = if lex.peek()?.kind() == WK::BracketR { None } else { Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?) };
 
         lex.get()?.expect_kind(WK::BracketR)?;
 
-        TypeKind::Vector(sub, ext)
+        if let Some(ext) = ext {
+          TypeKind::Vector(sub, ext)
+        } else {
+          TypeKind::VScale(sub)
+        }
       }
 
       (_, c) => c.panic_kind3(WK::BracketR, WK::Semicolon, WK::Mul)?
@@ -655,10 +622,67 @@ impl TypeParser {
     }
   }
 
-  fn read_fun_args(ctx: &mut Ctx) -> Result<ThingRng, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn read_fun_args(ctx: &mut Ctx) -> Result<(Option<TypeId>, ThingRng), Message> { ctx!(ctx => cre, sin, far, lex, sum);
     lex.get()?.expect_kind(WK::ParenL)?;
     
     let mut args = vec![];
+    let mut self_kind = None;
+
+    if lex.peek()?.kind() != WK::ParenR {
+      if lex.peek()?.kind() == WK::Amp {
+        let amp_word = lex.get()?;
+        let ism = if lex.peek()?.kind() == WK::Mut {
+          lex.bump()?;
+          true
+        } else {
+          false
+        };
+        let self_word = lex.get()?;
+        if self_word.kind() != WK::SelfS {
+          return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(self_word)));
+        }
+        let self_t = cre.push(Type {
+          pos: lex.pos_extend(self_word),
+          kind: TypeKind::SelfT,
+        });
+        let ref_t = cre.push(Type {
+          pos: lex.pos_extend(amp_word),
+          kind: TypeKind::Ref(self_t, ism),
+        });
+        self_kind = Some(ref_t);
+      } else if lex.peek()?.kind() == WK::Mut {
+        let mut_word = lex.get()?;
+        if lex.peek()?.kind() == WK::SelfS {
+          let self_word = lex.get()?;
+          let self_t = cre.push(Type {
+            pos: lex.pos_extend(self_word),
+            kind: TypeKind::SelfT,
+          });
+          self_kind = Some(self_t);
+        } else {
+          return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(mut_word)));
+        }
+      } else if lex.peek()?.kind() == WK::SelfS {
+        let self_word = lex.get()?;
+        let self_t = cre.push(Type {
+          pos: lex.pos_extend(self_word),
+          kind: TypeKind::SelfT,
+        });
+        self_kind = Some(self_t);
+      }
+
+      if self_kind.is_some() {
+        match lex.peek_k()? {
+          (WK::Comma, _) => { lex.bump()?; }
+          (WK::ParenR, _) => {
+            lex.bump()?;
+            return Ok((self_kind, cre.extra(&args)));
+          }
+          (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
+        }
+      }
+    }
+
     loop {
       if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break; }
       
@@ -694,7 +718,7 @@ impl TypeParser {
       }
     }
 
-    Ok(cre.extra(&args))
+    Ok((self_kind, cre.extra(&args)))
   }
 
 }

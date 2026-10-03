@@ -2,7 +2,7 @@ use qwc_ast::{Expr, ExprId, ExprKind, IdentSave};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 
-use crate::{ExprParser, ctx, meta_p::WordCheck, parse::Ctx};
+use crate::{ExprParser, ctx, expr_p::postfix_p, meta_p::WordCheck, parse::Ctx};
 
 
 // Nick
@@ -15,8 +15,9 @@ pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
     pos: lex.pos_extend(start),
     kind: ExprKind::Nick(name)
   };
+  let this = cre.push(this);
 
-  Ok(cre.push(this))
+  if lex.peek()?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Ok(this) }
 }
 
 

@@ -1,5 +1,5 @@
 use qwc_ast::{Expr, ExprId, ExprKind, Rng};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Message, Span};
 use qwc_lexer::WK;
 
 use super::helper;
@@ -25,10 +25,10 @@ pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   Ok(cre.push(this))
 }
 
-pub fn post_unary(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-  let start = lex.get()?;
+pub fn post_unary(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  let op = lex.get()?;
 
-  let op = helper::parse_unary_op(start.kind());
+  let op = helper::parse_unary_op(op.kind());
   
 
   // Post
@@ -42,8 +42,8 @@ pub fn post_unary(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(
 
 
 // Call & Index
-pub fn post_call(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-  let start = lex.get()?;
+pub fn post_call(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  lex.get()?;
 
   let args = if lex.peek()?.kind() == WK::ParenR {
     lex.bump()?;
@@ -76,8 +76,8 @@ pub fn post_call(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(c
   Ok(cre.push(this))
 }
 
-pub fn post_index(ctx: &mut Ctx, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
-  let start = lex.get()?;
+pub fn post_index(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  lex.get()?;
 
   let args = if lex.peek()?.kind() == WK::BracketR {
     lex.bump()?;

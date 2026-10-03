@@ -1,4 +1,4 @@
-use inkwell::values::{BasicValue, BasicValueEnum};
+use inkwell::values::{AnyValue, AnyValueEnum, BasicValue, BasicValueEnum};
 use qwc_mir::{Const, Value};
 
 use crate::{FnCtx, cgen::{CtxI, CtxM, SymbolVal}};
@@ -29,9 +29,22 @@ impl ValueLow {
         SymbolVal::Function(fv) => fv.as_global_value().as_pointer_value().as_basic_value_enum(),
       },
 
-      Value::StackRef(idx) => {
-        fctx.stack_slots[*idx as usize].as_basic_value_enum()
+      Value::Param(idx) => {
+        fctx.params[*idx as usize]
       }
+    }
+  }
+
+  pub fn low_fun<'ctx>(uctx: &mut CtxM<'ctx>, _ictx: &CtxI<'ctx, '_>, _fctx: &FnCtx<'ctx>, it: &Value) -> AnyValueEnum<'ctx> {
+    match it {
+      Value::GlobalRef(symb) => match uctx.symbols.get(symb).unwrap_or_else(|| {
+        panic!("Global symbol {:?} not found in symbol table", symb)
+      }) {
+        SymbolVal::Global(gv) => gv.as_any_value_enum(),
+        SymbolVal::Function(fv) => fv.as_any_value_enum(),
+      },
+      
+      _ => panic!()
     }
   }
 

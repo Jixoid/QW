@@ -7,25 +7,45 @@ use crate::{ItemLow, TypeLow, ctx, hgen::Ctx};
 
 
 // Resolve
-pub fn low_nick(ctx: &mut Ctx, ident: Ident) -> Result<hir::ExprId, Message> {
-  let (kind, lscp, span) = Resolver::with_locals(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods, Some(ctx.loc)).lookup(ident)?.get_k();
-  low_resolved(ctx, kind, lscp, span)
+pub fn low_nick(ctx: &mut Ctx, pos: Span, ident: Ident) -> Result<hir::ExprId, Message> {
+  let (kind, lscp, _) = Resolver::with_locals(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods, Some(ctx.loc)).lookup(ident)?.get_k();
+  low_resolved(ctx, kind, lscp, pos)
 }
 
-pub fn low_path(ctx: &mut Ctx, rng: ast::ExprRng) -> Result<hir::ExprId, Message> {
+pub fn low_self(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
+  let self_sid = ctx.sin.sid_self();
+
+  let Some(id) = ctx.loc.lookup(&self_sid) else {
+    return Err(Message::error(CANNOT_FIND_X_IN_SCOPE.args(&["self"]), Label::new_pos(pos)))
+  };
+
+  
+  // Post
+  let local = ctx.loc.get_local(id);
+
+  let this = hir::Expr {
+    kind: hir::ExprKind::LocalRef(id),
+    category: ExprCategory::lvalue(local.ism),
+    ety: local.ty,
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::ExprId, Message> {
   let mut segment = vec![];
 
   for id in ctx.src.extra_get(rng) {
-    let it: &ast::Expr = ctx.src.get(id);
+    let it = ctx.src.get(id);
 
     if let ast::ExprKind::Nick(ident) = it.kind { segment.push(ident) } else { panic!() }
   }
 
-  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
-  low_resolved(ctx, kind, lscp, span)
+  let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
+  low_resolved(ctx, kind, lscp, pos)
 }
 
-pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: Span) -> Result<hir::ExprId, Message> {
+pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Result<hir::ExprId, Message> {
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::ExprParam(thing) => {
@@ -46,7 +66,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
 
       resolve::ScopeKindAst::Expr(id) => {
         let id = ItemLow::low(ctx!(lscp -> ctx), id)?.unwrap();
-        let it: &hir::Item = ctx.cre.get(id);
+        let it = ctx.cre.get(id);
 
         let kind = it.symbol_kind().unwrap();
         
@@ -56,20 +76,32 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         // Post
         let this = hir::Expr{
           kind: hir::ExprKind::GlobalRef(id),
-          category: ExprCategory::lvalue(ism), // TODO!
+          category: ExprCategory::lvalue(ism),
           ety: kind,
         };
 
         ctx.cre.push(this)
       }
 
-      resolve::ScopeKindAst::Type(..) | resolve::ScopeKindAst::TypeParam(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(span)));
+      resolve::ScopeKindAst::Type(kind) => {
+        let kind = TypeLow::low(ctx, kind)?;
+
+        // Post
+        let this = hir::Expr {
+          kind: hir::ExprKind::TypeOf { kind },
+          category: ExprCategory::RValue,
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
+        };
+
+        ctx.cre.push(this)
       }
 
-      resolve::ScopeKindAst::Module(id) => {
-        let span = (ctx.src.get(id) as &ast::Item).pos;
-        return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(span)));
+      resolve::ScopeKindAst::TypeParam(..) => {
+        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+      }
+
+      resolve::ScopeKindAst::Module(..) => {
+        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
       }
 
       resolve::ScopeKindAst::Local(id) => {
@@ -98,7 +130,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindHir::Type(..) | resolve::ScopeKindHir::Module(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(span)));
+        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
       }
     },
   };

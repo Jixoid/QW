@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, num::NonZeroU32};
 
-use crate::{Block, Inst, Symbol, Type};
+use crate::{Block, Inst, Symbol, Type, Value};
 
 
 // AstId
@@ -62,6 +62,7 @@ pub type TypeId  = MirId<Type>;
 pub type SymbId  = MirId<Symbol>;
 pub type BlokId  = MirId<Block>;
 pub type InstId  = MirId<Inst>;
+pub type ValueId = MirId<Value>;
 
 
 
@@ -80,6 +81,10 @@ impl<T: MirKind> Rng<T> {
     Self { start, end, pkind: PhantomData }
   }
 
+  pub fn count(&self) -> u32 {
+    self.end - self.start
+  }
+  
   pub fn range(&self) -> std::ops::Range<usize> {
     (self.start as usize)..(self.end as usize)
   }
@@ -93,10 +98,11 @@ impl<T: MirKind> Rng<T> {
   }
 }
 
-pub type TypeRng = Rng<Type>;
-pub type SymbRng = Rng<Symbol>;
-pub type BlokRng = Rng<Block>;
-pub type InstRng = Rng<Inst>;
+pub type TypeRng  = Rng<Type>;
+pub type SymbRng  = Rng<Symbol>;
+pub type BlokRng  = Rng<Block>;
+pub type InstRng  = Rng<Inst>;
+pub type ValueRng = Rng<Value>;
 
 
 
@@ -164,7 +170,7 @@ impl AnyId {
 
 // Trait
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeKind { Any, Type, Symb, Blok, Inst }
+pub enum NodeKind { Any, Type, Symb, Blok, Inst, Value }
 
 
 pub trait MirKind { fn kind() -> NodeKind; }
@@ -174,3 +180,4 @@ impl MirKind for Type   { fn kind() -> NodeKind { NodeKind::Type } }
 impl MirKind for Symbol { fn kind() -> NodeKind { NodeKind::Symb } }
 impl MirKind for Block  { fn kind() -> NodeKind { NodeKind::Blok } }
 impl MirKind for Inst   { fn kind() -> NodeKind { NodeKind::Inst } }
+impl MirKind for Value  { fn kind() -> NodeKind { NodeKind::Value } }

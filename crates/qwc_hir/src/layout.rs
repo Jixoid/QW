@@ -19,7 +19,7 @@ pub struct LayoutInfo {
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum LayoutKind { Static, DST, DSAT }
+pub enum LayoutKind { Static, Meta, DST, DSAT }
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -53,6 +53,14 @@ impl Layout {
     }
   }
 
+  pub const fn new_meta(by: LayoutBy) -> Self {
+    Layout {
+      kind: LayoutKind::Meta,
+      inhabited: false,
+      by
+    }
+  }
+
   pub const fn new_dst(by: LayoutBy) -> Self {
     Layout {
       kind: LayoutKind::DST,
@@ -78,15 +86,15 @@ impl Layout {
   pub const fn is_static(&self) -> bool {
     matches!(self.kind, LayoutKind::Static)
   }
+
+  pub const fn is_meta(&self) -> bool {
+    matches!(self.kind, LayoutKind::Meta)
+  }
+
+  pub const fn is_dynamic(&self) -> bool {
+    matches!(self.kind, LayoutKind::DST | LayoutKind::DSAT)
+  }
   
-  pub const fn is_dst(&self) -> bool {
-    matches!(self.kind, LayoutKind::DST)
-  }
-
-  pub const fn is_dsat(&self) -> bool {
-    matches!(self.kind, LayoutKind::DSAT)
-  }
-
 
   // sub
   pub const fn kind(&self) -> LayoutKind {

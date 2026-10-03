@@ -274,9 +274,7 @@ impl DumpHandler for Item {
 impl DumpHandler for Type {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
-      TypeKind::Type()  => write!(f, "{}", "type".green().bold())?,
-      TypeKind::SelfT() => write!(f, "{}", "Self".green().bold())?,
-
+      // Must Resolve
       TypeKind::Nick(name) => write!(f, "{}", name.str(far).green().bold())?,
 
       TypeKind::Path(rng) => {
@@ -290,6 +288,8 @@ impl DumpHandler for Type {
         }
       }
 
+
+      // Pointer
       TypeKind::Ptr(sub, ism) => {
         write!(f, "{}{}", "^".bright_black(), if ism { "mut " } else { "" })?;
         sub.dump(cre, sin, far, f, indent)?;
@@ -300,6 +300,24 @@ impl DumpHandler for Type {
         sub.dump(cre, sin, far, f, indent)?;
       }
 
+
+      // Vector
+      TypeKind::Vector(sub, len) => {
+        write!(f, "{}", "[".bright_black())?;
+        sub.dump(cre, sin, far, f, indent)?;
+        write!(f, " {} ", "*".bright_black())?;
+        len.dump(cre, sin, far, f, indent)?;
+        write!(f, "{}", "]".bright_black())?;
+      }
+
+      TypeKind::VScale(sub) => {
+        write!(f, "{}", "[".bright_black())?;
+        sub.dump(cre, sin, far, f, indent)?;
+        write!(f, " {} ", "*]".bright_black())?;
+      }
+
+
+      // Sequential
       TypeKind::Array(sub, len) => {
         write!(f, "{}", "[".bright_black())?;
         sub.dump(cre, sin, far, f, indent)?;
@@ -314,14 +332,18 @@ impl DumpHandler for Type {
         write!(f, "{}", "]".bright_black())?;
       }
 
-      TypeKind::Vector(sub, len) => {
-        write!(f, "{}", "[".bright_black())?;
-        sub.dump(cre, sin, far, f, indent)?;
-        write!(f, " {} ", "*".bright_black())?;
-        len.dump(cre, sin, far, f, indent)?;
-        write!(f, "{}", "]".bright_black())?;
+
+      // Must Constant
+      TypeKind::Type => {
+        write!(f, "{}", "type".green().bold())?;
       }
 
+      TypeKind::SelfT => {
+        write!(f, "{}", "Self".green().bold())?;
+      }
+      
+
+      // Basic
       TypeKind::Unit => {
         write!(f, "{}", "()".bright_black())?;
       }
@@ -331,6 +353,8 @@ impl DumpHandler for Type {
         sub.dump(cre, sin, far, f, indent)?;
       }
 
+
+      // Variant
       TypeKind::Option(sub) => {
         write!(f, "{}", "?".bright_black())?;
         sub.dump(cre, sin, far, f, indent)?;
@@ -342,11 +366,11 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Result { sub, err } => {
-        write!(f, "{}", "<".bright_black())?;
+        write!(f, "{}", "(".bright_black())?;
         sub.dump(cre, sin, far, f, indent)?;
         write!(f, " {} ", "!".bright_black())?;
         err.dump(cre, sin, far, f, indent)?;
-        write!(f, "{}", ">".bright_black())?;
+        write!(f, "{}", ")".bright_black())?;
       }
 
       TypeKind::Variant(rng) => {
@@ -362,6 +386,8 @@ impl DumpHandler for Type {
         write!(f, " }}")?;
       }
 
+
+      // Enum
       TypeKind::Enum(rng) => {
         write!(f, "{} {{ ", "enum".blue().bold())?;
         let mut first = true;
@@ -388,6 +414,8 @@ impl DumpHandler for Type {
         write!(f, " }}")?;
       }
 
+
+      // Combinated
       TypeKind::Struct(rng) => {
         writeln!(f, "{} {{", "struct".blue().bold())?;
         for field_id in cre.extra_get(rng) {
@@ -410,6 +438,8 @@ impl DumpHandler for Type {
         write!(f, "{}", ")".bright_black())?;
       }
 
+
+      // Impl
       TypeKind::Iface(rng) => {
         writeln!(f, "{} {{", "iface".blue())?;
         for field_id in cre.extra_get(rng) {
@@ -428,9 +458,24 @@ impl DumpHandler for Type {
         write!(f, "}}")?;
       }
 
-      TypeKind::Fun { args, ret, attr } => {
+
+      // Function
+      TypeKind::Fun { self_kind, args, ret, attr } => {
         write!(f, "(")?;
         let mut first = true;
+        if let Some(self_id) = self_kind {
+          let self_ty: &Type = cre.get(self_id);
+          match self_ty.kind {
+            TypeKind::Ref(_, false) => write!(f, "{}", "&self".magenta())?,
+            TypeKind::Ref(_, true) => write!(f, "{}", "&mut self".magenta())?,
+            TypeKind::SelfT => write!(f, "{}", "self".magenta())?,
+            _ => {
+              write!(f, "self: ")?;
+              self_id.dump(cre, sin, far, f, indent)?;
+            }
+          }
+          first = false;
+        }
         for thing_id in cre.extra_get(args) {
           if !first {
             write!(f, ", ")?;
@@ -440,12 +485,6 @@ impl DumpHandler for Type {
         }
         write!(f, ")")?;
 
-        if attr & FunAttrs::Static as u8 != 0 {
-          write!(f, " {}", "static".blue())?;
-        }
-        if attr & FunAttrs::Const as u8 != 0 {
-          write!(f, " {}", "const".blue())?;
-        }
         if attr & FunAttrs::Pure as u8 != 0 {
           write!(f, " {}", "pure".blue())?;
         }
@@ -468,12 +507,6 @@ impl DumpHandler for Type {
         }
         write!(f, ")")?;
 
-        if attr & FunAttrs::Static as u8 != 0 {
-          write!(f, " {}", "static".blue())?;
-        }
-        if attr & FunAttrs::Const as u8 != 0 {
-          write!(f, " {}", "const".blue())?;
-        }
         if attr & FunAttrs::Pure as u8 != 0 {
           write!(f, " {}", "pure".blue())?;
         }
@@ -491,17 +524,13 @@ impl DumpHandler for Type {
         }
         write!(f, ")")?;
 
-        if attr & FunAttrs::Static as u8 != 0 {
-          write!(f, " {}", "static".blue())?;
-        }
-        if attr & FunAttrs::Const as u8 != 0 {
-          write!(f, " {}", "const".blue())?;
-        }
         if attr & FunAttrs::Pure as u8 != 0 {
           write!(f, " {}", "pure".blue())?;
         }
       }
 
+
+      // Specialize
       TypeKind::Spec { base, args } => {
         base.dump(cre, sin, far, f, indent)?;
         write!(f, "<")?;
@@ -618,6 +647,23 @@ impl DumpHandler for Expr {
         write!(f, "]")?;
       }
 
+      ExprKind::FieldCreate { lhs, fields, brace_span: _ } => {
+        lhs.dump(cre, sin, far, f, indent)?;
+        
+        write!(f, "{{")?;
+        
+        for id in cre.extra_get(fields) {
+          let Thing::NamedExpr(name, expr) = *cre.get(id) else { panic!() };
+          
+          write!(f, "{}{} ", name.str(far), ":".bright_black())?;
+          
+          expr.dump(cre, sin, far, f, indent)?;
+          write!(f, "{}", ",".bright_black())?;
+        }
+
+        write!(f, "}}")?;
+      }
+
       ExprKind::Block { label, rng, expr } => {
         if let Some(lbl) = label {
           write!(f, "`{}: ", lbl.str(far).bright_black())?;
@@ -629,7 +675,7 @@ impl DumpHandler for Expr {
           
           id.dump(cre, sin, far, f, indent + 1)?;
           
-          if cre.get::<Expr>(id).is_like_blok() {
+          if cre.get(id).is_like_blok() {
             writeln!(f)?;
           } else {
             writeln!(f, "{}", punct(";"))?;
@@ -1048,7 +1094,7 @@ impl DumpHandler for Field {
 
 
       FieldKind::ImplIn {trait_ty, ctn} => {
-        write!(f, "{} : ", "impl".blue())?;
+        write!(f, "{}{} ", "impl".blue().bold(), ":".bright_black())?;
         trait_ty.dump(cre, sin, far, f, indent)?;
         writeln!(f, " {{")?;
 

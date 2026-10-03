@@ -9,6 +9,15 @@ impl InstLow {
 
   pub fn low_result<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FnCtx<'ctx>, inst_kind: &Expr, dest: SSA) {
     match *inst_kind {
+      // Alloca
+      Expr::Alloca { kind } => {
+        let kind = TypeLow::low_basic_cached(uctx, ictx, kind);
+
+        let a = ictx.builder.build_alloca(kind, "").unwrap();
+
+        fctx.ssa_map.insert(dest, a.into());
+      }
+
       // Memory
       Expr::Store{..} => panic!(),
 
@@ -19,6 +28,41 @@ impl InstLow {
         let loaded = ictx.builder.build_load(kind, target, "").unwrap();
         
         fctx.ssa_map.insert(dest, loaded);
+      }
+
+
+      // Call
+      Expr::Call{callee, args} => {
+        let callee = ValueLow::low_fun(uctx, ictx, fctx, &callee).into_function_value();
+
+        let args: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> = {
+          let mut vec = vec![];
+
+          for id in ictx.cre.extra_get(args) {
+            let it = ictx.cre.get(id);
+            let it = ValueLow::low(uctx, ictx, fctx, it);
+            
+            vec.push(it.into());
+          }
+
+          vec
+        };
+
+        let call_res = ictx.builder.build_direct_call(callee, &args, "").unwrap();
+        let val = match call_res.try_as_basic_value() {
+          inkwell::values::ValueKind::Basic(v) => v,
+          inkwell::values::ValueKind::Instruction(_) => ictx.ctx.const_struct(&[], false).into(),
+        };
+        fctx.ssa_map.insert(dest, val);
+      }
+
+
+
+      Expr::Gep { target, kind, idx } => {
+        let target_ptr = ValueLow::low(uctx, ictx, fctx, &target).into_pointer_value();
+        let struct_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_struct_type();
+        let field_ptr = ictx.builder.build_struct_gep(struct_ty, target_ptr, idx, "").unwrap();
+        fctx.ssa_map.insert(dest, field_ptr.into());
       }
 
 
@@ -101,6 +145,10 @@ impl InstLow {
 
   pub fn low_sideff<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FnCtx<'ctx>, inst_kind: &Expr) {
     match *inst_kind {
+      // Alloca
+      Expr::Alloca{..} => panic!(),
+
+
       // Memory
       Expr::Store{target, kind: _, value} => {
         let target = ValueLow::low(uctx, ictx, fctx, &target).into_pointer_value();
@@ -111,6 +159,30 @@ impl InstLow {
 
       Expr::Load{..} => panic!(),
 
+
+      // Call
+      Expr::Call{callee, args} => {
+        let callee = ValueLow::low_fun(uctx, ictx, fctx, &callee).into_function_value();
+
+        let args: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> = {
+          let mut vec = vec![];
+
+          for id in ictx.cre.extra_get(args) {
+            let it = ictx.cre.get(id);
+            let it = ValueLow::low(uctx, ictx, fctx, it);
+            
+            vec.push(it.into());
+          }
+
+          vec
+        };
+
+        ictx.builder.build_direct_call(callee, &args, "").unwrap();
+      }
+
+
+      // Field
+      Expr::Gep{..} => panic!(),
 
       // Binary
       Expr::IntArithmetic{..} |

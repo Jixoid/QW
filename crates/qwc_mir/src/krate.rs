@@ -2,7 +2,7 @@ use core::slice;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, AnyRng, Block, BlokId, Inst, Rng, SymbId, Symbol, Type, TypeId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, Block, BlokId, Inst, Rng, SymbId, Symbol, Type, TypeId, Value, ValueId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
 
 
 pub struct Krate {
@@ -11,6 +11,7 @@ pub struct Krate {
   list_symb: Arena<Symbol>,
   list_blok: Arena<Block>,
   list_inst: Arena<Inst>,
+  list_valu: Arena<Value>,
 
   extra_data: (Arena<MirId<SpecAny>>, Arena<NodeKind>),
 
@@ -27,6 +28,7 @@ impl Krate {
       list_symb: Arena::new(),
       list_blok: Arena::new(),
       list_inst: Arena::new(),
+      list_valu: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
 
@@ -36,11 +38,11 @@ impl Krate {
 
 
   // Arena
-  pub fn push<T: ArenaNode>(&mut self, obj: T) -> T::Id { T::push(self, obj) }
-  pub fn get<T: ArenaNode>(&self, id: T::Id) -> &T { T::get(self, id) }
-  pub fn get_mut<T: ArenaNode>(&mut self, id: T::Id) -> &mut T { T::get_mut(self, id) }
-  pub fn iter<T: ArenaNode>(&self) -> impl Iterator<Item = &T> { T::iter(self) }
-  pub fn iter_mut<T: ArenaNode>(&mut self) -> impl Iterator<Item = &mut T> { T::iter_mut(self) }
+  pub fn push<T: PushApi>(&mut self, obj: T) -> T::Id { T::push(self, obj) }
+  pub fn get<I: GetApi>(&self, id: I) -> &I::Node { I::get(self, id) }
+  pub fn get_mut<I: GetApi>(&mut self, id: I) -> &mut I::Node { I::get_mut(self, id) }
+  pub fn iter<T: PushApi>(&self) -> impl Iterator<Item = &T> { T::iter(self) }
+  pub fn iter_mut<T: PushApi>(&mut self) -> impl Iterator<Item = &mut T> { T::iter_mut(self) }
 
 
   // Extra
@@ -121,11 +123,11 @@ impl Krate {
   pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Symbol>(&self) + Self::size_used::<Block>(&self) + Self::size_used::<Inst>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(&self) + Self::size_used::<Symbol>(&self) + Self::size_used::<Block>(&self) + Self::size_used::<Inst>(&self) + Self::size_used::<Value>(&self) + Self::size_used::<AnyId>(&self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Symbol>(&self) + Self::size_alloc::<Block>(&self) + Self::size_alloc::<Inst>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Symbol>(&self) + Self::size_alloc::<Block>(&self) + Self::size_alloc::<Inst>(&self) + Self::size_alloc::<Value>(&self) + Self::size_alloc::<AnyId>(&self)
   }
 
 }
@@ -133,54 +135,94 @@ impl Krate {
 
 
 // push & get
-pub trait ArenaNode: 'static {
+pub trait PushApi: 'static {
   type Id;
   
   fn push(krate: &mut Krate, obj: Self) -> Self::Id;
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self;
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self;
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self>;
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self>;
 }
 
-impl ArenaNode for Type {
+pub trait GetApi {
+  type Node;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node;
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
+}
+
+impl PushApi for Type {
   type Id = TypeId;
   
   fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_type.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_type[id.idx() as usize] }
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_type.iter() }
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_type.iter_mut() }
 }
 
-impl ArenaNode for Symbol {
+impl GetApi for TypeId {
+  type Node = Type;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_type[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_type[id.idx() as usize] }
+}
+
+impl PushApi for Symbol {
   type Id = SymbId;
 
   fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_symb.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_symb[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_symb[id.idx() as usize] }
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_symb.iter() }
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_symb.iter_mut() }
 }
 
-impl ArenaNode for Block {
+impl GetApi for SymbId {
+  type Node = Symbol;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_symb[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_symb[id.idx() as usize] }
+}
+
+impl PushApi for Block {
   type Id = BlokId;
 
   fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_blok.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_blok[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_blok[id.idx() as usize] }
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_blok.iter() }
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_blok.iter_mut() }
 }
 
-impl ArenaNode for Inst {
+impl GetApi for BlokId {
+  type Node = Block;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_blok[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_blok[id.idx() as usize] }
+}
+
+impl PushApi for Inst {
   type Id = InstId;
 
   fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_inst.push(obj)).unwrap()) }
-  fn get<'a>(krate: &'a Krate, id: Self::Id) -> &'a Self { &krate.list_inst[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self::Id) -> &'a mut Self { &mut krate.list_inst[id.idx() as usize] }
   fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_inst.iter() }
   fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_inst.iter_mut() }
+}
+
+impl GetApi for InstId {
+  type Node = Inst;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_inst[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_inst[id.idx() as usize] }
+}
+
+impl PushApi for Value {
+  type Id = ValueId;
+
+  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_valu.push(obj)).unwrap()) }
+  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_valu.iter() }
+  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_valu.iter_mut() }
+}
+
+impl GetApi for ValueId {
+  type Node = Value;
+
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_valu[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_valu[id.idx() as usize] }
 }
 
 
@@ -208,6 +250,11 @@ impl SizeApi for Block {
 impl SizeApi for Inst {
   fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_inst.len() }
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_inst.allocated_len() }
+}
+
+impl SizeApi for Value {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_valu.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_valu.allocated_len() }
 }
 
 impl SizeApi for AnyId {

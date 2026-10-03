@@ -22,10 +22,15 @@ impl TypeLow {
       hir::TypeKind::Ref(id, _) => {Self::low(ctx, id)?; ctx.tin.ty_ptr()},
 
       hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
+      hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
       hir::TypeKind::Bool => ctx.tin.ty_bool(),
 
       // Combinated
       hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
+      hir::TypeKind::Iface(rng) => Self::low_iface(ctx, id, rng)?,
+
+      // Context
+      hir::TypeKind::SelfT => ctx.tin.ty_ptr(),
 
       // Callable
       hir::TypeKind::Fun{args, ret} => Self::low_fun(ctx, args, ret)?,
@@ -52,15 +57,29 @@ impl TypeLow {
     Ok(it)
   }
 
+  fn low_float(ctx: &mut Ctx, len: u16) -> Result<mir::TypeId, Message> {
+    let it = match len {
+      16  => ctx.tin.ty_f16(),
+      32  => ctx.tin.ty_f32(),
+      64  => ctx.tin.ty_f64(),
+      128 => ctx.tin.ty_f128(),
+      _ => panic!()
+    };
 
-  fn low_struct(ctx: &mut Ctx, rng: hir::TypeRng) -> Result<mir::TypeId, Message> {
+    Ok(it)
+  }
+
+
+  fn low_struct(ctx: &mut Ctx, rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
     let rng = {
       let mut sub = vec![];
 
       for id in ctx.src.extra_get(rng) {
-        let id = TypeLow::low(ctx, id)?;
+        let hir::Thing::NamedType(_, kind) = *ctx.src.get(id) else { panic!() };
 
-        sub.push(id);
+        let kind = TypeLow::low(ctx, kind)?;
+
+        sub.push(kind);
       }
 
       ctx.cre.extra(&sub)
@@ -76,6 +95,29 @@ impl TypeLow {
     };
 
     Ok(ctx.cre.push(this))
+  }
+
+  fn low_iface(ctx: &mut Ctx, id: hir::TypeId, rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
+    let ptr = ctx.tin.ty_ptr();
+    let fat_fields = vec![ptr, ptr];
+    let fat_rng = ctx.cre.extra(&fat_fields);
+    
+    // Post
+    let kind = mir::TypeKind::Struct(fat_rng);
+    let this = mir::Type {
+      kind,
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
+    };
+
+    let ty = ctx.cre.push(this);
+    ctx.cmap.cache_type.insert(id, ty);
+
+    for member_id in ctx.src.extra_get(rng) {
+      let hir::Thing::NamedType(_, fun_ty) = *ctx.src.get(member_id) else { panic!() };
+      let _ = Self::low(ctx, fun_ty)?;
+    }
+
+    Ok(ty)
   }
 
 

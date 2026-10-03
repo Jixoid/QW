@@ -1,9 +1,9 @@
 use inkwell::values::FunctionValue;
-use qwc_mir::{Block, BlokId, BlokRng, Inst, Terminator, Type, TypeKind, TypeRng};
+use qwc_mir::{Block, BlokId, BlokRng, Inst, Terminator, Type, TypeKind};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	FnCtx, InstLow, TypeLow, ValueLow, any_type_to_basic,
+	FnCtx, InstLow, ValueLow,
 	cgen::{CtxI, CtxM},
 };
 
@@ -12,7 +12,7 @@ pub struct BlokLow;
 
 impl BlokLow {
 
-	pub fn low_fn<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fv: FunctionValue<'ctx>, ty: &Type, entry: BlokId, blocks: BlokRng, stack: TypeRng) {
+	pub fn low_fn<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fv: FunctionValue<'ctx>, ty: &Type, entry: BlokId, blocks: BlokRng) {
 		let is_ret_unit = match ty.kind {
 			TypeKind::Fun { ret, .. } => {
 				let ret_ty: &Type = ictx.cre.get(ret);
@@ -21,7 +21,7 @@ impl BlokLow {
 			_ => panic!("Expected function type for function symbol"),
 		};
 
-		let mut fctx = FnCtx::new();
+		let mut fctx = FnCtx::new(fv.get_params());
 
 		let mut bb_map: FxHashMap<BlokId, inkwell::basic_block::BasicBlock<'ctx>> = FxHashMap::default();
 
@@ -35,20 +35,6 @@ impl BlokLow {
 					.append_basic_block(fv, &format!("bb_{}", id.idx()));
 				bb_map.insert(id, llvm_bb);
 			}
-		}
-
-
-		// Stack
-		ictx.builder.position_at_end(entry_bb);
-		for id in ictx.cre.extra_get(stack) {
-			let it: &Type = ictx.cre.get(id);
-			let ty = any_type_to_basic(TypeLow::low(ictx, it));
-			let ptr = ictx.builder.build_alloca(ty, "").unwrap();
-			fctx.stack_slots.push(ptr);
-		}
-
-		for (i, param) in fv.get_params().into_iter().enumerate() {
-			ictx.builder.build_store(fctx.stack_slots[i], param).unwrap();
 		}
 
 

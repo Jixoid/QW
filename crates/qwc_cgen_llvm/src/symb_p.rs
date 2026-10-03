@@ -64,6 +64,15 @@ impl SymbLow {
 
           uctx.symbols.insert(symb_id, SymbolVal::Function(fv));
         }
+
+        SymbolKind::Vmt { .. } => {
+          let ty = TypeLow::low_basic_cached(uctx, ictx, it.ety);
+          let gv = ictx.mol.add_global(ty, None, name);
+          gv.set_constant(true);
+          gv.set_linkage(Linkage::Private);
+
+          uctx.symbols.insert(symb_id, SymbolVal::Global(gv));
+        }
       }
     }
   }
@@ -84,11 +93,36 @@ impl SymbLow {
           }
         }
 
-        SymbolKind::Function{entry, blocks, stack} => {
+        SymbolKind::Function{entry, blocks} => {
           if it.stat != SymbolStat::Import {
             if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&symb_id).copied() {
               let ty: &Type = ictx.cre.get(it.ety);
-              BlokLow::low_fn(uctx, ictx, fv, ty, entry, blocks, stack);
+              BlokLow::low_fn(uctx, ictx, fv, ty, entry, blocks);
+            }
+          }
+        }
+
+        SymbolKind::Vmt { size, align, table } => {
+          if it.stat != SymbolStat::Import {
+            if let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
+              let struct_ty = gv.get_value_type().into_struct_type();
+              let arch_int_ty = struct_ty.get_field_type_at_index(0).unwrap().into_int_type();
+              let ptr_ty = struct_ty.get_field_type_at_index(2).unwrap().into_pointer_type();
+
+              let mut field_vals: Vec<inkwell::values::BasicValueEnum> = vec![
+                arch_int_ty.const_int(size, false).into(),
+                arch_int_ty.const_int(align, false).into(),
+                ptr_ty.const_null().into(),
+              ];
+
+              for method_symb_id in ictx.cre.extra_get(table) {
+                if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&method_symb_id).copied() {
+                  field_vals.push(fv.as_global_value().as_pointer_value().into());
+                }
+              }
+
+              let struct_val = ictx.ctx.const_struct(&field_vals, false);
+              gv.set_initializer(&struct_val);
             }
           }
         }

@@ -1,7 +1,11 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
 
+pub enum ArchBit { B8, B16, B32, B64 }
+
 pub struct LayoutInfo {
+  pub arch_bit: ArchBit,
+  
   pub ptr_size: Layout,
   
   pub i8_lay: Layout,

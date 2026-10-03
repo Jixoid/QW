@@ -22,14 +22,15 @@ impl ExprLow {
   pub fn low(ctx: &mut Ctx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
     if let Some(&id) = ctx.cmap.cache_expr.get(&id) { return Ok(id) }
 
-    let it: &ast::Expr = ctx.src.get(id);
+    let it = ctx.src.get(id);
     
     use ast::ExprKind::*;
 
     let it = match it.kind {
       // Resolve
-      Nick(ident)   => resolve_p::low_nick(ctx, ident)?,
-      Path(rng) => resolve_p::low_path(ctx, rng)?,
+      Nick(ident)   => resolve_p::low_nick(ctx, it.pos, ident)?,
+      Path(rng) => resolve_p::low_path(ctx, it.pos, rng)?,
+      SelfS() => resolve_p::low_self(ctx, it.pos)?,
 
       // Const
       Unit => const_p::low_unit(ctx)?,
@@ -58,6 +59,11 @@ impl ExprLow {
       
       Assign{lhs, rhs, op_span} => operator_p::low_assign(ctx, lhs, rhs, op_span)?,
       AssignOp{op, lhs, rhs, op_span} => operator_p::low_assign_op(ctx, op, lhs, rhs, op_span)?,
+
+      Call{callee, args} => operator_p::low_call(ctx, it, callee, args)?,
+
+      FieldCreate{lhs, fields, brace_span} => operator_p::low_field_create(ctx, lhs, fields, brace_span)?,
+      Member(rng) => operator_p::low_member(ctx, rng)?,
       
       _ => todo!("{:#?}", it)
     };
