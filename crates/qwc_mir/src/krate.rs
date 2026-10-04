@@ -38,12 +38,10 @@ impl Krate {
 
 
   // Arena
-  pub fn push<T: PushApi>(&mut self, obj: T) -> T::Id { T::push(self, obj) }
+  pub fn push<T: MirKind, P: PushApi<T>>(&mut self, obj: P) -> MirId<T> { P::push(self, obj) }
   pub fn get<I: GetApi>(&self, id: I) -> &I::Node { I::get(self, id) }
   pub fn get_mut<I: GetApi>(&mut self, id: I) -> &mut I::Node { I::get_mut(self, id) }
-  pub fn iter<T: PushApi>(&self) -> impl Iterator<Item = &T> { T::iter(self) }
-  pub fn iter_mut<T: PushApi>(&mut self) -> impl Iterator<Item = &mut T> { T::iter_mut(self) }
-
+  
 
   // Extra
   pub fn extra<T: MirKind>(&mut self, vec: &[MirId<T>]) -> Rng<T> {
@@ -135,12 +133,8 @@ impl Krate {
 
 
 // push & get
-pub trait PushApi: 'static {
-  type Id;
-  
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id;
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self>;
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self>;
+pub trait PushApi<T: MirKind> {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T>;
 }
 
 pub trait GetApi {
@@ -150,12 +144,8 @@ pub trait GetApi {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
 }
 
-impl PushApi for Type {
-  type Id = TypeId;
-  
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_type.push(obj)).unwrap()) }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_type.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_type.iter_mut() }
+impl<T: MirKind> PushApi<T> for Type {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T> { MirId::<T>::new(u32::try_from(krate.list_type.push(obj)).unwrap()) }
 }
 
 impl GetApi for TypeId {
@@ -165,12 +155,8 @@ impl GetApi for TypeId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_type[id.idx() as usize] }
 }
 
-impl PushApi for Symbol {
-  type Id = SymbId;
-
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_symb.push(obj)).unwrap()) }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_symb.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_symb.iter_mut() }
+impl<T: MirKind> PushApi<T> for Symbol {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T> { MirId::<T>::new(u32::try_from(krate.list_symb.push(obj)).unwrap()) }
 }
 
 impl GetApi for SymbId {
@@ -180,12 +166,8 @@ impl GetApi for SymbId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_symb[id.idx() as usize] }
 }
 
-impl PushApi for Block {
-  type Id = BlokId;
-
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_blok.push(obj)).unwrap()) }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_blok.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_blok.iter_mut() }
+impl<T: MirKind> PushApi<T> for Block {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T> { MirId::<T>::new(u32::try_from(krate.list_blok.push(obj)).unwrap()) }
 }
 
 impl GetApi for BlokId {
@@ -195,12 +177,8 @@ impl GetApi for BlokId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_blok[id.idx() as usize] }
 }
 
-impl PushApi for Inst {
-  type Id = InstId;
-
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_inst.push(obj)).unwrap()) }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_inst.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_inst.iter_mut() }
+impl<T: MirKind> PushApi<T> for Inst {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T> { MirId::<T>::new(u32::try_from(krate.list_inst.push(obj)).unwrap()) }
 }
 
 impl GetApi for InstId {
@@ -210,12 +188,8 @@ impl GetApi for InstId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_inst[id.idx() as usize] }
 }
 
-impl PushApi for Value {
-  type Id = ValueId;
-
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(u32::try_from(krate.list_valu.push(obj)).unwrap()) }
-  fn iter<'a>(krate: &'a Krate) -> impl Iterator<Item = &'a Self> { krate.list_valu.iter() }
-  fn iter_mut<'a>(krate: &'a mut Krate) -> impl Iterator<Item = &'a mut Self> { krate.list_valu.iter_mut() }
+impl<T: MirKind> PushApi<T> for Value {
+  fn push(krate: &mut Krate, obj: Self) -> MirId<T> { MirId::<T>::new(u32::try_from(krate.list_valu.push(obj)).unwrap()) }
 }
 
 impl GetApi for ValueId {

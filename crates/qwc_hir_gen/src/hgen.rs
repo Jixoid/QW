@@ -3,7 +3,7 @@ use qwc_ast as ast;
 use qwc_diagnostic::Summary;
 use qwc_hir::{self as hir, CID, Deps};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
-use qwc_string_interner::StrInterner;
+use qwc_string_interner::{StrInterner};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{ItemLow, ty_interner::TypeInterner, type_p::TypeLow};
@@ -28,6 +28,7 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
 
 pub struct TypeMethods {
   pub traits: FxHashSet<hir::TypeId>,
+  //pub methods: FxHashMap<Sid, hir::ItemId>,
 }
 
 
@@ -99,6 +100,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     match ty.kind {
       // Generic
       hir::TypeKind::GenericType => "<generic>".to_string(),
+      hir::TypeKind::GenericSelfType => "Self".to_string(),
 
 
       // Primitive
@@ -145,16 +147,22 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
 
       // Function
-      hir::TypeKind::Fun{args, ret} => {
+      hir::TypeKind::Fun{self_kind, args, ret} => {
         let krate = self.get_krate(id.cid());
-        let arg_types: Vec<String> = krate
-          .extra_get(args)
-          .filter_map(|id| {
-            Some(self.type_name(id))
-          })
-          .collect();
+        let mut args_str = vec![];
+        
+        if let Some(id) = self_kind {
+          args_str.push(self.type_name(id));
+        }
+        
+        for id in krate.extra_get(args) {
+          let hir::Thing::NamedType(name, kind) = *self.cre.get(id) else { panic!() };
+
+          args_str.push(format!("{}: {}", self.sin.str(name), self.type_name(kind)));
+        }
+        
         let ret_name = self.type_name(ret);
-        format!("fun({}) -> {}", arg_types.join(", "), ret_name)
+        format!("fun({}) -> {}", args_str.join(", "), ret_name)
       }
     }
   }
@@ -239,6 +247,7 @@ impl<'ast, 'hir, 'imod> HGen {
         Vacant(entry) => {
           let mut tyfuns = TypeMethods {
             traits: FxHashSet::default(),
+            //methods: FxHashMap::default(),
           };
           
           if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }

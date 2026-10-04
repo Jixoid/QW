@@ -24,6 +24,7 @@ pub struct BuildInfo<'a> {
   pub usages: bool,
   pub dump: Vec<DumpStage>,
   pub check_only: bool,
+  pub execute: bool,
 }
 
 
@@ -94,17 +95,14 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
 }
 
 
-pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, StrInterner, Files, Duration), Error> {
+pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, StrInterner, Duration), Error> {
   let mut cre = ast::Krate::new();
-  let mut far = Files::new();
   let mut sin = StrInterner::new();
 
   let legcurpath = env::current_dir()?;
   let abs_fpath = fpath.canonicalize().unwrap_or_else(|_| fpath.to_path_buf());
   env::set_current_dir(&abs_fpath)?;
 
-  let conf = parse_conf(&abs_fpath, &mut far)?;
-  
   let entry_file = {
     let path1 = Path::new("src/main.qw");
     let path2 = Path::new("src/lib.qw");
@@ -117,13 +115,9 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
     }
   };
   
-  if info.verbose > 0 {
-    eprintln!("{}{} {}", "Compiling".green().bold(), ":".bright_black(), conf.name);
-  }
-  
   let now = Instant::now();
   let (root, sum) = {
-    let (root, sum) = read_file(&entry_file, &mut cre, &mut sin, &mut far)?;
+    let (root, sum) = read_file(&entry_file, &mut cre, &mut sin, far)?;
 
     let id = cre.push(root);
     
@@ -143,7 +137,7 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
 
   env::set_current_dir(legcurpath)?;
   
-  Ok((cre, sin, far, time))
+  Ok((cre, sin, time))
 }
 
 pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imods: &[Imod<'_>]) -> Result<(ScopeMap, Vec<ImplFor>, Duration), Error> {
@@ -214,14 +208,14 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(mir_cre: &mir::Krate, fpath: &Path) -> Result<Duration, Error> {
+pub fn build_cgen(backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, ext_ll: bool) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
-  qwc_cgen_llvm::CGen::generate(mir_cre, fpath).map_err(|err| Error::Str(err))?;
+  let (bc, ll) = backend.generate(mir_cre, ext_ll).map_err(|err| Error::Str(err))?;
 
   let time = now.elapsed();
 
-  Ok(time)
+  Ok((bc, ll, time))
 }
 
 
@@ -265,10 +259,23 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   };
 
 
+  // Setup
+  let mut far = Files::new();
+
+
+  // Config
+  let conf = parse_conf(&info.path.canonicalize().unwrap_or_else(|_| info.path.to_path_buf()), &mut far)?;
+
+
+  if info.verbose > 0 {
+    eprintln!("{}{} {}", "Compiling".green().bold(), ":".bright_black(), conf.name);
+  }
+
+
   // PASS 1 (parse)
   if info.verbose > 0 { eprintln!("{}", "PASS 1 (parse)".red().bold()) }
   
-  let (ast_cre, mut sin, far, time_pass1_parse) = build_ast_krate(info.path, &info)?;
+  let (ast_cre, mut sin, time_pass1_parse) = build_ast_krate(info.path, &mut far)?;
   
   if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
 
@@ -328,6 +335,10 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &sin, &far, &mir_layinfo)?;
   
   if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre}) }
+
+
+  // Choose Backend
+  let backend: Box<dyn ICGen> = Box::new(qwc_cgen_llvm::CGen);
   
   
   // Pass 4 (cgen)
@@ -337,9 +348,30 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     fs::create_dir(info.path.join("build"))?;
   }
   
-  let time_pass4_cgen = build_cgen(&mir_cre, &info.path.join("build").join("out.ll"))?;
+  let (bitcode, llir, time_pass4_cgen) = build_cgen(&backend, &mir_cre, info.dump.contains(&DumpStage::Lir))?;
   
-  if info.dump.contains(&DumpStage::Lir) { eprintln!("{}", fs::read_to_string(info.path.join("build").join("out.ll"))?) }
+  fs::write(info.path.join("build").join("out.bc"), &bitcode)?;
+
+  if info.dump.contains(&DumpStage::Lir) { eprintln!("{}", llir.unwrap()) }
+
+
+  if info.verbose > 0 {
+    eprintln!("{}{} {}", "Compiled".green().bold(), ":".bright_black(), conf.name);
+  }
+
+
+  // Execute
+  if info.execute {
+    if info.verbose > 0 {
+      eprintln!("{}", "Running".green().bold());
+    }
+
+    let exitcode = backend.run_vm(&bitcode)?;
+
+    if info.verbose > 0 {
+      eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
+    }
+  }
 
 
   // Timings

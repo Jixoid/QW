@@ -40,8 +40,9 @@ pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) ->
 
 // Variable
 pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Result<hir::ExprId, Message> {
-  let (name, span) = match ctx.src.get(item) as &ast::Patt {
-    ast::Patt::One(ident) => (ident.sid(), (*ident).into()),
+  let (name, span) = match *ctx.src.get(item) {
+    ast::Patt::One(ident) => (ident.sid(), ident),
+
     _ => todo!("patterns in let bindings not implemented yet"),
   };
 

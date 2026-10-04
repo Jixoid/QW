@@ -5,6 +5,7 @@ use crate::{ExprId, Layout, ThingRng, TypeId, TypeRng};
 pub enum TypeKind {
   // Generic
   GenericType,
+  GenericSelfType,
   
   // Basic
   Unit,
@@ -43,7 +44,7 @@ pub enum TypeKind {
   Option(TypeId),
   
   // Callable
-  Fun{args: TypeRng, ret: TypeId},
+  Fun{self_kind: Option<TypeId>, args: ThingRng /* NamedType => name: type */, ret: TypeId},
 }
 
 

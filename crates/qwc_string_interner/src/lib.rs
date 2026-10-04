@@ -25,6 +25,7 @@ pub struct StrInterner {
 
   sid_import: Sid,
   sid_export: Sid,
+  sid_entry: Sid,
 
   sid_self: Sid,
 }
@@ -45,6 +46,7 @@ impl StrInterner {
 
       sid_import: Sid::from(rodeo.get_or_intern_static("import").into_inner()),
       sid_export: Sid::from(rodeo.get_or_intern_static("export").into_inner()),
+      sid_entry: Sid::from(rodeo.get_or_intern_static("entry").into_inner()),
 
       sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
       
@@ -81,5 +83,6 @@ impl StrInterner {
 
   pub fn sid_import(&self) -> Sid { self.sid_import }
   pub fn sid_export(&self) -> Sid { self.sid_export }
+  pub fn sid_entry(&self) -> Sid  { self.sid_entry }
   pub fn sid_self(&self) -> Sid   { self.sid_self }
 }

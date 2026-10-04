@@ -40,15 +40,16 @@ impl DumpHandler for Item {
   fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     write_indent(f, indent)?;
     
-    if let Some(svis) = self.svis {
-      match svis {
-        SymVis::Export => write!(f, "{} ", attr("![export]"))?,
-        SymVis::Import => write!(f, "{} ", attr("![import]"))?,
-      }
-    }
-
     match self.vis {
-      ItemVis::Public => write!(f, "{} ", kw("pub"))?,
+      ItemVis::Public(svis) => {
+        match svis {
+          SymVis::Export => write!(f, "{} ", attr("![export]"))?,
+          SymVis::Import => write!(f, "{} ", attr("![import]"))?,
+          SymVis::Internal => {},
+        }
+        
+        write!(f, "{} ", kw("pub"))?;
+      }
       ItemVis::Private => {},
     }
 
@@ -118,13 +119,15 @@ impl DumpHandler for Item {
       }
 
       
-      ItemKind::Impl { struct_ty, iface_ty, methods } => {
+      ItemKind::Impl { type_ty, trait_ty, methods } => {
         write!(f, "{} ", kw("impl"))?;
-        struct_ty.dump(cre, sin, f, indent)?;
-        if let Some(iface) = iface_ty {
+        type_ty.dump(cre, sin, f, indent)?;
+        
+        if let Some(iface) = trait_ty {
           write!(f, " {} ", punct(":"))?;
           iface.dump(cre, sin, f, indent)?;
         }
+        
         writeln!(f, " {{")?;
         for id in cre.extra_get(methods) {
           //write_indent(f, indent)?;
@@ -147,6 +150,7 @@ impl DumpHandler for Type {
     match self.kind {
       // Generic
       TypeKind::GenericType => write!(f, "{}", punct("<generic>"))?,
+      TypeKind::GenericSelfType => write!(f, "{}", punct("Self"))?,
       
 
       // Basic
@@ -265,33 +269,22 @@ impl DumpHandler for Type {
 
 
       // Function
-      TypeKind::Fun { args, ret } => {
+      TypeKind::Fun { self_kind, args, ret } => {
         write!(f, "{}{}", ty("fun"), punct("("))?;
-        let mut first = true;
-        for (i, id) in cre.extra_get(args).enumerate() {
-          if !first { write!(f, "{} ", punct(","))? }
-          first = false;
 
-          if i == 0 {
-            let arg_ty = cre.get(id);
-            match arg_ty.kind {
-              TypeKind::Ref(.., false) => {
-                write!(f, "{}", "&self".magenta())?;
-                continue;
-              }
-              TypeKind::Ref(.., true) => {
-                write!(f, "{}", "&mut self".magenta())?;
-                continue;
-              }
-              _ => {
-                write!(f, "{}", "self".magenta())?;
-                continue;
-              }
-            }
+        if let Some(self_kind) = self_kind {
+          match cre.get(self_kind).kind {
+            TypeKind::Ref(.., false) => write!(f, "{}", "&self".magenta())?,
+            TypeKind::Ref(.., true) => write!(f, "{}", "&mut self".magenta())?,
+            _ => write!(f, "{}", "self".magenta())?,
           }
-
-          id.dump(cre, sin, f, indent)?;
         }
+
+        for id in cre.extra_get(args) {
+          id.dump(cre, sin, f, indent)?;
+          write!(f, "{} ", punct(","))?;
+        }
+        
         write!(f, "{} {} ", punct(")"), op("->"))?;
         ret.dump(cre, sin, f, indent)?;
       }

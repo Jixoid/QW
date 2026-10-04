@@ -1,9 +1,12 @@
+use itertools::{Itertools, izip};
 use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_ast::{self as ast, Ident};
-use qwc_hir as hir;
-use qwc_resolve::{self as resolve, Resolver};
+use qwc_ast::{self as ast};
+use qwc_hir::{self as hir, PushOkApi};
 
-use crate::{Ctx, ExprLow, ctx};
+use crate::{Ctx, ExprLow};
+
+mod resolve_p;
+
 
 
 pub struct TypeLow;
@@ -19,8 +22,8 @@ impl TypeLow {
   
     let it = match it.kind {
       // Resolve
-      Nick(ident)   => Self::low_nick(ctx, ident)?,
-      Path(rng) => Self::low_path(ctx, rng)?,
+      Nick(ident)   => resolve_p::low_nick(ctx, ident)?,
+      Path(rng) => resolve_p::low_path(ctx, rng)?,
       
       // Basic
       Unit => ctx.tin.ty_unit(),
@@ -44,7 +47,10 @@ impl TypeLow {
       Iface(rng) => Self::low_iface(ctx, rng)?,
 
       // Context
-      SelfT => return Ok(*ctx.cmap.self_ty.last().unwrap()),
+      SelfT => match ctx.cmap.self_ty.last() {
+        Some(&v) => return Ok(v),
+        None => return Err(Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(it.pos)))
+      }
 
       // Function
       Fun{self_kind, args, ret, ..} => Self::low_fun(ctx, self_kind, args, ret)?,
@@ -55,70 +61,6 @@ impl TypeLow {
     ctx.cmap.cache_type.insert(id, it);
 
     Ok(it)
-  }
-
-
-  // Resolve
-  fn low_nick(ctx: &mut Ctx, ident: Ident) -> Result<hir::TypeId, Message> {
-    let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).lookup(ident)?.get_k();
-    Self::low_resolved(ctx, kind, lscp, span)
-  }
-
-  fn low_path(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message> {
-    let mut segment = vec![];
-
-    for id in ctx.src.extra_get(rng) {
-      let it = ctx.src.get(id);
-
-      if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { panic!() }
-    }
-
-    let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
-    Self::low_resolved(ctx, kind, lscp, span)
-  }
-
-  fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: qwc_diagnostic::Span) -> Result<hir::TypeId, Message> {
-    let ty = match kind {
-      resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
-        resolve::ScopeKindAst::Type(ty) => Self::low(ctx!(lscp -> ctx), ty)?,
-
-        resolve::ScopeKindAst::TypeParam(thing) => {
-          match ctx.src.get(thing) as &ast::Thing {
-            ast::Thing::NamedType(_, ty) => Self::low(ctx!(lscp -> ctx), *ty)?,
-
-            ast::Thing::Name(_) => ctx.tin.ty_generic_type(),
-
-            _ => panic!()
-          }
-        }
-
-        // Expr
-        resolve::ScopeKindAst::Expr(item) => {
-          let span = ctx.src.get(item).pos;
-
-          return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
-        }
-
-        // Module
-        resolve::ScopeKindAst::Module(item) => {
-          let span = ctx.src.get(item).pos;
-
-          return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "module"]), Label::new_pos(span)))
-        }
-
-        resolve::ScopeKindAst::ExprParam(..) | resolve::ScopeKindAst::Local(..) => panic!("value in type position"),
-      },
-
-      resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
-        resolve::ScopeKindHir::Type(ty) => ctx.low_hir_type(ty),
-
-        resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
-          return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
-        }
-      }
-    };
-
-    Ok(ty)
   }
 
 
@@ -266,31 +208,26 @@ impl TypeLow {
 
   // Interface
   fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-    let iface_id = ctx.cre.push(hir::Type {
-      kind: hir::TypeKind::Iface(hir::Rng::empty()),
-      layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
-    });
-
-    ctx.cmap.self_ty.push(iface_id);
+    ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW)}.push(ctx.cre));
 
     let methods = {
       let mut ctn = vec![];
+
       for id in ctx.src.extra_get(rng) {
         let it = ctx.src.get(id);
+
         match it.kind {
           ast::FieldKind::Fun { kind, .. } => {
-            let fun_ast = ctx.src.get(kind);
-            let ast::TypeKind::Fun { self_kind, .. } = fun_ast.kind else { unreachable!() };
-
             let fun_ty = Self::low(ctx, kind)?;
+            
+            if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.cre.get(fun_ty).kind {
 
-            if let Some(self_id) = self_kind {
-              let hir::TypeKind::Fun { args, .. } = ctx.cre.get(fun_ty).kind else { unreachable!() };
-              let self_hir_ty = ctx.cre.extra_get(args).next().unwrap();
-              let lay = ctx.cre.get(self_hir_ty).layout;
+              let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
+          
+              let lay = ctx.cre.get(self_kind).layout;
 
               if !lay.is_static() {
-                let pos = ctx.src.get(self_id).pos;
+                let pos = self_pos;
                 return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
               }
             }
@@ -298,18 +235,21 @@ impl TypeLow {
             let id = ctx.cre.push(hir::Thing::NamedType(it.name.unwrap().sid(), fun_ty));
             ctn.push(id);
           }
-          _ => {}
+
+          _ => panic!()
         }
       }
+
       ctx.cre.extra(&ctn)
     };
 
     ctx.cmap.self_ty.pop();
 
-    let this = ctx.cre.get_mut(iface_id);
-    this.kind = hir::TypeKind::Iface(methods);
 
-    Ok(iface_id)
+    hir::Type {
+      kind: hir::TypeKind::Iface(methods),
+      layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    }.push_ok(ctx.cre)
   }
 
   
@@ -318,24 +258,22 @@ impl TypeLow {
     let args = {
       let mut ctn = vec![];
 
-      if let Some(self_id) = self_kind {
-        ctn.push(Self::low(ctx, self_id)?);
-      }
-      
       for id in ctx.src.extra_get(rng) {
-        let it = ctx.src.get(id);
+        let ast::Thing::NamedType(name, kind) = *ctx.src.get(id) else { panic!() };
 
-        let ty = match *it {
-          ast::Thing::NamedType(_, ty) => ty,
-
-          _ => panic!()
-        };
-
-        ctn.push(Self::low(ctx, ty)?);
+        ctn.push(hir::Thing::NamedType(name.sid(), Self::low(ctx, kind)?).push(ctx.cre));
       }
 
       ctx.cre.extra(&ctn)
     };
+
+    if let Some(self_kind) = self_kind && ctx.cmap.self_ty.last().is_none() {
+      let self_kind = ctx.src.get(self_kind);
+      
+      return Err(Message::error(SELF_PARAMETER_IS_ONLY_ALLOWED_IN_ASSOCIATED_FUN, Label::new_pos(self_kind.pos)))
+    }
+
+    let self_kind = self_kind.map(|id| Self::low(ctx, id)).transpose()?;
 
     let ret = match ret {
       None => ctx.tin.ty_unit(),
@@ -345,11 +283,102 @@ impl TypeLow {
 
     // Post
     let this = hir::Type {
-      kind: hir::TypeKind::Fun{args, ret},
+      kind: hir::TypeKind::Fun{self_kind, args, ret},
       layout: hir::Layout::new_dst(hir::LayoutBy::QW),
     };
     
     Ok(ctx.cre.push(this))
+  }
+
+}
+
+
+
+pub struct TypeMatch;
+
+impl TypeMatch {
+
+  pub fn matches(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, ty2_ast: ast::TypeId) -> Result<(), Message> {
+    if ty1 == ty2 { return Ok(()) }
+
+    let ty1_ty = ctx.cre.get(ty1).kind;
+    let ty2_ty = ctx.cre.get(ty2).kind;
+    let ty2_ast_ty = ctx.src.get(ty2_ast).kind;
+
+    match (ty1_ty, ty2_ty) {
+      (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
+        let ast::TypeKind::Ref(t2_ast, _) = ty2_ast_ty else { panic!() };
+
+        Self::matches(ctx, t1, t2, t2_ast)
+      }
+
+      _ => {
+        let ty_pos = ctx.src.get(ty2_ast).pos;
+        return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(ty_pos)));
+      }
+    }
+  }
+
+
+  pub fn match_fun(ctx: &Ctx, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId) -> Result<(), Message> {
+    let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.cre.get(fun1).kind else { panic!() };
+    let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.cre.get(fun2).kind else { panic!() };
+
+    let fun2_ast = ctx.src.get(fun2_ast);
+    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ret: ret_ast, attr: _} = fun2_ast.kind else { panic!() };
+
+
+    // Self Match
+    match (self_1, self_2) {
+      (None, None) => {},
+
+      (None, Some(..)) => {
+        let self_pos = ctx.src.get(self_ast.unwrap()).pos;
+        return Err(Message::error(INCOMPATIBLE_METHOD, Label::new(self_pos, UNEXPECTED_PARAMETER)))
+      }
+
+      (Some(..), None) => {
+        return Err(Message::error(INCOMPATIBLE_METHOD, Label::new(fun2_ast.pos, ARGUMENT_X_IS_MISSING.args(&["self"]))))
+      }
+
+      (Some(self_1), Some(self_2)) => {
+        let self_1_ty = ctx.cre.get(self_1).kind;
+        let self_2_ty = ctx.cre.get(self_2).kind;
+
+        match (self_1_ty, self_2_ty) {
+          (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
+          
+          _ => TypeMatch::matches(ctx, self_1, self_2, self_ast.unwrap())?,
+        }
+      }
+    }
+
+
+    // Args Match
+    let args_1 = ctx.cre.extra_get(args_1).collect_vec().into_boxed_slice();
+    let args_2 = ctx.cre.extra_get(args_2).collect_vec().into_boxed_slice();
+    let args_ast = ctx.src.extra_get(args_ast).collect_vec().into_boxed_slice();
+    
+    if args_1.len() != args_2.len() {
+      return Err(Message::error(
+        FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[&args_1.len().to_string(), &args_2.len().to_string()]),
+        Label::new_pos(fun2_ast.pos),
+      ));
+    }
+
+    for (id_1, id_2, id_ast) in izip!(args_1, args_2, args_ast) {
+      let hir::Thing::NamedType(_, id_1) = *ctx.cre.get(id_1) else { unreachable!() };
+      let hir::Thing::NamedType(_, id_2) = *ctx.cre.get(id_2) else { unreachable!() };
+      let ast::Thing::NamedType(_, id_ast) = *ctx.src.get(id_ast) else { unreachable!() };
+
+      TypeMatch::matches(ctx, id_1, id_2, id_ast)?;
+    }
+
+
+    // Ret Match
+    ret_ast.map(|ret_ast| TypeMatch::matches(ctx, ret_1, ret_2, ret_ast)).transpose()?;
+    
+    Ok(())
   }
 
 }

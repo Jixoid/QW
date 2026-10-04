@@ -1,6 +1,6 @@
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
-use qwc_mir as mir;
+use qwc_mir::{self as mir, id::PushOkApi};
 
 use crate::{Ctx, Layouter};
 
@@ -12,7 +12,7 @@ impl TypeLow {
   pub fn low(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
     if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Ok(id) }
 
-    let it: &hir::Type = ctx.src.get(id);
+    let it = ctx.src.get(id);
 
     let ty = match it.kind {
       // ZST
@@ -35,10 +35,10 @@ impl TypeLow {
 
       // Combinated
       hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
-      hir::TypeKind::Iface(rng) => Self::low_iface(ctx, id, rng)?,
+      hir::TypeKind::Iface(rng) => Self::low_iface(ctx, rng)?,
 
       // Callable
-      hir::TypeKind::Fun{args, ret} => Self::low_fun(ctx, args, ret)?,
+      hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, self_kind, args, ret)?,
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -102,36 +102,34 @@ impl TypeLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn low_iface(ctx: &mut Ctx, id: hir::TypeId, rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
+  fn low_iface(ctx: &mut Ctx, _rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
     let ptr = ctx.tin.ty_ptr();
     let fat_fields = vec![ptr, ptr];
     let fat_rng = ctx.cre.extra(&fat_fields);
     
+
     // Post
     let kind = mir::TypeKind::Struct(fat_rng);
-    let this = mir::Type {
+
+    mir::Type {
       kind,
       layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
-    };
-
-    let ty = ctx.cre.push(this);
-    ctx.cmap.cache_type.insert(id, ty);
-
-    for member_id in ctx.src.extra_get(rng) {
-      let hir::Thing::NamedType(_, fun_ty) = *ctx.src.get(member_id) else { panic!() };
-      let _ = Self::low(ctx, fun_ty)?;
-    }
-
-    Ok(ty)
+    }.push_ok(ctx.cre)
   }
 
 
-  fn low_fun(ctx: &mut Ctx, args: hir::TypeRng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
+  fn low_fun(ctx: &mut Ctx, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
     let args = {
       let mut ctn = vec![];
+
+      if let Some(self_kind) = self_kind {
+        ctn.push(Self::low(ctx, self_kind)?);
+      }
       
       for id in ctx.src.extra_get(args) {
-        ctn.push(Self::low(ctx, id)?);
+        let hir::Thing::NamedType(_, kind) = *ctx.src.get(id) else { panic!() };
+
+        ctn.push(Self::low(ctx, kind)?);
       }
 
       ctx.cre.extra(&ctn)

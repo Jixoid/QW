@@ -1,5 +1,5 @@
 use qwc_diagnostic::Message;
-use qwc_hir as hir;
+use qwc_hir::{self as hir, ItemAttr};
 use qwc_mir as mir;
 use qwc_mangling::{Mangler, ManglerQW};
 use qwc_string_interner::Sid;
@@ -14,21 +14,18 @@ impl SymbLow {
   pub fn low(ctx: &mut Ctx, id: hir::ItemId) -> Result<Option<mir::SymbId>, Message> {
     if let Some(&id) = ctx.cmap.cache_item.get(&id) { return Ok(id) }
 
-    let it: &hir::Item = ctx.src.get(id);
+    let it = ctx.src.get(id);
 
     let it = match it.kind {
-      hir::ItemKind::RootNS{rng} => {Self::low_root(ctx, rng)?; None},
-      hir::ItemKind::NameSpace{rng, name} => {Self::low_namespace(ctx, rng, name)?; None}
+      hir::ItemKind::RootNS {rng} => {Self::low_root(ctx, rng)?; None},
+      hir::ItemKind::NameSpace {rng, name} => {Self::low_namespace(ctx, rng, name)?; None}
 
-      qwc_hir::ItemKind::Using{kind, ..} => {TypeLow::low(ctx, kind)?; None}
+      qwc_hir::ItemKind::Using {kind, ..} => {TypeLow::low(ctx, kind)?; None}
 
-      hir::ItemKind::Variable{kind, name, expr, ism} => Some(Self::low_variable(ctx, it, name, kind, expr, ism)?),
-      hir::ItemKind::Function{kind, name, expr} => Some(Self::low_function(ctx, it, name, kind, expr)?),
+      hir::ItemKind::Variable {kind, name, expr, ism} => Some(Self::low_variable(ctx, it, name, kind, expr, ism)?),
+      hir::ItemKind::Function {kind, name, expr} => Some(Self::low_function(ctx, it, name, kind, expr)?),
 
-      hir::ItemKind::Impl { struct_ty, iface_ty, methods } => {
-        Self::low_impl(ctx, struct_ty, iface_ty, methods)?;
-        None
-      }
+      hir::ItemKind::Impl {type_ty, trait_ty, methods} => {Self::low_impl(ctx, type_ty, trait_ty, methods)?; None}
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -64,7 +61,7 @@ impl SymbLow {
 
   fn low_variable(ctx: &mut Ctx, it: &hir::Item, name: Sid, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> Result<mir::SymbId, Message> {
     let sym = ManglerQW::new(ctx.sin, ctx.mgr, name);
-    
+
     let ety = TypeLow::low(ctx, kind)?;
 
     let _value = ExprLow::low(ctx, &mut FunBuilder::new(), expr)?;
@@ -82,7 +79,11 @@ impl SymbLow {
   }
 
   fn low_function(ctx: &mut Ctx, it: &hir::Item, name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> Result<mir::SymbId, Message> {
-    let sym = ManglerQW::new(ctx.sin, ctx.mgr, name);
+    let sym = if it.attr.contains(ItemAttr::Entry) {
+      String::from("qw_entry")
+    } else {
+      ManglerQW::new(ctx.sin, ctx.mgr, name)
+    };
     
     let ety = TypeLow::low(ctx, kind)?;
 
@@ -116,6 +117,7 @@ impl SymbLow {
 
     Ok(ctx.cre.push(this))
   }
+
 
   fn low_method_sym(ctx: &mut Ctx, it: &hir::Item, struct_name: Sid, iface_name: Option<Sid>, method_name: Sid, kind: hir::TypeId, expr: hir::ExprId) -> Result<mir::SymbId, Message> {
     let sym = ManglerQW::new_impl(ctx.sin, ctx.mgr, struct_name, iface_name, method_name);
@@ -219,7 +221,7 @@ impl SymbLow {
     let hir::ItemKind::RootNS { rng } = ctx.src.get(root).kind else { panic!() };
     for id in ctx.src.extra_get(rng) {
       let it = ctx.src.get(id);
-      if let hir::ItemKind::Impl { struct_ty: s, iface_ty: Some(i), methods } = it.kind {
+      if let hir::ItemKind::Impl { type_ty: s, trait_ty: Some(i), methods } = it.kind {
         if s == struct_ty && i == iface_ty {
           Self::low_impl(ctx, s, Some(i), methods)?;
           return Ok(*ctx.cmap.cache_vmt.get(&(struct_ty, iface_ty)).expect("vmt must be cached"));
@@ -253,11 +255,10 @@ fn convert_vis(it: &hir::Item) -> mir::SymbolStat {
   match it.vis {
     hir::ItemVis::Private => mir::SymbolStat::Private,
 
-    hir::ItemVis::Public => match it.svis {
-      None => mir::SymbolStat::Internal,
-
-      Some(hir::SymVis::Import) => mir::SymbolStat::Import,
-      Some(hir::SymVis::Export) => mir::SymbolStat::Export,
+    hir::ItemVis::Public(svis) => match svis {
+      hir::SymVis::Import => mir::SymbolStat::Import,
+      hir::SymVis::Export => mir::SymbolStat::Export,
+      hir::SymVis::Internal => mir::SymbolStat::Internal,
     }
   }
 }

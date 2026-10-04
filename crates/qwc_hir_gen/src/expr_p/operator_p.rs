@@ -302,7 +302,7 @@ pub fn low_call(ctx: &mut Ctx, it: &ast::Expr, callee: ast::ExprId, args: ast::E
   let callee_ex = ctx.cre.get(callee);
   let callee_ty = ctx.cre.get(callee_ex.ety);
 
-  let qwc_hir::TypeKind::Fun{args: trait_args, ret: trait_ret} = callee_ty.kind else { panic!() };
+  let qwc_hir::TypeKind::Fun{self_kind: _, args: trait_args, ret: trait_ret} = callee_ty.kind else { panic!() };
 
   if args_hir.count() != trait_args.count() {
     let extra1 = if trait_args.count() > args_hir.count() {
@@ -323,10 +323,12 @@ pub fn low_call(ctx: &mut Ctx, it: &ast::Expr, callee: ast::ExprId, args: ast::E
 
 
   for (supp_hir, supp_ast, trt) in izip!(ctx.cre.extra_get(args_hir), ctx.src.extra_get(args), ctx.cre.extra_get(trait_args)) {
+    let hir::Thing::NamedType(_, trt_ty) = *ctx.cre.get(trt) else { panic!() };
+    
     let supp_pos = ctx.src.get(supp_ast).pos;
     let supp_ty = ctx.cre.get(supp_hir).ety;
 
-    if supp_ty != trt {
+    if supp_ty != trt_ty {
       return Err(Message::error(MISMATCHED_TYPES, Label::new_pos(supp_pos)))
     }
   }

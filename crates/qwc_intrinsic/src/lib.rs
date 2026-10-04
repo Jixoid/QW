@@ -1,4 +1,4 @@
-use qwc_hir::{CID, Item, ItemKind, ItemVis, Krate, LayoutInfo, Type, TypeKind, Visitor};
+use qwc_hir::{CID, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeKind, Visitor};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
@@ -17,7 +17,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 			($name:literal => $kind:expr, $lay:expr) => {
 				let kind = cre.push(Type{kind: $kind, layout: $lay});
 
-				let item = cre.push(Item{vis: ItemVis::Public, svis: None, kind: ItemKind::Using { kind, name: sin.sid($name) }});
+				let item = cre.push(Item{vis: ItemVis::Public(SymVis::Internal), kind: ItemKind::Using { kind, name: sin.sid($name) }, attr: ItemAttr::empty() });
 
 				types.push(item);
 			};
@@ -51,9 +51,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 		// Post
 		let this = Item {
-			vis: ItemVis::Public,
-			svis: None,
-			kind: ItemKind::NameSpace { rng: cre.extra(&types), name: sin.sid("types") }
+			vis: ItemVis::Public(SymVis::Internal),
+			kind: ItemKind::NameSpace { rng: cre.extra(&types), name: sin.sid("types") },
+			attr: ItemAttr::empty(),
 		};
 
 		cre.push(this)
@@ -64,9 +64,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	// root
 	let root = {
 		let this = Item {
-			vis: ItemVis::Public,
-			svis: None,
-			kind: ItemKind::RootNS{ rng: cre.extra(&root) }
+			vis: ItemVis::Public(SymVis::Internal),
+			kind: ItemKind::RootNS{ rng: cre.extra(&root) },
+			attr: ItemAttr::empty(),
 		};
 
 		cre.push(this)

@@ -6,6 +6,7 @@ mod error;
 mod build;
 mod conf;
 mod init;
+mod run;
 //mod deps;
 //mod pkg;
 
@@ -49,6 +50,28 @@ enum MainCommands {
     /// Force init overwrite
     #[arg(short, long)]
     force: bool,
+  },
+
+  #[command(alias = "r")]
+  Run {
+    /// Directory to build
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Display execution times for each compiler phase
+    #[arg(long)]
+    timings: bool,
+  
+    /// Display memory storage for each compiler phase
+    #[arg(long)]
+    usages: bool,
+
+    /// Use verbose output
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
+
+    #[arg(long, value_delimiter = ',', value_enum)]
+    dump: Vec<DumpStage>,
   },
 
   #[command(alias = "b")]
@@ -138,6 +161,24 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
+    MainCommands::Run{path, timings, usages, verbose, dump} => {
+      let info = run::RunInfo {
+        path: &path,
+        verbose,
+        timings,
+        usages,
+        dump,
+      };
+
+      match run::run(info) {
+        Ok(()) => (),
+        Err(e) => {
+          eprintln!("{}", e);
+          std::process::exit(1);
+        }
+      };
+    }
+
     MainCommands::Build{path, variant, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: &path,
@@ -147,6 +188,7 @@ fn main_cmd(cmd: MainCommands) {
         usages,
         dump,
         check_only: false,
+        execute: false,
       };
 
       match build::build(info) {
@@ -167,6 +209,7 @@ fn main_cmd(cmd: MainCommands) {
         usages,
         dump,
         check_only: true,
+        execute: false,
       };
 
       match build::build(info) {

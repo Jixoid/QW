@@ -1,11 +1,7 @@
 use std::path::Path;
 
 use inkwell::{
-    builder::Builder,
-    context::Context,
-    module::Module,
-    types::BasicTypeEnum,
-    values::{FunctionValue, GlobalValue},
+    builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue},
 };
 use qwc_cgen::ICGen;
 use qwc_mir::{Krate, SymbId, TypeId};
@@ -34,15 +30,41 @@ pub struct CtxM<'ctx> {
 pub struct CGenLLVM;
 
 impl ICGen for CGenLLVM {
-	fn generate(cre: &Krate, fpath: &Path) -> Result<(), String> {
+	fn generate(&self, cre: &Krate, ext_ll: bool) -> Result<(Vec<u8>, Option<String>), String> {
 		let ctx = Context::create();
 		let mol = Self::compile_to_module(&ctx, "main", cre);
 
 		mol.verify().map_err(|err| err.to_string())?;
 
-		mol.print_to_file(fpath).map_err(|err| err.to_string())?;
+		let bc = mol.write_bitcode_to_memory().as_slice().to_vec();
 
-		Ok(())
+		let ll = ext_ll.then(|| mol.print_to_string().to_string());
+
+		Ok((bc, ll))
+	}
+
+	fn run_vm(&self, code: &[u8]) -> Result<i32, String> {
+		let ctx = Context::create();
+
+		let mol = Module
+			::parse_bitcode_from_buffer(&MemoryBuffer::create_from_memory_range(code, "main"), &ctx)
+			.map_err(|err| err.to_string())?;
+	
+		let execution_engine = mol
+			.create_jit_execution_engine(inkwell::OptimizationLevel::Default)
+			.map_err(|e| e.to_string())?;
+
+		type QwEntryFunc = unsafe extern "C" fn() -> i32;
+
+    let qw_entry_jit_fn = unsafe {
+			execution_engine.get_function::<QwEntryFunc>("qw_entry")
+    };
+
+		match qw_entry_jit_fn {
+			Ok(func) => Ok(unsafe { func.call() }),
+
+			Err(err) => Err(err.to_string())
+    }
 	}
 }
 
