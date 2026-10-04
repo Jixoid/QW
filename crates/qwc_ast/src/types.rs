@@ -46,7 +46,7 @@ pub enum TypeKind {
   Flags (ThingRng /* Name | NamedExpr */),
 
   // Combinated
-  Struct (FieldRng),
+  Struct (ThingRng /* NamedType => name: type */),
   Tuple  (TypeRng),
 
   // Impl

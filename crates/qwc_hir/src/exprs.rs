@@ -97,6 +97,9 @@ pub enum ExprKind {
   // Bool
   BoolLogic{op: BoolLogicOp, lhs: ExprId, rhs: ExprId},
   BoolNot(ExprId),
+
+  // Cast
+  Cast{expr: ExprId, kind: TypeId},
 }
 
 

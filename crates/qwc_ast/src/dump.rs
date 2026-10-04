@@ -65,7 +65,7 @@ impl DumpHandler for Item {
       }
 
       ItemKind::Fun {kind, blok} => {
-        write!(f, "{} ", "fun".blue().bold())?;
+        write!(f, "{} ", kw("fun"))?;
 
         if let Some(name) = self.name {
           write!(f, "{}", name.str(far).yellow().bold())?;
@@ -77,7 +77,7 @@ impl DumpHandler for Item {
           b.dump(cre, sin, far, f, indent)?;
           writeln!(f)?;
         } else {
-          writeln!(f, "{}", ";".bright_black())?;
+          writeln!(f, "{}", punct(";"))?;
         }
       }
 
@@ -89,75 +89,10 @@ impl DumpHandler for Item {
       }
 
       ItemKind::ItemTy(ty) => {
-        let ty_obj: &Type = cre.get(ty);
-        match ty_obj.kind {
-          TypeKind::Struct(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "struct".blue().bold(), name.yellow().bold())?;
-            for field_id in cre.extra_get(rng) {
-              field_id.dump(cre, sin, far, f, indent + 1)?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          TypeKind::Iface(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "iface".blue().bold(), name.yellow().bold())?;
-            for field_id in cre.extra_get(rng) {
-              field_id.dump(cre, sin, far, f, indent + 1)?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          TypeKind::Trait(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "trait".blue().bold(), name.yellow().bold())?;
-            for field_id in cre.extra_get(rng) {
-              field_id.dump(cre, sin, far, f, indent + 1)?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          TypeKind::Enum(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "enum".blue().bold(), name.yellow().bold())?;
-            for thing_id in cre.extra_get(rng) {
-              write_indent(f, indent + 1)?;
-              thing_id.dump(cre, sin, far, f, indent + 1)?;
-              writeln!(f, ",")?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          TypeKind::Flags(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "flags".blue().bold(), name.yellow().bold())?;
-            for thing_id in cre.extra_get(rng) {
-              write_indent(f, indent + 1)?;
-              thing_id.dump(cre, sin, far, f, indent + 1)?;
-              writeln!(f, ",")?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          TypeKind::Variant(rng) => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            writeln!(f, "{} {} {{", "variant".blue().bold(), name.yellow().bold())?;
-            for thing_id in cre.extra_get(rng) {
-              write_indent(f, indent + 1)?;
-              thing_id.dump(cre, sin, far, f, indent + 1)?;
-              writeln!(f, ",")?;
-            }
-            write_indent(f, indent)?;
-            writeln!(f, "}}")?;
-          }
-          _ => {
-            let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-            write!(f, "{} {} = ", "type".blue().bold(), name.yellow().bold())?;
-            ty.dump(cre, sin, far, f, indent)?;
-            writeln!(f, ";")?;
-          }
-        }
+        let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
+        write!(f, "{} {} = ", "type".blue().bold(), name.yellow().bold())?;
+        ty.dump(cre, sin, far, f, indent)?;
+        writeln!(f, ";")?;
       }
 
 
@@ -167,6 +102,7 @@ impl DumpHandler for Item {
 
         for item_id in cre.extra_get(rng) {
           item_id.dump(cre, sin, far, f, indent + 1)?;
+          writeln!(f)?;
         }
 
         write_indent(f, indent)?;
@@ -180,7 +116,8 @@ impl DumpHandler for Item {
         writeln!(f, "{} {} {{", "mod".blue().bold(), name.yellow().bold())?;
 
         for item_id in cre.extra_get(rng) {
-          item_id.dump(cre, sin, far, f, indent + 1)?;
+          item_id.dump(cre, sin, far, f, indent +1)?;
+          writeln!(f)?;
         }
 
         write_indent(f, indent)?;
@@ -239,10 +176,10 @@ impl DumpHandler for Item {
       }
 
       ItemKind::Impl { type_ty, trait_ty, ctn } => {
-        write!(f, "{} ", "impl".blue())?;
+        write!(f, "{} ", "impl".blue().bold())?;
         type_ty.dump(cre, sin, far, f, indent)?;
         if let Some(trt) = trait_ty {
-          write!(f, " : ")?;
+          write!(f, "{} ", ":".bright_black())?;
           trt.dump(cre, sin, far, f, indent)?;
         }
         writeln!(f, " {{")?;
@@ -417,23 +354,19 @@ impl DumpHandler for Type {
 
       // Combinated
       TypeKind::Struct(rng) => {
-        writeln!(f, "{} {{", "struct".blue().bold())?;
+        write!(f, "{} {{", kw("struct"))?;
         for field_id in cre.extra_get(rng) {
-          field_id.dump(cre, sin, far, f, indent + 1)?;
+          field_id.dump(cre, sin, far, f, indent)?;
+          write!(f, ", ")?;
         }
-        write_indent(f, indent)?;
         write!(f, "}}")?;
       }
 
       TypeKind::Tuple(rng) => {
         write!(f, "{}", "(".bright_black())?;
-        let mut first = true;
         for field_id in cre.extra_get(rng) {
-          if !first {
-            write!(f, ", ")?;
-          }
-          first = false;
           field_id.dump(cre, sin, far, f, indent)?;
+          write!(f, ", ")?;
         }
         write!(f, "{}", ")".bright_black())?;
       }
@@ -441,7 +374,7 @@ impl DumpHandler for Type {
 
       // Impl
       TypeKind::Iface(rng) => {
-        writeln!(f, "{} {{", "iface".blue())?;
+        writeln!(f, "{} {{", kw("iface"))?;
         for field_id in cre.extra_get(rng) {
           field_id.dump(cre, sin, far, f, indent + 1)?;
         }
@@ -450,7 +383,7 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Trait(rng) => {
-        writeln!(f, "{} {{", "trait".blue().bold())?;
+        writeln!(f, "{} {{", kw("trait"))?;
         for field_id in cre.extra_get(rng) {
           field_id.dump(cre, sin, far, f, indent + 1)?;
         }
@@ -953,6 +886,12 @@ impl DumpHandler for Expr {
         }
         write!(f, ">")?;
       }
+
+      ExprKind::Cast { expr, kind } => {
+        expr.dump(cre, sin, far, f, indent)?;
+        write!(f, " {} ", "as".yellow())?;
+        kind.dump(cre, sin, far, f, indent)?;
+      }
     }
 
     Ok(())
@@ -1222,13 +1161,9 @@ fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files,
     if !attrs.is_empty() {
       write_indent(f, indent)?;
       write!(f, "{}", "![".bright_magenta())?;
-      let mut first = true;
       for attr in attrs {
-        if !first {
-          write!(f, ", ")?;
-        }
-        first = false;
         attr.dump(cre, sin, far, f, indent)?;
+        write!(f, ", ")?;
       }
       writeln!(f, "{}", "]".bright_magenta())?;
     }

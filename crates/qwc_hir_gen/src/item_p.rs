@@ -1,7 +1,9 @@
+use itertools::Itertools;
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Attribute, Ident};
-use qwc_hir::{self as hir};
+use qwc_hir::{self as hir, PushOkApi};
 use qwc_string_interner::StrInterner;
+use rustc_hash::FxHashMap;
 
 use crate::{Ctx, ExprLow, TypeLow, ctx};
 
@@ -47,92 +49,74 @@ impl ItemLow {
 
   fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
+    
+    let ids = &ctx.src.extra_get(rng)
+      .filter_map(|id| {
+        Self::low(ctx!(lscp -> ctx), id)
+          .map_err(|err| ctx.sum.add(err))
+          .ok().flatten()
+      }).collect_vec();
 
-    let rng = {
-      let mut ctn = vec![];
-      
-      for id in ctx.src.extra_get(rng) {
-        if let Some(hir_id) = Self::low(ctx!(lscp -> ctx), id)? {
-          ctn.push(hir_id);
-        }
-        Self::collect_struct_impls(ctx!(lscp -> ctx), id, &mut ctn)?;
-      }
-
-      ctx.cre.extra(&ctn)
-    };
+    let rng = ctx.cre.extra(ids);
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
 
     // Post
-    let this = hir::Item {
+    hir::Item {
       kind: hir::ItemKind::RootNS { rng },
       vis: convert_vis(it.vis),
       svis
-    };
-    
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
   fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
-    let rng = {
-      let mut ctn = vec![];
-      
-      for id in ctx.src.extra_get(rng) {
-        if let Some(hir_id) = Self::low(ctx!(lscp -> ctx), id)? {
-          ctn.push(hir_id);
-        }
-        Self::collect_struct_impls(ctx!(lscp -> ctx), id, &mut ctn)?;
-      }
+    let ids = &ctx.src.extra_get(rng)
+      .filter_map(|id| {
+        Self::low(ctx!(lscp -> ctx), id)
+          .map_err(|err| ctx.sum.add(err))
+          .ok().flatten()
+      }).collect_vec();
 
-      ctx.cre.extra(&ctn)
-    };
+    let rng = ctx.cre.extra(ids);
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
 
     // Post
-    let this = hir::Item {
+    hir::Item {
       kind: hir::ItemKind::NameSpace {
         name: it.name.unwrap().sid(),
         rng,
       },
       vis: convert_vis(it.vis),
       svis
-    };
-    
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
   fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
     let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
-    let rng = {
-      let mut ctn = vec![];
-      
-      for id in ctx.src.extra_get(rng) {
-        if let Some(hir_id) = Self::low(ctx!(lscp -> ctx), id)? {
-          ctn.push(hir_id);
-        }
-        Self::collect_struct_impls(ctx!(lscp -> ctx), id, &mut ctn)?;
-      }
+    let ids = &ctx.src.extra_get(rng)
+      .filter_map(|id| {
+        Self::low(ctx!(lscp -> ctx), id)
+          .map_err(|err| ctx.sum.add(err))
+          .ok().flatten()
+      }).collect_vec();
 
-      ctx.cre.extra(&ctn)
-    };
+    let rng = ctx.cre.extra(ids);
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 
     
     // Post
-    let this = hir::Item {
+    hir::Item {
       kind: hir::ItemKind::GenericNS { rng },
       vis: convert_vis(it.vis),
       svis
-    };
-
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
 
@@ -143,28 +127,24 @@ impl ItemLow {
 
 
     // Post
-    let this = hir::Item {
+    hir::Item {
       kind: hir::ItemKind::Using {
         name: it.name.unwrap().sid(),
         kind,
       },
       vis: convert_vis(it.vis),
       svis,
-    };
-
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
 
   fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
-    Self::low_fun_helper(ctx, it.name.unwrap(), kind, expr, it.pos, it.vis, ctx.src.get_attached(id), None)
+    Self::low_fun_helper(ctx, it.name.unwrap(), kind, expr, it.pos, it.vis, ctx.src.get_attached(id))
   }
 
-  fn low_fun_helper(ctx: &mut Ctx, name: Ident, kind: ast::TypeId, expr: Option<ast::ExprId>, pos: Span, vis: ast::Visibility, attached: Option<&Vec<Attribute>>, self_ty: Option<hir::TypeId>) -> Result<hir::ItemId, Message> {
-    ctx.cmap.self_ty = self_ty;
+  fn low_fun_helper(ctx: &mut Ctx, name: Ident, kind: ast::TypeId, expr: Option<ast::ExprId>, pos: Span, vis: ast::Visibility, attached: Option<&Vec<Attribute>>) -> Result<hir::ItemId, Message> {
     let hir_kind = TypeLow::low(ctx, kind)?;
-    ctx.cmap.self_ty = None;
-
+    
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
     // Args
@@ -209,82 +189,198 @@ impl ItemLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn collect_struct_impls(ctx: &mut Ctx, id: ast::ItemId, ctn: &mut Vec<hir::ItemId>) -> Result<(), Message> {
-    let it = ctx.src.get(id);
-    let ast_ty_id = match it.kind {
-      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => kind,
-      _ => return Ok(()),
-    };
-
-    let ast_ty = ctx.src.get(ast_ty_id);
-    let ast::TypeKind::Struct(fields) = ast_ty.kind else { return Ok(()) };
-
-    let struct_hir_ty = *ctx.cmap.cache_type.get(&ast_ty_id).expect("struct type must be cached");
-
-    for field_id in ctx.src.extra_get(fields) {
-      let field = ctx.src.get(field_id);
-      
-      let ast::FieldKind::ImplIn { trait_ty, ctn: method_rng } = field.kind else { continue };
-      
-      let iface_hir_ty = Some(TypeLow::low(ctx, trait_ty)?);
-      let mut method_ids = vec![];
-
-      for method_field_id in ctx.src.extra_get(method_rng) {
-        let method_field = ctx.src.get(method_field_id);
-        let ast::FieldKind::Fun { kind, blok } = method_field.kind else { continue };
-        let method_id = Self::low_fun_helper(
-          ctx,
-          method_field.name.unwrap(),
-          kind,
-          blok,
-          method_field.pos,
-          method_field.vis,
-          ctx.src.get_attached(method_field_id),
-          Some(struct_hir_ty),
-        )?;
-        method_ids.push(method_id);
+  fn type_ident_name<'a>(src: &'a ast::Krate, far: &'a qwc_arena::Files, id: ast::TypeId) -> Option<&'a str> {
+    let it = src.get(id);
+    match it.kind {
+      ast::TypeKind::Nick(ident) => Some(ident.str(far)),
+      ast::TypeKind::Path(rng) => {
+        let last = src.extra_get(rng).last()?;
+        let it = src.get(last);
+        if let ast::TypeKind::Nick(ident) = it.kind {
+          Some(ident.str(far))
+        } else {
+          None
+        }
       }
-
-      let methods = ctx.cre.extra(&method_ids);
-
-
-      // Post
-      let impl_item = hir::Item {
-        kind: hir::ItemKind::Impl {
-          struct_ty: struct_hir_ty,
-          iface_ty: iface_hir_ty,
-          methods,
-        },
-        vis: convert_vis(field.vis),
-        svis: None,
-      };
-      ctn.push(ctx.cre.push(impl_item));
+      _ => None,
     }
-    Ok(())
   }
 
-  fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::ItemRng) -> Result<hir::ItemId, Message> {
+  fn validate_and_order_iface_impl(ctx: &mut Ctx, iface_hir_ty: hir::TypeId, struct_hir_ty: hir::TypeId, trait_ast_ty: Option<ast::TypeId>, implemented_methods: Vec<(Ident, hir::ItemId, Span)>, impl_span: Span) -> Result<hir::ItemRng, Message> {
+    let iface = ctx.cre.get(iface_hir_ty);
+    
+    let hir::TypeKind::Iface(iface_methods) = iface.kind else { unreachable!() };
+
+    let iface_name = trait_ast_ty
+      .and_then(|id| Self::type_ident_name(ctx.src, ctx.far, id))
+      .unwrap_or("iface")
+      .to_string();
+
+    let mut expected_methods = vec![];
+    for mid in ctx.cre.extra_get(iface_methods) {
+      let hir::Thing::NamedType(name_sid, fun_ty) = *ctx.cre.get(mid) else { unreachable!() };
+      expected_methods.push((name_sid, fun_ty));
+    }
+
+    let mut impl_map: FxHashMap<qwc_string_interner::Sid, (Ident, hir::ItemId, Span)> = FxHashMap::default();
+    for (ident, method_id, pos) in implemented_methods {
+      let sid = ident.sid();
+
+      if let Some((.., first_pos)) = impl_map.get(&sid) {
+        return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(ident))
+          .add(Label::new(*first_pos, FIRST_DEFINITION_HERE)));
+      }
+
+      impl_map.insert(sid, (ident, method_id, pos));
+    }
+
+    // Extra method check
+    for (sid, (ident, _, pos)) in &impl_map {
+      if !expected_methods.iter().any(|(exp_sid, _)| exp_sid == sid) {
+        let method_name = ident.str(ctx.far);
+
+        return Err(Message::error(
+          METHOD_NOT_A_MEMBER_OF_IFACE.args(&[method_name, &iface_name]),
+          Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&iface_name])),
+        ));
+      }
+    }
+
+    // Missing method check
+    let mut missing = vec![];
+
+    for (exp_sid, _) in &expected_methods {
+      if !impl_map.contains_key(exp_sid) {
+        missing.push(format!("`{}`", ctx.sin.str(*exp_sid)));
+      }
+    }
+
+    if !missing.is_empty() {
+      let missing_str = missing.join(", ");
+      return Err(Message::error(
+        NOT_ALL_IFACE_ITEMS_IMPLEMENTED.args(&[&missing_str]),
+        Label::new(impl_span, MISSING_IN_IMPLEMENTATION.args(&[&missing_str])),
+      ));
+    }
+
+
+    // Signature matching
+    for (exp_sid, exp_fun_ty) in &expected_methods {
+      let (ident, method_id, pos) = impl_map.get(exp_sid).unwrap();
+      let hir::ItemKind::Function { kind: act_fun_ty, .. } = ctx.cre.get(*method_id).kind else { unreachable!() };
+      let exp_fun = ctx.cre.get(*exp_fun_ty);
+      let act_fun = ctx.cre.get(act_fun_ty);
+      let (hir::TypeKind::Fun { args: exp_args, ret: exp_ret }, hir::TypeKind::Fun { args: act_args, ret: act_ret }) = (exp_fun.kind, act_fun.kind) else { unreachable!() };
+
+      let exp_args_list: Vec<hir::TypeId> = ctx.cre.extra_get(exp_args).collect();
+      let act_args_list: Vec<hir::TypeId> = ctx.cre.extra_get(act_args).collect();
+
+      if exp_args_list.len() != act_args_list.len() {
+        return Err(Message::error(
+          FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[&exp_args_list.len().to_string(), &act_args_list.len().to_string()]),
+          Label::new_pos(*pos),
+        ));
+      }
+
+      if !exp_args_list.is_empty() {
+        let exp_first = ctx.cre.get(exp_args_list[0]);
+        let act_first = ctx.cre.get(act_args_list[0]);
+
+        if let hir::TypeKind::Ref(_exp_sub, exp_ism) = exp_first.kind {
+          if let hir::TypeKind::Ref(act_sub, act_ism) = act_first.kind {
+            if exp_ism != act_ism || act_sub != struct_hir_ty {
+              let method_name = ident.str(ctx.far);
+              return Err(Message::error(
+                INCOMPATIBLE_IFACE_METHOD_TYPE.args(&[method_name, &iface_name]),
+                Label::new(*pos, EXPECTED_X.args(&[&format!("&{}self", if exp_ism { "mut " } else { "" })])),
+              ));
+            }
+          } else {
+            let method_name = ident.str(ctx.far);
+            return Err(Message::error(
+              INCOMPATIBLE_IFACE_METHOD_TYPE.args(&[method_name, &iface_name]),
+              Label::new(*pos, EXPECTED_X.args(&[&format!("&{}self", if exp_ism { "mut " } else { "" })])),
+            ));
+          }
+        } else if exp_args_list[0] != act_args_list[0] {
+          let method_name = ident.str(ctx.far);
+          return Err(Message::error(
+            INCOMPATIBLE_IFACE_METHOD_TYPE.args(&[method_name, &iface_name]),
+            Label::new(*pos, EXPECTED_X.args(&[&ctx.type_name(exp_args_list[0])])),
+          ));
+        }
+
+        for idx in 1..exp_args_list.len() {
+          if exp_args_list[idx] != act_args_list[idx] {
+            let method_name = ident.str(ctx.far);
+            return Err(Message::error(
+              INCOMPATIBLE_IFACE_METHOD_TYPE.args(&[method_name, &iface_name]),
+              Label::new(*pos, EXPECTED_X.args(&[&ctx.type_name(exp_args_list[idx])])),
+            ));
+          }
+        }
+      }
+
+      if exp_ret != act_ret {
+        let method_name = ident.str(ctx.far);
+        return Err(Message::error(
+          INCOMPATIBLE_IFACE_METHOD_TYPE.args(&[method_name, &iface_name]),
+          Label::new(*pos, EXPECTED_X.args(&[&ctx.type_name(exp_ret)])),
+        ));
+      }
+    }
+
+
+    // Order methods according to iface declaration order
+    let mut ordered_ids = Vec::with_capacity(expected_methods.len());
+    for (exp_sid, _) in &expected_methods {
+      let (_, method_id, _) = impl_map.get(exp_sid).unwrap();
+      ordered_ids.push(*method_id);
+    }
+
+    Ok(ctx.cre.extra(&ordered_ids))
+  }
+
+  fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::FieldRng) -> Result<hir::ItemId, Message> {
     let struct_hir_ty = TypeLow::low(ctx, type_ty)?;
     let iface_hir_ty = trait_ty.map(|ty| TypeLow::low(ctx, ty)).transpose()?;
 
     let mut method_ids = vec![];
     for method_item_id in ctx.src.extra_get(ctn) {
       let method_item = ctx.src.get(method_item_id);
-      let ast::ItemKind::Fun { kind, blok } = method_item.kind else { panic!() };
+      let ast::FieldKind::Fun { kind, blok } = method_item.kind else { panic!() };
+      let name = method_item.name.unwrap();
+
+      ctx.cmap.self_ty.push(struct_hir_ty);
 
       let method_id = Self::low_fun_helper(
         ctx,
-        method_item.name.unwrap(),
+        name,
         kind,
         blok,
         method_item.pos,
         method_item.vis,
         ctx.src.get_attached(method_item_id),
-        Some(struct_hir_ty),
       )?;
-      method_ids.push(method_id);
+
+      ctx.cmap.self_ty.pop();
+
+      method_ids.push((name, method_id, method_item.pos));
     }
-    let methods = ctx.cre.extra(&method_ids);
+
+    let methods = if let Some(iface_ty) = iface_hir_ty {
+      Self::validate_and_order_iface_impl(
+        ctx,
+        iface_ty,
+        struct_hir_ty,
+        trait_ty,
+        method_ids,
+        it.pos,
+      )?
+    } else {
+      let ids: Vec<_> = method_ids.into_iter().map(|(_, id, _)| id).collect();
+      ctx.cre.extra(&ids)
+    };
 
     let svis = read_attrs(ctx.sin, ctx.src.get_attached(id))?;
 

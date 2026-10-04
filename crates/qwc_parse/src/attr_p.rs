@@ -10,7 +10,7 @@ pub struct AttrParser;
 
 impl AttrParser {
 
-  pub fn read_attr(ctx: &mut Ctx) -> Result<Option<Vec<Attribute>>, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  pub fn read_attr(ctx: &mut Ctx) -> Result<Option<Vec<Attribute>>, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let mut attrs = vec![];
 
     loop {
@@ -20,7 +20,7 @@ impl AttrParser {
         loop {
           if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
           
-          attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum))?);
+          attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum, side))?);
 
           match lex.get_k()? {
             (WK::Comma, _) => continue,
@@ -38,7 +38,7 @@ impl AttrParser {
   }
 
 
-  fn read_attr_sub(ctx: &mut Ctx) -> Result<Attribute, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn read_attr_sub(ctx: &mut Ctx) -> Result<Attribute, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let key = lex.get()?;
     
     let attr = match lex.peek()?.kind() {
@@ -56,7 +56,7 @@ impl AttrParser {
         loop {
           if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
           
-          attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum))?);
+          attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum, side))?);
 
           match lex.get_k()? {
             (WK::Comma, _) => continue,
@@ -71,7 +71,7 @@ impl AttrParser {
 
       WK::Eq => { // A = $expr
         lex.bump()?;
-        let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+        let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
         Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Set(expr)}
       }

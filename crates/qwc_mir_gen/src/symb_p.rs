@@ -203,10 +203,31 @@ impl SymbLow {
         ety,
         kind: mir::SymbolKind::Vmt { size, align, table },
       };
-      ctx.cre.push(this);
+      let vmt_id = ctx.cre.push(this);
+      ctx.cmap.cache_vmt.insert((struct_ty, iface_ty.unwrap()), vmt_id);
     }
 
     Ok(())
+  }
+
+  pub fn get_or_low_vmt(ctx: &mut Ctx, struct_ty: hir::TypeId, iface_ty: hir::TypeId) -> Result<mir::SymbId, Message> {
+    if let Some(&symb_id) = ctx.cmap.cache_vmt.get(&(struct_ty, iface_ty)) {
+      return Ok(symb_id);
+    }
+
+    let root = ctx.src.root().unwrap();
+    let hir::ItemKind::RootNS { rng } = ctx.src.get(root).kind else { panic!() };
+    for id in ctx.src.extra_get(rng) {
+      let it = ctx.src.get(id);
+      if let hir::ItemKind::Impl { struct_ty: s, iface_ty: Some(i), methods } = it.kind {
+        if s == struct_ty && i == iface_ty {
+          Self::low_impl(ctx, s, Some(i), methods)?;
+          return Ok(*ctx.cmap.cache_vmt.get(&(struct_ty, iface_ty)).expect("vmt must be cached"));
+        }
+      }
+    }
+
+    panic!("VMT not found for struct {:?} and iface {:?}", struct_ty, iface_ty);
   }
 
   fn find_type_name(ctx: &Ctx, target_ty: hir::TypeId) -> Option<Sid> {

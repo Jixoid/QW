@@ -1,5 +1,5 @@
 use qwc_arena::{File, Files};
-use qwc_ast as ast;
+use qwc_ast::{self as ast, ItemId};
 use qwc_ast::{Krate, Visibility};
 use qwc_diagnostic::{Span, Summary};
 use qwc_lexer::Lexer;
@@ -14,18 +14,19 @@ pub struct Ctx<'a,'d> {
   pub lex: &'a mut Lexer<'d>,
   pub sum: &'a mut Summary,
   pub far: &'a Files,
+  pub side: &'a mut Vec<ItemId>,
 }
 
 
 #[macro_export]
 macro_rules! ctx {
-  ($ctx:expr => $cre:ident, $sin:ident, $far:ident, $lex:ident, $sum:ident) => {
+  ($ctx:expr => $cre:ident, $sin:ident, $far:ident, $lex:ident, $sum:ident, $side:ident) => {
     #[allow(unused_variables)]
-    let Ctx{$cre, $sin, $far, $lex, $sum} = $ctx;
+    let Ctx{$cre, $sin, $far, $lex, $sum, $side} = $ctx;
   };
   
-  ($cre:ident, $sin:ident, $far:ident, $lex:ident, $sum:ident) => {
-    &mut Ctx{$cre, $sin, $far, $lex, $sum}
+  ($cre:ident, $sin:ident, $far:ident, $lex:ident, $sum:ident, $side:ident) => {
+    &mut Ctx{$cre, $sin, $far, $lex, $sum, $side}
   };
 }
 
@@ -49,13 +50,18 @@ impl Parse {
       loop {
         if lex.peek_safe().is_none() { break }
         
+        let mut side = vec![];
+
         // Any
-        match ItemParser::read_item(&mut Ctx{cre, sin, far, lex, sum: &mut sum}, &mut Visibility::Inherited) {
-          Ok(aid) => av.push(aid),
+        match ItemParser::read_item(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut side}, &mut Visibility::Inherited) {
+          Ok(aid) => {
+            av.push(aid);
+            av.extend(side);
+          }
           
           Err(e) => {
             sum.add(e);
-            if let Err(e) = MetaParser::pmr_global(&mut Ctx{cre, sin, far, lex, sum: &mut sum}) { sum.add(e) }
+            if let Err(e) = MetaParser::pmr_global(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut vec![]}) { sum.add(e) }
           }
         }
       }

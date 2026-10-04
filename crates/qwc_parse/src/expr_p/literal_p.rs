@@ -6,7 +6,7 @@ use crate::{ExprParser, ctx, expr_p::postfix_p, meta_p::WordCheck, parse::Ctx};
 
 
 // Nick
-pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
   let name = start.ident(sin, far)?;
 
@@ -22,7 +22,7 @@ pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
 
 
 // Self
-pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Post
@@ -34,7 +34,7 @@ pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre,
   Ok(cre.push(this))
 }
 
-pub fn pre_self_small(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_self_small(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Post
@@ -48,7 +48,7 @@ pub fn pre_self_small(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cr
 
 
 // Const
-pub fn pre_bool(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_bool(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Post
@@ -60,7 +60,7 @@ pub fn pre_bool(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
   Ok(cre.push(this))
 }
 
-pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Post
@@ -72,7 +72,7 @@ pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
   Ok(cre.push(this))
 }
 
-pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Post
@@ -86,7 +86,7 @@ pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
 
 
 // Primary
-pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   // Unit
@@ -102,7 +102,7 @@ pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
     return Ok(cre.push(this))
   }
   
-  let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+  let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       
   match lex.get_k()? {
     (WK::ParenR, _) => Ok(expr), // (X)
@@ -113,7 +113,7 @@ pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
       loop {
         if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
         
-        vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?);
+        vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
         
         match lex.get_k()? {
           (WK::ParenR, _) => break,
@@ -139,7 +139,7 @@ pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   }
 }
 
-pub fn pre_propagate(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_propagate(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
   
   let (rng, prpg) = {
@@ -149,14 +149,14 @@ pub fn pre_propagate(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre
     loop {
       if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
       
-      vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?);
+      vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
       
       match lex.get_k()? {
         (WK::BracketR, _) => break,
         (WK::Comma, _) => continue,
 
         (WK::Semicolon, _) => {
-          prpg = Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?);
+          prpg = Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
           lex.get()?.expect_kind(WK::BracketR)?;
           break
         }

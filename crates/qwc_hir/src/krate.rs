@@ -89,7 +89,7 @@ impl Krate {
 
 
   // Arena
-  pub fn push<T: PushApi>(&mut self, obj: T) -> T::Id { T::push(self, obj) }
+  pub fn push<T: HirKind, P: PushApi<T>>(&mut self, obj: P) -> HirId<T> { P::push(self, obj) }
   pub fn get<I: GetApi>(&self, id: I) -> &I::Node { I::get(self, id) }
   pub fn get_mut<I: GetApi>(&mut self, id: I) -> &mut I::Node { I::get_mut(self, id) }
 
@@ -157,10 +157,8 @@ impl Krate {
 
 
 // push & get
-pub trait PushApi {
-  type Id;
-  
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id;
+pub trait PushApi<T: HirKind> {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T>;
 }
 
 pub trait GetApi {
@@ -170,9 +168,8 @@ pub trait GetApi {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
 }
 
-impl PushApi for Type {
-  type Id = TypeId;
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_type.push(obj)).unwrap()) }
+impl<T: HirKind> PushApi<T> for Type {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_type.push(obj)).unwrap()) }
 }
 
 impl GetApi for TypeId {
@@ -181,9 +178,8 @@ impl GetApi for TypeId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_type[id.idx() as usize] }
 }
 
-impl PushApi for Expr {
-  type Id = ExprId;
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
+impl<T: HirKind> PushApi<T> for Expr {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
 }
 
 impl GetApi for ExprId {
@@ -192,9 +188,8 @@ impl GetApi for ExprId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_expr[id.idx() as usize] }
 }
 
-impl PushApi for Item {
-  type Id = ItemId;
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_item.push(obj)).unwrap()) }
+impl<T: HirKind> PushApi<T> for Item {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_item.push(obj)).unwrap()) }
 }
 
 impl GetApi for ItemId {
@@ -203,9 +198,8 @@ impl GetApi for ItemId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_item[id.idx() as usize] }
 }
 
-impl PushApi for Thing {
-  type Id = ThingId;
-  fn push(krate: &mut Krate, obj: Self) -> Self::Id { Self::Id::new(krate.cid, u32::try_from(krate.list_thin.push(obj)).unwrap()) }
+impl<T: HirKind> PushApi<T> for Thing {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_thin.push(obj)).unwrap()) }
 }
 
 impl GetApi for ThingId {

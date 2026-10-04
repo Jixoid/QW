@@ -44,7 +44,7 @@ impl TypeLow {
       Iface(rng) => Self::low_iface(ctx, rng)?,
 
       // Context
-      SelfT => return Ok(ctx.cmap.self_ty.unwrap()),
+      SelfT => return Ok(*ctx.cmap.self_ty.last().unwrap()),
 
       // Function
       Fun{self_kind, args, ret, ..} => Self::low_fun(ctx, self_kind, args, ret)?,
@@ -203,27 +203,22 @@ impl TypeLow {
 
 
   // Combinated
-  fn low_struct(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+  fn low_struct(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
     let fields_rng = {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(rng) {
-        let it = ctx.src.get(id);
-        
-        let id = match it.kind {
-          ast::FieldKind::MemberVar{kind} => Self::low(ctx, kind)?,
-          ast::FieldKind::ImplIn{..} | ast::FieldKind::Fun{..} => continue,
-          _ => todo!("{:#?}", it)
-        };
+        let ast::Thing::NamedType(name, kind) = *ctx.src.get(id) else { panic!() };
 
         // Check
+        let id = Self::low(ctx, kind)?;
         let lay = ctx.cre.get(id).layout;
 
         if lay.is_dynamic() {
-          return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["struct"]), Label::new_pos(it.pos)))
+          return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(name)))
         }
-
-        let id = ctx.cre.push(hir::Thing::NamedType(it.name.unwrap().sid(), id));
+        
+        let id = ctx.cre.push(hir::Thing::NamedType(name.sid(), id));
         ctn.push(id);
       }
 
@@ -276,8 +271,7 @@ impl TypeLow {
       layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     });
 
-    let prev_self = ctx.cmap.self_ty;
-    ctx.cmap.self_ty = Some(iface_id);
+    ctx.cmap.self_ty.push(iface_id);
 
     let methods = {
       let mut ctn = vec![];
@@ -288,20 +282,14 @@ impl TypeLow {
             let fun_ast = ctx.src.get(kind);
             let ast::TypeKind::Fun { self_kind, .. } = fun_ast.kind else { unreachable!() };
 
-            let fun_ty = match Self::low(ctx, kind) {
-              Ok(ty) => ty,
-              Err(err) => {
-                ctx.cmap.self_ty = prev_self;
-                return Err(err);
-              }
-            };
+            let fun_ty = Self::low(ctx, kind)?;
 
             if let Some(self_id) = self_kind {
               let hir::TypeKind::Fun { args, .. } = ctx.cre.get(fun_ty).kind else { unreachable!() };
               let self_hir_ty = ctx.cre.extra_get(args).next().unwrap();
               let lay = ctx.cre.get(self_hir_ty).layout;
+
               if !lay.is_static() {
-                ctx.cmap.self_ty = prev_self;
                 let pos = ctx.src.get(self_id).pos;
                 return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
               }
@@ -316,7 +304,7 @@ impl TypeLow {
       ctx.cre.extra(&ctn)
     };
 
-    ctx.cmap.self_ty = prev_self;
+    ctx.cmap.self_ty.pop();
 
     let this = ctx.cre.get_mut(iface_id);
     this.kind = hir::TypeKind::Iface(methods);

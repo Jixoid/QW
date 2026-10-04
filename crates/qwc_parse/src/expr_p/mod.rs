@@ -85,6 +85,9 @@ impl ExprParser {
         WK::ParenL   => operator_p::post_call(ctx, start, lhs)?,
         WK::BracketL => operator_p::post_index(ctx, start, lhs)?,
 
+        // Cast
+        WK::As => postfix_p::post_cast(ctx, start, lhs)?,
+
         _ => break
       }
     }

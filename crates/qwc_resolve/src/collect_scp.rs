@@ -1,5 +1,5 @@
 use qwc_arena::Files;
-use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeKind, Visitor};
+use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeId, TypeKind, Visitor};
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
@@ -7,7 +7,7 @@ use crate::{Imod, Scope, ScopeKindAst, ScopeMap, import, scope::{ImportDef, Impo
 
 
 impl Visitor for ScopeMap {
-  type Type = Self;
+  type Type = (Self, Vec<ImplFor>);
 
   fn visit(cre: &Krate, sin: &StrInterner, _: &Files) -> Result<Self::Type, Summary> {
     ScopeCollector::collect(cre, sin, &[])
@@ -15,39 +15,39 @@ impl Visitor for ScopeMap {
 }
 
 
+#[derive(PartialEq, Eq, Hash)]
+pub struct ImplFor {pub type_ty: TypeId, pub trait_ty: Option<TypeId>, pub container: AnyId}
+
 pub struct ScopeCollector<'a, 'imod> {
   cre: &'a Krate,
   sin: &'a StrInterner,
   imods: &'a [Imod<'imod>],
   scp: ScopeMap,
   sum: Summary,
+  impl_for: Vec<ImplFor>,
 }
 
 impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
-  pub fn collect(cre: &'a Krate, sin: &'a StrInterner, imods: &'a [Imod<'imod>]) -> Result<ScopeMap, Summary> {
-    let mut collector = Self {
-      cre,
-      sin,
-      imods,
-      scp: ScopeMap::new(),
-      sum: Summary::new(),
-    };
+  pub fn collect(cre: &'a Krate, sin: &'a StrInterner, imods: &'a [Imod<'imod>]) -> Result<(ScopeMap, Vec<ImplFor>), Summary> {
+    let mut collector = Self { cre, sin, imods, scp: ScopeMap::new(), sum: Summary::new(), impl_for: vec![] };
 
-    if let Some(root_id) = cre.root() {
-      collector.process_container(root_id.to_any(), None);
-    }
+    let root = cre.root().unwrap();
+
+    collector.process_container(root.to_any(), None);
+    
 
     if collector.sum.is_empty() {
       import::resolve_imports(&mut collector.scp, collector.cre, collector.sin, collector.imods, &mut collector.sum);
     }
 
     if collector.sum.is_empty() {
-      Ok(collector.scp)
+      Ok((collector.scp, collector.impl_for))
     } else {
       Err(collector.sum)
     }
   }
+
 
   fn process_container(&mut self, container_id: AnyId, parent_scope: Option<AnyId>) {
     let mut current_scope = Scope::new(parent_scope);
@@ -57,14 +57,20 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
     // Önce tüm yerel elemanları bu kapsama kaydet (İleriye dönük referanslar için)
     for &id in &item_ids {
-      let item: &Item = self.cre.get(id);
+      let it = self.cre.get(id);
       
-      let kind = match item.kind {
+      let kind = match it.kind {
         ItemKind::Module(..) | ItemKind::ModuleFile(..) => ScopeKindAst::Module(id),
         
-        ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
-        
         ItemKind::Let{..} | ItemKind::Fun{..} => ScopeKindAst::Expr(id),
+        
+        ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
+
+        // Record Impl
+        ItemKind::Impl {type_ty, trait_ty, ..} => {
+          self.impl_for.push(ImplFor{ type_ty, trait_ty, container: container_id });
+          continue
+        }
 
         // No Named / continue
         ItemKind::Import(rng) => {
@@ -85,22 +91,16 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
           if segments.is_empty() && !glob { panic!("empty import path"); }
 
-          current_scope.import.push(ImportDef::new(
-            item.pos,
-            item.vis,
-            segments,
-            glob,
-          ));
-
+          current_scope.import.push(ImportDef::new(it.pos, it.vis, segments, glob));
           continue
         }
         
         // Ignore
         ItemKind::Generic{..} => continue,
 
-        _ => todo!("{item:#?}"),
+        _ => todo!("{it:#?}"),
       };
-      current_scope.insert(item.name.unwrap(), kind, &mut self.sum);
+      current_scope.insert(it.name.unwrap(), kind, &mut self.sum);
     }
 
     // Generic parametreleri varsa onları da mevcut kapsama ekle

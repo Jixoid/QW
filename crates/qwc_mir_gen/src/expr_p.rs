@@ -63,6 +63,9 @@ impl ExprLow {
       BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, bbld, op, lhs, rhs)?),
       BoolNot(val) => Some(Self::low_bool_not(ctx, bbld, val)?),
 
+      // Cast
+      Cast{expr, kind} => Some(Self::low_cast(ctx, bbld, expr, kind)?),
+
       c @_ => todo!("{c:#?}")
     };
 
@@ -645,6 +648,49 @@ impl ExprLow {
     }.emit(bbld).unwrap();
 
     Ok(this.into())
+  }
+
+  fn low_cast(ctx: &mut Ctx, bbld: &mut FunBuilder, expr: hir::ExprId, kind: hir::TypeId) -> Result<Value, Message> {
+    let target_mir_ty = TypeLow::low(ctx, kind)?;
+    let expr_hir = ctx.src.get(expr);
+    let struct_hir_ty = match ctx.src.get(expr_hir.ety).kind {
+      hir::TypeKind::Ref(sub, _) => sub,
+      _ => expr_hir.ety,
+    };
+    let iface_hir_ty = match ctx.src.get(kind).kind {
+      hir::TypeKind::Ref(sub, _) => sub,
+      _ => kind,
+    };
+
+    if matches!(ctx.src.get(iface_hir_ty).kind, hir::TypeKind::Iface(..)) {
+      let ptr_ty = ctx.tin.ty_ptr();
+      let data_ptr = if expr_hir.category.is_lvalue() {
+        Self::low_lval(ctx, bbld, expr)?
+      } else if matches!(ctx.src.get(expr_hir.ety).kind, hir::TypeKind::Ref(..)) {
+        ExprLow::low(ctx, bbld, expr)?.unwrap()
+      } else {
+        let struct_mir_ty = TypeLow::low(ctx, struct_hir_ty)?;
+        let val = ExprLow::low(ctx, bbld, expr)?.unwrap();
+        let slot = bbld.build_alloca(struct_mir_ty);
+        bbld.emit(mir::Expr::Store { target: slot, kind: struct_mir_ty, value: val });
+        slot
+      };
+
+      let vmt_sym = SymbLow::get_or_low_vmt(ctx, struct_hir_ty, iface_hir_ty)?;
+      let vmt_val = Value::GlobalRef(vmt_sym);
+
+      let slot = bbld.build_alloca(target_mir_ty);
+      let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: target_mir_ty, idx: 0 }).unwrap();
+      bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr_ty, value: data_ptr });
+      let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: target_mir_ty, idx: 1 }).unwrap();
+      bbld.emit(mir::Expr::Store { target: f1.into(), kind: ptr_ty, value: vmt_val });
+
+      let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: target_mir_ty }).unwrap();
+      return Ok(fat_val.into());
+    }
+
+    let val = ExprLow::low(ctx, bbld, expr)?.unwrap();
+    Ok(val)
   }
 
 }

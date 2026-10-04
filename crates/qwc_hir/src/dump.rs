@@ -57,6 +57,7 @@ impl DumpHandler for Item {
         writeln!(f, "{} {{", kw("root"))?;
         for id in cre.extra_get(rng) {
           id.dump(cre, sin, f, indent +1)?;
+          writeln!(f)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -68,6 +69,7 @@ impl DumpHandler for Item {
         writeln!(f, "{} {} {{", kw("namespace"), name(name_str))?;
         for id in cre.extra_get(rng) {
           id.dump(cre, sin, f, indent +1)?;
+          writeln!(f)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -77,6 +79,7 @@ impl DumpHandler for Item {
         writeln!(f, "{} {{", kw("generic"))?;
         for id in cre.extra_get(rng) {
           id.dump(cre, sin, f, indent +1)?;
+          writeln!(f)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -124,8 +127,8 @@ impl DumpHandler for Item {
         }
         writeln!(f, " {{")?;
         for id in cre.extra_get(methods) {
-          write_indent(f, indent + 2)?;
-          id.dump(cre, sin, f, indent + 2)?;
+          //write_indent(f, indent)?;
+          id.dump(cre, sin, f, indent +1)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -138,15 +141,13 @@ impl DumpHandler for Item {
 
 impl DumpHandler for Type {
   fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    self.layout.dump(cre, sin, f, indent)?;
-
-    write!(f, " ")?;
+    //self.layout.dump(cre, sin, f, indent)?;
+    //write!(f, " ")?;
 
     match self.kind {
       // Generic
       TypeKind::GenericType => write!(f, "{}", punct("<generic>"))?,
-      TypeKind::SelfT => write!(f, "{}", ty("Self"))?,
-
+      
 
       // Basic
       TypeKind::Unit => write!(f, "{}", punct("()"))?,
@@ -274,19 +275,18 @@ impl DumpHandler for Type {
           if i == 0 {
             let arg_ty = cre.get(id);
             match arg_ty.kind {
-              TypeKind::Ref(sub, false) if cre.get(sub).kind == TypeKind::SelfT || matches!(cre.get(sub).kind, TypeKind::Iface(..)) => {
+              TypeKind::Ref(.., false) => {
                 write!(f, "{}", "&self".magenta())?;
                 continue;
               }
-              TypeKind::Ref(sub, true) if cre.get(sub).kind == TypeKind::SelfT || matches!(cre.get(sub).kind, TypeKind::Iface(..)) => {
+              TypeKind::Ref(.., true) => {
                 write!(f, "{}", "&mut self".magenta())?;
                 continue;
               }
-              TypeKind::SelfT | TypeKind::Iface(..) => {
+              _ => {
                 write!(f, "{}", "self".magenta())?;
                 continue;
               }
-              _ => {}
             }
           }
 
@@ -530,6 +530,11 @@ impl DumpHandler for Expr {
         write!(f, "{}", ")".bright_black())?;
       }
 
+      ExprKind::Cast { expr, kind } => {
+        expr.dump(cre, sin, f, indent)?;
+        write!(f, " {} ", punct("as"))?;
+        kind.dump(cre, sin, f, indent)?;
+      }
     }
 
     Ok(())

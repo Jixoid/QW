@@ -7,7 +7,7 @@ use crate::{ctx, ExprParser, parse::Ctx};
 
 
 // Route
-pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   let label = if lex.peek()?.kind() == WK::Backtick {
@@ -22,7 +22,7 @@ pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
   };
 
   let val = if lex.peek()?.kind() != WK::Semicolon {
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
@@ -37,7 +37,7 @@ pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
   Ok(cre.push(this))
 }
 
-pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   let label = if lex.peek()?.kind() == WK::Backtick {
@@ -52,7 +52,7 @@ pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   };
 
   let val = if lex.peek()?.kind() != WK::Semicolon {
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
@@ -67,7 +67,7 @@ pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   Ok(cre.push(this))
 }
 
-pub fn pre_continue(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_continue(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   let label = if lex.peek()?.kind() == WK::Backtick {

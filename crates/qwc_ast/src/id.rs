@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, num::NonZeroU32};
 
-use crate::{Expr, Field, Item, Patt, Thing, Type};
+use crate::{Expr, Field, Item, Krate, Patt, PushApi, Thing, Type};
 
 
 // AstId
@@ -130,6 +130,24 @@ impl AnyRng {
 
   pub fn is_empty(&self) -> bool {
     self.start == self.end
+  }
+}
+
+
+
+// PushOkApi
+pub trait PushOkApi<T: AstKind> {
+  fn push(self, cre: &mut Krate) -> AstId<T>;
+  fn push_ok<E>(self, cre: &mut Krate) -> Result<AstId<T>, E>;
+}
+
+impl<T: AstKind, P: PushApi<T>> PushOkApi<T> for P {
+  fn push(self, cre: &mut Krate) -> AstId<T> {
+    cre.push(self)
+  }
+
+  fn push_ok<E>(self, cre: &mut Krate) -> Result<AstId<T>, E> {
+    Ok(cre.push(self))
   }
 }
 

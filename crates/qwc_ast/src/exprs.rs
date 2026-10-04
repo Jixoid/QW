@@ -94,6 +94,9 @@ pub enum ExprKind {
   
   // Specialize
   Spec{callee: ExprId, args: AnyRng},
+
+  // Cast
+  Cast { expr: ExprId, kind: TypeId },
 }
 
 

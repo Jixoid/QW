@@ -11,6 +11,7 @@ mod route_p;
 mod const_p;
 mod block_p;
 mod loop_p;
+mod cast_p;
 mod helper;
 
 
@@ -64,6 +65,8 @@ impl ExprLow {
 
       FieldCreate{lhs, fields, brace_span} => operator_p::low_field_create(ctx, lhs, fields, brace_span)?,
       Member(rng) => operator_p::low_member(ctx, rng)?,
+
+      Cast{expr, kind} => cast_p::low_cast(ctx, it, expr, kind)?,
       
       _ => todo!("{:#?}", it)
     };

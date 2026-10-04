@@ -8,12 +8,12 @@ use crate::{ExprParser, ctx, meta_p::WordCheck, parse::Ctx};
 
 
 // Unary
-pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
   let op = helper::parse_unary_op(start.kind());
   
-  let val = ExprParser::read_expr_sub(ctx!(cre, sin, far, lex, sum), 85)?;
+  let val = ExprParser::read_expr_sub(ctx!(cre, sin, far, lex, sum, side), 85)?;
   
 
   // Post
@@ -25,7 +25,7 @@ pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   Ok(cre.push(this))
 }
 
-pub fn post_unary(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_unary(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let op = lex.get()?;
 
   let op = helper::parse_unary_op(op.kind());
@@ -42,7 +42,7 @@ pub fn post_unary(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mes
 
 
 // Call & Index
-pub fn post_call(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_call(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   lex.get()?;
 
   let args = if lex.peek()?.kind() == WK::ParenR {
@@ -52,7 +52,7 @@ pub fn post_call(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mess
     let mut args = vec![];
 
     loop {
-      args.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?);
+      args.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
 
       match lex.get_k()? {
         (WK::Comma, _) => if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break },
@@ -76,7 +76,7 @@ pub fn post_call(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mess
   Ok(cre.push(this))
 }
 
-pub fn post_index(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_index(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   lex.get()?;
 
   let args = if lex.peek()?.kind() == WK::BracketR {
@@ -86,7 +86,7 @@ pub fn post_index(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mes
     let mut args = vec![];
 
     loop {
-      args.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?);
+      args.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
 
       match lex.get_k()? {
         (WK::Comma, _) => if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break },

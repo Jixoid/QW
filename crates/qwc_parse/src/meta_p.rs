@@ -9,7 +9,7 @@ pub struct MetaParser;
 
 impl MetaParser {
 
-  pub fn pmr_global(ctx: &mut Ctx) -> Result<(),  Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  pub fn pmr_global(ctx: &mut Ctx) -> Result<(),  Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let mut level: isize = 0;
 
     loop {
@@ -28,9 +28,9 @@ impl MetaParser {
   }
 
 
-  pub fn read_start(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<(Visibility, Option<Vec<Attribute>>), Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  pub fn read_start(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<(Visibility, Option<Vec<Attribute>>), Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     loop {
-      let attr = if lex.peek()?.kind() == WK::BangAttr { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum))? } else { None };
+      let attr = if lex.peek()?.kind() == WK::BangAttr { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum, side))? } else { None };
 
       let vis = match lex.peek()?.kind() {
         WK::Pub   => Some((lex.get()?, Visibility::Public)),

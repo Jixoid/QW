@@ -19,7 +19,15 @@ impl TypeLow {
       hir::TypeKind::Unit => ctx.tin.ty_unit(),
 
       // Primitive
-      hir::TypeKind::Ref(id, _) => {Self::low(ctx, id)?; ctx.tin.ty_ptr()},
+      hir::TypeKind::Ref(id, _) => {
+        let sub_ty = ctx.src.get(id);
+        if matches!(sub_ty.kind, hir::TypeKind::Iface(..)) {
+          Self::low(ctx, id)?
+        } else {
+          Self::low(ctx, id)?;
+          ctx.tin.ty_ptr()
+        }
+      },
 
       hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
       hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
@@ -28,9 +36,6 @@ impl TypeLow {
       // Combinated
       hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
       hir::TypeKind::Iface(rng) => Self::low_iface(ctx, id, rng)?,
-
-      // Context
-      hir::TypeKind::SelfT => ctx.tin.ty_ptr(),
 
       // Callable
       hir::TypeKind::Fun{args, ret} => Self::low_fun(ctx, args, ret)?,

@@ -9,7 +9,7 @@ pub struct PattParser;
 
 impl PattParser {
 
-  pub fn read_patt(ctx: &mut Ctx) -> Result<PattId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  pub fn read_patt(ctx: &mut Ctx) -> Result<PattId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let it = match lex.get_k()? {
       (WK::Word, c) => Patt::One(c.ident(sin, far)?),
 
@@ -23,7 +23,7 @@ impl PattParser {
           loop {
             if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
             
-            subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum))?);
+            subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum, side))?);
             
             match lex.get_k()? {
               (WK::ParenR, _) => break,
@@ -46,7 +46,7 @@ impl PattParser {
           loop {
             if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
             
-            subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum))?);
+            subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum, side))?);
             
             match lex.get_k()? {
               (WK::BracketR, _) => break,

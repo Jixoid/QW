@@ -6,14 +6,14 @@ use crate::{ExprParser, PattParser, ctx, WordCheck, parse::Ctx};
 
 
 // Loop
-pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
   let elsb = if lex.peek()?.kind() == WK::Else {
     lex.bump()?;
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
@@ -28,16 +28,16 @@ pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
   Ok(cre.push(this))
 }
 
-pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
   
-  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
   let elsb = if lex.peek()?.kind() == WK::Else {
     lex.bump()?;
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
@@ -52,20 +52,20 @@ pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
   Ok(cre.push(this))
 }
 
-pub fn pre_for(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_for(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let vars = PattParser::read_patt(ctx!(cre, sin, far, lex, sum))?;
+  let vars = PattParser::read_patt(ctx!(cre, sin, far, lex, sum, side))?;
 
   lex.get()?.expect_kind(WK::In)?;
   
-  let iter = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+  let iter = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
-  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
   let elsb = if lex.peek()?.kind() == WK::Else {
     lex.bump()?;
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };

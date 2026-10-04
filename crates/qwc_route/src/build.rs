@@ -9,7 +9,7 @@ use qwc_diagnostic::{Label, Message, Summary, msg::*};
 use qwc_parse::Parse;
 use qwc_hir_gen::HGen;
 use qwc_mir_gen::MGen;
-use qwc_resolve::{ExportMap, Imod, ScopeCollector, ScopeMap};
+use qwc_resolve::{ExportMap, Imod, ImplFor, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
 use qwc_unit::Unit;
 
@@ -146,13 +146,13 @@ pub fn build_ast_krate(fpath: &Path, info: &BuildInfo) -> Result<(ast::Krate, St
   Ok((cre, sin, far, time))
 }
 
-pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imods: &[Imod<'_>]) -> Result<(ScopeMap, Duration), Error> {
+pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imods: &[Imod<'_>]) -> Result<(ScopeMap, Vec<ImplFor>, Duration), Error> {
   let now = Instant::now();
   let ret = ScopeCollector::collect(ast_cre, sin, imods);
   let time = now.elapsed();
 
   match ret {
-    Ok(v) => Ok((v, time)),
+    Ok((v1, v2)) => Ok((v1, v2, time)),
     Err(sum) => {
       for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
     
@@ -163,9 +163,9 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imo
   }
 }
 
-pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, imods: &[hir::CID], ideps: &mut hir::Deps) -> Result<(hir::CID, Duration), Error> {
+pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, implst: Vec<ImplFor>, imods: &[hir::CID], ideps: &mut hir::Deps) -> Result<(hir::CID, Duration), Error> {
   let now = Instant::now();
-  let (hir_cid, sum) = HGen::low(&ast_cre, sin, far, ast_scp, imods, ideps);
+  let (cid, sum) = HGen::low(&ast_cre, sin, far, ast_scp, implst, imods, ideps);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -175,8 +175,8 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
 
     if sum.sumerr() > 0 { return Err(Error::New | "") }
   }
-
-  Ok((hir_cid.unwrap(), time))
+  
+  cid.map(|cid| (cid, time)).ok_or(Error::New | "unknown")
 }
 
 pub fn build_hir_export(hir_cre: &hir::Krate, far: &Files) -> Result<(ExportMap, Duration), Error> {
@@ -286,15 +286,15 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // PASS 1 (scope)
   if info.verbose > 0 { eprintln!("{}", "PASS 1 (scope)".red().bold()) }
   
-  let (scp, time_pass1_scope) = build_ast_scope(&ast_cre, &sin, &far, &imods)?;
+  let (scp, implst, time_pass1_scope) = build_ast_scope(&ast_cre, &sin, &far, &imods)?;
   
-  if info.dump.contains(&DumpStage::Scope) { eprintln!("{}", qwc_resolve::dupm_scp::Dump{scp: &scp, sin: &sin, root: ast_cre.root().unwrap().to_any()}) }
+  if info.dump.contains(&DumpStage::Scope) { eprintln!("{}", qwc_resolve::dump_scp::Dump{scp: &scp, sin: &sin, root: ast_cre.root().unwrap().to_any()}) }
   
   
   // PASS 2 (hgen)
   if info.verbose > 0 { eprintln!("{}", "PASS 2 (hgen)".red().bold()) }
   
-  let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, &imod_cids, &mut deps)?;
+  let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, implst, &imod_cids, &mut deps)?;
   let hir_cre = deps.get(hir_cid);
   
   if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, sin: &sin}) }

@@ -2,7 +2,7 @@ use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, Visibility
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
-use crate::{parse::Ctx, ctx, ExprParser, MetaParser, TypeParser, WordCheck};
+use crate::{ExprParser, MetaParser, TypeParser, WordCheck, ctx, field_p::FieldParser, parse::Ctx};
 
 
 pub struct ItemParser;
@@ -35,20 +35,20 @@ impl ItemParser {
 
 
   // Sub
-  fn sub_let(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_let(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
     let kind = if lex.peek()?.kind() == WK::Colon {
       lex.bump()?;
-      Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?)
+      Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?)
     } else {
       None
     };
 
     lex.get()?.expect_kind(WK::Eq)?;
 
-    let value = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+    let value = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
     lex.get()?.expect_kind(WK::Semicolon)?;
     
@@ -64,12 +64,12 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn sub_using(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_using(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
     
     lex.get()?.expect_kind(WK::Eq)?;
-    let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
+    let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
     lex.get()?.expect_kind(WK::Semicolon)?;
 
     
@@ -84,14 +84,14 @@ impl ItemParser {
     Ok(cre.push(this))
   }
   
-  fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
-    let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum))?;
+    let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum, side))?;
 
     let blok = match lex.peek_k()? {
-      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?),
+      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?),
       (WK::Semicolon, _) => { lex.bump()?; None },
 
       (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
@@ -109,13 +109,13 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn sub_impl(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_impl(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
-    let type_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?;
+    let type_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
     
     let trait_ty = if lex.peek()?.kind() == WK::Colon {
       lex.bump()?;
-      Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?)
+      Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?)
     } else {
       None
     };
@@ -129,11 +129,11 @@ impl ItemParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum), defvis)?;
+        let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum, side), defvis)?;
         
         let next_kw = lex.peek_k()?;
         if next_kw.0 == WK::Fun {
-          let fun = ItemParser::sub_fun(ctx!(cre, sin, far, lex, sum), vis)?;
+          let fun = FieldParser::sub_fun(ctx!(cre, sin, far, lex, sum, side), vis)?;
           
           if let Some(a) = attrs { cre.attach(fun, a); }
           
@@ -159,7 +159,7 @@ impl ItemParser {
     Ok(cre.push(this))
   }
   
-  fn sub_generic(ctx: &mut Ctx, mut vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_generic(ctx: &mut Ctx, mut vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     lex.get()?.expect_kind(WK::Lt)?;
     
@@ -187,7 +187,7 @@ impl ItemParser {
           }
         };
 
-        let kind = if hty { Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?) } else { None };
+        let kind = if hty { Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?) } else { None };
         
         for x in names {
           let thing = match kind {
@@ -221,7 +221,7 @@ impl ItemParser {
         let mut tys = vec![];
         
         loop {
-          tys.push(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?);
+          tys.push(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?);
           
           match lex.get_k()? {
             (WK::Pipe, _) => continue,
@@ -250,14 +250,14 @@ impl ItemParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let id = Self::read_item(ctx!(cre, sin, far, lex, sum), &mut vis)?;
+        let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), &mut vis)?;
 
         ctn.push(id);
       }
 
       cre.extra(&ctn)
     } else {
-      let id = Self::read_item(ctx!(cre, sin, far, lex, sum), &mut vis)?;
+      let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), &mut vis)?;
 
       cre.extra(&[id])
     };
@@ -274,7 +274,7 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn sub_use(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_use(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
 
     let begin = match lex.get_k()? {
@@ -291,7 +291,7 @@ impl ItemParser {
       loop {
         match lex.get_k()? {
           (WK::Semicolon, _) => break,
-          (WK::Colon2, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum))?),
+          (WK::Colon2, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?),
         
           (_, c) => c.panic_kind2(WK::Colon2, WK::Semicolon)?,
         }
@@ -312,7 +312,7 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn read_use_sub(ctx: &mut Ctx) -> Result<ThingId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn read_use_sub(ctx: &mut Ctx) -> Result<ThingId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let ret = match lex.get_k()? {
       (WK::Crate, _) => cre.push(Thing::Crate),
       (WK::Super, _) => cre.push(Thing::Super),
@@ -326,7 +326,7 @@ impl ItemParser {
     Ok(ret)
   }
 
-  fn sub_mod(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_mod(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
@@ -340,7 +340,7 @@ impl ItemParser {
         loop {
           if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
           
-          let id = Self::read_item(ctx!(cre, sin, far, lex, sum), defvis)?;
+          let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), defvis)?;
 
           ctn.push(id);
         }
@@ -366,18 +366,18 @@ impl ItemParser {
     Ok(cre.push(this))
   }
 
-  fn sub_itemty(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  fn sub_itemty(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
 
     let name = lex.get()?.ident(sin, far)?;
     
     let kind = match start.kind() {
-      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum))?,
-      WK::Iface   => TypeParser::sub_iface(ctx!(cre, sin, far, lex, sum))?,
-      WK::Trait   => TypeParser::sub_trait(ctx!(cre, sin, far, lex, sum))?,
-      WK::Enum    => TypeParser::sub_enum(ctx!(cre, sin, far, lex, sum))?,
-      WK::Flags   => TypeParser::sub_flags(ctx!(cre, sin, far, lex, sum))?,
-      WK::Variant => TypeParser::sub_variant(ctx!(cre, sin, far, lex, sum))?,
+      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Iface   => TypeParser::sub_iface(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Trait   => TypeParser::sub_trait(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Enum    => TypeParser::sub_enum(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Flags   => TypeParser::sub_flags(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Variant => TypeParser::sub_variant(ctx!(cre, sin, far, lex, sum, side))?,
 
       _ => panic!(),
     };

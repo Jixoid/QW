@@ -2,11 +2,11 @@ use qwc_arena::Files;
 use qwc_ast as ast;
 use qwc_diagnostic::Summary;
 use qwc_hir::{self as hir, CID, Deps};
-use qwc_resolve::{LocalScopeManager, Scope, ScopeMap};
+use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
 use qwc_string_interner::StrInterner;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{ItemLow, ty_interner::TypeInterner};
+use crate::{ItemLow, ty_interner::TypeInterner, type_p::TypeLow};
 
 
 pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
@@ -22,14 +22,21 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
   pub loc:  &'loc mut LocalScopeManager,
   pub imods: &'imod [CID],
   pub ideps: &'imod mut Deps,
+  pub type_impls: &'loc FxHashMap<hir::TypeId, TypeMethods>,
 }
+
+
+pub struct TypeMethods {
+  pub traits: FxHashSet<hir::TypeId>,
+}
+
 
 pub struct CacheMap {
   pub(crate) cache_type: FxHashMap<ast::TypeId, hir::TypeId>,
   pub(crate) cache_item: FxHashMap<ast::ItemId, Option<hir::ItemId>>,
   pub(crate) cache_expr: FxHashMap<ast::ExprId, hir::ExprId>,
   pub(crate) cache_type_import: FxHashMap<hir::TypeId, hir::TypeId>,
-  pub(crate) self_ty: Option<hir::TypeId>,
+  pub(crate) self_ty: Vec<hir::TypeId>,
 }
 
 impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
@@ -92,7 +99,6 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     match ty.kind {
       // Generic
       hir::TypeKind::GenericType => "<generic>".to_string(),
-      hir::TypeKind::SelfT => "Self".to_string(),
 
 
       // Primitive
@@ -134,6 +140,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       // Combinated
       hir::TypeKind::Struct(..) => format!("struct {{}}"),
       hir::TypeKind::Tuple(..) => format!("tuple {{}}"),
+      
       hir::TypeKind::Iface(..) => format!("iface {{}}"),
 
 
@@ -157,11 +164,11 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 #[macro_export]
 macro_rules! ctx {
   ($lscp:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, loc: &mut *$ctx.loc, $lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp}
   };
 
   (loc $loc:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, loc: &mut $loc, lscp: $ctx.lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp}
   }
 }
 
@@ -171,19 +178,26 @@ pub struct HGen;
 
 impl<'ast, 'hir, 'imod> HGen {
 
-  pub fn low(src: &'ast ast::Krate, sin: &'ast StrInterner, far: &'ast Files, scp: &'ast ScopeMap, imods: &'imod [CID], ideps: &'imod mut Deps) -> (Option<CID>, Summary) {
+  pub fn low(src: &'ast ast::Krate, sin: &'ast StrInterner, far: &'ast Files, scp: &'ast ScopeMap, implst: Vec<ImplFor>, imods: &'imod [CID], ideps: &'imod mut Deps) -> (Option<CID>, Summary) {
     let cid = ideps.get_next_id();
     let mut cre = hir::Krate::new(cid);
     
     let mut tin = TypeInterner::new(&mut cre);
     let mut sum = Summary::new();
-    let mut cmap = CacheMap{ cache_type: FxHashMap::default(), cache_item: FxHashMap::default(), cache_expr: FxHashMap::default(), cache_type_import: FxHashMap::default(), self_ty: None };
+    let mut cmap = CacheMap{ cache_type: FxHashMap::default(), cache_item: FxHashMap::default(), cache_expr: FxHashMap::default(), cache_type_import: FxHashMap::default(), self_ty: vec![]};
     let mut loc = LocalScopeManager::new();
     
     let root = src.root().unwrap();
     let lscp = scp.get(&root.to_any()).unwrap();
     
-    match ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, loc: &mut loc}, root) {
+    // Pre 1
+    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, type_impls: &FxHashMap::default(), loc: &mut loc}, implst) {
+      Err(..) => return (None, sum),
+      Ok(v) => v,
+    };
+
+    // Start
+    match ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, type_impls: &type_impls, loc: &mut loc}, root) {
       Ok(root) => cre.set_root(root.unwrap()),
       
       Err(msg) => sum.add(msg),
@@ -192,6 +206,49 @@ impl<'ast, 'hir, 'imod> HGen {
     ideps.add(cre);
 
     (Some(cid), sum)
+  }
+
+
+  fn pre1(ctx: &mut Ctx, implst: Vec<ImplFor>) -> Result<FxHashMap<hir::TypeId, TypeMethods>, ()> {
+    let mut type_impls: FxHashMap<hir::TypeId, TypeMethods> = FxHashMap::default();
+
+    for ImplFor{ type_ty, trait_ty, container } in implst {
+      let lscp = ctx.scp.get(&container).unwrap();
+      let ctx = ctx!(lscp -> ctx);
+
+      let type_ty = match TypeLow::low(ctx, type_ty) {
+        Ok(v) => v,
+        Err(err) => { ctx.sum.add(err); continue },
+      };
+      
+      let trait_ty = match trait_ty.map(|id| TypeLow::low(ctx, id)).transpose() {
+        Ok(v) => v,
+        Err(err) => { ctx.sum.add(err); continue },
+      };
+
+
+      use std::collections::hash_map::Entry::*;
+
+      match type_impls.entry(type_ty) {
+        Occupied(mut entry) => {
+          let tyfuns = entry.get_mut();
+
+          if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
+        }
+        
+        Vacant(entry) => {
+          let mut tyfuns = TypeMethods {
+            traits: FxHashSet::default(),
+          };
+          
+          if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
+          
+          entry.insert(tyfuns);
+        }
+      };
+    }
+
+    Ok(type_impls)
   }
 
 }

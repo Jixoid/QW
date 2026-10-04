@@ -1,6 +1,6 @@
 use qwc_diagnostic::Span;
 
-use crate::{ExprId, ItemRng, ThingRng, TypeId, ident::Ident};
+use crate::{ExprId, FieldRng, ItemRng, ThingRng, TypeId, ident::Ident};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -48,7 +48,7 @@ pub enum ItemKind {
   Generic {params: ThingRng /* Name | NamedType */, reqs: ThingRng /* NamedTypeList */, ctn: ItemRng},
   
   // Impl
-  Impl {type_ty: TypeId, trait_ty: Option<TypeId>, ctn: ItemRng},
+  Impl {type_ty: TypeId, trait_ty: Option<TypeId>, ctn: FieldRng},
   
   // Import
   Import (ThingRng),

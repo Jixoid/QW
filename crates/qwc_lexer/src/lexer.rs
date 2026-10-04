@@ -457,6 +457,7 @@ impl<'a> Lexer<'a> {
           b"self" => WK::SelfS,
           b"Self" => WK::SelfB,
           b"type" => WK::Type,
+          b"as"   => WK::As,
 
           _ => WK::Word,
         };

@@ -20,6 +20,11 @@ pub const ONLY_TYPES_CAN_BE_INITIALIZED_IN_THIS_WAY:      CodedMsg = CodedMsg::n
 pub const FIELD_X_SPECIFIED_MORE_THAN_ONCE:               CodedMsg = CodedMsg::new(0x000f, "field `{}` specified more than once");
 pub const HAS_NO_FIELD_NAMED_X:                           CodedMsg = CodedMsg::new(0x0010, "has no field named `{}`");
 pub const MISSING_FIELDS_X_ININITIALIZER:                 CodedMsg = CodedMsg::new(0x0011, "missing fields {} in initializer");
+pub const NOT_ALL_IFACE_ITEMS_IMPLEMENTED:                CodedMsg = CodedMsg::new(0x0012, "not all iface items implemented, missing: {}");
+pub const METHOD_NOT_A_MEMBER_OF_IFACE:                   CodedMsg = CodedMsg::new(0x0013, "method `{}` is not a member of iface `{}`");
+pub const INCOMPATIBLE_IFACE_METHOD_TYPE:                 CodedMsg = CodedMsg::new(0x0014, "method `{}` has an incompatible type for iface `{}`");
+pub const IFACE_NOT_IMPLEMENTED_FOR_TYPE:                 CodedMsg = CodedMsg::new(0x0016, "the iface `{}` is not implemented for `{}`");
+pub const CANNOT_CAST_X_TO_Y:                             CodedMsg = CodedMsg::new(0x0017, "cannot cast `{}` to `{}`");
 
 
 // Non Coded Messages
@@ -52,3 +57,7 @@ pub const NOT_FOUND_IN_OR2:                 FmtMsg = FmtMsg::new("not found in `
 pub const YOU_SAID:                         FmtMsg = FmtMsg::new("you said `{}`");
 pub const EXPECTED_X:                       FmtMsg = FmtMsg::new("expected `{}`");
 pub const X_ARGUMENTS_ARE_MISSING:          FmtMsg = FmtMsg::new("{} arguments are missing");
+pub const MISSING_IN_IMPLEMENTATION:        FmtMsg = FmtMsg::new("missing {} in implementation");
+pub const NOT_A_MEMBER_OF_IFACE:            FmtMsg = FmtMsg::new("not a member of iface `{}`");
+pub const NOT_IMPLEMENTED_FOR_X:            FmtMsg = FmtMsg::new("the iface `{}` is not implemented for `{}`");
+pub const CANNOT_CAST:                      FmtMsg = FmtMsg::new("cannot cast `{}` to `{}`");

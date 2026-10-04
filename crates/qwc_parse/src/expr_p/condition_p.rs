@@ -6,19 +6,19 @@ use crate::{ctx, ExprParser, WordCheck, parse::Ctx};
 
 
 // Condition
-pub fn pre_if(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_if(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
   
-  let then = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let then = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
   let elsb = match lex.peek_k()? {
-    (WK::Ef, _) => Some(pre_if(ctx!(cre, sin, far, lex, sum))?),
+    (WK::Ef, _) => Some(pre_if(ctx!(cre, sin, far, lex, sum, side))?),
 
     (WK::Else, _) => {
       lex.bump()?;
-      Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?)
+      Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?)
     }
     _ => None,
   };
@@ -33,10 +33,10 @@ pub fn pre_if(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, 
   Ok(cre.push(this))
 }
 
-pub fn pre_match(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_match(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
   
   let arms = {
     lex.get()?.expect_kind(WK::BraceL)?;
@@ -46,9 +46,9 @@ pub fn pre_match(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
     loop {
       if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
       
-      let pat = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+      let pat = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       lex.get()?.expect_kind(WK::FatArrow)?;
-      let body = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+      let body = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       
       let arm = Thing::MatchArm(pat, body);
       arm_ids.push(cre.push(arm));

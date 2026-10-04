@@ -5,7 +5,6 @@ use crate::{ExprId, Layout, ThingRng, TypeId, TypeRng};
 pub enum TypeKind {
   // Generic
   GenericType,
-  SelfT,
   
   // Basic
   Unit,
@@ -34,7 +33,7 @@ pub enum TypeKind {
   Slice(TypeId),
   
   // Combinated
-  Struct(ThingRng),
+  Struct(ThingRng /* NamedType => name: type */),
   Tuple(TypeRng),
   
   // Interface

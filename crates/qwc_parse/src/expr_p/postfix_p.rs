@@ -16,11 +16,11 @@ pub fn post_scope_spec(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId
 }
 
 
-pub fn post_member(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_member(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   lex.get()?;
 
   let rng = {
-    let sub = literal_p::pre_nick(ctx!(cre, sin, far, lex, sum))?;
+    let sub = literal_p::pre_nick(ctx!(cre, sin, far, lex, sum, side))?;
     
     let mut ctn = vec![lhs, sub];
 
@@ -28,7 +28,7 @@ pub fn post_member(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Me
       match lex.peek_k()? {
         (WK::Dot, _) => {
           lex.bump()?;
-          ctn.push(literal_p::pre_nick(ctx!(cre, sin, far, lex, sum))?);
+          ctn.push(literal_p::pre_nick(ctx!(cre, sin, far, lex, sum, side))?);
         }
 
         (WK::Colon2, c) => return Err(Message::error(CANNOT_FIELD_ACCESS_AFTER_MEMBER, Label::new_pos(c))),
@@ -50,18 +50,18 @@ pub fn post_member(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Me
   Ok(cre.push(this))
 }
 
-pub fn post_scope(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_scope(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   lex.peek()?;
 
   let rng = {
-    let sub = literal_p::pre_nick(ctx!(cre, sin, far, lex, sum))?;
+    let sub = literal_p::pre_nick(ctx!(cre, sin, far, lex, sum, side))?;
     
     let mut ctn = vec![lhs, sub];
 
     loop {
       if lex.peek()?.kind() == WK::Colon2 {
         lex.bump()?;
-        ctn.push(literal_p::pre_nick(ctx!(cre, sin, far, lex, sum))?);
+        ctn.push(literal_p::pre_nick(ctx!(cre, sin, far, lex, sum, side))?);
       } else {
         break
       }
@@ -82,7 +82,7 @@ pub fn post_scope(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mes
 }
 
 
-pub fn post_specialize(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_specialize(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   lex.get()?;
 
   let args = if lex.peek()?.kind() == WK::Gt {
@@ -93,9 +93,9 @@ pub fn post_specialize(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId
 
     loop {
       let arg = match lex.peek_k()? {
-        (WK::String | WK::Number | WK::BraceL, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?.to_any(),
+        (WK::String | WK::Number | WK::BraceL, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?.to_any(),
         
-        _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?.to_any(),
+        _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?.to_any(),
       };
       
       args.push(arg);
@@ -125,7 +125,7 @@ pub fn post_specialize(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId
 
 
 // FieldCreate
-pub fn post_field_create(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn post_field_create(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let s = lex.get()?;
   
   let fields = {
@@ -138,7 +138,7 @@ pub fn post_field_create(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<Expr
       
       lex.get()?.expect_kind(WK::Colon)?;
       
-      let expr = ExprParser::read_expr(ctx!(cre,sin,far,lex,sum))?;
+      let expr = ExprParser::read_expr(ctx!(cre,sin,far,lex,sum,side))?;
 
 
       vec.push(cre.push(Thing::NamedExpr(name, expr)));
@@ -163,3 +163,18 @@ pub fn post_field_create(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<Expr
 
   Ok(cre.push(this))
 }
+
+
+// Cast
+pub fn post_cast(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> {
+  ctx.lex.get()?; // consume 'as'
+  let kind = TypeParser::read_type(ctx)?;
+
+  let this = Expr {
+    pos: ctx.lex.pos_extend(start),
+    kind: ExprKind::Cast { expr: lhs, kind },
+  };
+
+  Ok(ctx.cre.push(this))
+}
+

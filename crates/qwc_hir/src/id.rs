@@ -2,7 +2,7 @@ use std::{marker::PhantomData, num::NonZero};
 
 use serde::Serialize;
 
-use crate::{Expr, Item, Thing, Type, krate::CID};
+use crate::{Expr, Item, Krate, PushApi, Thing, Type, krate::CID};
 
 
 // AstId
@@ -138,6 +138,23 @@ impl AnyRng {
 
   pub fn is_empty(&self) -> bool {
     self.start == self.end
+  }
+}
+
+
+
+// PushOkApi
+pub trait PushOkApi<T: HirKind> {
+  fn push(self, cre: &mut Krate) -> HirId<T>;
+  fn push_ok<E>(self, cre: &mut Krate) -> Result<HirId<T>, E>;
+}
+
+impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
+  fn push(self, cre: &mut Krate) -> HirId<T> {
+    cre.push(self)
+  }
+  fn push_ok<E>(self, cre: &mut Krate) -> Result<HirId<T>, E> {
+    Ok(cre.push(self))
   }
 }
 

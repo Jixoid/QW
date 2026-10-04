@@ -182,7 +182,7 @@ pub enum WK {
   Using, Struct, Iface, Trait, Enum, Flags, Variant, Fun, Init, Fini, Generic, Mod, Use, Impl,
   Pub, Priv, Prot, Crate, Super, Mut,
   Ret, Break, Continue, Die, Unsafe, Relaxed,
-  True, False, Undef, Unreachable,
+  True, False, Undef, Unreachable, As,
   
   /// Self
   SelfB,

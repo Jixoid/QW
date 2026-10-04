@@ -8,7 +8,7 @@ use crate::{ExprParser, ctx, WordCheck, parse::Ctx, PattParser, TypeParser};
 // Block
 impl ExprParser {
 
-  pub fn pre_block(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+  pub fn pre_block(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
 
     let label = match start.kind() {
@@ -36,7 +36,7 @@ impl ExprParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let ex_id = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?;
+        let ex_id = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
         
         match lex.peek_k()? {
           (WK::Semicolon, _) => { lex.bump()?; ctn.push(ex_id); },
@@ -70,10 +70,10 @@ impl ExprParser {
 
 
 // Context
-pub fn pre_unsafe(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_unsafe(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
 
   // Post
@@ -85,10 +85,10 @@ pub fn pre_unsafe(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
   Ok(cre.push(this))
 }
 
-pub fn pre_relaxed(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_relaxed(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum))?;
+  let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
 
   // Post
@@ -102,21 +102,21 @@ pub fn pre_relaxed(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, 
 
 
 // Variable
-pub fn pre_let(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum);
+pub fn pre_let(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let item = PattParser::read_patt(ctx!(cre, sin, far, lex, sum))?;
+  let item = PattParser::read_patt(ctx!(cre, sin, far, lex, sum, side))?;
 
   let kind = if lex.peek()?.kind() == WK::Colon {
     lex.bump()?;
-    Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum))?)
+    Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
 
   let init = if lex.peek()?.kind() == WK::Eq {
     lex.bump()?;
-    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum))?)
+    Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   }
   else {
     None
