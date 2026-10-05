@@ -2,76 +2,130 @@ use crate::{ExprLow, hgen::Ctx, TypeLow};
 
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_hir::{self as hir, ExprCategory};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 
 
 // Cast
-pub fn low_cast(ctx: &mut Ctx, it: &ast::Expr, expr: ast::ExprId, kind: ast::TypeId) -> Result<hir::ExprId, Message> {
-  let expr_hir_id = ExprLow::low(ctx, expr)?;
-  let target_hir_ty = TypeLow::low(ctx, kind)?;
-  let expr_hir = ctx.cre.get(expr_hir_id);
-  let src_ty = expr_hir.ety;
+pub fn low_cast(ctx: &mut Ctx, it: &ast::Expr, expr: ast::ExprId, target: ast::TypeId) -> Result<hir::ExprId, Message> {
+  let expr = ExprLow::low(ctx, expr)?;
+  let target = TypeLow::low(ctx, target)?;
+  
+  let expr_ty = ctx.cre.get(expr).ety;
 
-  // Unpack struct type (whether value or &value)
-  let (struct_ty, _src_is_ref) = match ctx.cre.get(src_ty).kind {
-    hir::TypeKind::Struct(..) => (src_ty, false),
-    hir::TypeKind::Ref(sub, _) => match ctx.cre.get(sub).kind {
-      hir::TypeKind::Struct(..) => (sub, true),
-      _ => (src_ty, true),
-    },
-    _ => (src_ty, false),
-  };
 
-  // Unpack iface type (whether Iface or &Iface)
-  let (iface_ty, target_is_ref) = match ctx.cre.get(target_hir_ty).kind {
-    hir::TypeKind::Iface(..) => (Some(target_hir_ty), false),
-    hir::TypeKind::Ref(sub, _) => match ctx.cre.get(sub).kind {
-      hir::TypeKind::Iface(..) => (Some(sub), true),
-      _ => (None, true),
-    },
-    _ => (None, false),
-  };
+  // Choose
+  let ret: Option<(fn(_, _, _, _, _) -> _, hir::TypeId)> =
+  match ctx.cre.get(target).kind {
+    hir::TypeKind::Ref(target, _) => {
 
-  if let (true, Some(iface_id)) = (matches!(ctx.cre.get(struct_ty).kind, hir::TypeKind::Struct(..)), iface_ty) {
-    let search = ctx.type_impls.get(&struct_ty).map(|tyfuns| tyfuns.traits.get(&iface_id)).flatten();
-
-    if let None = search {
-      // Check if struct implements iface in O(1) via cache_impl!
-      let struct_name = ctx.type_name(struct_ty);
-      let iface_name = ctx.type_name(iface_id);
-      return Err(Message::error(
-        IFACE_NOT_IMPLEMENTED_FOR_TYPE.args(&[&iface_name, &struct_name]),
-        Label::new(it.pos, NOT_IMPLEMENTED_FOR_X.args(&[&iface_name, &struct_name])),
-      ));
+      // Choose
+      match ctx.cre.get(target).kind {
+        hir::TypeKind::Iface(..) => Some((cast_to_iface_ref, target)),
+        
+        _ => None,
+      }
     }
+    hir::TypeKind::Trait(..) => Some((cast_to_trait, target)),
     
-    let ret_ty = if target_is_ref {
-      target_hir_ty
-    } else {
-      ctx.tin.ty_ref(ctx.cre, iface_id, false)
-    };
+    _ => None
+  };
 
-    let this = hir::Expr {
-      kind: hir::ExprKind::Cast {
-        expr: expr_hir_id,
-        kind: ret_ty,
-      },
-      category: ExprCategory::RValue,
-      ety: ret_ty,
-    };
-
-    return Ok(ctx.cre.push(this));
+  match ret {
+    Some((fun, target_unwrap)) => fun(ctx, it, expr, target, target_unwrap),
+    
+    None => Err(Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+      Label::new(it.pos, CANNOT_CAST),
+    ))
   }
+}
 
-  // Not a struct-to-iface cast and not same type:
-  if src_ty == target_hir_ty {
-    return Ok(expr_hir_id);
+
+
+fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, target_unwrap: hir::TypeId) -> Result<hir::ExprId, Message> {
+  let expr_ty = ctx.cre.get(expr).ety;
+  
+  // Choose
+  let expr_unwrap = match ctx.cre.get(expr_ty).kind {
+    hir::TypeKind::Ref(expr_ty, _) => {
+      
+      // Choose
+      match ctx.cre.get(expr_ty).kind {
+        hir::TypeKind::Struct(..) => Some(expr_ty),
+
+        _ => None
+      }
+    }
+
+    _ => None
   }
+  .ok_or_else(||
+    Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+      Label::new(it.pos, CANNOT_CAST),
+    )
+  )?;
 
-  let src_name = ctx.type_name(src_ty);
-  let target_name = ctx.type_name(target_hir_ty);
-  Err(Message::error(
-    CANNOT_CAST_X_TO_Y.args(&[&src_name, &target_name]),
-    Label::new(it.pos, CANNOT_CAST.args(&[&src_name, &target_name])),
-  ))
+
+  // Search
+  ctx.type_impls.get(&expr_unwrap).map(|tyfuns| tyfuns.traits.get(&target_unwrap)).flatten()
+    .ok_or_else(||
+      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["iface", &ctx.type_name(expr_ty), &ctx.type_name(target)]),
+        Label::new_pos(it.pos),
+      )
+    )?;
+
+  
+
+  // Post
+  hir::Expr {
+    kind: hir::ExprKind::CastToIfaceRef {
+      ref_of_expr: expr,
+      ref_of_type: expr_unwrap,
+      target_iface: target_unwrap,
+    },
+    category: ExprCategory::RValue,
+    ety: target,
+  }.push_ok(ctx.cre)
+}
+
+fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, _: hir::TypeId) -> Result<hir::ExprId, Message> {
+  let expr_ty = ctx.cre.get(expr).ety;
+  
+  // Choose
+  match ctx.cre.get(expr_ty).kind {
+    hir::TypeKind::Struct(..) => Some(()),
+
+    _ => None
+  }
+  .ok_or_else(||
+    Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+      Label::new(it.pos, CANNOT_CAST),
+    )
+  )?;
+
+
+  // Search
+  ctx.type_impls.get(&expr_ty).map(|tyfuns| tyfuns.traits.get(&target)).flatten()
+    .ok_or_else(||
+      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(expr_ty), &ctx.type_name(target)]),
+        Label::new_pos(it.pos),
+      )
+    )?;
+
+
+  // Static & Hidden
+  let hidden = ctx.tin.ty_trait_from(ctx.cre, expr_ty, target);
+
+
+  // Post
+  hir::Expr {
+    kind: hir::ExprKind::CastToTrait {
+      expr: expr,
+      target_trait: target,
+    },
+    category: ExprCategory::RValue,
+    ety: hidden,
+  }.push_ok(ctx.cre)
 }

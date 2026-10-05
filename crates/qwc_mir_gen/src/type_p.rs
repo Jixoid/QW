@@ -15,30 +15,25 @@ impl TypeLow {
     let it = ctx.src.get(id);
 
     let ty = match it.kind {
-      // ZST
-      hir::TypeKind::Unit => ctx.tin.ty_unit(),
-
       // Primitive
-      hir::TypeKind::Ref(id, _) => {
-        let sub_ty = ctx.src.get(id);
-        if matches!(sub_ty.kind, hir::TypeKind::Iface(..)) {
-          Self::low(ctx, id)?
-        } else {
-          Self::low(ctx, id)?;
-          ctx.tin.ty_ptr()
-        }
-      },
-
+      hir::TypeKind::Unit => ctx.tin.ty_unit(),
+      
       hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
       hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
       hir::TypeKind::Bool => ctx.tin.ty_bool(),
 
+      hir::TypeKind::Ref(id, _) => Self::low_ref(ctx, id)?,
+
       // Combinated
       hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
       hir::TypeKind::Iface(rng) => Self::low_iface(ctx, rng)?,
-
+      hir::TypeKind::TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
+      
       // Callable
       hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, self_kind, args, ret)?,
+      
+      // Logic Error
+      hir::TypeKind::Trait(..) => panic!("this type must not have infiltrated this layer!"),
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -75,6 +70,32 @@ impl TypeLow {
   }
 
 
+  fn low_ref(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
+    let it = ctx.src.get(id);
+
+    let it = match it.kind {
+      hir::TypeKind::Iface(..) => {
+        let ptr = ctx.tin.ty_ptr();
+        
+        let rng = ctx.cre.extra(&[ptr, ptr]);
+        
+
+        // Post
+        let kind = mir::TypeKind::Struct(rng);
+
+        mir::Type {
+          kind,
+          layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
+        }.push(ctx.cre)
+      }
+      
+      _ => ctx.tin.ty_ptr(),
+    };
+
+    Ok(it)
+  }
+
+
   fn low_struct(ctx: &mut Ctx, rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
     let rng = {
       let mut sub = vec![];
@@ -102,21 +123,13 @@ impl TypeLow {
     Ok(ctx.cre.push(this))
   }
 
-  fn low_iface(ctx: &mut Ctx, _rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
-    let ptr = ctx.tin.ty_ptr();
-    let fat_fields = vec![ptr, ptr];
-    let fat_rng = ctx.cre.extra(&fat_fields);
-    
-
-    // Post
-    let kind = mir::TypeKind::Struct(fat_rng);
-
-    mir::Type {
-      kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
-    }.push_ok(ctx.cre)
+  fn low_iface(_ctx: &mut Ctx, _rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
+    todo!()
   }
 
+  fn low_trait_from(ctx: &mut Ctx, hidden: hir::TypeId) -> Result<mir::TypeId, Message> {
+    TypeLow::low(ctx, hidden)
+  }
 
   fn low_fun(ctx: &mut Ctx, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
     let args = {

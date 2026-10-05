@@ -30,6 +30,7 @@ const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 const WORD_MAP = new Map([
   // Declarations & Modifiers
   ['fun', 'keyword'],
+  ['task', 'keyword'],
   ['init', 'keyword'],
   ['fini', 'keyword'],
   ['let', 'keyword'],
@@ -225,7 +226,7 @@ class QWWordMappingHighlighter {
             if (typeIndex !== -1) {
               tokensBuilder.push(lineIndex, wordStart, word.length, typeIndex, 0);
             }
-            if (word === 'fun' || word === 'init' || word === 'fini') {
+            if (word === 'fun' || word === 'task' || word === 'init' || word === 'fini') {
               expectFunctionName = true;
             } else if (word === 'struct' || word === 'enum' || word === 'iface' || word === 'trait' || word === 'flags' || word === 'type') {
               expectTypeName = true;

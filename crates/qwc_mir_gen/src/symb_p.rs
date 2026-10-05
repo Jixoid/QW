@@ -16,16 +16,18 @@ impl SymbLow {
 
     let it = ctx.src.get(id);
 
+    use hir::ItemKind::*;
+
     let it = match it.kind {
-      hir::ItemKind::RootNS {rng} => {Self::low_root(ctx, rng)?; None},
-      hir::ItemKind::NameSpace {rng, name} => {Self::low_namespace(ctx, rng, name)?; None}
+      RootNS {rng} => {Self::low_root(ctx, rng)?; None},
+      NameSpace {rng, name} => {Self::low_namespace(ctx, rng, name)?; None}
 
-      qwc_hir::ItemKind::Using {kind, ..} => {TypeLow::low(ctx, kind)?; None}
+      Using {..} => None,
 
-      hir::ItemKind::Variable {kind, name, expr, ism} => Some(Self::low_variable(ctx, it, name, kind, expr, ism)?),
-      hir::ItemKind::Function {kind, name, expr} => Some(Self::low_function(ctx, it, name, kind, expr)?),
+      Variable {kind, name, expr, ism} => Some(Self::low_variable(ctx, it, name, kind, expr, ism)?),
+      Function {kind, name, expr} => Some(Self::low_function(ctx, it, name, kind, expr)?),
 
-      hir::ItemKind::Impl {type_ty, trait_ty, methods} => {Self::low_impl(ctx, type_ty, trait_ty, methods)?; None}
+      Impl {type_ty, trait_ty, methods} => {Self::low_impl(ctx, type_ty, trait_ty, methods)?; None}
 
       kind @_ => todo!("{kind:#?}")
     };

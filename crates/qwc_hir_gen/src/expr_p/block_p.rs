@@ -23,9 +23,11 @@ pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) ->
   })();
 
   ctx.loc.pop_scope();
+  
   let (stmt, expr) = res?;
 
-  let ety = if let Some(expr) = expr { (ctx.cre.get(expr) as &hir::Expr).ety } else { ctx.tin.ty_unit() };
+  let ety = expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.tin.ty_unit() );
+
 
   // Post
   let this = hir::Expr{

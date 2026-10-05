@@ -36,7 +36,7 @@
       "patterns": [
         {
           "name": "meta.function.declaration.qw",
-          "match": "\\b(fun|init|fini)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "\\b(fun|task|init|fini)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.declaration.qw" },
             "2": { "name": "entity.name.function.qw" }
@@ -113,7 +113,7 @@
         },
         {
           "name": "keyword.declaration.qw",
-          "match": "\\b(fun|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|new|static|const|mut|imm)\\b"
+          "match": "\\b(fun|task|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|new|static|const|mut|imm)\\b"
         },
         {
           "name": "keyword.other.visibility.qw",

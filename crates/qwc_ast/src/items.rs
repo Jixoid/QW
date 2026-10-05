@@ -23,6 +23,13 @@ pub enum ItemKind {
   /// To define static function: `fun main() {...}`
   /// 
   Fun {kind: TypeId, blok: Option<ExprId>},
+
+
+  /// Task Decl
+  /// 
+  /// To define static task: `task do_it() {...}`
+  /// 
+  Task {kind: TypeId, blok: Option<ExprId>},
   
 
   /// Using Decl

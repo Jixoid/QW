@@ -18,6 +18,7 @@ impl ItemParser {
        WK::Var, _)     => Self::sub_let     (ctx, vis)?,
       (WK::Using, _)   => Self::sub_using   (ctx, vis)?,
       (WK::Fun, _)     => Self::sub_fun     (ctx, vis)?,
+      (WK::Task, _)    => Self::sub_task    (ctx, vis)?,
       (WK::Impl, _)    => Self::sub_impl    (ctx, vis)?,
       (WK::Generic, _) => Self::sub_generic (ctx, vis)?,
       (WK::Use, _)     => Self::sub_use     (ctx, vis)?,
@@ -104,6 +105,31 @@ impl ItemParser {
       vis,
       name: Some(name),
       kind: ItemKind::Fun{ kind, blok },
+    };
+    
+    Ok(cre.push(this))
+  }
+
+  fn sub_task(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get()?;
+    let name = lex.get()?.ident(sin, far)?;
+
+    let kind = TypeParser::read_task(ctx!(cre, sin, far, lex, sum, side))?;
+
+    let blok = match lex.peek_k()? {
+      (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?),
+      (WK::Semicolon, _) => { lex.bump()?; None },
+
+      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
+    };
+
+
+    // Post
+    let this = Item{
+      pos: lex.pos_extend(start),
+      vis,
+      name: Some(name),
+      kind: ItemKind::Task{ kind, blok },
     };
     
     Ok(cre.push(this))

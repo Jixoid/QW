@@ -26,7 +26,8 @@ impl TypeParser {
 
       WK::ParenL => Self::pre_tuple(ctx!(cre, sin, far, lex, sum, side))?,
 
-      WK::Fun => Self::pre_fun(ctx!(cre, sin, far, lex, sum, side), true)?,
+      WK::Fun  => Self::pre_fun(ctx!(cre, sin, far, lex, sum, side), true)?,
+      WK::Task => Self::pre_task(ctx!(cre, sin, far, lex, sum, side), true)?,
 
       WK::SelfB => Self::pre_self(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Type  => Self::pre_type(ctx!(cre, sin, far, lex, sum, side))?,
@@ -50,6 +51,7 @@ impl TypeParser {
   }
 
   pub fn read_fun(ctx: &mut Ctx) -> Result<TypeId, Message> { Self::pre_fun(ctx, false) }
+  pub fn read_task(ctx: &mut Ctx) -> Result<TypeId, Message> { Self::pre_task(ctx, false) }
 
 
   // Ex
@@ -233,6 +235,28 @@ impl TypeParser {
 
 
   fn pre_fun(ctx: &mut Ctx, is_sub: bool) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = if is_sub { lex.get()? } else { lex.peek()? };
+
+    let (self_kind, args) = Self::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;
+
+    let ret = if lex.peek()?.kind() == WK::ArrowRight {
+      lex.bump()?;
+      Some(Self::read_type(ctx!(cre, sin, far, lex, sum, side))?)
+    } else {
+      None
+    };
+
+
+    // Post
+    let this = Type{
+      pos: lex.pos_extend(start),
+      kind: TypeKind::Fun{ self_kind, args, ret, attr: 0 }
+    };
+
+    Ok(cre.push(this))
+  }
+
+  fn pre_task(ctx: &mut Ctx, is_sub: bool) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = if is_sub { lex.get()? } else { lex.peek()? };
 
     let (self_kind, args) = Self::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;

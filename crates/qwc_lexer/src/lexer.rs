@@ -419,6 +419,7 @@ impl<'a> Lexer<'a> {
           b"let"   => WK::Let,
           b"var"   => WK::Var,
           b"fun"   => WK::Fun,
+          b"task"  => WK::Task,
           b"init"  => WK::Init,
           b"fini"  => WK::Fini,
 

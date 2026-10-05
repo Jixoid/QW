@@ -62,7 +62,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
       let kind = match it.kind {
         ItemKind::Module(..) | ItemKind::ModuleFile(..) => ScopeKindAst::Module(id),
         
-        ItemKind::Let{..} | ItemKind::Fun{..} => ScopeKindAst::Expr(id),
+        ItemKind::Let{..} | ItemKind::Fun{..} | ItemKind::Task{..} => ScopeKindAst::Expr(id),
         
         ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
 

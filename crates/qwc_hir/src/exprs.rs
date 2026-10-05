@@ -99,7 +99,12 @@ pub enum ExprKind {
   BoolNot(ExprId),
 
   // Cast
-  Cast{expr: ExprId, kind: TypeId},
+
+  /// &Type => &Iface
+  CastToIfaceRef{ref_of_expr: ExprId, ref_of_type: TypeId, target_iface: TypeId},
+  
+  /// Type => Trait
+  CastToTrait{expr: ExprId, target_trait: TypeId},
 }
 
 

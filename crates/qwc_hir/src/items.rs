@@ -21,6 +21,7 @@ pub enum ItemKind {
   
   Variable {kind: TypeId, expr: ExprId, name: Sid, ism: bool},
   Function {kind: TypeId, expr: ExprId, name: Sid},
+  Task {kind: TypeId, expr: ExprId, name: Sid},
 
   Impl {type_ty: TypeId, trait_ty: Option<TypeId>, methods: ItemRng},
 }

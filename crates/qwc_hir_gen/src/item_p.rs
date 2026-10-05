@@ -18,26 +18,32 @@ impl ItemLow {
     let it = ctx.src.get(id);
 
     let it = match it.kind {
+      // Scope
       ast::ItemKind::Krate(rng) => Some(Self::low_krate(ctx, id, it, rng)?),
 
       ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(Self::low_module(ctx, id, it, rng)?),
       
       ast::ItemKind::Generic{ctn: rng, ..} => Some(Self::low_generic(ctx, id, it, rng)?),
 
-      
-      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => Some(Self::low_using(ctx, id, it, kind)?),
-      
-
 
       // Symbols
       ast::ItemKind::Fun{kind, blok} => Some(Self::low_fun(ctx, id, it, kind, blok)?),
-
+      
+      ast::ItemKind::Task{kind, blok} => Some(Self::low_task(ctx, id, it, kind, blok)?),
+      
       ast::ItemKind::Let{kind, value, ism} => Some(Self::low_let(ctx, id, it, kind, value, ism)?),
       
+      ast::ItemKind::Impl{type_ty, trait_ty, ctn} => Some(Self::low_impl(ctx, id, it, type_ty, trait_ty, ctn)?),
+
+
+      // Using
+      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => Some(Self::low_using(ctx, id, it, kind)?),
+
+
       // Unexpected
       ast::ItemKind::ModuleUnloaded => panic!("ast object that should not be present"),
       
-      ast::ItemKind::Impl{type_ty, trait_ty, ctn} => Some(Self::low_impl(ctx, id, it, type_ty, trait_ty, ctn)?),
+      // Impl
       ast::ItemKind::Import(..) => None,
     };
 
@@ -165,6 +171,58 @@ impl ItemLow {
 
     // Args
     let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
+    let hir::TypeKind::Fun{self_kind, args, ret} = ctx.cre.get(hir_kind).kind else { unreachable!() };
+    
+    if let Some(ty) = self_kind {
+      let self_pos = ctx.src.get(self_ast.unwrap()).pos;
+      
+      loc.insert(ctx.sin.sid_self(), ty, false, self_pos);
+    }
+
+    for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
+      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
+      let ast::Thing::NamedType(name_pos, ..) = *ctx.src.get(id_pos) else { panic!() };
+
+      loc.insert(name, kind, false, name_pos);
+    }
+
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?;
+    
+    let expr_pos = ctx.src.get(expr.unwrap()).pos;
+    let expr_ty = ctx.cre.get(expr_hir).ety;
+
+    let ret = if let hir::TypeKind::Trait(..) = ctx.cre.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.cre.get(expr_ty).kind {
+      let fun_sign = ctx.cre.get_mut(hir_kind);
+
+      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
+
+      *sign_ret = expr_ty;
+      expr_ty
+    } else { ret };
+
+    TypeMatch::matches_pos(ctx, ret, expr_ty, expr_pos)?;
+
+    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+
+
+    // Post
+    hir::Item {
+      kind: hir::ItemKind::Function {
+        name: it.name.unwrap().sid(),
+        expr: expr_hir,
+        kind: hir_kind,
+      },
+      vis, attr
+    }.push_ok(ctx.cre)
+  }
+
+  fn low_task(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+    let hir_kind = TypeLow::low(ctx, kind)?;
+    
+    let mut loc = qwc_resolve::LocalScopeManager::new();
+
+    // Args
+    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
     let hir::TypeKind::Fun{self_kind, args, ..} = ctx.cre.get(hir_kind).kind else { unreachable!() };
     
     if let Some(ty) = self_kind {
@@ -187,7 +245,7 @@ impl ItemLow {
 
     // Post
     hir::Item {
-      kind: hir::ItemKind::Function {
+      kind: hir::ItemKind::Task {
         name: it.name.unwrap().sid(),
         expr,
         kind: hir_kind,
@@ -282,7 +340,7 @@ impl ItemLow {
   }
 
   fn low_impl_validate(ctx: &mut Ctx, _type_ty: hir::TypeId, trait_ty: hir::TypeId, impl_span: Span, implemented_methods: Vec<(Ident, hir::ItemId, ast::TypeId, Span)>) -> Result<hir::ItemRng, Message> {
-    let hir::TypeKind::Iface(trait_methods) = ctx.cre.get(trait_ty).kind else { unreachable!() };
+    let (hir::TypeKind::Iface(trait_methods) | hir::TypeKind::Trait(trait_methods)) = ctx.cre.get(trait_ty).kind else { unreachable!() };
 
 
     // Expected Methods

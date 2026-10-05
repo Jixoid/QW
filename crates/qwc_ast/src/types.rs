@@ -55,6 +55,7 @@ pub enum TypeKind {
 
   // Function
   Fun {self_kind: Option<TypeId>, args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
+  Task{self_kind: Option<TypeId>, args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
   Init{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
   Fini{args: ThingRng /* NamedType */, attr: u8 /* FunAttrs */},
 

@@ -37,8 +37,11 @@ pub enum TypeKind {
   Struct(ThingRng /* NamedType => name: type */),
   Tuple(TypeRng),
   
-  // Interface
-  Iface(ThingRng),
+  // Trait
+  Trait(ThingRng /* NamedType => fun name: type */),
+  Iface(ThingRng /* NamedType => fun name: type */),
+
+  TraitFrom{trait_ty: TypeId, hidden: TypeId},
 
   // Variant
   Option(TypeId),

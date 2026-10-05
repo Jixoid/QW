@@ -118,6 +118,17 @@ impl DumpHandler for Item {
         writeln!(f)?;
       }
 
+      ItemKind::Task { kind, expr, name: fn_name } => {
+        let name_str = sin.str(fn_name);
+
+        write!(f, "{} {}{} ", kw("task"), name(name_str), punct(":"))?;
+        
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+        expr.dump(cre, sin, f, indent)?;
+        writeln!(f)?;
+      }
+
       
       ItemKind::Impl { type_ty, trait_ty, methods } => {
         write!(f, "{} ", kw("impl"))?;
@@ -243,6 +254,32 @@ impl DumpHandler for Type {
         write!(f, " }}")?;
       }
 
+      TypeKind::Tuple(rng) => {
+        write!(f, "{} {{ ", kw("struct"))?;
+        let mut first = true;
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))? }
+          first = false;
+
+          id.dump(cre, sin, f, indent)?;
+        }
+        write!(f, " }}")?;
+      }
+
+
+      // Trait
+      TypeKind::Trait(rng) => {
+        write!(f, "{} {{ ", kw("trait"))?;
+        let mut first = true;
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))? }
+          first = false;
+
+          id.dump(cre, sin, f, indent)?;
+        }
+        write!(f, " }}")?;
+      }
+
       TypeKind::Iface(rng) => {
         write!(f, "{} {{ ", kw("iface"))?;
         let mut first = true;
@@ -255,16 +292,13 @@ impl DumpHandler for Type {
         write!(f, " }}")?;
       }
 
-      TypeKind::Tuple(rng) => {
-        write!(f, "{} {{ ", kw("struct"))?;
-        let mut first = true;
-        for id in cre.extra_get(rng) {
-          if !first { write!(f, "{} ", punct(","))? }
-          first = false;
 
-          id.dump(cre, sin, f, indent)?;
-        }
-        write!(f, " }}")?;
+      TypeKind::TraitFrom {trait_ty, hidden} => {
+        write!(f, "{}{}", kw("trait"), punct("("))?;
+        trait_ty.dump(cre, sin, f, indent)?;
+        write!(f, "{} ", punct(", hidden:"))?;
+        hidden.dump(cre, sin, f, indent)?;
+        write!(f, "{}", punct(")"))?;
       }
 
 
@@ -414,10 +448,12 @@ impl DumpHandler for Expr {
         }
       }
     
+
       // TypeOf
       ExprKind::TypeOf { kind } => {
         kind.dump(cre, sin, f, indent)?;
       }
+
 
       // Call
       ExprKind::Call { callee, args } => {
@@ -437,7 +473,6 @@ impl DumpHandler for Expr {
         write!(f, ".{}", idx)?;
       }
 
-      // Field Create
       ExprKind::CombinatedInit { kind, fields } => {
         kind.dump(cre, sin, f, indent)?;
         write!(f, "{}", "{".bright_black())?;
@@ -447,6 +482,7 @@ impl DumpHandler for Expr {
         }
         write!(f, "{}", "}".bright_black())?;
       }
+
 
       // Integer
       ExprKind::IntArithmetic { op, flg, lhs, rhs } => {
@@ -523,10 +559,18 @@ impl DumpHandler for Expr {
         write!(f, "{}", ")".bright_black())?;
       }
 
-      ExprKind::Cast { expr, kind } => {
+
+      // Cast
+      ExprKind::CastToIfaceRef { ref_of_expr, ref_of_type: _, target_iface } => {
+        ref_of_expr.dump(cre, sin, f, indent)?;
+        write!(f, " {} {} {}", punct("/* to iface ref */"), punct("as"), punct("&"))?;
+        target_iface.dump(cre, sin, f, indent)?;
+      }
+
+      ExprKind::CastToTrait { expr, target_trait } => {
         expr.dump(cre, sin, f, indent)?;
-        write!(f, " {} ", punct("as"))?;
-        kind.dump(cre, sin, f, indent)?;
+        write!(f, " {} {} ", punct("/* to trait */"), punct("as"))?;
+        target_trait.dump(cre, sin, f, indent)?;
       }
     }
 

@@ -81,6 +81,23 @@ impl DumpHandler for Item {
         }
       }
 
+      ItemKind::Task {kind, blok} => {
+        write!(f, "{} ", kw("task"))?;
+
+        if let Some(name) = self.name {
+          write!(f, "{}", name.str(far).yellow().bold())?;
+        }
+        
+        kind.dump(cre, sin, far, f, indent)?;
+        if let Some(b) = blok {
+          write!(f, " ")?;
+          b.dump(cre, sin, far, f, indent)?;
+          writeln!(f)?;
+        } else {
+          writeln!(f, "{}", punct(";"))?;
+        }
+      }
+
       ItemKind::Using(ty) => {
         let name = self.name.map(|n| n.str(far)).unwrap();
         write!(f, "{} {} {} ", "using".blue().bold(), name.yellow().bold(), "=".bright_black())?;
@@ -394,6 +411,41 @@ impl DumpHandler for Type {
 
       // Function
       TypeKind::Fun { self_kind, args, ret, attr } => {
+        write!(f, "(")?;
+        let mut first = true;
+        if let Some(self_id) = self_kind {
+          let self_ty: &Type = cre.get(self_id);
+          match self_ty.kind {
+            TypeKind::Ref(_, false) => write!(f, "{}", "&self".magenta())?,
+            TypeKind::Ref(_, true) => write!(f, "{}", "&mut self".magenta())?,
+            TypeKind::SelfT => write!(f, "{}", "self".magenta())?,
+            _ => {
+              write!(f, "self: ")?;
+              self_id.dump(cre, sin, far, f, indent)?;
+            }
+          }
+          first = false;
+        }
+        for thing_id in cre.extra_get(args) {
+          if !first {
+            write!(f, ", ")?;
+          }
+          first = false;
+          thing_id.dump(cre, sin, far, f, indent)?;
+        }
+        write!(f, ")")?;
+
+        if attr & FunAttrs::Pure as u8 != 0 {
+          write!(f, " {}", "pure".blue())?;
+        }
+
+        if let Some(r) = ret {
+          write!(f, " -> ")?;
+          r.dump(cre, sin, far, f, indent)?;
+        }
+      }
+
+      TypeKind::Task { self_kind, args, ret, attr } => {
         write!(f, "(")?;
         let mut first = true;
         if let Some(self_id) = self_kind {

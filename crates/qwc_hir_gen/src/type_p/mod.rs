@@ -1,10 +1,11 @@
 use itertools::{Itertools, izip};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast};
 use qwc_hir::{self as hir, PushOkApi};
 
 use crate::{Ctx, ExprLow};
 
+mod trait_p;
 mod resolve_p;
 
 
@@ -43,8 +44,9 @@ impl TypeLow {
       Struct(rng) => Self::low_struct(ctx, rng)?,
       Tuple(rng)  => Self::low_tuple(ctx, rng)?,
       
-      // Interface
-      Iface(rng) => Self::low_iface(ctx, rng)?,
+      // Trait
+      Trait(rng) => trait_p::low_trait(ctx, rng)?,
+      Iface(rng) => trait_p::low_iface(ctx, rng)?,
 
       // Context
       SelfT => match ctx.cmap.self_ty.last() {
@@ -206,53 +208,6 @@ impl TypeLow {
   }
 
 
-  // Interface
-  fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-    ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW)}.push(ctx.cre));
-
-    let methods = {
-      let mut ctn = vec![];
-
-      for id in ctx.src.extra_get(rng) {
-        let it = ctx.src.get(id);
-
-        match it.kind {
-          ast::FieldKind::Fun { kind, .. } => {
-            let fun_ty = Self::low(ctx, kind)?;
-            
-            if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.cre.get(fun_ty).kind {
-
-              let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
-          
-              let lay = ctx.cre.get(self_kind).layout;
-
-              if !lay.is_static() {
-                let pos = self_pos;
-                return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
-              }
-            }
-
-            let id = ctx.cre.push(hir::Thing::NamedType(it.name.unwrap().sid(), fun_ty));
-            ctn.push(id);
-          }
-
-          _ => panic!()
-        }
-      }
-
-      ctx.cre.extra(&ctn)
-    };
-
-    ctx.cmap.self_ty.pop();
-
-
-    hir::Type {
-      kind: hir::TypeKind::Iface(methods),
-      layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
-    }.push_ok(ctx.cre)
-  }
-
-  
   // Function
   fn low_fun(ctx: &mut Ctx, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Result<hir::TypeId, Message> {
     let args = {
@@ -315,6 +270,23 @@ impl TypeMatch {
       _ => {
         let ty_pos = ctx.src.get(ty2_ast).pos;
         return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(ty_pos)));
+      }
+    }
+  }
+
+  pub fn matches_pos(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, pos: impl Into<Span>) -> Result<(), Message> {
+    if ty1 == ty2 { return Ok(()) }
+
+    let ty1_ty = ctx.cre.get(ty1).kind;
+    let ty2_ty = ctx.cre.get(ty2).kind;
+
+    match (ty1_ty, ty2_ty) {
+      (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
+        Self::matches_pos(ctx, t1, t2, pos)
+      }
+
+      _ => {
+        return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(pos)));
       }
     }
   }

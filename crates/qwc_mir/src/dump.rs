@@ -3,9 +3,7 @@ use std::fmt;
 use owo_colors::OwoColorize;
 use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 
-use crate::{
-  AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SSA, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny},
-};
+use crate::{AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny}};
 
 
 pub trait DumpHandler {
@@ -201,7 +199,7 @@ impl DumpHandler for Terminator {
 impl DumpHandler for Inst {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     if let Some(dest) = self.dest {
-      write!(f, "{} {} ", dest, op("="))?;
+      write!(f, "{} {} ", tmpval(format!("%{}", dest.0)), op("="))?;
     }
     self.kind.dump(cre, f, indent)
   }
@@ -336,7 +334,7 @@ impl DumpHandler for Const {
 impl DumpHandler for Value {
   fn dump(&self, cre: &Krate, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
-      Value::SSA(it) => write!(f, "{}", it)?,
+      Value::SSA(idx) => write!(f, "{}", tmpval(format!("%{}", idx.0)))?,
       
       Value::Const(it) => it.dump(cre, f, indent)?,
 
@@ -345,7 +343,7 @@ impl DumpHandler for Value {
         write!(f, "{}", tmpval(format!("@{}", cre.sym_str(sym.name))))?;
       }
 
-      Value::Param(idx) => write!(f, "{}", tmpval(format!("arg({})", idx)))?,
+      Value::Param(idx) => write!(f, "{}", tmpval(format!("${}", idx)))?,
     }
 
     Ok(())
@@ -394,10 +392,6 @@ impl DumpHandler for Layout {
 
     Ok(())
   }
-}
-
-impl fmt::Display for SSA {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", format!("%{}", self.0).purple().bold()) }
 }
 
 

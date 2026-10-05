@@ -30,7 +30,9 @@ pub struct TypeInterner {
   ty_meta: FxHashMap<TypeId, TypeId>,
   
   ty_ref: FxHashMap<(TypeId, bool), TypeId>,
-
+  
+  ty_trait_from: FxHashMap<(TypeId, TypeId), TypeId>,
+  
   ty_slice: FxHashMap<TypeId, TypeId>,
   ty_vscale: FxHashMap<TypeId, TypeId>,
 
@@ -67,6 +69,7 @@ impl TypeInterner {
       // Sub
       ty_meta: FxHashMap::default(),
       ty_ref: FxHashMap::default(),
+      ty_trait_from: FxHashMap::default(),
       ty_slice: FxHashMap::default(),
       ty_vscale: FxHashMap::default(),
       ty_option: FxHashMap::default(),
@@ -124,6 +127,25 @@ impl TypeInterner {
       Entry::Vacant(entry) => {
         let this = Type{
           kind: TypeKind::Ref(id, ism),
+          layout: Layout::new_static(LayoutBy::QW),
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
+  pub fn ty_trait_from(&mut self, cre: &mut Krate, id: TypeId, trait_ty: TypeId) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_trait_from.entry((id, trait_ty)) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let this = Type{
+          kind: TypeKind::TraitFrom{hidden: id, trait_ty},
           layout: Layout::new_static(LayoutBy::QW),
         };
 
