@@ -1,28 +1,77 @@
-## 1. General Principles and Character Set
+# QW Name Mangling Specification & ABI
 
-### 1.1 Constraints and Linker Compatibility
-All mangled symbols produced by the QW compiler must be 100% compatible with the target operating system's linker (GNU ld, LLVM lld, MSVC link.exe). Symbols may only contain the following[[Mangling Letters]] character set:
+This document defines the symbol naming conventions and Application Binary Interface (ABI) name mangling rules used by the QW compiler.
 
-- Alphabetic characters: `A-Z`, `a-z`
-- Numeric characters: `0-9`
-- Special characters: `_` (underscore), `$` (dollar sign), `@` (at sign)
+---
 
+## 1. General Principles and Linker Compatibility
 
-> **Critical Rule:** The use of addressing or template-denoting characters such as `[`, `]`, `<`, `>`, `*`, `&` within symbols is strictly prohibited.
+All symbols produced by the QW compiler must be 100% compatible with standard operating system linkers (GNU `ld`, LLVM `lld`, and MSVC `link.exe`).
 
-### 1.2 Character vs Byte Counting
+### Character Set Rules
+Symbols may only contain the following characters:
+- **Alphabetic:** `A-Z`, `a-z`
+- **Numeric:** `0-9`
+- **Linker-Safe Delimiters:** `_` (underscore), `$` (dollar sign), `@` (at sign)
 
-All `<length>` specifiers in the symbol structure represent the **total number of bytes in UTF-8 encoding**, not the number of characters in the source code.
+> **Prohibited Characters:** Addressing or template characters such as `[`, `]`, `<`, `>`, `*`, `&`, `^`, or `:` must never appear in raw emitted linker symbols.
 
-- _Example:_ For the method `fun café()`, the name length is encoded as `5` instead of `4`, because the letter `é` occupies 2 bytes (`5café`).
+### UTF-8 Byte Length Encoding
+All length specifiers prefixing names represent the **exact number of bytes in UTF-8 encoding**, not source character counts.
+- *Example:* For identifier `café`, the byte count is `5` (since `é` takes 2 bytes in UTF-8), resulting in `5café`.
 
-## 2. Formal Grammar (EBNF)
+---
 
-The syntactic structure of symbols is precisely defined by the following Extended Backus-Naur Form (EBNF):
+## 2. Current Compiler Implementation (`qwc_mangling`)
 
-EBNF
+The active reference compiler implementation in `crates/qwc_mangling` provides fast, structured symbol mangling for modules, functions, methods, and virtual method tables:
 
+### 2.1 Free Functions and Top-Level Symbols
+Free functions and global symbols use the prefix `qw_` followed by each scope segment and the symbol name, each prefixed with its UTF-8 length:
 ```
+qw_<scope_len><scope_name>...<name_len><name>
+```
+
+- **Example 1:** Free function `main` at root:
+  - Emitted Symbol: `qw_4main`
+- **Example 2:** Function `calculate` inside module `math::stats`:
+  - Emitted Symbol: `qw_4math5stats9calculate`
+- **Example 3 (Entry Point):** When marked with `![entry]`, the compiler emits:
+  - Emitted Symbol: `qw_entry`
+
+### 2.2 Method Implementations (`new_impl`)
+Methods implemented for structures and interfaces use the `qw_impl_` prefix, encoding the target type and method identifier:
+```
+qw_impl_<target_type_path>_<optional_iface_path><method_name>
+```
+
+- **Inherent Struct Method:**
+  ```qw
+  struct Vector { fun length() -> f32; }
+  ```
+  - Emitted Symbol: `qw_impl_6Vector_6length`
+- **Interface Implementation Method:**
+  ```qw
+  impl Vector: Printable { fun print(); }
+  ```
+  - Emitted Symbol: `qw_impl_6Vector_9Printable5print`
+
+### 2.3 Virtual Method Tables (`new_vmt`)
+VMTs associated with a structure implementing an interface use the `qw_vmt_` prefix:
+```
+qw_vmt_<struct_path>_<iface_name>
+```
+
+- **Example:** Struct `Circle` implementing `Drawable`:
+  - Emitted Symbol: `qw_vmt_6Circle_8Drawable`
+
+---
+
+## 3. Formal Type-Safe Mangling Grammar (Target ABI Specification)
+
+For full signature-based type safety, method overloading, and template specialization, the formal target ABI grammar is defined below in Extended Backus-Naur Form (EBNF):
+
+```ebnf
 <mangled-name>      ::= "_qw_" [ <special-prefix> ] <type-path> [ <method-decl> ]
 
 <special-prefix>    ::= "vmt_" | "rtti_" | "init_" | "fini_"
@@ -32,7 +81,7 @@ EBNF
 <scope>             ::= <length> <identifier>
 <source-name>       ::= <length> <identifier>
 
-<method-decl>       ::= "F" <source-name> <self-type> <return-type> <type>*
+<method-decl>       ::= <source-name> <self-type> <return-type> <type>*
 
 <generic-list>      ::= "G" <length> <type>*
 
@@ -40,7 +89,8 @@ EBNF
 <complex-type>      ::= "N" <type-path> "Z" | "x"
 <self-type>         ::= <type>
 
-<primitive-type>    ::= "v" | "b" | "c" | "h" | "f" | "d" | "g" | (<integer-sign> <integer-size>)
+<primitive-type>    ::= "v" | "b" | "c" | "p" | "l" | "h" | "f" | "d" | "g" 
+                      | (<integer-sign> <integer-size>)
 <integer-sign>      ::= "S" | "U"
 <integer-size>      ::= "t" | "s" | "i" | "l" | "y" | "n"
 
@@ -51,116 +101,63 @@ EBNF
 <identifier>        ::= [A-Za-z0-9_]+
 ```
 
-### 2.1 Special Prefixes
+### 3.1 Type Encoding Table
 
-- **vmt_ / rtti_**: Generated for Virtual Method Tables and RTTI data associated with a type.
-- **init_ / fini_**: Generated for initialization (e.g. constructors) and finalization (e.g. destructors) routines.
+| Code | Type | Meaning |
+| :---: | :--- | :--- |
+| **`v`** | `()` / `void` | Unit / void |
+| **`b`** | `bool` | 1-bit boolean |
+| **`c`** | `char` | 8-bit character |
+| **`p`** | `^void` | Raw untyped pointer |
+| **`l`** | `null_t` | Null pointer |
+| **`St` / `Ut`** | `i8` / `u8` | 8-bit signed / unsigned integer |
+| **`Ss` / `Us`** | `i16` / `u16` | 16-bit signed / unsigned integer |
+| **`Si` / `Ui`** | `i32` / `u32` | 32-bit signed / unsigned integer |
+| **`Sl` / `Ul`** | `i64` / `u64` | 64-bit signed / unsigned integer |
+| **`Sy` / `Uy`** | `i128` / `u128`| 128-bit signed / unsigned integer |
+| **`Sn` / `Un`** | `isize` / `usize`| Pointer-sized platform integer |
+| **`h`** | `f16` | 16-bit half-precision float |
+| **`f`** | `f32` | 32-bit single-precision float |
+| **`d`** | `f64` | 64-bit double-precision float |
+| **`g`** | `f128` | 128-bit quad-precision float |
 
-## 3. Type System and Qualifiers
+### 3.2 Modifiers & Complex Type Encapsulation
 
-### 3.1 Primitive Types
+- **`P`**: Raw Pointer (`^T`)
+- **`R`**: Reference (`&T`)
+- **`M`**: Mutable (`mut`)
+- **`V`**: Volatile
+- **`Z`**: Slice (`[T]`)
+- **`A<size>_`**: Fixed Array (`[T; size]`). E.g. `[i32; 10]` encodes as `A10_Si`.
+- **`N...Z`**: Encapsulates user-defined and compound types (`N3std6StringZ`).
+- **`x` (Backreference):** Replaces a type identical to the immediately preceding complex type to prevent symbol bloat. E.g. `fun cmp(Vector, Vector)` encodes the second parameter as `x`.
 
-Primitive types have a fixed width and do not take a length prefix.
+---
 
-| **Abbreviation** | **Equivalent**           |
-| ----------------- | ------------------------ |
-| **`v`**           | void                     |
-| **`b`**           | bool (1bit)              |
-| **`c`**           | char                     |
-| **`p`**           | ptr                      |
-| **`l`**           | null_t                   |
-| **`St` / `Ut`**   | i8 / u8                  |
-| **`Ss` / `Us`**   | i16 / u16                |
-| **`Si` / `Ui`**   | i32 / u32                |
-| **`Sl` / `Ul`**   | i64 / u64                |
-| **`Sy` / `Uy`**   | i128 / u128              |
-| **`Sn` / `Un`**   | isize / usize (platform) |
-| **`h`**           | f16 (half)               |
-| **`f`**           | f32 (float)              |
-| **`d`**           | f64 (double)             |
-| **`g`**           | f128 (quad)              |
+## 4. Method Uniformity: Static vs Instance
 
+In the full ABI specification, static functions and instance methods share the same `<method-decl>` formula:
+- **Instance Method (mutable `self`):** `<self>` field contains `Mx` or `MN...Z`.
+- **Instance Method (immutable `self`):** `<self>` field contains `x` or `N...Z`.
+- **Static Function (no `self`):** `<self>` field is set directly to **`v`** (void).
 
-### 3.2 Type Modifiers
+### Detailed ABI Example
 
-Modifiers are always prepended to the left of the target type and can be chained consecutively (resolved from right to left).
-
-- **`P`** : Pointer (`type^`) $\rightarrow$ `Pi` (int*)
-- **`R`** : Reference (`type&`) $\rightarrow$ `Ri` (int&)
-- **`M`** : Mutable (`mut type`) $\rightarrow$ `Mi` (mut int)
-- **`V`** : Volatile (`vol type`)
-- **`Z`** : Unbounded Array (`type[]`) $\rightarrow$ `ZSi` (i32[])
-- **`A<size>_`** : Fixed-Size Array (`type[X]`). A trailing `_` is appended to indicate the end of the size value.
-    
-    - _Multi-Dimensional Array Rule:_ Multi-dimensional arrays are formed by chaining modifiers.
-    - _Example:_ `i32[10][5]` $\rightarrow$ `A10_A5_Si`
-
-### 3.3 Complex Types and `N...Z` Encapsulation
-
-When a non-primitive, user-defined type (Struct, etc.) is passed as a function argument or generic parameter, its beginning is delimited by the **`N`** character and its end by the **`Z`** character. This allows the parser to precisely distinguish the boundaries between types.
-
-## 4. Advanced Architectures and Resolution Rules
-
-### 4.1 `x` (Backreference) Mechanism
-
-To optimize symbol sizes and prevent bloat, when a type in a function's argument list is **identical to the complete complex type definition immediately preceding it**, the entire path is not rewritten; instead, a single **`x`** character is used in its place.
-
-- _Example:_ In the call `fun foo(vector, vector)`, the second parameter is entirely carried as `x`.
-
-### 4.2 Generic Parsing Rule
-
-Generic lists are opened with the `G` character, followed by the `<length>` (number of generic arguments). For example, if there are two generic parameters (`Map<i32, f64>`), it is encoded as `G2Sid`.
-
-The parser relies on this explicitly provided `<length>` to know exactly how many generic arguments to parse, avoiding ambiguity.
-
-### 4.3 Static and Instance Method Uniformity
-
-There is no special "static" flag in the method formula. The system naturally resolves objectless (static) function calls by placing **`v` (void)** in the `<self>` slot.
-
-- **Instance Method (`self` mutable):** The `<self>` field becomes `Mx` or `MN...Z`.
-- **Instance Method (`self` immutable):** The `<self>` field becomes `x` or `N...Z`.
-- **Static Method (no `self`):** The `<self>` field is directly **`v`**.
-
-## 5. Comprehensive and Verified Example Scenarios
-
-### 5.1 Struct Method Example
-
-Code snippet
-
-```
-// Module: std
-struct C { fun draw() -> void {} }
-```
-
-- **Generated Symbol:** `_qw_3std1CF4drawMxv`
-    
-- **Symbol Breakdown:**
-    
-    - `_qw_` $\rightarrow$ Standard prefix.
-    - `3std1C` $\rightarrow$ Main Type: `std::C`.
-    - `F4draw` $\rightarrow$ 4-character method `draw`.
-    - `Mx` $\rightarrow$ `<self>` parameter: mutable reference to the preceding struct (`mut C`).
-    - `v` $\rightarrow$ Return type: `void`.
-
-### 5.2 Complex Generic and Static Function Combination
-
-Code snippet
-
-```
-// Module: std
-struct vector<T> {
-  fun dummy(vector&) static -> void {}
+```qw
+mod std {
+  struct Buffer<T> {
+    fun copy(buf: Buffer<T>&) static -> void {}
+  }
 }
-type veci = vector<i32>;
+type BufferI32 = std::Buffer<i32>;
 ```
 
-- **Generated Symbol:** `_qw_3std6vectorG1SiF5dummyvvRx`
-    
-- **Symbol Breakdown:**
-    
-    - `_qw_` $\rightarrow$ Standard prefix.
-    - `3std6vectorG1Si` $\rightarrow$ Main Type: `std::vector<i32>`, with `G1` indicating 1 generic parameter (`Si` for `i32`).
-    - `F5dummy` $\rightarrow$ 5-character function `dummy`.
-    - `v` $\rightarrow$ `<self>` field: `void` (Because the function is **static**, it takes no object).
-    - `v` $\rightarrow$ Return type: `void`.
-    - `Rx` $\rightarrow$ First argument: `R` (Reference) + `x` (Backreference, i.e., the preceding struct `vector<i32>`).
+- **Mangled Target Symbol:** `_qw_3std6BufferG1SiF4copyvvRx`
+- **Breakdown:**
+  - `_qw_`: Prefix
+  - `3std6Buffer`: Path `std::Buffer`
+  - `G1Si`: 1 generic argument (`i32`)
+  - `F4copy`: Method name `copy`
+  - `v`: `<self>` parameter: `void` (static function)
+  - `v`: Return type: `void`
+  - `Rx`: First argument: `R` (Reference) + `x` (Backreference to `std::Buffer<i32>`)

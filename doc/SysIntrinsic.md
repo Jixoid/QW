@@ -1,176 +1,92 @@
-# QW Core Intrinsic Functions Specification (`sys::*`)
+# QW Compiler Intrinsics & `core::*` Specification
 
-This document defines the built-in (intrinsic) functions under the `sys::` namespace in the QW programming language. These functions are evaluated directly by the compiler at compile time to perform type inspection, size calculations, and safe type conversions.
-
-## 1. Size Information
-
-### `sys::is_size`
-
-* **Declaration (QW IDL):**
-```qw
-pub fun is_size<T>() -> usize;
-
-```
-
-
-* **Compile-time Semantics:** Returns the size of the given type `T` in bytes at compile time. (Note: This function is currently in the prototype stage and defaults to returning 8).
-
-
+This document defines the built-in compiler intrinsics, the `core` library type registration, and compile-time reflection functions available under the `core::*` namespace in QW.
 
 ---
 
-## 2. Type Comparison & Conversion
+## 1. Overview of Intrinsics in QW
 
-### `sys::is_same`
+The QW compiler handles two tiers of intrinsics:
 
-* **Declaration (QW IDL):**
+1. **Primitive Type System (`core::types`):** Low-level hardware types (`i8`..`i128`, `u8`..`u128`, `b8`..`b128`, `f16`..`f128`, `bool`) injected by `qwc_intrinsic` during Phase 1.
+2. **Compile-Time Reflection & Type Queries (`core::*`):** Special built-in functions evaluated directly by semantic analysis (`qwc_hir_gen`) and the constant evaluator (`qwc_comptime`). They carry zero runtime cost.
+
+---
+
+## 2. Compile-Time Type Inspection (`core::is_*`)
+
+All type query functions in this section take generic type parameters, execute at compile time, and return a `bool` constant.
+
+### 2.1 Scalar & Primitive Queries
+
+- **`core::is_int<T>() -> bool`**: Returns `true` if `T` is any signed or unsigned primitive integer (`i8` through `u128`, `isize`, `usize`).
+- **`core::is_signed<T>() -> bool`**: Returns `true` if `T` is a signed integer type (`i8`, `i16`, `i32`, `i64`, `i128`, `isize`).
+- **`core::is_unsigned<T>() -> bool`**: Returns `true` if `T` is an unsigned integer type (`u8`, `u16`, `u32`, `u64`, `u128`, `usize`).
+- **`core::is_float<T>() -> bool`**: Returns `true` if `T` is a floating-point type (`f16`, `f32`, `f64`, `f128`).
+- **`core::is_bool<T>() -> bool`**: Returns `true` if `T` is `bool`.
+- **`core::is_char<T>() -> bool`**: Returns `true` if `T` is a character (`char` / `u8`).
+- **`core::is_void<T>() -> bool`**: Returns `true` if `T` is the unit type `()`.
+
+### 2.2 Pointer, Reference & Sequence Queries
+
+- **`core::is_pointer<T>() -> bool`**: Returns `true` if `T` is a raw pointer (`^U` or `^mut U`).
+- **`core::is_reference<T>() -> bool`**: Returns `true` if `T` is a safe reference (`&U` or `&mut U`).
+- **`core::is_array<T>() -> bool`**: Returns `true` if `T` is a fixed-size array (`[U; N]`).
+- **`core::is_slice<T>() -> bool`**: Returns `true` if `T` is a dynamically-sized slice (`[U]`).
+- **`core::is_vector<T>() -> bool`**: Returns `true` if `T` is a fixed SIMD vector (`[U * N]`) or scalable vector (`[U *]`).
+
+### 2.3 User-Defined & Compound Type Queries
+
+- **`core::is_struct<T>() -> bool`**: Returns `true` if `T` is a `struct`.
+- **`core::is_iface<T>() -> bool`**: Returns `true` if `T` is an interface (`iface`).
+- **`core::is_trait<T>() -> bool`**: Returns `true` if `T` is a `trait`.
+- **`core::is_enum<T>() -> bool`**: Returns `true` if `T` is an `enum`.
+- **`core::is_flags<T>() -> bool`**: Returns `true` if `T` is a bitwise `flags` type.
+- **`core::is_variant<T>() -> bool`**: Returns `true` if `T` is a sum type (`variant`).
+- **`core::is_function<T>() -> bool`**: Returns `true` if `T` is a function or task signature.
+
+---
+
+## 3. Type Size & Layout Queries
+
+### `core::is_size<T>() -> usize`
+Returns the byte size of type `T` according to the target architecture's data layout:
 ```qw
-pub fun is_same<T, U>() -> bool;
-
+let int_size = core::is_size<i32>();   # Evaluates to 4 at compile time
 ```
 
-
-* **Compile-time Semantics:** Checks whether two provided types are completely identical at the compiler level. It performs a strict, literal match based on the names of the types.
-
-
-
-### `sys::is_convertible`
-
-* **Declaration (QW IDL):**
+### `core::is_align<T>() -> usize`
+Returns the byte alignment requirement of type `T`:
 ```qw
-pub fun is_convertible<From, To>() -> bool;
-
+let ptr_align = core::is_align<^u8>(); # Evaluates to 8 on 64-bit platforms
 ```
 
+---
 
-* **Compile-time Semantics:** Evaluates whether an expression of type `From` can be implicitly converted to type `To`. This validation is performed by testing the compiler's semantic conversion and type assignment rules.
+## 4. Type Relations & Equivalence
 
+### `core::is_same<T, U>() -> bool`
+Returns `true` if types `T` and `U` represent the exact same type:
+```qw
+let same = core::is_same<i32, i32>();  # true
+let diff = core::is_same<i32, u32>();  # false
+```
 
+### `core::is_convertible<From, To>() -> bool`
+Evaluates whether a value of type `From` can be converted or cast to type `To`:
+```qw
+let ok = core::is_convertible<i16, i32>(); # true
+```
 
-### `sys::cast`
+---
 
-* **Declaration (QW IDL):**
+## 5. Compile-Time Cast (`core::cast`)
+
 ```qw
 pub fun cast<To>(value: any) -> To;
-
 ```
 
-
-* **Compile-time Semantics:** Converts a given value to the target type `To`. Currently, this intrinsic supports conversions between `enum <-> int` and `set <-> int`. During these conversions, the compiler strictly enforces compile-time bounds checking to ensure the value fits within the target integer type or maps to an existing valid element. If an overflow or out-of-bounds condition occurs, a compile-time error is generated.
-
-
-
----
-
-## 3. Primitive Type Checking
-
-The following intrinsic functions evaluate whether a type belongs to the compiler's primitive type taxonomy. All functions in this section return a `bool` and are resolved at compile time.
-
-* **`sys::is_int<T>`**
-* **IDL:** `pub fun is_int<T>() -> bool;`
-* **Semantics:** Checks if `T` is one of the core primitive integer types ranging from `I8` to `U128`.
-
-
-
-
-* **`sys::is_float<T>`**
-* **IDL:** `pub fun is_float<T>() -> bool;`
-* **Semantics:** Checks if `T` is a floating-point number type.
-
-
-
-
-* **`sys::is_bool<T>`**
-* **IDL:** `pub fun is_bool<T>() -> bool;`
-* **Semantics:** Tests if `T` is exactly a boolean type.
-
-
-
-
-* **`sys::is_char<T>`**
-* **IDL:** `pub fun is_char<T>() -> bool;`
-* **Semantics:** Checks if `T` is a character (`char`) type.
-
-
-
-
-* **`sys::is_void<T>`**
-* **IDL:** `pub fun is_void<T>() -> bool;`
-* **Semantics:** Checks if `T` is a `void` type.
-
-
-
-
-* **`sys::is_ptr<T>`**
-* **IDL:** `pub fun is_ptr<T>() -> bool;`
-* **Semantics:** Tests if `T` is a primitive `ptr` (raw memory address) type.
-
-
-
-
-* **`sys::is_signed<T>`**
-* **IDL:** `pub fun is_signed<T>() -> bool;`
-* **Semantics:** Checks if `T` is a signed type, such as a signed integer.
-
-
-
-
-* **`sys::is_unsigned<T>`**
-* **IDL:** `pub fun is_unsigned<T>() -> bool;`
-* **Semantics:** Tests if `T` is an unsigned type, such as an unsigned integer.
-
-
-
-
-
----
-
-## 4. Compound Type Checking
-
-The following intrinsic functions are used to identify complex or user-defined type structures. All functions in this section return a `bool` and are resolved at compile time.
-
-* **`sys::is_pointer<T>`**
-* **IDL:** `pub fun is_pointer<T>() -> bool;`
-* **Semantics:** Checks if `T` is a derived pointer type.
-
-
-
-
-* **`sys::is_reference<T>`**
-* **IDL:** `pub fun is_reference<T>() -> bool;`
-* **Semantics:** Checks if `T` is a reference type.
-
-
-
-
-* **`sys::is_array<T>`**
-* **IDL:** `pub fun is_array<T>() -> bool;`
-* **Semantics:** Verifies if `T` is either a fixed-size array (`ZArrayType`) or a dynamic array (`PArrayType`).
-
-
-
-
-* **`sys::is_struct<T>`**
-* **IDL:** `pub fun is_struct<T>() -> bool;`
-* **Semantics:** Checks if `T` is a record or struct type.
-
-
-
-
-* **`sys::is_function<T>`**
-* **IDL:** `pub fun is_function<T>() -> bool;`
-* **Semantics:** Checks if `T` is a function type.
-
-
-
-
-* **`sys::is_enum<T>`**
-* **IDL:** `pub fun is_enum<T>() -> bool;`
-* **Semantics:** Checks if `T` is an enum type.
-
-
-
-
-* **`sys::is_set<T>`**
-* **IDL:** `pub fun is_set<T>() -> bool;`
-* **Semantics:** Checks if `T` is a set bitmask type.
+Performs compile-time verified scalar and enumeration conversions:
+- `enum <-> int`: Verifies that numeric values correspond to valid enum discriminants.
+- `flags <-> int`: Verifies that combined flag masks are valid.
+- If an overflow or out-of-bounds conversion occurs, the compiler generates a compile-time diagnostic error.

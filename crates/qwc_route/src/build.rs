@@ -351,8 +351,13 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let (bitcode, llir, time_pass4_cgen) = build_cgen(&backend, &mir_cre, info.dump.contains(&DumpStage::Lir))?;
   
   fs::write(info.path.join("build").join("out.bc"), &bitcode)?;
+  
+  if info.dump.contains(&DumpStage::Lir) {
+    let llir = llir.unwrap();
 
-  if info.dump.contains(&DumpStage::Lir) { eprintln!("{}", llir.unwrap()) }
+    fs::write(info.path.join("build").join("out.ll"), &llir)?;
+    eprintln!("{}", llir);
+  }
 
 
   if info.verbose > 0 {
@@ -368,7 +373,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
 
     let exitcode = backend.run_vm(&bitcode)?;
 
-    if info.verbose > 0 {
+    if info.verbose > 0 && exitcode != 0 {
       eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
     }
   }
@@ -435,6 +440,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
         eprintln!("    {}: {}", "type".cyan(), humanize_size(hir_cre.size_used::<hir::Type>()));
         eprintln!("    {}: {}", "expr".cyan(), humanize_size(hir_cre.size_used::<hir::Expr>()));
         eprintln!("    {}: {}", "item".cyan(), humanize_size(hir_cre.size_used::<hir::Item>()));
+        eprintln!("    {}: {}", "thing".cyan(), humanize_size(hir_cre.size_used::<hir::Thing>()));
         eprintln!("    {}: {}", "extra".cyan(), humanize_size(hir_cre.size_used::<hir::AnyId>()));
       }
 
@@ -444,6 +450,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
         eprintln!("    {}: {}", "symb".cyan(), humanize_size(mir_cre.size_used::<mir::Symbol>()));
         eprintln!("    {}: {}", "blok".cyan(), humanize_size(mir_cre.size_used::<mir::Block>()));
         eprintln!("    {}: {}", "inst".cyan(), humanize_size(mir_cre.size_used::<mir::Inst>()));
+        eprintln!("    {}: {}", "value".cyan(), humanize_size(mir_cre.size_used::<mir::Value>()));
         eprintln!("    {}: {}", "extra".cyan(), humanize_size(mir_cre.size_used::<mir::AnyId>()));
       }
 
