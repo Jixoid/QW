@@ -15,7 +15,7 @@ impl Visitor for ScopeMap {
 }
 
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ImplFor {pub type_ty: TypeId, pub trait_ty: Option<TypeId>, pub container: AnyId}
 
 pub struct ScopeCollector<'a, 'imod> {

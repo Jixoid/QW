@@ -54,6 +54,15 @@ impl<T: Copy> Serialize for Arena<T> {
 }
 
 
+impl<T: Copy> Clone for Arena<T> {
+  fn clone(&self) -> Self {
+    Self {
+      data: self.data.clone(),
+      len: self.len,
+    }
+  }
+}
+
 impl<T: Copy> Arena<T> {
 
   pub fn new() -> Self {

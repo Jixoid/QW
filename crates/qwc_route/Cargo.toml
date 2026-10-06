@@ -3,6 +3,10 @@ name = "qwc_route"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+lsp = ["dep:qwc_lsp", "qwc_diagnostic/lsp"]
+
 [dependencies]
 qwc_ast = { path = "../qwc_ast" }
 qwc_hir = { path = "../qwc_hir" }
@@ -19,6 +23,7 @@ qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
 qwc_cgen = { path = "../qwc_cgen" }
 qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
+qwc_lsp = { path = "../qwc_lsp", optional = true }
 clap = { version = "4.5", features = ["derive"] }
 uuid = { version = "1.10", features = ["v4"] }
 owo-colors = "4.4.0"

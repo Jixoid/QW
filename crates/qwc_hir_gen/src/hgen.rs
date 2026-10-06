@@ -129,13 +129,11 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
       // Vector
       hir::TypeKind::VScale(sub) => format!("[{} *]", self.type_name(sub)),
-
       hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sub), self.expr_name(len)),
       
 
       // Array
       hir::TypeKind::Slice(sub) => format!("[{}]", self.type_name(sub)),
-      
       hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sub), self.expr_name(len)),
       
       
@@ -143,11 +141,16 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       hir::TypeKind::Struct(..) => format!("struct {{}}"),
       hir::TypeKind::Tuple(..) => format!("tuple {{}}"),
       
+      
+      // Trait
       hir::TypeKind::Trait(..) => format!("trait {{}}"),
       hir::TypeKind::Iface(..) => format!("iface {{}}"),
 
       hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("trait({}, hidden: {})", self.type_name(trait_ty), self.type_name(hidden)),
 
+
+      // Enum
+      hir::TypeKind::Enum(..) => format!("enum {{}}"),
 
       // Function
       hir::TypeKind::Fun{self_kind, args, ret} => {

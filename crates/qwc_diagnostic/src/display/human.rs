@@ -1,20 +1,16 @@
 use std::{collections::BTreeMap, fmt, path::Path};
 use owo_colors::OwoColorize;
+
 use qwc_arena::Files;
-use crate::{Level, Message};
+
+use crate::Message;
 
 
-pub struct MessageDisplay<'a>(&'a Message, &'a Files);
+pub struct MessageHumanDisplay<'a>(pub(super) &'a Message, pub(super) &'a Files);
 
-impl Message {
-  pub fn display<'a>(&'a self, far: &'a Files) -> MessageDisplay<'a> {
-    MessageDisplay(self, far)
-  }
-}
-
-impl<'a> fmt::Display for MessageDisplay<'a> {
+impl<'a> fmt::Display for MessageHumanDisplay<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let MessageDisplay(msg, far) = self;
+    let MessageHumanDisplay(msg, far) = self;
 
     // level[code]: message
     if let Some(code) = &msg.message.code {
@@ -108,19 +104,6 @@ impl<'a> fmt::Display for MessageDisplay<'a> {
     }
 
     Ok(())
-  }
-}
-
-
-
-impl fmt::Display for Level {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      Level::Fatal => write!(f, "{}", "fatal".red().bold()),
-      Level::Error => write!(f, "{}", "error".red().bold()),
-      Level::Warn  => write!(f, "{}", "warn".yellow().bold()),
-      Level::Hint  => write!(f, "{}", "hint".yellow().bold()),
-    }
   }
 }
 

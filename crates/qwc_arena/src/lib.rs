@@ -30,7 +30,11 @@ impl Files {
 
 
   pub fn add<'a>(&'a mut self, fpath: &Path) -> u16 {
-    let mut map = fs::read(fpath).unwrap();
+    let map = fs::read(fpath).unwrap();
+    self.add_buffer(fpath, map)
+  }
+
+  pub fn add_buffer(&mut self, fpath: &Path, mut map: Vec<u8>) -> u16 {
     map.resize(map.len() + 8, 0);
 
     let fi = File{

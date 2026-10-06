@@ -124,6 +124,10 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
+  #[cfg(feature = "lsp")]
+  /// Start the language server
+  Lsp,
+
   /*
   /// Manage project dependencies
   Deps {
@@ -221,6 +225,17 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
+    #[cfg(feature = "lsp")]
+    MainCommands::Lsp => {
+      match qwc_lsp::start() {
+        Ok(()) => (),
+        Err(e) => {
+          eprintln!("{}", e);
+          std::process::exit(1);
+        }
+      };
+    }
+
     //MainCommands::Deps {command} => { deps::deps_cmd(command); }
     //MainCommands::Pkg  {command} => { pkg::pkg_cmd(command); }
   }

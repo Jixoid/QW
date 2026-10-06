@@ -8,6 +8,10 @@ members = [
   "crates/*"
 ]
 
+[features]
+default = ["lsp"]
+lsp = ["qwc_route/lsp"]
+
 [profile.release]
 opt-level = 3
 lto = "thin"

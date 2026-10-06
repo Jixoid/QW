@@ -302,6 +302,20 @@ impl DumpHandler for Type {
       }
 
 
+      // Enum
+      TypeKind::Enum(rng) => {
+        write!(f, "{} {{ ", kw("enum"))?;
+        let mut first = true;
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))? }
+          first = false;
+
+          id.dump(cre, sin, f, indent)?;
+        }
+        write!(f, " }}")?;
+      }
+
+
       // Function
       TypeKind::Fun { self_kind, args, ret } => {
         write!(f, "{}{}", ty("fun"), punct("("))?;
@@ -341,11 +355,7 @@ impl DumpHandler for Expr {
     match self.kind {
       ExprKind::GenericExpr => write!(f, "{}", punct("<generic expr>"))?,
 
-      ExprKind::Const(c) => match c {
-        Const::Unit => write!(f, "{}", punct("()"))?,
-        Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
-        Const::Int(i) => write!(f, "{}", lit_num(i))?,
-      }
+      ExprKind::Const(c) => c.dump(cre, sin, f, indent)?,
 
       ExprKind::Ref(e) => {
         e.dump(cre, sin, f, indent)?;
@@ -581,17 +591,35 @@ impl DumpHandler for Expr {
 impl DumpHandler for Thing {
   fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
+      Thing::NamedType(name, expr) => {
+        write!(f, "{}", sin.str(name).white())?;
+        write!(f, " = ")?;
+        expr.dump(cre, sin, f, indent)?;
+      }
+      
       Thing::NamedExpr(name, expr) => {
         write!(f, "{}", sin.str(name).white())?;
         write!(f, " = ")?;
         expr.dump(cre, sin, f, indent)?;
       }
 
-      Thing::NamedType(name, expr) => {
+      Thing::NamedConst(name, cons) => {
         write!(f, "{}", sin.str(name).white())?;
         write!(f, " = ")?;
-        expr.dump(cre, sin, f, indent)?;
+        cons.dump(cre, sin, f, indent)?;
       }
+    }
+
+    Ok(())
+  }
+}
+
+impl DumpHandler for Const {
+  fn dump(&self, _cre: &Krate, _sin: &StrInterner, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
+    match *self {
+      Const::Unit => write!(f, "{}", punct("()"))?,
+      Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
+      Const::Int(i) => write!(f, "{}", lit_num(i))?,
     }
 
     Ok(())

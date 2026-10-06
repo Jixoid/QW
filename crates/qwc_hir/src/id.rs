@@ -153,6 +153,7 @@ impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
   fn push(self, cre: &mut Krate) -> HirId<T> {
     cre.push(self)
   }
+  
   fn push_ok<E>(self, cre: &mut Krate) -> Result<HirId<T>, E> {
     Ok(cre.push(self))
   }

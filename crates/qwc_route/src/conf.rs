@@ -23,7 +23,7 @@ pub fn parse_conf(fpath: &Path, far: &mut Files) -> Result<ConfSetup, Error> {
     far.get(fid)
   };
   
-  let conf = Value::load_file(fi).map_err(|e| format!("{}", e.display(far)))?;
+  let conf = Value::load_file(fi).map_err(|e| format!("{}", e.display_human(far)))?;
 
 
   struct Setup {

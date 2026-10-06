@@ -1,4 +1,7 @@
 const vscode = require('vscode');
+const { LanguageClient } = require('vscode-languageclient/node');
+
+let client;
 
 /**
  * Token types legend for VSCode Semantic Highlighting
@@ -22,6 +25,13 @@ const tokenTypes = [
 const tokenModifiers = ['declaration', 'definition', 'readonly', 'static'];
 
 const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
+
+const DECLARATION_KEYWORDS = new Set([
+  'fun', 'task', 'init', 'fini', 'let', 'var', 'using',
+  'struct', 'iface', 'trait', 'enum', 'flags', 'impl', 'generic',
+  'mod', 'use', 'requires', 'new', 'static', 'const', 'mut', 'imm',
+  'pub', 'priv', 'prot', 'crate', 'super'
+]);
 
 /**
  * Word Mapping Table (Kelime Eşleme Tablosu)
@@ -106,7 +116,7 @@ const WORD_MAP = new Map([
 /**
  * Highlighting provider operating strictly on Word Mapping lookup,
  * with support for function declarations (`fun X`), parameters (`(x, y: T)`),
- * type declarations (`struct X`), // line comments and /* */ (including nested) block comments.
+ * type declarations (`struct X`), line comments (//) and block comments.
  */
 class QWWordMappingHighlighter {
   provideDocumentSemanticTokens(document) {
@@ -224,7 +234,8 @@ class QWWordMappingHighlighter {
           } else if (tokenTypeStr) {
             const typeIndex = tokenTypes.indexOf(tokenTypeStr);
             if (typeIndex !== -1) {
-              tokensBuilder.push(lineIndex, wordStart, word.length, typeIndex, 0);
+              const modMask = DECLARATION_KEYWORDS.has(word) ? 1 : 0;
+              tokensBuilder.push(lineIndex, wordStart, word.length, typeIndex, modMask);
             }
             if (word === 'fun' || word === 'task' || word === 'init' || word === 'fini') {
               expectFunctionName = true;
@@ -299,9 +310,67 @@ function activate(context) {
   context.subscriptions.push(
     vscode.languages.registerDocumentSemanticTokensProvider(selector, provider, legend)
   );
+
+  // LSP Client start
+  client = createLanguageClient();
+  client.start();
+
+  // Register Restart Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('qw.restartServer', async () => {
+      await restartLanguageServer();
+    })
+  );
 }
 
-function deactivate() {}
+function createLanguageClient() {
+  const config = vscode.workspace.getConfiguration('qw');
+  const serverCommand = config.get('lsp.serverPath') || 'qwd.debug';
+
+  const serverOptions = {
+    command: serverCommand,
+    args: [],
+    options: {
+      shell: true
+    }
+  };
+
+  const clientOptions = {
+    documentSelector: [{ scheme: 'file', language: 'qw' }],
+    synchronize: {
+      fileEvents: vscode.workspace.createFileSystemWatcher('**/*.qw')
+    }
+  };
+
+  return new LanguageClient(
+    'qw-lsp',
+    'QW Language Server',
+    serverOptions,
+    clientOptions
+  );
+}
+
+async function restartLanguageServer() {
+  if (client) {
+    try {
+      await client.stop();
+    } catch (err) {
+      console.error('Failed to stop QW Language Server:', err);
+    }
+    client = undefined;
+  }
+
+  client = createLanguageClient();
+  await client.start();
+  vscode.window.showInformationMessage('QW Language Server restarted.');
+}
+
+function deactivate() {
+  if (!client) {
+    return undefined;
+  }
+  return client.stop();
+}
 
 module.exports = {
   activate,

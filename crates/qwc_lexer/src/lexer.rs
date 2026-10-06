@@ -1,4 +1,4 @@
-use std::num::NonZeroU16;
+use std::num::{NonZero, NonZeroU16};
 
 use qwc_arena::File;
 use qwc_diagnostic::{Message, Span, msg::*};
@@ -102,6 +102,34 @@ impl<'a> Lexer<'a> {
   pub fn get_k(&mut self) -> Result<(WK, Word), Message> {
     let a = self.get()?;
     Ok((a.kind(), a))
+  }
+
+
+  pub fn parse_token(&mut self) -> Result<Word, Message> {
+    let (it, bak) = match self.get_k()? {
+      (WK::Amp2, w) => (
+        Word{
+          fid: w.fid,
+          kind: WK::Amp,
+          len: unsafe {NonZero::<u16>::new_unchecked(1)},
+          off: w.off
+        },
+        Word{
+          fid: w.fid,
+          kind: WK::Amp,
+          len: unsafe {NonZero::<u16>::new_unchecked(1)},
+          off: w.off+1  
+        }
+      ),
+
+      _ => panic!(),
+    };
+
+    if let Some(..) = self.cache { panic!() }
+
+    self.cache = Some((bak, self.off));
+
+    Ok(it)
   }
 
 

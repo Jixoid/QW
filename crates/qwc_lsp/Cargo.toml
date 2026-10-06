@@ -1,0 +1,19 @@
+[package]
+name = "qwc_lsp"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tower-lsp = "0.20.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "io-std", "sync"] }
+qwc_vfs = { path = "../qwc_vfs" }
+qwc_arena = { path = "../qwc_arena" }
+qwc_ast = { path = "../qwc_ast" }
+qwc_parse = { path = "../qwc_parse" }
+qwc_resolve = { path = "../qwc_resolve" }
+qwc_intrinsic = { path = "../qwc_intrinsic" }
+qwc_hir = { path = "../qwc_hir" }
+qwc_hir_gen = { path = "../qwc_hir_gen" }
+qwc_diagnostic = { path = "../qwc_diagnostic", features = ["lsp"] }
+qwc_string_interner = { path = "../qwc_string_interner" }
+serde_json = "1.0"

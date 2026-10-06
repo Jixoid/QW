@@ -126,7 +126,7 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, Str
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
     eprint!("{}", sum);
 
@@ -148,7 +148,7 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imo
   match ret {
     Ok((v1, v2)) => Ok((v1, v2, time)),
     Err(sum) => {
-      for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+      for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
       eprint!("{}", sum);
 
@@ -163,7 +163,7 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
     eprint!("{}", sum);
 
@@ -183,7 +183,7 @@ pub fn build_hir_export(hir_cre: &hir::Krate, far: &Files) -> Result<(ExportMap,
   match ret {
     Ok(v) => Ok((v, time)),
     Err(sum) => {
-      for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+      for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
       eprint!("{}", sum);
 
@@ -198,7 +198,7 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
     eprint!("{}", sum);
 

@@ -5,6 +5,7 @@ use qwc_hir::{self as hir, PushOkApi};
 
 use crate::{Ctx, ExprLow};
 
+mod enum_p;
 mod trait_p;
 mod resolve_p;
 
@@ -47,6 +48,9 @@ impl TypeLow {
       // Trait
       Trait(rng) => trait_p::low_trait(ctx, rng)?,
       Iface(rng) => trait_p::low_iface(ctx, rng)?,
+
+      // Enum
+      Enum(rng) => enum_p::low_enum(ctx, rng)?,
 
       // Context
       SelfT => match ctx.cmap.self_ty.last() {

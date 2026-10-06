@@ -436,10 +436,27 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
           }
         }
         None => {
-          sum.add(Message::error(
-            CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(seg_ident.sid())]),
-            Label::new_pos(seg_ident),
-          ));
+          let mut pool = Vec::new();
+          for (&sid, _) in exports.iter() {
+            pool.push((self.sin.str(sid), ()));
+          }
+          let input = self.sin.str(seg_ident.sid());
+          let sugg = find_did_you_mean(input, &pool).map(|(matched, _)| {
+            Suggestion::new(
+              DID_YOU_MEAN.args(&[matched]),
+              Applicability::MaybeIncorrect,
+              matched.to_string(),
+              Label::new(seg_ident, YOU_SAID.args(&[input])),
+            )
+          });
+
+          sum.add(
+            Message::error(
+              CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(seg_ident.sid())]),
+              Label::new_pos(seg_ident),
+            )
+            .add_if(sugg),
+          );
           return;
         }
       }

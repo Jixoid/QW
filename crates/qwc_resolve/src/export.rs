@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct ExportMap {
   pub(crate) cid: CID,
   pub(crate) root: Option<ItemId>,
@@ -69,7 +69,7 @@ pub enum ExportKind {
 }
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Export {
   pub parent: Option<AnyId>,
   pub(crate) map: FxHashMap<Sid, ExportKind>,

@@ -12,6 +12,7 @@ impl From<NonZeroU32> for Sid {
 }
 
 
+#[derive(Clone)]
 pub struct StrInterner {
   rodeo: Rodeo,
 

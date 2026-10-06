@@ -12,7 +12,8 @@
   ],
   "main": "./extension.js",
   "activationEvents": [
-    "onLanguage:qw"
+    "onLanguage:qw",
+    "onCommand:qw.restartServer"
   ],
   "contributes": {
     "languages": [
@@ -29,7 +30,38 @@
         "scopeName": "source.qw",
         "path": "./syntaxes/qw.tmLanguage.json"
       }
+    ],
+    "configuration": {
+      "title": "QW",
+      "properties": {
+        "qw.lsp.serverPath": {
+          "type": "string",
+          "default": "qwd.debug",
+          "description": "Path to the QW language server executable"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "qw.restartServer",
+        "title": "Restart Language Server",
+        "category": "QW"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "qw",
+        "scopes": {
+          "keyword.declaration": [
+            "keyword.declaration.qw",
+            "storage.type"
+          ]
+        }
+      }
     ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   },
   "scripts": {
     "test": "node test.js"

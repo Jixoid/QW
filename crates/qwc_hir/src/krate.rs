@@ -11,6 +11,7 @@ use crate::{AnyId, AnyRng, Expr, Item, ItemId, Rng, Thing, ThingId, Type, TypeId
 pub struct CID (pub(crate) NonZero<u16>);
 
 
+#[derive(Clone)]
 pub struct Deps {
   imod: Vec<Krate>,
 }
@@ -38,7 +39,7 @@ impl Deps {
 
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Krate {
   // Root
   root: Option<ItemId>,

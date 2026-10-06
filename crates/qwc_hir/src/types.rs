@@ -40,8 +40,11 @@ pub enum TypeKind {
   // Trait
   Trait(ThingRng /* NamedType => fun name: type */),
   Iface(ThingRng /* NamedType => fun name: type */),
-
+  
   TraitFrom{trait_ty: TypeId, hidden: TypeId},
+  
+  // Enum
+  Enum(ThingRng /* NamedExpr => name = expr */),  
 
   // Variant
   Option(TypeId),

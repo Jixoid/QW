@@ -2,3 +2,8 @@
 /.vscode
 /.obsidian
 /target
+
+# Node / VS Code Extension
+node_modules/
+*.vsix
+
