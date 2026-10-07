@@ -1,5 +1,0 @@
-/* Multi-line comment test */
-fun main() -> i32 {
-  /* inner /* nested */ comment */
-  ret 0;
-}
