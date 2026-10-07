@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{BuildVariant, DumpStage, Error, build};
+use crate::{BuildStartRoutine, BuildVariant, DumpStage, Error, build};
 
 
 pub struct RunInfo<'a> {
@@ -21,5 +21,8 @@ pub fn run(info: RunInfo) -> Result<(), Error> {
     check_only: false,
     execute: true,
     variant: BuildVariant::Debug,
+    start_routine: BuildStartRoutine::CRT,
+    triple: None,
+    rtl: None,
   })
 }

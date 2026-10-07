@@ -1,9 +1,9 @@
 use std::path::Path;
 
 use inkwell::{
-    builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue},
+    builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, targets::{InitializationConfig, Target, TargetMachine, TargetTriple}, types::BasicTypeEnum, values::{FunctionValue, GlobalValue},
 };
-use qwc_cgen::ICGen;
+use qwc_cgen::{ICGen, Optimization, OutKind};
 use qwc_mir::{Krate, SymbId, TypeId};
 use rustc_hash::FxHashMap;
 
@@ -30,17 +30,44 @@ pub struct CtxM<'ctx> {
 pub struct CGenLLVM;
 
 impl ICGen for CGenLLVM {
-	fn generate(&self, cre: &Krate, ext_ll: bool) -> Result<(Vec<u8>, Option<String>), String> {
+	fn generate(&self, cre: &Krate, ext_ll: bool, outk: OutKind, triple: &Option<String>, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String> {
 		let ctx = Context::create();
 		let mol = Self::compile_to_module(&ctx, "main", cre);
 
 		mol.verify().map_err(|err| err.to_string())?;
 
-		let bc = mol.write_bitcode_to_memory().as_slice().to_vec();
+		// Out
+		let out = match outk {
+			OutKind::ByteCode => {
+				mol.write_bitcode_to_memory().as_slice().to_vec()
+			}
+
+			OutKind::Object => {
+				Target::initialize_all(&InitializationConfig::default());
+				let triple = triple.clone().map(|str| TargetTriple::create(&str)).unwrap_or_else(|| TargetMachine::get_default_triple());
+				
+				Target::from_triple(&triple)
+				.map_err(|err| format!("{} for {}", err.to_string(), triple))?
+				.create_target_machine(
+					&triple,
+					"generic",
+					"",
+					opt_into(opt),
+					inkwell::targets::RelocMode::PIC,
+					inkwell::targets::CodeModel::Default,
+				)
+				.ok_or_else(|| String::from("target machine cannot created"))?
+				.write_to_memory_buffer(&mol, inkwell::targets::FileType::Object)
+				.map_err(|err| err.to_string())?
+				.as_slice()
+				.to_vec()
+			}
+		};
+		
 
 		let ll = ext_ll.then(|| mol.print_to_string().to_string());
 
-		Ok((bc, ll))
+		Ok((out, ll))
 	}
 
 	fn run_vm(&self, code: &[u8]) -> Result<i32, String> {
@@ -54,14 +81,14 @@ impl ICGen for CGenLLVM {
 			.create_jit_execution_engine(inkwell::OptimizationLevel::Default)
 			.map_err(|e| e.to_string())?;
 
-		type QwEntryFunc = unsafe extern "C" fn() -> i32;
+		type QwEntryFunc = unsafe extern "C" fn();
 
     let qw_entry_jit_fn = unsafe {
 			execution_engine.get_function::<QwEntryFunc>("qw_entry")
     };
 
 		match qw_entry_jit_fn {
-			Ok(func) => Ok(unsafe { func.call() }),
+			Ok(func) => {unsafe { func.call(); }; Ok(0)},
 
 			Err(err) => Err(err.to_string())
     }
@@ -100,5 +127,15 @@ impl CGenLLVM {
 		mol.verify().map_err(|e| e.to_string())?;
 		mol.print_to_file(path).map_err(|e| e.to_string())?;
 		Ok(())
+	}
+}
+
+
+fn opt_into(it: Optimization) -> inkwell::OptimizationLevel {
+	match it {
+		Optimization::None       => inkwell::OptimizationLevel::None,
+		Optimization::Less       => inkwell::OptimizationLevel::Less,
+		Optimization::Default    => inkwell::OptimizationLevel::Default,
+		Optimization::Aggressive => inkwell::OptimizationLevel::Aggressive,
 	}
 }

@@ -29,8 +29,9 @@ const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 const DECLARATION_KEYWORDS = new Set([
   'fun', 'task', 'init', 'fini', 'let', 'var', 'using',
   'struct', 'iface', 'trait', 'enum', 'flags', 'impl', 'generic',
-  'mod', 'use', 'requires', 'new', 'static', 'const', 'mut', 'imm',
-  'pub', 'priv', 'prot', 'crate', 'super'
+  'mod', 'use', 'requires', 'static', 'const', 'mut', 'imm',
+  'pub', 'priv', 'prot', 'crate', 'super',
+  'self', 'Self'
 ]);
 
 /**
@@ -56,7 +57,6 @@ const WORD_MAP = new Map([
   ['mod', 'keyword'],
   ['use', 'keyword'],
   ['requires', 'keyword'],
-  ['new', 'keyword'],
   ['static', 'keyword'],
   ['const', 'keyword'],
   ['mut', 'keyword'],
@@ -103,10 +103,10 @@ const WORD_MAP = new Map([
   ['char', 'type'],
   ['void', 'type'],
   ['type', 'type'],
-  ['Self', 'type'],
 
   // Special Variables & Literals
-  ['self', 'variable'],
+  ['self', 'keyword'],
+  ['Self', 'keyword'],
   ['true', 'number'],
   ['false', 'number'],
   ['null', 'number'],
@@ -127,15 +127,19 @@ class QWWordMappingHighlighter {
     const functionTypeIdx = tokenTypes.indexOf('function');
     const typeTypeIdx = tokenTypes.indexOf('type');
     const parameterTypeIdx = tokenTypes.indexOf('parameter');
+    const variableTypeIdx = tokenTypes.indexOf('variable');
 
     let inBlockComment = 0; // nested block comment depth across lines
+    let inImpl = false;
 
     for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
       const lineText = document.lineAt(lineIndex).text;
       let i = 0;
       const len = lineText.length;
       let expectFunctionName = false;
-      let expectTypeName = false;
+      let expectTypeName = inImpl;
+      let inLetVar = false;
+      let expectVariableName = false;
 
       while (i < len) {
         // If we are currently inside a multi-line block comment
@@ -231,6 +235,11 @@ class QWWordMappingHighlighter {
             if (typeTypeIdx !== -1) {
               tokensBuilder.push(lineIndex, wordStart, word.length, typeTypeIdx, 1);
             }
+          } else if (expectVariableName) {
+            expectVariableName = false;
+            if (variableTypeIdx !== -1) {
+              tokensBuilder.push(lineIndex, wordStart, word.length, variableTypeIdx, 1);
+            }
           } else if (tokenTypeStr) {
             const typeIndex = tokenTypes.indexOf(tokenTypeStr);
             if (typeIndex !== -1) {
@@ -241,6 +250,12 @@ class QWWordMappingHighlighter {
               expectFunctionName = true;
             } else if (word === 'struct' || word === 'enum' || word === 'iface' || word === 'trait' || word === 'flags' || word === 'type') {
               expectTypeName = true;
+            } else if (word === 'impl') {
+              inImpl = true;
+              expectTypeName = true;
+            } else if (word === 'let' || word === 'var') {
+              inLetVar = true;
+              expectVariableName = true;
             }
           } else {
             // 1. Check if it's a function call (followed by '(')
@@ -250,7 +265,11 @@ class QWWordMappingHighlighter {
             }
             if (peek < len && lineText[peek] === '(' && functionTypeIdx !== -1) {
               tokensBuilder.push(lineIndex, wordStart, word.length, functionTypeIdx, 0);
-            } else {
+            } else if (inLetVar) {
+              if (variableTypeIdx !== -1) {
+                tokensBuilder.push(lineIndex, wordStart, word.length, variableTypeIdx, 1);
+              }
+            } else if (!inImpl) {
               // 2. Check if it's a parameter before ':' (e.g. `v: T` or `x, y: T` or `min, max: &Self`)
               let isParam = false;
               let pIdx = i;
@@ -292,6 +311,25 @@ class QWWordMappingHighlighter {
         }
 
         // Other characters (symbols, operators, whitespace)
+        if (char === '{' || char === ';') {
+          inImpl = false;
+          expectTypeName = false;
+          inLetVar = false;
+          expectVariableName = false;
+        } else if (char === '=') {
+          inLetVar = false;
+          expectVariableName = false;
+        } else if (inImpl && (char === ':' || char === ',' || char === '<')) {
+          expectTypeName = true;
+        } else if (inLetVar) {
+          if (char === ':') {
+            inLetVar = false;
+            expectVariableName = false;
+            expectTypeName = true;
+          } else if (char === ',' || char === '(') {
+            expectVariableName = true;
+          }
+        }
         i++;
       }
     }

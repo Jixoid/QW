@@ -245,8 +245,8 @@ impl Backend {
     // Control flow, visibility and modifiers
     let keywords = [
       "break", "continue", "pub", "priv", "prot", "mut", "imm",
-      "const", "static", "new", "task", "init", "fini", "using", "requires",
-      "generic", "flags", "die", "crate", "super", "self", "true", "false", "null", "nil",
+      "const", "static", "task", "init", "fini", "using", "requires",
+      "generic", "flags", "die", "crate", "super", "self", "Self", "true", "false", "null", "nil",
     ];
 
     for kw in keywords {
@@ -266,7 +266,7 @@ impl Backend {
       "i8", "i16", "i32", "i64", "i128", "isize",
       "u8", "u16", "u32", "u64", "u128", "usize",
       "f16", "f32", "f64", "f128", "fsize", "bf16",
-      "bool", "str", "char", "void", "never", "Self", "type",
+      "bool", "str", "char", "void", "never", "type",
     ];
 
     for ty in types {

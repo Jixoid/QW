@@ -85,6 +85,18 @@ enum MainCommands {
     #[arg(long, default_value = "debug")]
     variant: BuildVariant,
 
+    /// Target start routine
+    #[arg(long, default_value = "cqrt")]
+    start_routine: BuildStartRoutine,
+
+    /// Target triple
+    #[arg(long)]
+    triple: Option<String>,
+    
+    /// Source RTL
+    #[arg(long)]
+    rtl: Option<String>,
+
     /// Display execution times for each compiler phase
     #[arg(long)]
     timings: bool,
@@ -183,10 +195,13 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Build{path, variant, verbose, timings, usages, dump} => {
+    MainCommands::Build{path, variant, start_routine, triple, rtl, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: &path,
         variant,
+        start_routine,
+        triple,
+        rtl,
         verbose,
         timings,
         usages,
@@ -208,6 +223,9 @@ fn main_cmd(cmd: MainCommands) {
       let info = build::BuildInfo {
         path: &path,
         variant: BuildVariant::Debug,
+        start_routine: BuildStartRoutine::CQRT,
+        triple: None,
+        rtl: None,
         verbose,
         timings,
         usages,
@@ -249,8 +267,17 @@ enum BuildVariant {
   RelWithDebInfo,
 }
 
+
+#[derive(ValueEnum, Clone, Debug)]
+enum BuildStartRoutine {
+  CRT,
+  QRT,
+  CQRT,
+}
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
-#[value(rename_all = "lowercase")] // CLI'da küçük harf zorunluluğu: ast, scope, hir
+#[value(rename_all = "lowercase")]
 enum DumpStage {
   Ast,
   Scope,

@@ -8,6 +8,8 @@
     { "include": "#numbers" },
     { "include": "#functions" },
     { "include": "#type_declarations" },
+    { "include": "#impl_declarations" },
+    { "include": "#variable_declarations" },
     { "include": "#keywords" },
     { "include": "#types" },
     { "include": "#parameters" },
@@ -63,6 +65,32 @@
         }
       ]
     },
+    "impl_declarations": {
+      "patterns": [
+        {
+          "name": "meta.impl.declaration.qw",
+          "match": "\\b(impl)\\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s*(:)\\s*([a-zA-Z_][a-zA-Z0-9_]*))?",
+          "captures": {
+            "1": { "name": "keyword.declaration.qw" },
+            "2": { "name": "entity.name.type.qw" },
+            "3": { "name": "keyword.operator.qw" },
+            "4": { "name": "entity.name.type.qw" }
+          }
+        }
+      ]
+    },
+    "variable_declarations": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.qw",
+          "match": "\\b(let|var)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.qw" },
+            "2": { "name": "variable.other.declaration.qw" }
+          }
+        }
+      ]
+    },
     "parameters": {
       "patterns": [
         {
@@ -113,7 +141,7 @@
         },
         {
           "name": "keyword.declaration.qw",
-          "match": "\\b(fun|task|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|new|static|const|mut|imm)\\b"
+          "match": "\\b(fun|task|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|static|const|mut|imm|self|Self)\\b"
         },
         {
           "name": "keyword.other.visibility.qw",
@@ -125,7 +153,7 @@
       "patterns": [
         {
           "name": "storage.type.qw",
-          "match": "\\b(i8|i16|i32|i64|isize|u8|u16|u32|u64|usize|f32|f64|fsize|bool|str|char|void|type|Self)\\b"
+          "match": "\\b(i8|i16|i32|i64|isize|u8|u16|u32|u64|usize|f32|f64|fsize|bool|str|char|void|type)\\b"
         }
       ]
     },
@@ -133,7 +161,7 @@
       "patterns": [
         {
           "name": "constant.language.qw",
-          "match": "\\b(true|false|null|nil|self)\\b"
+          "match": "\\b(true|false|null|nil)\\b"
         }
       ]
     },

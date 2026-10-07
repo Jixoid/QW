@@ -1,4 +1,4 @@
-use qwc_ast::{FieldKind, IdentSave, Item, Thing, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
+use qwc_ast::{self as ast, FieldKind, IdentSave, Item, Thing, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -14,25 +14,29 @@ impl TypeParser {
 
     lex.get()?.expect_kind(WK::BraceL)?;
 
-    let (rng, impin) = {
+    let (rng, impin, hideimp) = {
       let mut ctn = vec![];
       let mut impin = vec![];
+      let mut hideimp = vec![];
 
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
 
         let id = FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), &mut Visibility::Inherited)?;
         let it = cre.get(id);
+        
         match it.kind {
           FieldKind::MemberVar {kind} => ctn.push(Thing::NamedType(it.name.unwrap(), kind).push(cre)),
           
           FieldKind::ImplIn {trait_ty, ctn} => impin.push((trait_ty, ctn, it.pos, it.vis)),
-          
-          c @_ => todo!("{c:#?}") // TODO!
+
+          FieldKind::Fun{..} | FieldKind::Init{..} | FieldKind::Fini{..} => hideimp.push(id),
+
+          FieldKind::Type(..) => panic!("unexpected kind"),
         }
       }
 
-      (cre.extra(&ctn), impin.into_boxed_slice())
+      (cre.extra(&ctn), impin.into_boxed_slice(), hideimp.into_boxed_slice())
     };
 
     let type_ty = Type {
@@ -43,13 +47,24 @@ impl TypeParser {
     
     for (trait_ty, ctn, pos, vis) in impin {
       let sideimp = Item {
-        kind: qwc_ast::ItemKind::Impl { type_ty, trait_ty: Some(trait_ty), ctn },
+        kind: ast::ItemKind::Impl { type_ty, trait_ty: Some(trait_ty), ctn },
         name: None,
         pos,
         vis,
       }.push(ctx.cre);
 
       ctx.side.push(sideimp);
+    }
+
+    if !hideimp.is_empty() {
+      let hideimp = Item {
+        kind: ast::ItemKind::Impl { type_ty, trait_ty: None, ctn: ctx.cre.extra(&hideimp) },
+        name: None,
+        pos: lex.pos_extend(start),
+        vis: Visibility::Public,
+      }.push(ctx.cre);
+
+      ctx.side.push(hideimp);
     }
 
     Ok(type_ty)

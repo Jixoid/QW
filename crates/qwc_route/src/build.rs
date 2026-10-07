@@ -1,8 +1,8 @@
-use std::{env, fs, io::Write, path::Path, time::{Duration, Instant}};
+use std::{env, fs, io::{self, Write}, path::Path, process::Command, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_cgen::ICGen;
+use qwc_cgen::{ICGen, Optimization, OutKind};
 use qwc_hir as hir;
 use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
@@ -13,12 +13,18 @@ use qwc_resolve::{ExportMap, Imod, ImplFor, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
 use qwc_unit::Unit;
 
-use crate::{BuildVariant, DumpStage, Error, parse_conf};
+use crate::{BuildStartRoutine, BuildVariant, DumpStage, Error, parse_conf};
 
+
+#[derive(PartialEq, Eq)]
+pub enum BuildKind { Exec, Lib }
 
 pub struct BuildInfo<'a> {
   pub path: &'a Path,
   pub variant: BuildVariant,
+  pub start_routine: BuildStartRoutine,
+  pub triple: Option<String>,
+  pub rtl: Option<String>,
   pub verbose: u8,
   pub timings: bool,
   pub usages: bool,
@@ -95,7 +101,7 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
 }
 
 
-pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, StrInterner, Duration), Error> {
+pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, StrInterner, BuildKind, Duration), Error> {
   let mut cre = ast::Krate::new();
   let mut sin = StrInterner::new();
 
@@ -103,13 +109,13 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, Str
   let abs_fpath = fpath.canonicalize().unwrap_or_else(|_| fpath.to_path_buf());
   env::set_current_dir(&abs_fpath)?;
 
-  let entry_file = {
+  let (entry_file, bldkind) = {
     let path1 = Path::new("src/main.qw");
     let path2 = Path::new("src/lib.qw");
     
     match () {
-      _ if path1.exists() => path1,
-      _ if path2.exists() => path2,
+      _ if path1.exists() => (path1, BuildKind::Exec),
+      _ if path2.exists() => (path2, BuildKind::Lib),
       
       _ => return Err(Error::New | format!("could not find entry file (`{:?}` or `{:?}`)", path1, path2))
     }
@@ -137,7 +143,7 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, Str
 
   env::set_current_dir(legcurpath)?;
   
-  Ok((cre, sin, time))
+  Ok((cre, sin, bldkind, time))
 }
 
 pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, imods: &[Imod<'_>]) -> Result<(ScopeMap, Vec<ImplFor>, Duration), Error> {
@@ -208,14 +214,79 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, ext_ll: bool) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
+pub fn build_cgen(backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, ext_ll: bool, outk: OutKind, triple: &Option<String>, opt: Optimization) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
-  let (bc, ll) = backend.generate(mir_cre, ext_ll).map_err(|err| Error::Str(err))?;
+  let (out, ll) = backend.generate(mir_cre, ext_ll, outk, triple, opt).map_err(|err| Error::Str(err))?;
 
   let time = now.elapsed();
 
-  Ok((bc, ll, time))
+  Ok((out, ll, time))
+}
+
+pub fn build_jit(info: &BuildInfo, backend: &Box<dyn ICGen>, bytecode: &Vec<u8>) -> Result<(), Error> {
+  if info.verbose > 0 {
+    eprintln!("{}", "Running".green().bold());
+  }
+
+  let exitcode = backend.run_vm(&bytecode)?;
+
+  if exitcode != 0 {
+    eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
+  }
+
+  Ok(())
+}
+
+pub fn build_link(info: &BuildInfo, bld_kind: BuildKind) -> Result<(), Error> {
+  if info.verbose > 0 {
+    eprintln!("{}", "Linking".green().bold());
+  }
+
+  fn get_rtl(rtl: &Option<String>) -> Result<&str, Error> {
+    match rtl {
+      Some(s) => Ok(&s),
+      
+      None =>  {
+        let path = Path::new("/usr/lib/qwc/rtl");
+
+        if path.exists() { Ok(path.to_str().unwrap()) } else { Err(Error::New | "rtl sources not found") }
+      }
+    }
+  }
+  
+  let mut out = Command::new("ld.lld");
+  
+  if bld_kind == BuildKind::Exec {
+    let rt = match info.start_routine {
+      BuildStartRoutine::CQRT => {out.arg("-lc").arg("--dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2"); "cqrt"},
+      BuildStartRoutine::CRT  => {out.arg("-lc").arg("--dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2"); "crt"},
+      BuildStartRoutine::QRT  => "qrt",
+    };
+  
+    out.arg(format!("{}/obj/{}.o", get_rtl(&info.rtl)?, rt));
+  }
+  
+  let out = out.arg("-L/usr/lib").arg("-o")
+    .arg(match bld_kind {
+      BuildKind::Exec => info.path.join("build").join("out"),
+      BuildKind::Lib  => info.path.join("build").join("out.so"),
+    })
+    .arg(info.path.join("build").join("out.o"))
+    .output()
+    .map_err(|err| err.to_string())?;
+  
+  if !out.status.success() {
+    eprintln!("{}{} {}", "Linker Exit Code".green().bold(), ":".bright_black(), out.status);
+    
+    io::stderr().write(&out.stdout).map_err(|err| err.to_string())?;
+    io::stderr().write(&out.stderr).map_err(|err| err.to_string())?;
+  } else {
+    io::stderr().write(&out.stdout).map_err(|err| err.to_string())?;
+    io::stderr().write(&out.stderr).map_err(|err| err.to_string())?;
+  }
+
+  Ok(())
 }
 
 
@@ -275,7 +346,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // PASS 1 (parse)
   if info.verbose > 0 { eprintln!("{}", "PASS 1 (parse)".red().bold()) }
   
-  let (ast_cre, mut sin, time_pass1_parse) = build_ast_krate(info.path, &mut far)?;
+  let (ast_cre, mut sin, bld_kind, time_pass1_parse) = build_ast_krate(info.path, &mut far)?;
   
   if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
 
@@ -348,9 +419,21 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     fs::create_dir(info.path.join("build"))?;
   }
   
-  let (bitcode, llir, time_pass4_cgen) = build_cgen(&backend, &mir_cre, info.dump.contains(&DumpStage::Lir))?;
+  let (out, llir, time_pass4_cgen) = build_cgen(
+    &backend,
+    &mir_cre,
+    info.dump.contains(&DumpStage::Lir),
+    if info.execute { OutKind::ByteCode } else { OutKind::Object },
+    &info.triple,
+    Optimization::None,
+  )?;
+
+  let bytecode = (info.execute /* OutKind::ByteCode */).then_some(&out);
+  let object = (!info.execute /* OutKind::Object */).then_some(&out);
   
-  fs::write(info.path.join("build").join("out.bc"), &bitcode)?;
+  if !info.execute {
+    fs::write(info.path.join("build").join("out.o"), &&object.unwrap())?;
+  }
   
   if info.dump.contains(&DumpStage::Lir) {
     let llir = llir.unwrap();
@@ -365,18 +448,12 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   }
 
 
-  // Execute
   if info.execute {
-    if info.verbose > 0 {
-      eprintln!("{}", "Running".green().bold());
-    }
-
-    let exitcode = backend.run_vm(&bitcode)?;
-
-    if info.verbose > 0 && exitcode != 0 {
-      eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
-    }
+    build_jit(&info, &backend, bytecode.unwrap())?;
+  } else {
+    build_link(&info, bld_kind)?;
   }
+
 
 
   // Timings
