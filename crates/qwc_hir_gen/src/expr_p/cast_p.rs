@@ -27,11 +27,11 @@ pub fn low_cast(ctx: &mut Ctx, it: &ast::Expr, expr: ast::ExprId, target: ast::T
 
   // Choose
   let ret: Option<(fn(_, _, _, _, _) -> _, hir::TypeId)> =
-  match ctx.cre.get(target).kind {
+  match ctx.get_type(target).kind {
     hir::TypeKind::Ref(target, _) => {
 
       // Choose
-      match ctx.cre.get(target).kind {
+      match ctx.get_type(target).kind {
         hir::TypeKind::Iface(..) => Some((cast_to_iface_ref, target)),
         
         _ => None,
@@ -58,11 +58,11 @@ fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: h
   let expr_ty = ctx.cre.get(expr).ety;
   
   // Choose
-  let expr_unwrap = match ctx.cre.get(expr_ty).kind {
+  let expr_unwrap = match ctx.get_type(expr_ty).kind {
     hir::TypeKind::Ref(expr_ty, _) => {
       
       // Choose
-      match ctx.cre.get(expr_ty).kind {
+      match ctx.get_type(expr_ty).kind {
         hir::TypeKind::Struct(..) => Some(expr_ty),
 
         _ => None
@@ -105,7 +105,7 @@ fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::
   let expr_ty = ctx.cre.get(expr).ety;
   
   // Choose
-  match ctx.cre.get(expr_ty).kind {
+  match ctx.get_type(expr_ty).kind {
     hir::TypeKind::Struct(..) => Some(()),
 
     _ => None

@@ -26,7 +26,7 @@ pub fn low_return(ctx: &mut Ctx, val: Option<ast::ExprId>) -> Result<hir::ExprId
   let item = hir::Expr {
     kind: hir::ExprKind::Return(val),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_never(),
+    ety: ctx.prims.ty_never,
   };
 
   Ok(ctx.cre.push(item))
@@ -40,7 +40,7 @@ pub fn low_break(ctx: &mut Ctx, val: Option<ast::ExprId>) -> Result<hir::ExprId,
   let item = hir::Expr {
     kind: hir::ExprKind::Break(val),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_never(),
+    ety: ctx.prims.ty_never,
   };
 
   Ok(ctx.cre.push(item))
@@ -51,7 +51,7 @@ pub fn low_continue(ctx: &mut Ctx) -> Result<hir::ExprId, Message> {
   let item = hir::Expr {
     kind: hir::ExprKind::Continue,
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_never(),
+    ety: ctx.prims.ty_never,
   };
 
   Ok(ctx.cre.push(item))

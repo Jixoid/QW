@@ -824,6 +824,7 @@ name = "qwc_cgen"
 version = "0.1.0"
 dependencies = [
  "qwc_mir",
+ "qwc_string_interner",
 ]
 
 [[package]]
@@ -833,6 +834,7 @@ dependencies = [
  "inkwell",
  "qwc_cgen",
  "qwc_mir",
+ "qwc_string_interner",
  "rustc-hash",
 ]
 

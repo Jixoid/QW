@@ -12,8 +12,8 @@
 
 use itertools::{Itertools, izip};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
-use qwc_ast::{self as ast};
-use qwc_hir::{self as hir, PushOkApi};
+use qwc_ast::{self as ast, Attribute};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
 use crate::{Ctx, ExprLow};
 
@@ -40,7 +40,7 @@ impl TypeLow {
       Path(rng) => resolve_p::low_path(ctx, rng)?,
       
       // Basic
-      Unit => ctx.tin.ty_unit(),
+      Unit => ctx.prims.ty_unit,
 
       // Reference
       Ref(id, ism) => {let id = Self::low(ctx, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
@@ -54,7 +54,7 @@ impl TypeLow {
       Slice(kind) => Self::low_slice(ctx, kind)?,
       
       // Combinated
-      Struct(rng) => Self::low_struct(ctx, rng)?,
+      Struct(rng) => Self::low_struct(ctx, id, rng)?,
       Tuple(rng)  => Self::low_tuple(ctx, rng)?,
       
       // Trait
@@ -88,7 +88,7 @@ impl TypeLow {
     let hir_ext  = ExprLow::low(ctx, ext)?;
 
     // Check
-    let lay = ctx.cre.get(hir_kind).layout;
+    let lay = ctx.get_type(hir_kind).layout;
     let pos = ctx.src.get(kind).pos;
     
     if lay.is_dynamic() {
@@ -100,6 +100,7 @@ impl TypeLow {
     let this = hir::Type {
       kind: hir::TypeKind::Vector(hir_kind, hir_ext),
       layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
     };
     
     Ok(ctx.cre.push(this))
@@ -109,7 +110,7 @@ impl TypeLow {
     let hir_kind = TypeLow::low(ctx, kind)?;
 
     // Check
-    let lay = ctx.cre.get(hir_kind).layout;
+    let lay = ctx.get_type(hir_kind).layout;
     let pos = ctx.src.get(kind).pos;
 
     if lay.is_dynamic() {
@@ -128,7 +129,7 @@ impl TypeLow {
     let hir_ext  = ExprLow::low(ctx, ext)?;
 
     // Check
-    let lay = ctx.cre.get(hir_kind).layout;
+    let lay = ctx.get_type(hir_kind).layout;
     let pos = ctx.src.get(kind).pos;
     
     if lay.is_dynamic() {
@@ -140,6 +141,7 @@ impl TypeLow {
     let this = hir::Type {
       kind: hir::TypeKind::Array(hir_kind, hir_ext),
       layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
     };
     
     Ok(ctx.cre.push(this))
@@ -149,7 +151,7 @@ impl TypeLow {
     let hir_kind = TypeLow::low(ctx, kind)?;
 
     // Check
-    let lay = ctx.cre.get(hir_kind).layout;
+    let lay = ctx.get_type(hir_kind).layout;
     let pos = ctx.src.get(kind).pos;
 
     if lay.is_dynamic() {
@@ -163,7 +165,7 @@ impl TypeLow {
 
 
   // Combinated
-  fn low_struct(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+  fn low_struct(ctx: &mut Ctx, id: ast::TypeId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
     let fields_rng = {
       let mut ctn = vec![];
       
@@ -172,7 +174,7 @@ impl TypeLow {
 
         // Check
         let id = Self::low(ctx, kind)?;
-        let lay = ctx.cre.get(id).layout;
+        let lay = ctx.get_type(id).layout;
 
         if lay.is_dynamic() {
           return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(name)))
@@ -185,9 +187,16 @@ impl TypeLow {
       ctx.cre.extra(&ctn)
     };
 
+    let attr = read_attrs(ctx, ctx.src.get_attached(id))?;
+
+    let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::QW} else {hir::LayoutBy::C});
+
+
+    // Post
     let this = hir::Type {
       kind: hir::TypeKind::Struct(fields_rng),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      layout,
+      attr,
     };
 
     Ok(ctx.cre.push(this))
@@ -201,7 +210,7 @@ impl TypeLow {
         // Check
         let pos = ctx.src.get(id).pos;
         let id = Self::low(ctx, id)?;
-        let lay = ctx.cre.get(id).layout;
+        let lay = ctx.get_type(id).layout;
 
         if lay.is_dynamic() {
           return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(pos)))
@@ -218,6 +227,7 @@ impl TypeLow {
     let this = hir::Type {
       kind: hir::TypeKind::Tuple(rng),
       layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
     };
     
     Ok(ctx.cre.push(this))
@@ -247,7 +257,7 @@ impl TypeLow {
     let self_kind = self_kind.map(|id| Self::low(ctx, id)).transpose()?;
 
     let ret = match ret {
-      None => ctx.tin.ty_unit(),
+      None => ctx.prims.ty_unit,
       Some(kind) => Self::low(ctx, kind)?,
     };
 
@@ -256,12 +266,42 @@ impl TypeLow {
     let this = hir::Type {
       kind: hir::TypeKind::Fun{self_kind, args, ret},
       layout: hir::Layout::new_dst(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
     };
     
     Ok(ctx.cre.push(this))
   }
 
 }
+
+
+fn read_attrs(ctx: &Ctx, attrs: Option<&Vec<Attribute>>) -> Result<TypeAttr, Message> {
+  let mut attr = TypeAttr::empty();
+
+  if let Some(attrs) = attrs {
+    for key in attrs {
+      let key = key.ident;
+      
+      match () {
+        // C
+        _ if key.sid() == ctx.sin.sid_c() => {
+          if attr.contains(TypeAttr::C) {
+            return Err(Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
+              .add(ONLY_ONE_DEFINITION_REMAIN)
+            )
+          };
+          attr |= TypeAttr::C;
+        }
+
+        _ => return Err(Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)))
+      }
+    }
+  }
+
+  Ok(attr)
+}
+
 
 
 
@@ -272,8 +312,8 @@ impl TypeMatch {
   pub fn matches(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, ty2_ast: ast::TypeId) -> Result<(), Message> {
     if ty1 == ty2 { return Ok(()) }
 
-    let ty1_ty = ctx.cre.get(ty1).kind;
-    let ty2_ty = ctx.cre.get(ty2).kind;
+    let ty1_ty = ctx.get_type(ty1).kind;
+    let ty2_ty = ctx.get_type(ty2).kind;
     let ty2_ast_ty = ctx.src.get(ty2_ast).kind;
 
     match (ty1_ty, ty2_ty) {
@@ -293,8 +333,8 @@ impl TypeMatch {
   pub fn matches_pos(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, pos: impl Into<Span>) -> Result<(), Message> {
     if ty1 == ty2 { return Ok(()) }
 
-    let ty1_ty = ctx.cre.get(ty1).kind;
-    let ty2_ty = ctx.cre.get(ty2).kind;
+    let ty1_ty = ctx.get_type(ty1).kind;
+    let ty2_ty = ctx.get_type(ty2).kind;
 
     match (ty1_ty, ty2_ty) {
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
@@ -309,8 +349,8 @@ impl TypeMatch {
 
 
   pub fn match_fun(ctx: &Ctx, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId) -> Result<(), Message> {
-    let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.cre.get(fun1).kind else { panic!() };
-    let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.cre.get(fun2).kind else { panic!() };
+    let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get_type(fun1).kind else { panic!() };
+    let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get_type(fun2).kind else { panic!() };
 
     let fun2_ast = ctx.src.get(fun2_ast);
     let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ret: ret_ast, attr: _} = fun2_ast.kind else { panic!() };
@@ -330,8 +370,8 @@ impl TypeMatch {
       }
 
       (Some(self_1), Some(self_2)) => {
-        let self_1_ty = ctx.cre.get(self_1).kind;
-        let self_2_ty = ctx.cre.get(self_2).kind;
+        let self_1_ty = ctx.get_type(self_1).kind;
+        let self_2_ty = ctx.get_type(self_2).kind;
 
         match (self_1_ty, self_2_ty) {
           (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
@@ -343,8 +383,10 @@ impl TypeMatch {
 
 
     // Args Match
-    let args_1 = ctx.cre.extra_get(args_1).collect_vec().into_boxed_slice();
-    let args_2 = ctx.cre.extra_get(args_2).collect_vec().into_boxed_slice();
+    let krate_1 = ctx.get_krate(fun1.cid());
+    let krate_2 = ctx.get_krate(fun2.cid());
+    let args_1 = krate_1.extra_get(args_1).collect_vec().into_boxed_slice();
+    let args_2 = krate_2.extra_get(args_2).collect_vec().into_boxed_slice();
     let args_ast = ctx.src.extra_get(args_ast).collect_vec().into_boxed_slice();
     
     if args_1.len() != args_2.len() {
@@ -355,8 +397,8 @@ impl TypeMatch {
     }
 
     for (id_1, id_2, id_ast) in izip!(args_1, args_2, args_ast) {
-      let hir::Thing::NamedType(_, id_1) = *ctx.cre.get(id_1) else { unreachable!() };
-      let hir::Thing::NamedType(_, id_2) = *ctx.cre.get(id_2) else { unreachable!() };
+      let hir::Thing::NamedType(_, id_1) = *krate_1.get(id_1) else { unreachable!() };
+      let hir::Thing::NamedType(_, id_2) = *krate_2.get(id_2) else { unreachable!() };
       let ast::Thing::NamedType(_, id_ast) = *ctx.src.get(id_ast) else { unreachable!() };
 
       TypeMatch::matches(ctx, id_1, id_2, id_ast)?;

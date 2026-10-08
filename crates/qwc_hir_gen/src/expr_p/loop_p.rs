@@ -42,7 +42,7 @@ pub fn low_while(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, blok: ast::Ex
   let cond = ExprLow::low(ctx, cond)?;
   let cond_ty = ctx.cre.get(cond).ety;
 
-  if cond_ty != ctx.tin.ty_bool() {
+  if cond_ty != ctx.prims.ty_bool {
     let found_ty = ctx.type_name(cond_ty);
     return Err(Message::error(
       EXPECTED_BUT_FOUND.args(&["bool", &found_ty]),
@@ -59,7 +59,7 @@ pub fn low_while(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, blok: ast::Ex
   let brk = hir::Expr {
     kind: hir::ExprKind::Break(None),
     category: hir::ExprCategory::RValue,
-    ety: ctx.tin.ty_never(),
+    ety: ctx.prims.ty_never,
   };
   let brk = ctx.cre.push(brk);
 

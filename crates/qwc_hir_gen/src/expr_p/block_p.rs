@@ -14,7 +14,7 @@ use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_hir::{self as hir, ExprCategory};
 use qwc_ast as ast;
 
-use crate::{ExprLow, hgen::Ctx, TypeLow};
+use crate::{ExprLow, TypeLow, Ctx, TypeMatch};
 
 
 // Block
@@ -38,7 +38,7 @@ pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) ->
   
   let (stmt, expr) = res?;
 
-  let ety = expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.tin.ty_unit() );
+  let ety = expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.prims.ty_unit );
 
 
   // Post
@@ -71,10 +71,8 @@ pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init
     let kind_ty = TypeLow::low(ctx, kind)?;
 
     if init_ty != kind_ty {
-      return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(kind_ty), &ctx.type_name(init_ty)]),
-        Label::new(kind_pos, X_DEFINED_HERE.args(&[&ctx.type_name(kind_ty)])))
-          .add(Label::new(init_pos, CONFLICTING_DEFINITION))
-      );
+      TypeMatch::matches_pos(ctx, kind_ty, init_ty, init_pos)
+        .map_err(|err| err.add(Label::new(kind_pos, X_DEFINED_HERE.args(&[&ctx.type_name(kind_ty)]))))?;
     }
 
     (kind_ty, kind_pos)
@@ -89,11 +87,11 @@ pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init
   let local_id = ctx.loc.insert(name, kind, ism, span);
 
   // is DST
-  if ctx.cre.get(kind).layout.is_dynamic() {
+  if ctx.get_type(kind).layout.is_dynamic() {
     return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
   }
   
-  if ctx.cre.get(kind).layout.is_meta() {
+  if ctx.get_type(kind).layout.is_meta() {
     return Err(Message::error(META_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
   }
 
@@ -102,7 +100,7 @@ pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init
   let this = hir::Expr {
     kind: hir::ExprKind::Let { local: local_id, init: init_hir},
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_unit(),
+    ety: ctx.prims.ty_unit,
   };
 
   Ok(ctx.cre.push(this))

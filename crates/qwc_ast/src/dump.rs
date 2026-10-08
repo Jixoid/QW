@@ -593,8 +593,8 @@ impl DumpHandler for Expr {
         write!(f, "{}", span.str(far).yellow())?;
       }
 
-      ExprKind::String(span) => {
-        write!(f, "{}", span.str(far).green())?;
+      ExprKind::String(span, _) => {
+        write!(f, "{}", span.str(far).yellow())?;
       }
 
       ExprKind::Tuple(rng) => {

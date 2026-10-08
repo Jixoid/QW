@@ -1,0 +1,7 @@
+
+pub enum SysCall {
+  NR_read  = 0;
+  NR_write = 1;
+  NR_open  = 2;
+  NR_close = 3;
+}

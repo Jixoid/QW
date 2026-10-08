@@ -54,7 +54,7 @@ pub enum FieldKind {
   /// This declaration is surreptitiously carried over to the global arena as a side effect.
   /// 
   /// e.g.,
-  /// ```
+  /// ```ignore
   /// impl: fmt::Display {
   ///   ...
   /// }

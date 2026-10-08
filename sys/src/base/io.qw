@@ -1,0 +1,18 @@
+// types
+pub trait FD {}
+
+pub flags OpenFlags { Read, Write, Create }
+
+
+// function
+pub trait IO {
+  type FD = FD;
+  type OpenFlags = OpenFlags;
+
+  fun open(path: &str, flag: OpenFlags) -> ?FD;
+
+  fun read(fd: FD, buf: ^mut u8, count: usize) -> ?usize;
+  fun write(fd: FD, buf: ^u8, count: usize) -> ?usize;
+
+  fun close(fd: FD) -> ?();
+}

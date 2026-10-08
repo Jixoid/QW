@@ -12,14 +12,14 @@
 
 mod cgen;
 mod value_p;
-mod fn_ctx;
+mod fun_ctx;
 mod symb_p;
 mod inst_p;
 mod blok_p;
 mod type_p;
 
 use cgen::{CtxI, CtxM};
-use fn_ctx::FnCtx;
+use fun_ctx::FunCtx;
 use symb_p::SymbLow;
 use blok_p::BlokLow;
 use inst_p::InstLow;

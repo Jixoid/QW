@@ -22,12 +22,27 @@ use crate::{SymbLow, ty_interner::TypeInterner};
 
 pub struct Ctx<'ast, 'hir, 'mir, 'a> {
   pub src: &'hir hir::Krate,
+  pub deps: &'hir hir::Deps,
   pub sin: &'ast StrInterner,
   pub cre: &'mir mut mir::Krate,
   pub tin: &'mir mut TypeInterner<'a>,
   pub sum: &'mir mut Summary,
   pub mgr: &'mir mut Vec<Sid>,
   pub cmap: &'mir mut CacheMap,
+}
+
+impl<'ast, 'hir, 'mir, 'a> Ctx<'ast, 'hir, 'mir, 'a> {
+  pub fn get_krate(&self, cid: hir::CID) -> &hir::Krate {
+    if cid == self.src.cid() {
+      self.src
+    } else {
+      self.deps.get(cid)
+    }
+  }
+
+  pub fn get_type(&self, id: hir::TypeId) -> &hir::Type {
+    self.get_krate(id.cid()).get(id)
+  }
 }
 
 pub struct CacheMap {
@@ -40,7 +55,7 @@ pub struct CacheMap {
 #[macro_export]
 macro_rules! ctx {
   ($mgr:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, src: $ctx.src, sin: $ctx.sin, cmap: $ctx.cmap, $mgr}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, src: $ctx.src, deps: $ctx.deps, sin: $ctx.sin, cmap: $ctx.cmap, $mgr}
   };
 }
 
@@ -50,7 +65,7 @@ pub struct MGen;
 
 impl<'ast, 'hir, 'mir, 'a> MGen {
 
-  pub fn low(src: &'hir hir::Krate, sin: &'ast StrInterner, layinfo: &'a LayoutInfo) -> (Option<mir::Krate>, Summary) {
+  pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo) -> (Option<mir::Krate>, Summary) {
     let mut cre = mir::Krate::new();
     let mut sum = Summary::new();
     let mut tin = TypeInterner::new(&mut cre, layinfo);
@@ -63,7 +78,7 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
     let root = src.root().unwrap();
 
     let _ = SymbLow::low(
-      &mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, mgr: &mut vec![]},
+      &mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, deps, sin, mgr: &mut vec![]},
       root
     ).map_err(|msg| sum.add(msg));
 
@@ -71,3 +86,4 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
   }
 
 }
+

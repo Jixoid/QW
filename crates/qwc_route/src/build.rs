@@ -14,7 +14,7 @@ use std::{env, fs, io::{self, Write}, path::Path, process::Command, time::{Durat
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_cgen::{ICGen, Optimization, OutKind};
+use qwc_cgen::{self as cgen, ICGen, Optimization, OutKind};
 use qwc_hir as hir;
 use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
@@ -25,7 +25,7 @@ use qwc_resolve::{ExportMap, Imod, ImplFor, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
 use qwc_unit::Unit;
 
-use crate::{BuildStartRoutine, BuildVariant, DumpStage, Error, parse_conf};
+use crate::{BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode, parse_conf};
 
 
 #[derive(PartialEq, Eq)]
@@ -33,10 +33,13 @@ pub enum BuildKind { Exec, Lib }
 
 pub struct BuildInfo<'a> {
   pub path: &'a Path,
+  pub opt_level: OptLevel,
   pub variant: BuildVariant,
   pub start_routine: BuildStartRoutine,
   pub triple: Option<String>,
   pub rtl: Option<String>,
+  pub reloc: RelocMode,
+  pub mcmodel: CodeModel,
   pub verbose: u8,
   pub timings: bool,
   pub usages: bool,
@@ -210,9 +213,9 @@ pub fn build_hir_export(hir_cre: &hir::Krate, far: &Files) -> Result<(ExportMap,
   }
 }
 
-pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo) -> Result<(mir::Krate, Duration), Error> {
+pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo) -> Result<(mir::Krate, Duration), Error> {
   let now = Instant::now();
-  let (mir_cre, sum) = MGen::low(&hir_cre, sin, layinfo);
+  let (mir_cre, sum) = MGen::low(&hir_cre, deps, sin, layinfo);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -226,10 +229,19 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, sin: &StrInterner, far: &Files, lay
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, ext_ll: bool, outk: OutKind, triple: &Option<String>, opt: Optimization) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
+pub fn build_cgen(info: &BuildInfo, backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
-  let (out, ll) = backend.generate(mir_cre, ext_ll, outk, triple, opt).map_err(|err| Error::Str(err))?;
+  let (out, ll) = backend.generate(
+    mir_cre,
+    sin,
+    ext_ll,
+    outk,
+    &info.triple,
+    match info.reloc { RelocMode::PIC => cgen::RelocMode::PIC, RelocMode::Static => cgen::RelocMode::Static },
+    match info.mcmodel { CodeModel::Small => cgen::CodeModel::Small, CodeModel::Medium => cgen::CodeModel::Medium, CodeModel::Large => cgen::CodeModel::Large, CodeModel::Kernel => cgen::CodeModel::Kernel },
+    match info.opt_level { OptLevel::O0 => Optimization::None, OptLevel::O1 => Optimization::Less, OptLevel::O2 => Optimization::Default, OptLevel::O3 => Optimization::Aggressive },
+  ).map_err(|err| Error::Str(err))?;
 
   let time = now.elapsed();
 
@@ -307,6 +319,8 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Layout
   let hir_layinfo = hir::LayoutInfo{
     bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+    
+    str_lay: hir::Layout::new_dst(hir::LayoutBy::SYS),
 
     i8_lay:   hir::Layout::new_static(hir::LayoutBy::SYS),
     i16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
@@ -366,8 +380,9 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Core & Imods
   let mut deps = hir::Deps::new();
   let core_cid = deps.get_next_id();
-  let (core_cre, core_exp) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+  let (core_cre, core_exp, prims) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
   deps.add(core_cre);
+  deps.set_prims(prims);
   let core_name = sin.sid("core");
   let imods = [Imod::new(core_name, &core_exp)];
   let imod_cids = [core_cid];
@@ -387,7 +402,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, implst, &imod_cids, &mut deps)?;
   let hir_cre = deps.get(hir_cid);
   
-  if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, sin: &sin}) }
+  if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, deps: Some(&deps), sin: &sin}) }
   
   if info.check_only { return Ok(()) }
 
@@ -401,7 +416,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   
   let (exp, time_pass2_export) = build_hir_export(hir_cre, &far)?;
   
-  if info.dump.contains(&DumpStage::Export) { eprintln!("{}", qwc_resolve::dump_exp::Dump{exp: &exp, cre: hir_cre, sin: &sin, root: hir_cre.root().unwrap().to_any()}) }
+  if info.dump.contains(&DumpStage::Export) { eprintln!("{}", qwc_resolve::dump_exp::Dump{exp: &exp, cre: hir_cre, deps: Some(&deps), sin: &sin, root: hir_cre.root().unwrap().to_any()}) }
 
 
   // QWU save
@@ -415,9 +430,9 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Pass 3 (mgen)
   if info.verbose > 0 { eprintln!("{}", "PASS 3 (mgen)".red().bold()) }
   
-  let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &sin, &far, &mir_layinfo)?;
+  let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &deps, &sin, &far, &mir_layinfo)?;
   
-  if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre}) }
+  if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre, sin: &sin}) }
 
 
   // Choose Backend
@@ -432,12 +447,12 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   }
   
   let (out, llir, time_pass4_cgen) = build_cgen(
+    &info,
     &backend,
     &mir_cre,
+    &sin,
     info.dump.contains(&DumpStage::Lir),
     if info.execute { OutKind::ByteCode } else { OutKind::Object },
-    &info.triple,
-    Optimization::None,
   )?;
 
   let bytecode = (info.execute /* OutKind::ByteCode */).then_some(&out);

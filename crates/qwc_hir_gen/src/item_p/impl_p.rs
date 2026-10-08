@@ -65,13 +65,13 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
 }
 
 fn low_impl_validate(ctx: &mut Ctx, _type_ty: hir::TypeId, trait_ty: hir::TypeId, impl_span: Span, implemented_methods: Vec<(Ident, hir::ItemId, ast::TypeId, Span)>) -> Result<hir::ItemRng, Message> {
-  let (hir::TypeKind::Iface(trait_methods) | hir::TypeKind::Trait(trait_methods)) = ctx.cre.get(trait_ty).kind else { unreachable!() };
-
+  let (hir::TypeKind::Iface(trait_methods) | hir::TypeKind::Trait(trait_methods)) = ctx.get_type(trait_ty).kind else { unreachable!() };
+  let krate = ctx.get_krate(trait_ty.cid());
 
   // Expected Methods
-  let expected_methods = ctx.cre.extra_get(trait_methods)
+  let expected_methods = krate.extra_get(trait_methods)
     .map(|id| {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { unreachable!() };
+      let hir::Thing::NamedType(name, kind) = *krate.get(id) else { unreachable!() };
       (name, kind)
     }).collect_vec().into_boxed_slice();
 

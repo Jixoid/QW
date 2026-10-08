@@ -12,7 +12,7 @@
 
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
-use qwc_mir::{self as mir, id::PushOkApi};
+use qwc_mir as mir;
 
 use crate::{Ctx, Layouter};
 
@@ -24,25 +24,26 @@ impl TypeLow {
   pub fn low(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
     if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Ok(id) }
 
-    let it = ctx.src.get(id);
+    let it = ctx.get_type(id);
 
     let ty = match it.kind {
       // Primitive
       hir::TypeKind::Unit => ctx.tin.ty_unit(),
       
       hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
+      hir::TypeKind::ArchInt(_) => ctx.tin.ty_arch_int(),
       hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
       hir::TypeKind::Bool => ctx.tin.ty_bool(),
 
       hir::TypeKind::Ref(id, _) => Self::low_ref(ctx, id)?,
 
       // Combinated
-      hir::TypeKind::Struct(rng) => Self::low_struct(ctx, rng)?,
+      hir::TypeKind::Struct(rng) => Self::low_struct(ctx, id, rng, id.cid())?,
       hir::TypeKind::Iface(rng) => Self::low_iface(ctx, rng)?,
       hir::TypeKind::TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
       
       // Callable
-      hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, self_kind, args, ret)?,
+      hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
       
       // Logic Error
       hir::TypeKind::Trait(..) => panic!("this type must not have infiltrated this layer!"),
@@ -83,53 +84,36 @@ impl TypeLow {
 
 
   fn low_ref(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
-    let it = ctx.src.get(id);
+    use hir::TypeKind::*;
 
-    let it = match it.kind {
-      hir::TypeKind::Iface(..) => {
-        let ptr = ctx.tin.ty_ptr();
-        
-        let rng = ctx.cre.extra(&[ptr, ptr]);
-        
-
-        // Post
-        let kind = mir::TypeKind::Struct(rng);
-
-        mir::Type {
-          kind,
-          layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
-        }.push(ctx.cre)
-      }
-      
-      _ => ctx.tin.ty_ptr(),
-    };
-
-    Ok(it)
+    // is fat
+    let fat = matches!(ctx.get_type(id).kind, Str | Slice(..) | Iface(..));
+    
+    Ok(if fat {ctx.tin.ty_fatptr()} else {ctx.tin.ty_ptr()})
   }
 
 
-  fn low_struct(ctx: &mut Ctx, rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
-    let rng = {
-      let mut sub = vec![];
-
-      for id in ctx.src.extra_get(rng) {
-        let hir::Thing::NamedType(_, kind) = *ctx.src.get(id) else { panic!() };
-
-        let kind = TypeLow::low(ctx, kind)?;
-
-        sub.push(kind);
-      }
-
-      ctx.cre.extra(&sub)
+  fn low_struct(ctx: &mut Ctx, id: hir::TypeId, rng: hir::ThingRng, cid: hir::CID) -> Result<mir::TypeId, Message> {
+    let kinds: Vec<hir::TypeId> = {
+      let krate = ctx.get_krate(cid);
+      krate.extra_get(rng).map(|id| {
+        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { panic!() };
+        kind
+      }).collect()
     };
-    
+
+    let mut sub = Vec::with_capacity(kinds.len());
+    for kind in kinds {
+      sub.push(TypeLow::low(ctx, kind)?);
+    }
+    let rng = ctx.cre.extra(&sub);
 
     // Post
     let kind = mir::TypeKind::Struct(rng);
 
     let this = mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
     };
 
     Ok(ctx.cre.push(this))
@@ -143,25 +127,25 @@ impl TypeLow {
     TypeLow::low(ctx, hidden)
   }
 
-  fn low_fun(ctx: &mut Ctx, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId) -> Result<mir::TypeId, Message> {
-    let args = {
-      let mut ctn = vec![];
-
-      if let Some(self_kind) = self_kind {
-        ctn.push(Self::low(ctx, self_kind)?);
-      }
-      
-      for id in ctx.src.extra_get(args) {
-        let hir::Thing::NamedType(_, kind) = *ctx.src.get(id) else { panic!() };
-
-        ctn.push(Self::low(ctx, kind)?);
-      }
-
-      ctx.cre.extra(&ctn)
+  fn low_fun(ctx: &mut Ctx, id: hir::TypeId, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId, cid: hir::CID) -> Result<mir::TypeId, Message> {
+    let kinds: Vec<hir::TypeId> = {
+      let krate = ctx.get_krate(cid);
+      krate.extra_get(args).map(|id| {
+        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { panic!() };
+        kind
+      }).collect()
     };
 
-    let ret = Self::low(ctx, ret)?;
+    let mut ctn = Vec::with_capacity(kinds.len() + (self_kind.is_some() as usize));
+    if let Some(self_kind) = self_kind {
+      ctn.push(Self::low(ctx, self_kind)?);
+    }
+    for kind in kinds {
+      ctn.push(Self::low(ctx, kind)?);
+    }
+    let args = ctx.cre.extra(&ctn);
 
+    let ret = Self::low(ctx, ret)?;
 
     // Post
     let kind = mir::TypeKind::Fun{
@@ -170,10 +154,9 @@ impl TypeLow {
 
     let this = mir::Type{
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, None),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
     };
 
-    
     Ok(ctx.cre.push(this))
   }
 

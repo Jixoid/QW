@@ -61,6 +61,7 @@ impl ExportMap {
     crate::dump_exp::Dump {
       exp: self,
       cre,
+      deps: None,
       sin,
       root,
     }

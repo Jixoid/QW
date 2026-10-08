@@ -13,7 +13,7 @@
 use itertools::Itertools;
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast as ast;
-use qwc_hir::{self as hir, PushOkApi};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 use rustc_hash::FxHashMap;
 
 use crate::Ctx;
@@ -60,5 +60,6 @@ pub fn low_enum(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Messag
   hir::Type {
     kind: hir::TypeKind::Enum(rng),
     layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
   }.push_ok(ctx.cre)
 }

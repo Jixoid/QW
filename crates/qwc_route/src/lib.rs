@@ -93,11 +93,15 @@ enum MainCommands {
     #[arg(long, default_value = ".")]
     path: PathBuf,
 
+    /// Optimization Level
+    #[arg(short = 'O', default_value = "O0", default_missing_value = "1", num_args = 0..=1)]
+    opt_level: OptLevel,
+
     /// Target build destination
     #[arg(long, default_value = "debug")]
     variant: BuildVariant,
 
-    /// Target start routine
+    /// Select start routine (only executable)
     #[arg(long, default_value = "cqrt")]
     start_routine: BuildStartRoutine,
 
@@ -105,9 +109,17 @@ enum MainCommands {
     #[arg(long)]
     triple: Option<String>,
     
-    /// Source RTL
+    /// RTL Source
     #[arg(long)]
     rtl: Option<String>,
+
+    /// PIC or Static
+    #[arg(long, default_value = "pic")]
+    reloc: RelocMode,
+
+    /// Code Model
+    #[arg(long, default_value = "small")]
+    mcmodel: CodeModel,
 
     /// Display execution times for each compiler phase
     #[arg(long)]
@@ -207,13 +219,16 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Build{path, variant, start_routine, triple, rtl, verbose, timings, usages, dump} => {
+    MainCommands::Build{path, opt_level, variant, start_routine, triple, rtl, reloc, mcmodel, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: &path,
+        opt_level,
         variant,
         start_routine,
         triple,
         rtl,
+        reloc,
+        mcmodel,
         verbose,
         timings,
         usages,
@@ -234,10 +249,13 @@ fn main_cmd(cmd: MainCommands) {
     MainCommands::Check{path, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: &path,
+        opt_level: OptLevel::O0,
         variant: BuildVariant::Debug,
         start_routine: BuildStartRoutine::CQRT,
         triple: None,
         rtl: None,
+        reloc: RelocMode::PIC,
+        mcmodel: CodeModel::Small,
         verbose,
         timings,
         usages,
@@ -272,6 +290,12 @@ fn main_cmd(cmd: MainCommands) {
 }
 
 
+
+#[derive(ValueEnum, Debug, Clone, PartialEq)]
+#[value(rename_all = "uppercase")]
+pub enum OptLevel { O0, O1, O2, O3 }
+
+
 #[derive(ValueEnum, Clone, Debug)]
 enum BuildVariant {
   Debug,
@@ -287,9 +311,22 @@ enum BuildStartRoutine {
   CQRT,
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+pub enum RelocMode {
+  PIC,
+  Static,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum CodeModel {
+  Small,
+  Medium,
+  Large,
+  Kernel,
+}
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
-#[value(rename_all = "lowercase")]
 enum DumpStage {
   Ast,
   Scope,

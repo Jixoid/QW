@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use crate::{BuildStartRoutine, BuildVariant, DumpStage, Error, build};
+use crate::{BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode, build};
 
 
 pub struct RunInfo<'a> {
@@ -26,6 +26,7 @@ pub struct RunInfo<'a> {
 pub fn run(info: RunInfo) -> Result<(), Error> {
   build::build(build::BuildInfo {
     path: info.path,
+    opt_level: OptLevel::O0,
     verbose: info.verbose,
     timings: info.timings,
     usages: info.usages,
@@ -36,5 +37,7 @@ pub fn run(info: RunInfo) -> Result<(), Error> {
     start_routine: BuildStartRoutine::CRT,
     triple: None,
     rtl: None,
+    reloc: RelocMode::PIC,
+    mcmodel: CodeModel::Small,
   })
 }

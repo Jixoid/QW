@@ -27,6 +27,7 @@ pub struct TypeInterner<'a> {
   // Ptr
   ty_ptr: TypeId,
   ty_fatptr: TypeId,
+  ty_fatptrint: TypeId,
   
   // Int
   ty_i8: TypeId,
@@ -45,11 +46,35 @@ pub struct TypeInterner<'a> {
 
 impl<'a> TypeInterner<'a> {
   pub fn new(cre: &mut Krate, layinfo: &'a LayoutInfo) -> Self {
+    let ty_i8  = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},  true), layout: layinfo.i8_lay}.push(cre);
+    let ty_i16 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(16)}, true), layout: layinfo.i16_lay}.push(cre);
+    let ty_i32 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)}, true), layout: layinfo.i32_lay}.push(cre);
+    let ty_i64 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)}, true), layout: layinfo.i64_lay}.push(cre);
+
+    let ty_arch_int = || -> TypeId {
+      use mir::ArchBit::*;
+
+      match layinfo.arch_bit {
+        B8  => ty_i8,
+        B16 => ty_i16,
+        B32 => ty_i32,
+        B64 => ty_i64,
+      }
+    };
+
+
     let ty_ptr = Type{kind: TypeKind::Ptr, layout: layinfo.ptr_size}.push(cre);
 
     let ty_fatptr = {
       let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_ptr]));
-      let layout = Layouter::layout(&kind, layinfo, cre, None);
+      let layout = Layouter::layout(&kind, layinfo, cre, qwc_hir::LayoutBy::SYS);
+
+      Type{kind, layout}.push(cre)
+    };
+
+    let ty_fatptrint = {
+      let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_arch_int()]));
+      let layout = Layouter::layout(&kind, layinfo, cre, qwc_hir::LayoutBy::SYS);
 
       Type{kind, layout}.push(cre)
     };
@@ -64,6 +89,7 @@ impl<'a> TypeInterner<'a> {
 
       ty_ptr,
       ty_fatptr,
+      ty_fatptrint,
       
       // Int
       ty_i8:   Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},   true), layout: layinfo.i8_lay}.push(cre),
@@ -87,6 +113,7 @@ impl<'a> TypeInterner<'a> {
 
   pub fn ty_ptr(&self) -> TypeId { self.ty_ptr }
   pub fn ty_fatptr(&self) -> TypeId { self.ty_fatptr }
+  pub fn ty_fatptrint(&self) -> TypeId { self.ty_fatptrint }
 
 
   // Int

@@ -12,14 +12,14 @@
 
 use qwc_mir::{self as mir, Expr, SSA};
 
-use crate::{FnCtx, TypeLow, ValueLow, cgen::{CtxI, CtxM}};
+use crate::{FunCtx, TypeLow, ValueLow, cgen::{CtxI, CtxM}};
 
 
 pub struct InstLow;
 
 impl InstLow {
 
-  pub fn low_result<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FnCtx<'ctx>, inst_kind: &Expr, dest: SSA) {
+  pub fn low_result<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FunCtx<'ctx>, inst_kind: &Expr, dest: SSA) {
     match *inst_kind {
       // Alloca
       Expr::Alloca { kind } => {
@@ -155,7 +155,7 @@ impl InstLow {
   }
 
 
-  pub fn low_sideff<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FnCtx<'ctx>, inst_kind: &Expr) {
+  pub fn low_sideff<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FunCtx<'ctx>, inst_kind: &Expr) {
     match *inst_kind {
       // Alloca
       Expr::Alloca{..} => panic!(),

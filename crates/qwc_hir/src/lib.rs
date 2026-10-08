@@ -27,4 +27,4 @@ pub use id::{AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, A
 pub use {items::*, types::*, exprs::*, things::* };
 pub use layout::*;
 pub use visitor::Visitor;
-pub use dump::{Dump, DumpHandler};
+pub use dump::{Dump, DumpHandler, DumpCtx};

@@ -14,10 +14,7 @@ use inkwell::values::FunctionValue;
 use qwc_mir::{Block, BlokId, BlokRng, Inst, Terminator, Type, TypeKind};
 use rustc_hash::FxHashMap;
 
-use crate::{
-	FnCtx, InstLow, ValueLow,
-	cgen::{CtxI, CtxM},
-};
+use crate::{FunCtx, InstLow, ValueLow, cgen::{CtxI, CtxM}};
 
 
 pub struct BlokLow;
@@ -33,7 +30,7 @@ impl BlokLow {
 			_ => panic!("Expected function type for function symbol"),
 		};
 
-		let mut fctx = FnCtx::new(fv.get_params());
+		let mut fctx = FunCtx::new(fv.get_params());
 
 		let mut bb_map: FxHashMap<BlokId, inkwell::basic_block::BasicBlock<'ctx>> = FxHashMap::default();
 

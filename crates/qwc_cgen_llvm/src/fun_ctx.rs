@@ -15,13 +15,13 @@ use inkwell::values::BasicValueEnum;
 use qwc_mir::SSA;
 
 
-pub struct FnCtx<'ctx> {
+pub struct FunCtx<'ctx> {
   pub params: Vec<BasicValueEnum<'ctx>>,
   pub ssa_map: FxHashMap<SSA, BasicValueEnum<'ctx>>,
 }
 
 
-impl<'ctx> FnCtx<'ctx> {
+impl<'ctx> FunCtx<'ctx> {
   pub fn new(params: Vec<BasicValueEnum<'ctx>>) -> Self {
     Self {
       params,

@@ -36,12 +36,14 @@ pub struct CoreUnit {
   pub core_name_sid: qwc_string_interner::Sid,
   pub core_cid: hir::CID,
   pub core_cre: hir::Krate,
+  pub core_prims: hir::PrimTypes,
 }
 
 impl CoreUnit {
   pub fn new() -> Self {
     let mut sin = StrInterner::new();
     let hir_layinfo = hir::LayoutInfo {
+      str_lay:  hir::Layout::new_dst(hir::LayoutBy::SYS),
       bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
       i8_lay:   hir::Layout::new_static(hir::LayoutBy::SYS),
       i16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
@@ -57,10 +59,10 @@ impl CoreUnit {
     };
     let mut deps = hir::Deps::new();
     let core_cid = deps.get_next_id();
-    let (core_cre, core_exp) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+    let (core_cre, core_exp, core_prims) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
     let core_name_sid = sin.sid("core");
 
-    Self { base_interner: sin, core_exp, core_name_sid, core_cid, core_cre }
+    Self { base_interner: sin, core_exp, core_name_sid, core_cid, core_cre, core_prims }
   }
 }
 
@@ -188,6 +190,7 @@ impl Backend {
     if let Some(Ok((scope_map, impl_for))) = scope_res {
       if summary.sumerr() == 0 {
         let mut deps = hir::Deps::new();
+        deps.set_prims(self.core.core_prims);
         deps.add(self.core.core_cre.clone());
         let imod_cids = [self.core.core_cid];
 

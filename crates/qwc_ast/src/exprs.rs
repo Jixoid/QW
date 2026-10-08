@@ -11,6 +11,7 @@
 
 
 use qwc_diagnostic::Span;
+use qwc_string_interner::Sid;
 
 use crate::{ExprId, ExprRng, Ident, PattId, ThingRng, TypeId, id::AnyRng};
 
@@ -52,7 +53,7 @@ pub enum ExprKind {
   Unit,
   Bool   (Span, bool),
   Number (Span),
-  String (Span),
+  String (Span, Sid),
   
   // Intrinsic
   SelfB(),

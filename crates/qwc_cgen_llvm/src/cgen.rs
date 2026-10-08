@@ -12,11 +12,11 @@
 
 use std::path::Path;
 
-use inkwell::{
-    builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, targets::{InitializationConfig, Target, TargetMachine, TargetTriple}, types::BasicTypeEnum, values::{FunctionValue, GlobalValue},
-};
-use qwc_cgen::{ICGen, Optimization, OutKind};
+use inkwell::{builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
+use inkwell::targets::{InitializationConfig, Target, TargetMachine, TargetTriple};
+use qwc_cgen::{CodeModel, ICGen, Optimization, OutKind, RelocMode};
 use qwc_mir::{Krate, SymbId, TypeId};
+use qwc_string_interner::StrInterner;
 use rustc_hash::FxHashMap;
 
 use crate::SymbLow;
@@ -30,6 +30,7 @@ pub enum SymbolVal<'ctx> {
 pub struct CtxI<'ctx, 'a> {
 	pub ctx: &'ctx Context,
 	pub mol: &'a Module<'ctx>,
+	pub sin: &'a StrInterner,
 	pub builder: &'a Builder<'ctx>,
 	pub cre: &'a Krate,
 }
@@ -42,9 +43,9 @@ pub struct CtxM<'ctx> {
 pub struct CGenLLVM;
 
 impl ICGen for CGenLLVM {
-	fn generate(&self, cre: &Krate, ext_ll: bool, outk: OutKind, triple: &Option<String>, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String> {
+	fn generate(&self, cre: &Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind, triple: &Option<String>, reloc: RelocMode, mcmodel: CodeModel, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String> {
 		let ctx = Context::create();
-		let mol = Self::compile_to_module(&ctx, "main", cre);
+		let mol = Self::compile_to_module(&ctx, "main", cre, sin);
 
 		mol.verify().map_err(|err| err.to_string())?;
 
@@ -65,8 +66,8 @@ impl ICGen for CGenLLVM {
 					"generic",
 					"",
 					opt_into(opt),
-					inkwell::targets::RelocMode::PIC,
-					inkwell::targets::CodeModel::Default,
+					reloc_into(reloc),
+					mcmodel_into(mcmodel),
 				)
 				.ok_or_else(|| String::from("target machine cannot created"))?
 				.write_to_memory_buffer(&mol, inkwell::targets::FileType::Object)
@@ -108,11 +109,11 @@ impl ICGen for CGenLLVM {
 }
 
 impl CGenLLVM {
-	pub fn compile_to_module<'ctx>(ctx: &'ctx Context, module_name: &str, cre: &Krate) -> Module<'ctx> {
+	pub fn compile_to_module<'ctx>(ctx: &'ctx Context, module_name: &str, cre: &Krate, sin: &StrInterner) -> Module<'ctx> {
 		let mol = ctx.create_module(module_name);
 		let builder = ctx.create_builder();
 
-		let ictx = CtxI {ctx, mol: &mol, builder: &builder, cre };
+		let ictx = CtxI {ctx, mol: &mol, builder: &builder, cre, sin };
 		let mut uctx = CtxM {type_cache: FxHashMap::default(),symbols: FxHashMap::default()};
 
 		// Pass 1: Declare all symbols (prototypes & globals)
@@ -124,17 +125,17 @@ impl CGenLLVM {
 		mol
 	}
 
-	pub fn generate_to_string(cre: &Krate) -> Result<String, String> {
+	pub fn generate_to_string(cre: &Krate, sin: &StrInterner) -> Result<String, String> {
 		let ctx = Context::create();
-		let mol = Self::compile_to_module(&ctx, "main", cre);
+		let mol = Self::compile_to_module(&ctx, "main", cre, sin);
 
 		mol.verify().map_err(|e| e.to_string())?;
 		Ok(mol.print_to_string().to_string())
 	}
 
-	pub fn generate_to_file(cre: &Krate, path: &Path) -> Result<(), String> {
+	pub fn generate_to_file(cre: &Krate, sin: &StrInterner, path: &Path) -> Result<(), String> {
 		let ctx = Context::create();
-		let mol = Self::compile_to_module(&ctx, "main", cre);
+		let mol = Self::compile_to_module(&ctx, "main", cre, sin);
 
 		mol.verify().map_err(|e| e.to_string())?;
 		mol.print_to_file(path).map_err(|e| e.to_string())?;
@@ -142,6 +143,22 @@ impl CGenLLVM {
 	}
 }
 
+
+fn mcmodel_into(it: CodeModel) -> inkwell::targets::CodeModel {
+	match it {
+		CodeModel::Small  => inkwell::targets::CodeModel::Small,
+		CodeModel::Medium => inkwell::targets::CodeModel::Medium,
+		CodeModel::Large  => inkwell::targets::CodeModel::Large,
+		CodeModel::Kernel => inkwell::targets::CodeModel::Kernel,
+	}
+}
+
+fn reloc_into(it: RelocMode) -> inkwell::targets::RelocMode {
+	match it {
+		RelocMode::PIC    => inkwell::targets::RelocMode::PIC,
+		RelocMode::Static => inkwell::targets::RelocMode::Static,
+	}
+}
 
 fn opt_into(it: Optimization) -> inkwell::OptimizationLevel {
 	match it {

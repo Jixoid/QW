@@ -1,0 +1,35 @@
+use sys::base::io::*;
+
+pub trait IO;
+
+priv impl i32 /* fd */: FD {}
+
+
+// function
+impl IO: sys::io::IO {
+  pub fun open(path: &str, flag: OpenFlags) -> ?FD {
+    let fd = core::syscall(unsafe {SysCall::NR_open as usize}, unsafe {path as usize}, unsafe {flag as usize}, 0) as isize;
+
+    if fd >= 0 { fd as i32 }
+  }
+
+
+  pub fun read(fd: FD, buf: ^mut u8, count: usize) -> ?usize {
+    let fd = core::syscall(unsafe {SysCall::NR_read}, unsafe {buf as usize}, count) as isize;
+
+    if fd >= 0 { fd as usize }
+  }
+
+  pub fun write(fd: FD, buf: ^u8, count: usize) -> ?usize {
+    let fd = core::syscall(unsafe {SysCall::NR_write}, unsafe {buf as usize}, count) as isize;
+
+    if fd >= 0 { fd as usize }
+  }
+
+
+  pub fun close(fd: FD) -> ?() {
+    let fd = core::syscall(unsafe {SysCall::NR_close}, unsafe {fd as usize}) as isize;
+
+    if fd >= 0 {()}
+  }
+}

@@ -14,6 +14,8 @@ pub struct LayoutInfo {
   pub ptr_size: Layout,
   
   pub bool_lay: Layout,
+  
+  pub str_lay: Layout,
 
   pub i8_lay: Layout,
   pub i16_lay: Layout,

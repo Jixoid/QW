@@ -11,13 +11,26 @@
 
 
 use qwc_mir as mir;
+use qwc_string_interner::StrInterner;
 
 
 pub enum Optimization {
-  None = 0,
-  Less = 1,
-  Default = 2,
-  Aggressive = 3,
+  None,
+  Less,
+  Default,
+  Aggressive,
+}
+
+pub enum RelocMode {
+  PIC,
+  Static,
+}
+
+pub enum CodeModel {
+  Small,
+  Medium,
+  Large,
+  Kernel,
 }
 
 pub enum OutKind {
@@ -26,7 +39,7 @@ pub enum OutKind {
 
 
 pub trait ICGen {
-  fn generate(&self, mir: &mir::Krate, ext_ll: bool, outk: OutKind, triple: &Option<String>, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String>;
+  fn generate(&self, mir: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind, triple: &Option<String>, reloc: RelocMode, mcmodel: CodeModel, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String>;
 
   fn run_vm(&self, code: &[u8]) -> Result<i32, String>;
 }

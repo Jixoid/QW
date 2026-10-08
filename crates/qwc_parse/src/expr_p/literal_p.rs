@@ -86,11 +86,12 @@ pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
 
 pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
+  let sid = start.string_sid(sin, far)?;
 
   // Post
   let this = Expr {
     pos: lex.pos_extend(start),
-    kind: ExprKind::String(start.into())
+    kind: ExprKind::String(start.into(), sid)
   };
 
   Ok(cre.push(this))

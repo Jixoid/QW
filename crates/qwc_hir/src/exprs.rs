@@ -10,6 +10,8 @@
 */
 
 
+use qwc_string_interner::Sid;
+
 use crate::{ExprId, ExprRng, ItemId, TypeId};
 
 
@@ -21,6 +23,7 @@ pub enum Const {
   // Primitive
   Bool(bool),
   Int(i32),
+  Str(Sid),
 }
 
 

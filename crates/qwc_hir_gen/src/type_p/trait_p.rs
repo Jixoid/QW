@@ -13,12 +13,12 @@
 use crate::{hgen::Ctx, TypeLow};
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_hir::{self as hir, PushOkApi};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
 
 // Static Interface
 pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW)}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()}.push(ctx.cre));
 
   let methods = {
     let mut ctn = vec![];
@@ -49,13 +49,14 @@ pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
   hir::Type {
     kind: hir::TypeKind::Trait(methods),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
   }.push_ok(ctx.cre)
 }
 
 
 // Dynamic Inteface
 pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW)}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()}.push(ctx.cre));
 
   let methods = {
     let mut ctn = vec![];
@@ -67,11 +68,11 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
       let fun_ty = TypeLow::low(ctx, kind)?;
       
       // Check (self != DST)
-      if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.cre.get(fun_ty).kind {
+      if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get_type(fun_ty).kind {
 
         let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
     
-        let lay = ctx.cre.get(self_kind).layout;
+        let lay = ctx.get_type(self_kind).layout;
 
         if !lay.is_static() {
           let pos = self_pos;
@@ -98,5 +99,6 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
   hir::Type {
     kind: hir::TypeKind::Iface(methods),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
   }.push_ok(ctx.cre)
 }

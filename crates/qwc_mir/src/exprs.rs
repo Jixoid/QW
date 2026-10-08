@@ -10,6 +10,8 @@
 */
 
 
+use qwc_string_interner::Sid;
+
 use crate::{SymbId, TypeId, ValueRng};
 
 
@@ -51,6 +53,7 @@ pub enum Const {
   
   Bool(bool),
   Int(i32),
+  Str(Sid),
 }
 
 

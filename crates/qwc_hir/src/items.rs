@@ -41,7 +41,8 @@ pub enum ItemKind {
 bitflags! {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
   pub struct ItemAttr: u16 {
-    const Entry = 1;
+    const C = 1;
+    const Entry = 2;
   }
 }
 

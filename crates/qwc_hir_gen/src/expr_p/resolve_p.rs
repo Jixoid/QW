@@ -129,7 +129,6 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
 
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
       resolve::ScopeKindHir::Expr(id, ty) => {
-        let ty = ctx.low_hir_type(ty);
         let kind = ctx.tin.ty_ref(ctx.cre, ty, false); // TODO!
 
         let this = hir::Expr {

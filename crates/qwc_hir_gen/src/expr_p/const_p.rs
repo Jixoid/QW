@@ -10,10 +10,11 @@
 */
 
 
-use crate::hgen::Ctx;
-
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_hir::{self as hir, Const, ExprCategory};
+use qwc_string_interner::Sid;
+
+use crate::Ctx;
 
 
 // ZST
@@ -22,7 +23,7 @@ pub fn low_unit(ctx: &mut Ctx) -> Result<hir::ExprId, Message> {
   let this = hir::Expr{
     kind: hir::ExprKind::Const(Const::Unit),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_unit()
+    ety: ctx.prims.ty_unit,
   };
 
   Ok(ctx.cre.push(this))
@@ -35,7 +36,7 @@ pub fn low_bool(ctx: &mut Ctx, val: bool) -> Result<hir::ExprId, Message> {
   let this = hir::Expr{
     kind: hir::ExprKind::Const(Const::Bool(val)),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_bool()
+    ety: ctx.prims.ty_bool,
   };
 
   Ok(ctx.cre.push(this))
@@ -51,7 +52,18 @@ pub fn low_number(ctx: &mut Ctx, span: Span) -> Result<hir::ExprId, Message> {
   let this = hir::Expr{
     kind: hir::ExprKind::Const(Const::Int(val)),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_i32()
+    ety: ctx.prims.ty_i32,
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+pub fn low_string(ctx: &mut Ctx, sid: Sid) -> Result<hir::ExprId, Message> {
+  // Post
+  let this = hir::Expr{
+    kind: hir::ExprKind::Const(Const::Str(sid)),
+    category: ExprCategory::RValue,
+    ety: ctx.tin.ty_ref(ctx.cre, ctx.prims.ty_str, false),
   };
 
   Ok(ctx.cre.push(this))

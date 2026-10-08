@@ -13,6 +13,7 @@
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
 use qwc_mir::{self as mir, Value};
+use qwc_string_interner::Sid;
 
 use crate::{FunBuilder, Ctx, SymbLow, builder::{ExprEmit, LoopFrame, RawTerminator}, type_p::TypeLow};
 
@@ -33,7 +34,7 @@ impl ExprLow {
 
     let it = match it.kind {
       // Const
-      Const(val) => Some(Self::low_const(val)?),
+      Const(val) => Some(Self::low_const(ctx, bbld, val)?),
 
       // MemRef
       GlobalRef(item) => Some(Self::low_global_ref(ctx, item)?),
@@ -92,14 +93,35 @@ impl ExprLow {
 
 
   // Const
-  fn low_const(val: hir::Const) -> Result<Value, Message> {
+  fn low_const(ctx: &mut Ctx, bbld: &mut FunBuilder, val: hir::Const) -> Result<Value, Message> {
+    use hir::Const::*;
+    
     let this = match val {
-      hir::Const::Unit => mir::Const::Unit,
-      hir::Const::Bool(b) => mir::Const::Bool(b),
-      hir::Const::Int(i) => mir::Const::Int(i),
+      Unit => mir::Const::Unit.into(),
+      Bool(b) => mir::Const::Bool(b).into(),
+      Int(i) => mir::Const::Int(i).into(),
+
+      Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
     };
 
-    Ok(this.into())
+    Ok(this)
+  }
+
+  fn low_const_str(ctx: &mut Ctx, bbld: &mut FunBuilder, sid: Sid) -> Result<Value, Message> {
+    let fatptr = ctx.tin.ty_fatptrint();
+    let ptr = ctx.tin.ty_ptr();
+    let aint = ctx.tin.ty_arch_int();
+
+    let slot = bbld.build_alloca(fatptr);
+
+    let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 0 }).unwrap();
+    bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr, value: mir::Const::Str(sid).into() });
+    let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 1 }).unwrap();
+    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::Int(ctx.sin.str(sid).len() as i32 -1).into() });
+
+    let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
+    
+    Ok(fat_val.into())
   }
 
 
@@ -132,7 +154,6 @@ impl ExprLow {
   // Ref & Deref
   fn low_ref(ctx: &mut Ctx, bbld: &mut FunBuilder, expr: hir::ExprId) -> Result<Value, Message> {
     let target = Self::low_lval(ctx, bbld, expr)?;
-
 
     // Post
     Ok(target)
@@ -277,28 +298,33 @@ impl ExprLow {
   }
 
   fn low_lval(ctx: &mut Ctx, bbld: &mut FunBuilder, id: hir::ExprId) -> Result<Value, Message> {
-    let it: &hir::Expr = ctx.src.get(id);
+    let it = ctx.src.get(id);
+
+    use hir::ExprKind::*;
+
     match it.kind {
-      hir::ExprKind::LocalRef(local) => {
+      LocalRef(local) => {
         let target = *bbld.local_to_alloca.get(&local).expect("local variable alloca not found");
         Ok(target)
       }
-      hir::ExprKind::GlobalRef(item) => {
+      
+      GlobalRef(item) => {
         Self::low_global_ref(ctx, item)
       }
-      hir::ExprKind::Field { target, idx } => {
+      
+      Field { target, idx } => {
         let target_ptr = Self::low_lval(ctx, bbld, target)?;
         let struct_ty = TypeLow::low(ctx, ctx.src.get(target).ety)?;
         let field_ptr = bbld.emit(mir::Expr::Gep { target: target_ptr, kind: struct_ty, idx }).unwrap();
         Ok(field_ptr.into())
       }
-      hir::ExprKind::Deref(inner) => {
+      
+      Deref(inner) => {
         let ptr_val = ExprLow::low(ctx, bbld, inner)?.unwrap();
         Ok(ptr_val)
       }
-      _ => {
-        panic!("unexpected lvalue expression: {:?}", it.kind);
-      }
+      
+      _ => panic!("unexpected lvalue expression: {:?}", it.kind)
     }
   }
 

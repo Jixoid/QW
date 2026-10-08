@@ -49,7 +49,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
         match ctx.src.get(thing) as &ast::Thing {
           ast::Thing::NamedType(_, ty) => TypeLow::low(ctx!(lscp -> ctx), *ty)?,
 
-          ast::Thing::Name(_) => ctx.tin.ty_generic_type(),
+          ast::Thing::Name(_) => ctx.prims.ty_generic_type,
 
           _ => panic!()
         }
@@ -73,7 +73,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
     },
 
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
-      resolve::ScopeKindHir::Type(ty) => ctx.low_hir_type(ty),
+      resolve::ScopeKindHir::Type(ty) => ty,
 
       resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))

@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 qwc_mir = { path = "../qwc_mir" }
+qwc_string_interner = { path = "../qwc_string_interner" }

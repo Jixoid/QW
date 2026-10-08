@@ -134,7 +134,7 @@ impl ItemLow {
     let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
-    let ret = if let hir::TypeKind::Trait(..) = ctx.cre.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.cre.get(expr_ty).kind {
+    let ret = if let hir::TypeKind::Trait(..) = ctx.get_type(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get_type(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
@@ -248,6 +248,18 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
       let key = key.ident;
       
       match () {
+        // C
+        _ if key.sid() == ctx.sin.sid_c() => {
+          if attr.contains(ItemAttr::C) {
+            return Err(Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
+              .add(ONLY_ONE_DEFINITION_REMAIN)
+            )
+          };
+          attr |= ItemAttr::C;
+        }
+
+        // Import
         _ if key.sid() == ctx.sin.sid_import() => {
           if let Some((pos, _)) = ivis {
             return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
@@ -256,8 +268,9 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
             )
           };
           ivis = Some((key, hir::SymVis::Import))
-        },
+        }
 
+        // Export
         _ if key.sid() == ctx.sin.sid_export() => {
           if let Some((pos, _)) = ivis {
             return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
@@ -266,8 +279,9 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
             )
           };
           ivis = Some((key, hir::SymVis::Export))
-        },
+        }
 
+        // Entry
         _ if key.sid() == ctx.sin.sid_entry() => {
           if let Some((pos, _)) = ivis {
             return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
@@ -282,9 +296,7 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
             )
           };
           if vis != ast::Visibility::Public {
-            return Err(Message::error(ENTRY_FUNCTION_MUST_BE_PUBLIC, Label::new_pos(key))
-              
-            )
+            return Err(Message::error(ENTRY_FUNCTION_MUST_BE_PUBLIC, Label::new_pos(key)))
           }
           ivis = Some((key, hir::SymVis::Export));
           attr |= ItemAttr::Entry;
@@ -299,7 +311,7 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
 
   let vis = match vis {
     ast::Visibility::Inherited => hir::ItemVis::Private,
-    ast::Visibility::Public  => hir::ItemVis::Public(ivis.unwrap().1),
+    ast::Visibility::Public  => hir::ItemVis::Public(ivis.unwrap() /* TODO! */ .1),
     ast::Visibility::Private => hir::ItemVis::Private,
     _ => panic!()
   };

@@ -24,7 +24,7 @@ pub fn low_if(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, then: ast::ExprI
   let cond = ExprLow::low(ctx, cond)?;
   let cond_ty = (ctx.cre.get(cond) as &hir::Expr).ety;
 
-  if cond_ty != ctx.tin.ty_bool() {
+  if cond_ty != ctx.prims.ty_bool {
     let found_ty = ctx.type_name(cond_ty);
     return Err(Message::error(
       EXPECTED_BUT_FOUND.args(&["bool", &found_ty]),

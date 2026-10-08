@@ -210,7 +210,7 @@ impl SymbLow {
       let struct_kind = mir::TypeKind::Struct(rng);
       let ety = ctx.cre.push(mir::Type {
         kind: struct_kind,
-        layout: Layouter::layout(&struct_kind, ctx.tin.layinfo, ctx.cre, None),
+        layout: Layouter::layout(&struct_kind, ctx.tin.layinfo, ctx.cre, qwc_hir::LayoutBy::QW),
       });
 
       let this = mir::Symbol {

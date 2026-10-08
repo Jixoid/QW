@@ -20,7 +20,7 @@ use qwc_string_interner::Sid;
 use rustc_hash::FxHashMap;
 
 use super::helper;
-use crate::{ExprLow, expr_p::const_p, hgen::Ctx};
+use crate::{ExprLow, expr_p::const_p, hgen::Ctx, TypeMatch};
 
 
 // Unary
@@ -41,7 +41,7 @@ pub fn low_unary(ctx: &mut Ctx, op: ast::UnaryOp, id: ast::ExprId) -> Result<hir
 fn low_unary_deref(ctx: &mut Ctx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
   let id = ExprLow::low(ctx, id)?;
   let it = ctx.cre.get(id);
-  let ty = ctx.cre.get(it.ety);
+  let ty = ctx.get_type(it.ety);
 
   use hir::TypeKind::*;
 
@@ -81,7 +81,7 @@ fn low_unary_ref(ctx: &mut Ctx, id: ast::ExprId) -> Result<hir::ExprId, Message>
 fn low_unary_not(ctx: &mut Ctx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
   let id = ExprLow::low(ctx, id)?;
   let it = ctx.cre.get(id);
-  let ty = ctx.cre.get(it.ety);
+  let ty = ctx.get_type(it.ety);
 
   use hir::TypeKind::*;
 
@@ -124,7 +124,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
-  let lhs_ty = ctx.cre.get(lhs_ex.ety);
+  let lhs_ty = ctx.get_type(lhs_ex.ety);
 
   if lhs_ex.ety != rhs_ex.ety { panic!() }
 
@@ -158,7 +158,7 @@ fn low_binary_condition(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs:
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
-  let lhs_ty = ctx.cre.get(lhs_ex.ety);
+  let lhs_ty = ctx.get_type(lhs_ex.ety);
 
   if lhs_ex.ety != rhs_ex.ety { panic!() }
 
@@ -181,7 +181,7 @@ fn low_binary_condition(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs:
   let this = hir::Expr {
     kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_bool(),
+    ety: ctx.prims.ty_bool,
   };
   
   Ok(ctx.cre.push(this))
@@ -191,7 +191,7 @@ fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
-  let lhs_ty = ctx.cre.get(lhs_ex.ety);
+  let lhs_ty = ctx.get_type(lhs_ex.ety);
 
   if lhs_ex.ety != rhs_ex.ety { panic!() }
 
@@ -226,7 +226,7 @@ fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir
   let this = hir::Expr {
     kind,
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_bool(),
+    ety: ctx.prims.ty_bool,
   };
 
   Ok(ctx.cre.push(this))
@@ -244,14 +244,14 @@ pub fn low_assign(ctx: &mut Ctx, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Sp
   let rhs_ty = ctx.cre.get(rhs_hir).ety;
 
   if lhs_ty != rhs_ty {
-    todo!("{:#?} != {:#?}", ctx.cre.get(lhs_ty), ctx.cre.get(rhs_ty))
+    todo!("{:#?} != {:#?}", ctx.get_type(lhs_ty), ctx.get_type(rhs_ty))
   }
 
   // Post
   let this = hir::Expr{
     kind: hir::ExprKind::Assign {lhs: lhs_hir, rhs: rhs_hir},
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_unit(),
+    ety: ctx.prims.ty_unit,
   };
   
   Ok(ctx.cre.push(this))
@@ -269,7 +269,7 @@ pub fn low_assign_op(ctx: &mut Ctx, op: ast::BinaryOp, lhs: ast::ExprId, rhs: as
   let rhs_ty = ctx.cre.get(rhs_hir).ety;
 
   if lhs_ty != rhs_ty {
-    todo!("{:#?} != {:#?}", ctx.cre.get(lhs_ty), ctx.cre.get(rhs_ty))
+    todo!("{:#?} != {:#?}", ctx.get_type(lhs_ty), ctx.get_type(rhs_ty))
   }
 
 
@@ -312,7 +312,7 @@ pub fn low_call(ctx: &mut Ctx, it: &ast::Expr, callee: ast::ExprId, args: ast::E
   };
   
   let callee_ex = ctx.cre.get(callee);
-  let callee_ty = ctx.cre.get(callee_ex.ety);
+  let callee_ty = ctx.get_type(callee_ex.ety);
 
   let qwc_hir::TypeKind::Fun{self_kind: _, args: trait_args, ret: trait_ret} = callee_ty.kind else { panic!() };
 
@@ -333,16 +333,14 @@ pub fn low_call(ctx: &mut Ctx, it: &ast::Expr, callee: ast::ExprId, args: ast::E
     )
   }
 
-
-  for (supp_hir, supp_ast, trt) in izip!(ctx.cre.extra_get(args_hir), ctx.src.extra_get(args), ctx.cre.extra_get(trait_args)) {
-    let hir::Thing::NamedType(_, trt_ty) = *ctx.cre.get(trt) else { panic!() };
+  let callee_krate = ctx.get_krate(callee_ex.ety.cid());
+  for (supp_hir, supp_ast, trt) in izip!(ctx.cre.extra_get(args_hir), ctx.src.extra_get(args), callee_krate.extra_get(trait_args)) {
+    let hir::Thing::NamedType(_, trt_ty) = *callee_krate.get(trt) else { panic!() };
     
     let supp_pos = ctx.src.get(supp_ast).pos;
     let supp_ty = ctx.cre.get(supp_hir).ety;
 
-    if supp_ty != trt_ty {
-      return Err(Message::error(MISMATCHED_TYPES, Label::new_pos(supp_pos)))
-    }
+    TypeMatch::matches_pos(ctx, trt_ty, supp_ty, supp_pos)?;
   }
 
 
@@ -368,13 +366,14 @@ pub fn low_field_create(ctx: &mut Ctx, lhs: ast::ExprId, fields: ast::ThingRng, 
 
   // Get Keys
   let (keys, sort) = {
-    let hir::TypeKind::Struct(fields) = ctx.cre.get(kind).kind else { panic!() };
+    let hir::TypeKind::Struct(fields) = ctx.get_type(kind).kind else { panic!() };
+    let krate = ctx.get_krate(kind.cid());
     
     let mut keys = FxHashMap::default();
     let mut sort = vec![];
     
-    for id in ctx.cre.extra_get(fields) {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
+    for id in krate.extra_get(fields) {
+      let hir::Thing::NamedType(name, kind) = *krate.get(id) else { panic!() };
       
       keys.insert(name, kind);
       sort.push(name);
@@ -397,7 +396,7 @@ pub fn low_field_create(ctx: &mut Ctx, lhs: ast::ExprId, fields: ast::ThingRng, 
 
       if let Some(&kind) = keys.get(&name.sid()) {
         if kind != expr_ty {
-          return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(kind), &ctx.type_name(expr_ty)]), Label::new_pos(expr_pos)))
+          TypeMatch::matches_pos(ctx, kind, expr_ty, expr_pos)?;
         }
       } else {
         return Err(Message::error(HAS_NO_FIELD_NAMED_X.args(&[name.str(ctx.far)]), Label::new_pos(name)))
@@ -465,13 +464,14 @@ pub fn low_member(ctx: &mut Ctx, rng: ast::ExprRng) -> Result<hir::ExprId, Messa
 
     let current = ctx.cre.get(current_id);
 
-    let hir::TypeKind::Struct(fields) = ctx.cre.get(current.ety).kind else {
+    let hir::TypeKind::Struct(fields) = ctx.get_type(current.ety).kind else {
       return Err(Message::error(HAS_NO_FIELD_NAMED_X.args(&[ident.str(ctx.far)]), Label::new_pos(ident)));
     };
+    let krate = ctx.get_krate(current.ety.cid());
 
     let mut found = None;
-    for (idx, field_thing_id) in ctx.cre.extra_get(fields).enumerate() {
-      let hir::Thing::NamedType(name, fty) = *ctx.cre.get(field_thing_id) else { panic!() };
+    for (idx, field_thing_id) in krate.extra_get(fields).enumerate() {
+      let hir::Thing::NamedType(name, fty) = *krate.get(field_thing_id) else { panic!() };
       if name == ident.sid() {
         found = Some((idx as u32, fty));
         break;

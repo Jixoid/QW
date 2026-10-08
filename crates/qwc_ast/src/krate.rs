@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 use qwc_arena::{Arena, Files};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::{WK, Word};
-use qwc_string_interner::StrInterner;
+use qwc_string_interner::{Sid, StrInterner};
 
 use crate::{AnyId, AnyRng, Attribute, Expr, ExprId, Field, FieldId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, Rng, SpecAny}};
 
@@ -149,6 +149,7 @@ impl Krate {
 // Ident save
 pub trait IdentSave {
   fn ident(self, sin: &mut StrInterner, far: &Files) -> Result<Ident, Message>;
+  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message>;
 }
 
 impl IdentSave for Word {
@@ -162,6 +163,22 @@ impl IdentSave for Word {
     let sid = sin.sid(str);
 
     Ok(Ident::new(off, len, fid, sid))
+  }
+
+  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message> {
+    let (off, len, fid, _) = self.to();
+    
+    let str = {
+      let mut str = far.get(fid).map()[(off as usize)+1..((off as usize)+(len.get() as usize))/* -1 (replaced NULL) */].to_vec();
+
+      *str.last_mut().unwrap() = b'\0';
+
+      String::from_utf8(str).unwrap()
+    };
+
+    let sid = sin.sid(&str);
+
+    Ok(sid)
   }
 }
 

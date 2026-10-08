@@ -10,6 +10,8 @@
 */
 
 
+use bitflags::bitflags;
+
 use crate::{ExprId, Layout, ThingRng, TypeId, TypeRng};
 
 
@@ -29,6 +31,7 @@ pub enum TypeKind {
   Float(u16),
   Bit(u16),
   Bool,
+  Str,
 
   // Meta
   Meta(TypeId),
@@ -66,8 +69,49 @@ pub enum TypeKind {
 }
 
 
+bitflags! {
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub struct TypeAttr: u16 {
+    const C = 1;
+  }
+}
+
+
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Type {
   pub kind: TypeKind,
   pub layout: Layout,
+  pub attr: TypeAttr,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct PrimTypes {
+  pub ty_generic_type: TypeId,
+  pub ty_generic_self_type: TypeId,
+  pub ty_unit: TypeId,
+  pub ty_never: TypeId,
+  pub ty_bool: TypeId,
+  pub ty_str: TypeId,
+  pub ty_isize: TypeId,
+  pub ty_usize: TypeId,
+  pub ty_i8: TypeId,
+  pub ty_i16: TypeId,
+  pub ty_i32: TypeId,
+  pub ty_i64: TypeId,
+  pub ty_i128: TypeId,
+  pub ty_u8: TypeId,
+  pub ty_u16: TypeId,
+  pub ty_u32: TypeId,
+  pub ty_u64: TypeId,
+  pub ty_u128: TypeId,
+  pub ty_b8: TypeId,
+  pub ty_b16: TypeId,
+  pub ty_b32: TypeId,
+  pub ty_b64: TypeId,
+  pub ty_b128: TypeId,
+  pub ty_f16: TypeId,
+  pub ty_f32: TypeId,
+  pub ty_f64: TypeId,
+  pub ty_f128: TypeId,
 }

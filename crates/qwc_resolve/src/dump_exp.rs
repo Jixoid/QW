@@ -14,7 +14,7 @@ use std::fmt;
 
 use owo_colors::OwoColorize;
 use qwc_dump::{kw, name, punct, write_indent};
-use qwc_hir::{AnyId, DumpHandler, Krate};
+use qwc_hir::{AnyId, DumpCtx, DumpHandler, Krate, Deps};
 use qwc_string_interner::StrInterner;
 
 use crate::{Export, ExportKind, ExportMap};
@@ -23,13 +23,18 @@ use crate::{Export, ExportKind, ExportMap};
 pub struct Dump<'a> {
   pub exp: &'a ExportMap,
   pub cre: &'a Krate,
+  pub deps: Option<&'a Deps>,
   pub sin: &'a StrInterner,
   pub root: AnyId,
 }
 
 impl<'a> Dump<'a> {
   pub fn new(exp: &'a ExportMap, cre: &'a Krate, sin: &'a StrInterner, root: AnyId) -> Self {
-    Self { exp, cre, sin, root }
+    Self { exp, cre, deps: None, sin, root }
+  }
+
+  pub fn with_deps(exp: &'a ExportMap, cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner, root: AnyId) -> Self {
+    Self { exp, cre, deps: Some(deps), sin, root }
   }
 }
 
@@ -80,7 +85,8 @@ fn dump(dmp: &Dump, exp: &Export, indent: usize, f: &mut fmt::Formatter) -> fmt:
       ExportKind::Expr(_id, ty_id) => {
         write_indent(f, indent)?;
         write!(f, "{} {}{} ", kw("expr"), name(name_str), punct(":"))?;
-        ty_id.dump(dmp.cre, dmp.sin, f, indent)?;
+        let ctx = DumpCtx::new(dmp.cre, dmp.deps, dmp.sin);
+        ty_id.dump(&ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }
     }

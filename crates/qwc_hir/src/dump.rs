@@ -16,16 +16,79 @@ use owo_colors::OwoColorize;
 use qwc_dump::{attr, kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
-use crate::{AnyId, Const, Expr, ExprId, ExprKind, Item, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, NodeKind, SpecAny}};
+use crate::{
+  id::{HirId, NodeKind, SpecAny},
+  AnyId, Const, Deps, Expr, ExprId, ExprKind, Item, ItemId, ItemKind, ItemVis, Krate, Layout,
+  LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, CID,
+};
+
+
+#[derive(Clone, Copy)]
+pub struct DumpCtx<'a> {
+  pub cre: &'a Krate,
+  pub deps: Option<&'a Deps>,
+  pub sin: &'a StrInterner,
+}
+
+impl<'a> DumpCtx<'a> {
+  pub fn new(cre: &'a Krate, deps: Option<&'a Deps>, sin: &'a StrInterner) -> Self {
+    Self { cre, deps, sin }
+  }
+
+  pub fn get_krate(&self, cid: CID) -> Option<&'a Krate> {
+    if cid == self.cre.cid() {
+      Some(self.cre)
+    } else if let Some(deps) = self.deps {
+      Some(deps.get(cid))
+    } else {
+      None
+    }
+  }
+
+  pub fn with_krate(&self, cre: &'a Krate) -> Self {
+    Self {
+      cre,
+      deps: self.deps,
+      sin: self.sin,
+    }
+  }
+
+  pub fn get_type(&self, id: TypeId) -> Option<&'a Type> {
+    self.get_krate(id.cid()).map(|k| k.get(id))
+  }
+
+  pub fn get_item(&self, id: ItemId) -> Option<&'a Item> {
+    self.get_krate(id.cid()).map(|k| k.get(id))
+  }
+
+  pub fn get_expr(&self, id: ExprId) -> Option<&'a Expr> {
+    self.get_krate(id.cid()).map(|k| k.get(id))
+  }
+
+  pub fn get_thing(&self, id: ThingId) -> Option<&'a Thing> {
+    self.get_krate(id.cid()).map(|k| k.get(id))
+  }
+}
 
 
 pub trait DumpHandler {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result;
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result;
 }
 
 pub struct Dump<'a> {
   pub cre: &'a Krate,
+  pub deps: Option<&'a Deps>,
   pub sin: &'a StrInterner,
+}
+
+impl<'a> Dump<'a> {
+  pub fn new(cre: &'a Krate, sin: &'a StrInterner) -> Self {
+    Self { cre, deps: None, sin }
+  }
+
+  pub fn with_deps(cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner) -> Self {
+    Self { cre, deps: Some(deps), sin }
+  }
 }
 
 impl<'a> fmt::Display for Dump<'a> {
@@ -38,8 +101,14 @@ impl<'a> fmt::Display for Dump<'a> {
       Some(v) => v,
     };
 
+    let ctx = DumpCtx {
+      cre: self.cre,
+      deps: self.deps,
+      sin: self.sin,
+    };
+
     writeln!(f, "{}", "HIR Crate Dump".cyan().bold())?;
-    root.dump(self.cre, self.sin, f, 0)?;
+    root.dump(&ctx, f, 0)?;
 
     Ok(())
   }
@@ -49,7 +118,7 @@ impl<'a> fmt::Display for Dump<'a> {
 
 // Object
 impl DumpHandler for Item {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     write_indent(f, indent)?;
     
     match self.vis {
@@ -68,8 +137,8 @@ impl DumpHandler for Item {
     match self.kind {
       ItemKind::RootNS {rng} => {
         writeln!(f, "{} {{", kw("root"))?;
-        for id in cre.extra_get(rng) {
-          id.dump(cre, sin, f, indent +1)?;
+        for id in ctx.cre.extra_get(rng) {
+          id.dump(ctx, f, indent +1)?;
           writeln!(f)?;
         }
         write_indent(f, indent)?;
@@ -77,11 +146,11 @@ impl DumpHandler for Item {
       }
 
       ItemKind::NameSpace {rng, name: ns_name} => {
-        let name_str = sin.str(ns_name);
+        let name_str = ctx.sin.str(ns_name);
 
         writeln!(f, "{} {} {{", kw("namespace"), name(name_str))?;
-        for id in cre.extra_get(rng) {
-          id.dump(cre, sin, f, indent +1)?;
+        for id in ctx.cre.extra_get(rng) {
+          id.dump(ctx, f, indent +1)?;
           writeln!(f)?;
         }
         write_indent(f, indent)?;
@@ -90,8 +159,8 @@ impl DumpHandler for Item {
 
       ItemKind::GenericNS { rng } => {
         writeln!(f, "{} {{", kw("generic"))?;
-        for id in cre.extra_get(rng) {
-          id.dump(cre, sin, f, indent +1)?;
+        for id in ctx.cre.extra_get(rng) {
+          id.dump(ctx, f, indent +1)?;
           writeln!(f)?;
         }
         write_indent(f, indent)?;
@@ -100,61 +169,60 @@ impl DumpHandler for Item {
 
 
       ItemKind::Using { kind, name: use_name } => {
-        let name_str = sin.str(use_name);
+        let name_str = ctx.sin.str(use_name);
         
         write!(f, "{} {} {} ", kw("using"), name(name_str), punct("="))?;
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }
 
 
       ItemKind::Variable { kind, expr, name: var_name, ism } => {
         let kw_label = if ism { kw("var") } else { kw("let") };
-        let name_str = sin.str(var_name);
+        let name_str = ctx.sin.str(var_name);
         
         write!(f, "{} {}{} ", kw_label, name(name_str), punct(":"))?;
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, " {} ", op("="))?;
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }
 
       ItemKind::Function { kind, expr, name: fn_name } => {
-        let name_str = sin.str(fn_name);
+        let name_str = ctx.sin.str(fn_name);
 
         write!(f, "{} {}{} ", kw("fun"), name(name_str), punct(":"))?;
         
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, " ")?;
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
         writeln!(f)?;
       }
 
       ItemKind::Task { kind, expr, name: fn_name } => {
-        let name_str = sin.str(fn_name);
+        let name_str = ctx.sin.str(fn_name);
 
         write!(f, "{} {}{} ", kw("task"), name(name_str), punct(":"))?;
         
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, " ")?;
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
         writeln!(f)?;
       }
 
       
       ItemKind::Impl { type_ty, trait_ty, methods } => {
         write!(f, "{} ", kw("impl"))?;
-        type_ty.dump(cre, sin, f, indent)?;
+        type_ty.dump(ctx, f, indent)?;
         
         if let Some(iface) = trait_ty {
           write!(f, " {} ", punct(":"))?;
-          iface.dump(cre, sin, f, indent)?;
+          iface.dump(ctx, f, indent)?;
         }
         
         writeln!(f, " {{")?;
-        for id in cre.extra_get(methods) {
-          //write_indent(f, indent)?;
-          id.dump(cre, sin, f, indent +1)?;
+        for id in ctx.cre.extra_get(methods) {
+          id.dump(ctx, f, indent +1)?;
         }
         write_indent(f, indent)?;
         writeln!(f, "}}")?;
@@ -166,10 +234,7 @@ impl DumpHandler for Item {
 }
 
 impl DumpHandler for Type {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    //self.layout.dump(cre, sin, f, indent)?;
-    //write!(f, " ")?;
-
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
       // Generic
       TypeKind::GenericType => write!(f, "{}", punct("<generic>"))?,
@@ -194,12 +259,14 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Bool => write!(f, "{}", ty("bool"))?,
+      
+      TypeKind::Str => write!(f, "{}", ty("str"))?,
 
 
       // Meta
       TypeKind::Meta(kind) => {
         write!(f, "{}", "#".bright_black())?;
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
       }
 
 
@@ -209,7 +276,7 @@ impl DumpHandler for Type {
 
         if ism { write!(f, "{}", kw("mut"))? }
         
-        sub.dump(cre, sin, f, indent)?;
+        sub.dump(ctx, f, indent)?;
       }
       
       TypeKind::Ptr(sub, ism) => {
@@ -217,22 +284,22 @@ impl DumpHandler for Type {
 
         if ism { write!(f, "{}", kw("mut"))? }
         
-        sub.dump(cre, sin, f, indent)?;
+        sub.dump(ctx, f, indent)?;
       }
 
 
       // Vector
       TypeKind::Vector(elem, len) => {
         write!(f, "{}", punct("["))?;
-        elem.dump(cre, sin, f, indent)?;
+        elem.dump(ctx, f, indent)?;
         write!(f, " {} ", punct("*"))?;
-        len.dump(cre, sin, f, indent)?;
+        len.dump(ctx, f, indent)?;
         write!(f, "{}", punct("]"))?;
       }
 
       TypeKind::VScale(sub) => {
         write!(f, "{}", punct("["))?;
-        sub.dump(cre, sin, f, indent)?;
+        sub.dump(ctx, f, indent)?;
         write!(f, " {}", punct("*]"))?;
       }
 
@@ -240,15 +307,15 @@ impl DumpHandler for Type {
       // Sequentiel
       TypeKind::Array(elem, len) => {
         write!(f, "{}", punct("["))?;
-        elem.dump(cre, sin, f, indent)?;
+        elem.dump(ctx, f, indent)?;
         write!(f, "{} ", punct(";"))?;
-        len.dump(cre, sin, f, indent)?;
+        len.dump(ctx, f, indent)?;
         write!(f, "{}", punct("]"))?;
       }
 
       TypeKind::Slice(sub) => {
         write!(f, "{}", punct("["))?;
-        sub.dump(cre, sin, f, indent)?;
+        sub.dump(ctx, f, indent)?;
         write!(f, "{}", punct("]"))?;
       }
 
@@ -257,11 +324,11 @@ impl DumpHandler for Type {
       TypeKind::Struct(rng) => {
         write!(f, "{} {{ ", kw("struct"))?;
         let mut first = true;
-        for id in cre.extra_get(rng) {
+        for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
           first = false;
 
-          id.dump(cre, sin, f, indent)?;
+          id.dump(ctx, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -269,11 +336,11 @@ impl DumpHandler for Type {
       TypeKind::Tuple(rng) => {
         write!(f, "{} {{ ", kw("struct"))?;
         let mut first = true;
-        for id in cre.extra_get(rng) {
+        for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
           first = false;
 
-          id.dump(cre, sin, f, indent)?;
+          id.dump(ctx, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -283,11 +350,11 @@ impl DumpHandler for Type {
       TypeKind::Trait(rng) => {
         write!(f, "{} {{ ", kw("trait"))?;
         let mut first = true;
-        for id in cre.extra_get(rng) {
+        for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
           first = false;
 
-          id.dump(cre, sin, f, indent)?;
+          id.dump(ctx, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -295,11 +362,11 @@ impl DumpHandler for Type {
       TypeKind::Iface(rng) => {
         write!(f, "{} {{ ", kw("iface"))?;
         let mut first = true;
-        for id in cre.extra_get(rng) {
+        for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
           first = false;
 
-          id.dump(cre, sin, f, indent)?;
+          id.dump(ctx, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -307,9 +374,9 @@ impl DumpHandler for Type {
 
       TypeKind::TraitFrom {trait_ty, hidden} => {
         write!(f, "{}{}", kw("trait"), punct("("))?;
-        trait_ty.dump(cre, sin, f, indent)?;
+        trait_ty.dump(ctx, f, indent)?;
         write!(f, "{} ", punct(", hidden:"))?;
-        hidden.dump(cre, sin, f, indent)?;
+        hidden.dump(ctx, f, indent)?;
         write!(f, "{}", punct(")"))?;
       }
 
@@ -318,11 +385,11 @@ impl DumpHandler for Type {
       TypeKind::Enum(rng) => {
         write!(f, "{} {{ ", kw("enum"))?;
         let mut first = true;
-        for id in cre.extra_get(rng) {
+        for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
           first = false;
 
-          id.dump(cre, sin, f, indent)?;
+          id.dump(ctx, f, indent)?;
         }
         write!(f, " }}")?;
       }
@@ -333,27 +400,28 @@ impl DumpHandler for Type {
         write!(f, "{}{}", ty("fun"), punct("("))?;
 
         if let Some(self_kind) = self_kind {
-          match cre.get(self_kind).kind {
-            TypeKind::Ref(.., false) => write!(f, "{}", "&self".magenta())?,
-            TypeKind::Ref(.., true) => write!(f, "{}", "&mut self".magenta())?,
+          let self_kind_val = ctx.get_type(self_kind);
+          match self_kind_val.map(|t| &t.kind) {
+            Some(TypeKind::Ref(.., false)) => write!(f, "{}", "&self".magenta())?,
+            Some(TypeKind::Ref(.., true)) => write!(f, "{}", "&mut self".magenta())?,
             _ => write!(f, "{}", "self".magenta())?,
           }
         }
 
-        for id in cre.extra_get(args) {
-          id.dump(cre, sin, f, indent)?;
+        for id in ctx.cre.extra_get(args) {
+          id.dump(ctx, f, indent)?;
           write!(f, "{} ", punct(","))?;
         }
         
         write!(f, "{} {} ", punct(")"), op("->"))?;
-        ret.dump(cre, sin, f, indent)?;
+        ret.dump(ctx, f, indent)?;
       }
 
 
       // Variant
       TypeKind::Option(sub) => {
         write!(f, "{}", op("?"))?;
-        sub.dump(cre, sin, f, indent)?;
+        sub.dump(ctx, f, indent)?;
       }
 
     }
@@ -363,27 +431,27 @@ impl DumpHandler for Type {
 }
 
 impl DumpHandler for Expr {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
       ExprKind::GenericExpr => write!(f, "{}", punct("<generic expr>"))?,
 
-      ExprKind::Const(c) => c.dump(cre, sin, f, indent)?,
+      ExprKind::Const(c) => c.dump(ctx, f, indent)?,
 
       ExprKind::Ref(e) => {
-        e.dump(cre, sin, f, indent)?;
+        e.dump(ctx, f, indent)?;
         write!(f, "{}", op("&"))?;
       }
 
       ExprKind::Deref(e) => {
-        e.dump(cre, sin, f, indent)?;
+        e.dump(ctx, f, indent)?;
         write!(f, "{}", op("^"))?;
       }
 
       ExprKind::GlobalRef(item_id) => {
-        let it: &Item = cre.get(item_id);
-        match it.kind {
-          ItemKind::Function { name, .. } | ItemKind::Variable { name, .. } => {
-            let n = sin.str(name);
+        let it = ctx.get_item(item_id);
+        match it.map(|i| &i.kind) {
+          Some(ItemKind::Function { name, .. } | ItemKind::Variable { name, .. }) => {
+            let n = ctx.sin.str(*name);
             write!(f, "{}{}", tmpval("@"), tmpval(n))?;
           }
           _ => write!(f, "@item_{}", item_id.idx())?,
@@ -396,19 +464,20 @@ impl DumpHandler for Expr {
 
       ExprKind::Let { local, init } => {
         write!(f, "{} _{}{} ", kw("let"), local, punct(":"))?;
-        let init_expr: &Expr = cre.get(init);
-        init_expr.ety.dump(cre, sin, f, indent)?;
+        if let Some(init_expr) = ctx.get_expr(init) {
+          init_expr.ety.dump(ctx, f, indent)?;
+        }
         write!(f, " {} ", op("="))?;
-        init.dump(cre, sin, f, indent)?;
+        init.dump(ctx, f, indent)?;
       }
 
       ExprKind::Block { stmt, expr } => {
         writeln!(f, "{{")?;
-        for id in cre.extra_get(stmt) {
+        for id in ctx.cre.extra_get(stmt) {
           write_indent(f, indent + 1)?;
-          id.dump(cre, sin, f, indent + 1)?;
-          let ex: &Expr = cre.get(id);
-          if matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. }) {
+          id.dump(ctx, f, indent + 1)?;
+          let ex = ctx.get_expr(id);
+          if let Some(ex) = ex && matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. }) {
             writeln!(f)?;
           } else {
             writeln!(f, "{}", punct(";"))?;
@@ -416,7 +485,7 @@ impl DumpHandler for Expr {
         }
         if let Some(last) = expr {
           write_indent(f, indent + 1)?;
-          last.dump(cre, sin, f, indent + 1)?;
+          last.dump(ctx, f, indent + 1)?;
           writeln!(f)?;
         }
         write_indent(f, indent)?;
@@ -424,17 +493,17 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Assign { lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         write!(f, " {} ", op("="))?;
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
 
       ExprKind::Loop { blok, elsb } => {
         write!(f, "{} ", kw("loop"))?;
-        blok.dump(cre, sin, f, indent)?;
+        blok.dump(ctx, f, indent)?;
         if let Some(el) = elsb {
           write!(f, " {} ", kw("else"))?;
-          el.dump(cre, sin, f, indent)?;
+          el.dump(ctx, f, indent)?;
         }
       }
 
@@ -442,7 +511,7 @@ impl DumpHandler for Expr {
         write!(f, "{}", kw("ret"))?;
         if let Some(v) = val {
           write!(f, " ")?;
-          v.dump(cre, sin, f, indent)?;
+          v.dump(ctx, f, indent)?;
         }
       }
 
@@ -450,7 +519,7 @@ impl DumpHandler for Expr {
         write!(f, "{}", kw("break"))?;
         if let Some(v) = val {
           write!(f, " ")?;
-          v.dump(cre, sin, f, indent)?;
+          v.dump(ctx, f, indent)?;
         }
       }
 
@@ -460,29 +529,29 @@ impl DumpHandler for Expr {
 
       ExprKind::If { cond, then, elsb } => {
         write!(f, "{} {}", kw("if"), punct("("))?;
-        cond.dump(cre, sin, f, indent)?;
+        cond.dump(ctx, f, indent)?;
         write!(f, "{} ", punct(")"))?;
-        then.dump(cre, sin, f, indent)?;
+        then.dump(ctx, f, indent)?;
         
         if let Some(elsb) = elsb {
           write!(f, " {} ", kw("else"))?;
-          elsb.dump(cre, sin, f, indent)?;
+          elsb.dump(ctx, f, indent)?;
         }
       }
     
 
       // TypeOf
       ExprKind::TypeOf { kind } => {
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
       }
 
 
       // Call
       ExprKind::Call { callee, args } => {
-        callee.dump(cre, sin, f, indent)?;
+        callee.dump(ctx, f, indent)?;
         write!(f, "{}", punct("("))?;
-        for id in cre.extra_get(args) {
-          id.dump(cre, sin, f, indent)?;
+        for id in ctx.cre.extra_get(args) {
+          id.dump(ctx, f, indent)?;
           write!(f, "{}", punct(","))?;
         }
         write!(f, "{}", punct(")"))?;
@@ -491,15 +560,15 @@ impl DumpHandler for Expr {
 
       // Field
       ExprKind::Field { target, idx } => {
-        target.dump(cre, sin, f, indent)?;
+        target.dump(ctx, f, indent)?;
         write!(f, ".{}", idx)?;
       }
 
       ExprKind::CombinatedInit { kind, fields } => {
-        kind.dump(cre, sin, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, "{}", "{".bright_black())?;
-        for id in cre.extra_get(fields) {
-          id.dump(cre, sin, f, indent)?;
+        for id in ctx.cre.extra_get(fields) {
+          id.dump(ctx, f, indent)?;
           write!(f, "{} ", ",".bright_black())?;
         }
         write!(f, "{}", "}".bright_black())?;
@@ -508,7 +577,7 @@ impl DumpHandler for Expr {
 
       // Integer
       ExprKind::IntArithmetic { op, flg, lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         
         use crate::IntArithmeticOp::*;
         use crate::IntArithmeticFlg::*;
@@ -518,11 +587,11 @@ impl DumpHandler for Expr {
         
         write!(f, " {}{} ", punct(op), punct(flg))?;
         
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
 
       ExprKind::AssignIntArithmetic { op, flg, lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         
         use crate::IntArithmeticOp::*;
         use crate::IntArithmeticFlg::*;
@@ -532,11 +601,11 @@ impl DumpHandler for Expr {
         
         write!(f, " {}{}{} ", punct(op), punct(flg), punct("="))?;
         
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
       
       ExprKind::IntCondition { op, lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         
         use crate::IntConditionOp::*;
         
@@ -544,13 +613,13 @@ impl DumpHandler for Expr {
         
         write!(f, " {} ", punct(op))?;
         
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
 
 
       // Floating
       ExprKind::FloatArithmetic { op, lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         
         use crate::FloatArithmeticOp::*;
         
@@ -558,13 +627,13 @@ impl DumpHandler for Expr {
         
         write!(f, " {} ", punct(op))?;
         
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
 
 
       // Logic
       ExprKind::BoolLogic { op, lhs, rhs } => {
-        lhs.dump(cre, sin, f, indent)?;
+        lhs.dump(ctx, f, indent)?;
         
         use crate::BoolLogicOp::*;
         
@@ -572,27 +641,27 @@ impl DumpHandler for Expr {
         
         write!(f, " {} ", punct(op))?;
         
-        rhs.dump(cre, sin, f, indent)?;
+        rhs.dump(ctx, f, indent)?;
       }
 
       ExprKind::BoolNot (val) => {
         write!(f, "{}", "!(".bright_black())?;
-        val.dump(cre, sin, f, indent)?;
+        val.dump(ctx, f, indent)?;
         write!(f, "{}", ")".bright_black())?;
       }
 
 
       // Cast
       ExprKind::CastToIfaceRef { ref_of_expr, ref_of_type: _, target_iface } => {
-        ref_of_expr.dump(cre, sin, f, indent)?;
+        ref_of_expr.dump(ctx, f, indent)?;
         write!(f, " {} {} {}", punct("/* to iface ref */"), punct("as"), punct("&"))?;
-        target_iface.dump(cre, sin, f, indent)?;
+        target_iface.dump(ctx, f, indent)?;
       }
 
       ExprKind::CastToTrait { expr, target_trait } => {
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
         write!(f, " {} {} ", punct("/* to trait */"), punct("as"))?;
-        target_trait.dump(cre, sin, f, indent)?;
+        target_trait.dump(ctx, f, indent)?;
       }
     }
 
@@ -601,24 +670,24 @@ impl DumpHandler for Expr {
 }
 
 impl DumpHandler for Thing {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
       Thing::NamedType(name, expr) => {
-        write!(f, "{}", sin.str(name).white())?;
+        write!(f, "{}", ctx.sin.str(name).white())?;
         write!(f, " = ")?;
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
       }
       
       Thing::NamedExpr(name, expr) => {
-        write!(f, "{}", sin.str(name).white())?;
+        write!(f, "{}", ctx.sin.str(name).white())?;
         write!(f, " = ")?;
-        expr.dump(cre, sin, f, indent)?;
+        expr.dump(ctx, f, indent)?;
       }
 
       Thing::NamedConst(name, cons) => {
-        write!(f, "{}", sin.str(name).white())?;
+        write!(f, "{}", ctx.sin.str(name).white())?;
         write!(f, " = ")?;
-        cons.dump(cre, sin, f, indent)?;
+        cons.dump(ctx, f, indent)?;
       }
     }
 
@@ -627,11 +696,12 @@ impl DumpHandler for Thing {
 }
 
 impl DumpHandler for Const {
-  fn dump(&self, _cre: &Krate, _sin: &StrInterner, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     match *self {
       Const::Unit => write!(f, "{}", punct("()"))?,
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
       Const::Int(i) => write!(f, "{}", lit_num(i))?,
+      Const::Str(s) => write!(f, "\"{}\"", ctx.sin.str(s))?,
     }
 
     Ok(())
@@ -642,7 +712,7 @@ impl DumpHandler for Const {
 
 // Others
 impl DumpHandler for Layout {
-  fn dump(&self, _: &Krate, _: &StrInterner, f: &mut fmt::Formatter, _: usize) -> fmt::Result {
+  fn dump(&self, _: &DumpCtx, f: &mut fmt::Formatter, _: usize) -> fmt::Result {
     write!(f, "{}", punct("![layout("))?;
 
     match self.kind() {
@@ -671,9 +741,14 @@ impl DumpHandler for Layout {
 macro_rules! impl_dump_id {
   ($id_ty:ident, $node_ty:ident) => {
     impl DumpHandler for $id_ty {
-      fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-        let node: &$node_ty = cre.get(*self);
-        node.dump(cre, sin, f, indent)
+      fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+        if let Some(krate) = ctx.get_krate(self.cid()) {
+          let node: &$node_ty = krate.get(*self);
+          let sub_ctx = ctx.with_krate(krate);
+          node.dump(&sub_ctx, f, indent)
+        } else {
+          write!(f, "<external {} {:?}>", stringify!($node_ty), self.cid())
+        }
       }
     }
   };
@@ -685,19 +760,19 @@ impl_dump_id!(ExprId, Expr);
 impl_dump_id!(ThingId, Thing);
 
 impl DumpHandler for (HirId<SpecAny>, NodeKind) {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.1 {
-      NodeKind::Item  => ItemId::new_from(*self).dump(cre, sin, f, indent),
-      NodeKind::Type  => TypeId::new_from(*self).dump(cre, sin, f, indent),
-      NodeKind::Expr  => ExprId::new_from(*self).dump(cre, sin, f, indent),
-      NodeKind::Thing => ThingId::new_from(*self).dump(cre, sin, f, indent),
+      NodeKind::Item  => ItemId::new_from(*self).dump(ctx, f, indent),
+      NodeKind::Type  => TypeId::new_from(*self).dump(ctx, f, indent),
+      NodeKind::Expr  => ExprId::new_from(*self).dump(ctx, f, indent),
+      NodeKind::Thing => ThingId::new_from(*self).dump(ctx, f, indent),
       NodeKind::Any => write!(f, "<any>"),
     }
   }
 }
 
 impl DumpHandler for AnyId {
-  fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    (self.id(), self.kind()).dump(cre, sin, f, indent)
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    (self.id(), self.kind()).dump(ctx, f, indent)
   }
 }
