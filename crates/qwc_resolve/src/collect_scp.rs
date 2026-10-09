@@ -11,7 +11,7 @@
 
 
 use qwc_arena::Files;
-use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeId, TypeKind, Visitor};
+use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeKind, Visitor};
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
@@ -28,7 +28,7 @@ impl Visitor for ScopeMap {
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ImplFor {pub type_ty: TypeId, pub trait_ty: Option<TypeId>, pub container: AnyId}
+pub struct ImplFor {pub container: AnyId, pub item: ItemId}
 
 pub struct ScopeCollector<'a, 'imod> {
   cre: &'a Krate,
@@ -79,8 +79,8 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
         ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
 
         // Record Impl
-        ItemKind::Impl {type_ty, trait_ty, ..} => {
-          self.impl_for.push(ImplFor{ type_ty, trait_ty, container: container_id });
+        ItemKind::Impl{..} => {
+          self.impl_for.push(ImplFor{ container: container_id, item: id });
           continue
         }
 

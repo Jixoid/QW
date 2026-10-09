@@ -979,6 +979,7 @@ dependencies = [
 name = "qwc_parse"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.2",
  "qwc_arena",
  "qwc_ast",
  "qwc_diagnostic",

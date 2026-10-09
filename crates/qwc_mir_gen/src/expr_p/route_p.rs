@@ -18,8 +18,8 @@ use crate::{Ctx, ExprLow, FunBuilder, RawTerminator, ExprEmit};
 
 
 
-pub fn low_return(ctx: &mut Ctx, bbld: &mut FunBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
-  let val = val.map(|id| ExprLow::low(ctx, bbld, id).transpose().unwrap()).transpose()?;
+pub fn low_return(ctx: &mut Ctx, bbld: &mut FunBuilder, val: hir::ExprId) -> Result<(), Message> {
+  let val = ExprLow::low(ctx, bbld, val)?;
 
   RawTerminator::Return(val).terminate(bbld);
   

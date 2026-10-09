@@ -52,7 +52,7 @@ impl LocalScopeManager {
   pub fn insert(&mut self, name: Sid, ty: hir::TypeId, ism: bool, span: impl Into<Span>) -> u32 {
     let id = self.locals.len() as u32;
     self.locals.push(LocalVarInfo { name, ty, ism, span: span.into() });
-    self.scopes.last_mut().expect("no active scope").insert(name, id).inspect(|_| panic!());
+    self.scopes.last_mut().expect("no active scope").insert(name, id);
     id
   }
 

@@ -60,6 +60,7 @@ pub enum BoolLogicOp {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExprKind {
   GenericExpr,
+  Error,
   
   Const(Const),
 
@@ -86,7 +87,7 @@ pub enum ExprKind {
   Loop{blok: ExprId, elsb: Option<ExprId>},
 
   // Route
-  Return(Option<ExprId>),
+  Return(ExprId),
   Break(Option<ExprId>),
   Continue,
 
@@ -95,7 +96,9 @@ pub enum ExprKind {
 
   // Call
   Call{callee: ExprId, args: ExprRng},
-
+  
+  BoundSelfMethod{callee: ExprId, this: ExprId},
+  
   // Field
   Field{target: ExprId, idx: u32},
   CombinatedInit{kind: TypeId, fields: ExprRng},

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind, IdentSave};
+use qwc_ast::{Expr, ExprId, ExprKind, IdentSave, id::PushOkApi};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 
@@ -32,6 +32,17 @@ pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
   if lex.peek()?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Ok(this) }
 }
 
+pub fn pre_nick_no_field_init(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get()?;
+  let name = start.ident(sin, far)?;
+
+  // Post
+  Expr{
+    pos: lex.pos_extend(start),
+    kind: ExprKind::Nick(name)
+  }.push_ok(ctx.cre)
+}
+
 
 // Self
 pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
@@ -42,8 +53,9 @@ pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre,
     pos: lex.pos_extend(start),
     kind: ExprKind::SelfB()
   };
+  let this = cre.push(this);
 
-  Ok(cre.push(this))
+  if lex.peek()?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Ok(this) }
 }
 
 pub fn pre_self_small(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);

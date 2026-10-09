@@ -40,13 +40,13 @@ pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::ExprId, elsb: Option
         
         // Durum 4: Blok hiçbir şey döndürmüyor, Else T döndürüyor -> ?T
         _ if ty_blok == ty_unit => {
-          let lay = ctx.get_type(ty_elsb).layout;
+          let lay = ctx.get(ty_elsb).layout;
           ctx.tin.ty_option(ctx.cre, ty_elsb, lay)
         }
 
         // Durum 5: Blok T döndürüyor, Else hiçbir şey döndürmüyor -> ?T
         _ if ty_elsb == ty_unit => {
-          let lay = ctx.get_type(ty_blok).layout;
+          let lay = ctx.get(ty_blok).layout;
           ctx.tin.ty_option(ctx.cre, ty_blok, lay)
         }
 

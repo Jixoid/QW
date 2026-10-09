@@ -186,7 +186,7 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
   if !sum.is_empty() {
     for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
     
-    eprint!("{}", sum);
+    eprintln!("{}", sum);
 
     if sum.sumerr() > 0 { return Err(Error::New | "") }
   }

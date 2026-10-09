@@ -108,7 +108,7 @@ fn lay_c_struct(cre: &Krate, rng: TypeRng) -> Layout {
     (align, off)
   };
 
-  Layout::new_sst(size, align, LayoutBy::C)
+  Layout::new_sst(size.max(1), align, LayoutBy::C)
 }
 
 

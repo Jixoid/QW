@@ -14,7 +14,7 @@ use qwc_ast::{Expr, ExprId, ExprKind};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 
-use crate::{ExprParser, PattParser, ctx, WordCheck, parse::Ctx};
+use crate::{ExprParser, PattParser, WordCheck, ctx, expr_p::ExprRestriction, parse::Ctx};
 
 
 // Loop
@@ -43,7 +43,7 @@ pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
 pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let cond = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
+  let cond = ExprParser::rest_read_expr(ctx!(cre, sin, far, lex, sum, side), ExprRestriction::NO_FIELD_INIT)?;
   
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
@@ -71,7 +71,7 @@ pub fn pre_for(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
 
   lex.get()?.expect_kind(WK::In)?;
   
-  let iter = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
+  let iter = ExprParser::rest_read_expr(ctx!(cre, sin, far, lex, sum, side), ExprRestriction::NO_FIELD_INIT)?;
 
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 

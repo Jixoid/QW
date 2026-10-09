@@ -240,8 +240,8 @@ impl DumpHandler for Type {
       TypeKind::GenericType => write!(f, "{}", punct("<generic>"))?,
       TypeKind::GenericSelfType => write!(f, "{}", punct("Self"))?,
       
-
       // Basic
+      TypeKind::Error => write!(f, "{}", punct("{error}"))?,
       TypeKind::Unit => write!(f, "{}", punct("()"))?,
       TypeKind::Never => write!(f, "{}", op("!"))?,
 
@@ -434,6 +434,7 @@ impl DumpHandler for Expr {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
       ExprKind::GenericExpr => write!(f, "{}", punct("<generic expr>"))?,
+      ExprKind::Error => write!(f, "{}", punct("{error}"))?,
 
       ExprKind::Const(c) => c.dump(ctx, f, indent)?,
 
@@ -507,12 +508,11 @@ impl DumpHandler for Expr {
         }
       }
 
+
+      // Route
       ExprKind::Return (val) => {
-        write!(f, "{}", kw("ret"))?;
-        if let Some(v) = val {
-          write!(f, " ")?;
-          v.dump(ctx, f, indent)?;
-        }
+        write!(f, "{} ", kw("ret"))?;
+        val.dump(ctx, f, indent)?;
       }
 
       ExprKind::Break (val) => {
@@ -527,6 +527,8 @@ impl DumpHandler for Expr {
         write!(f, "{}", kw("continue"))?;
       }
 
+
+      // Condition
       ExprKind::If { cond, then, elsb } => {
         write!(f, "{} {}", kw("if"), punct("("))?;
         cond.dump(ctx, f, indent)?;
@@ -554,6 +556,13 @@ impl DumpHandler for Expr {
           id.dump(ctx, f, indent)?;
           write!(f, "{}", punct(","))?;
         }
+        write!(f, "{}", punct(")"))?;
+      }
+
+      ExprKind::BoundSelfMethod { callee, this } => {
+        callee.dump(ctx, f, indent)?;
+        write!(f, "{}{}{} ", punct("("), "@self".yellow(), punct(":"))?;
+        this.dump(ctx, f, indent)?;
         write!(f, "{}", punct(")"))?;
       }
 
@@ -701,7 +710,7 @@ impl DumpHandler for Const {
       Const::Unit => write!(f, "{}", punct("()"))?,
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
       Const::Int(i) => write!(f, "{}", lit_num(i))?,
-      Const::Str(s) => write!(f, "\"{}\"", ctx.sin.str(s))?,
+      Const::Str(s) => write!(f, "{}", format!("\"{}\"", ctx.sin.str(s)).yellow())?,
     }
 
     Ok(())

@@ -24,13 +24,14 @@ impl BlokLow {
   pub fn low_fn(ctx: &mut Ctx, id: hir::ExprId, is_ret_unit: bool, param_tys: &[mir::TypeId]) -> Result<(mir::BlokId, mir::BlokRng), Message> {
     let mut fbld = FunBuilder::new();
 
-    for (local_id, &param_ty) in param_tys.iter().enumerate() {
+    // Args to stack
+    for (idx, &param_ty) in param_tys.iter().enumerate() {
       let slot = fbld.build_alloca(param_ty);
-      fbld.local_to_alloca.insert(local_id as u32, slot);
+      fbld.local_to_alloca.insert(idx as u32, slot);
       fbld.emit(mir::Expr::Store {
         target: slot,
         kind: param_ty,
-        value: mir::Value::Param(local_id as u32),
+        value: mir::Value::Param(idx as u32),
       });
     }
 

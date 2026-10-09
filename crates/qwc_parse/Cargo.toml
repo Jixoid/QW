@@ -10,3 +10,4 @@ qwc_arena = { path = "../qwc_arena" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 thin-vec = "0.2.19"
+bitflags = "2.13.2"

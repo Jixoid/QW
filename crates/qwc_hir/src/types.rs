@@ -22,6 +22,7 @@ pub enum TypeKind {
   GenericSelfType,
   
   // Basic
+  Error,
   Unit,
   Never,
   
@@ -89,6 +90,7 @@ pub struct Type {
 pub struct PrimTypes {
   pub ty_generic_type: TypeId,
   pub ty_generic_self_type: TypeId,
+  pub ty_error: TypeId,
   pub ty_unit: TypeId,
   pub ty_never: TypeId,
   pub ty_bool: TypeId,

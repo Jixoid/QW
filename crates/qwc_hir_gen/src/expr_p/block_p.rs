@@ -14,31 +14,55 @@ use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_hir::{self as hir, ExprCategory};
 use qwc_ast as ast;
 
-use crate::{ExprLow, TypeLow, Ctx, TypeMatch};
+use crate::{Ctx, ExprLow, TypeLow, TypeMatch, FunCtx};
 
 
 // Block
-pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
   ctx.loc.push_scope();
 
   let res = (|| {
     let mut stmt = vec![];
+    let mut unreachable = false;
 
     for id in ctx.src.extra_get(rng) {
-      let id = ExprLow::low(ctx, id)?;
-      stmt.push(id);
+      if unreachable {
+        let pos = ctx.src.get(id).pos;
+        ctx.sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
+        break;
+      }
+
+      let hir_id = ExprLow::low(ctx, fctx, id)?;
+      stmt.push(hir_id);
+      
+      if ctx.cre.get(hir_id).ety == ctx.prims.ty_never {
+        unreachable = true;
+      }
     }
 
     let stmt_rng = ctx.cre.extra(&stmt);
-    let expr = expr.map(|id| ExprLow::low(ctx, id)).transpose()?;
-    Ok((stmt_rng, expr))
+    
+    if unreachable {
+      if let Some(id) = expr {
+        let pos = ctx.src.get(id).pos;
+        ctx.sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
+      }
+      Ok((stmt_rng, None, true))
+    } else {
+      let expr = expr.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
+      Ok((stmt_rng, expr, false))
+    }
   })();
 
   ctx.loc.pop_scope();
   
-  let (stmt, expr) = res?;
+  let (stmt, expr, is_unreachable) = res?;
 
-  let ety = expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.prims.ty_unit );
+  let ety = if is_unreachable {
+    ctx.prims.ty_never
+  } else {
+    expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.prims.ty_unit)
+  };
 
 
   // Post
@@ -53,7 +77,7 @@ pub fn low_block(ctx: &mut Ctx, rng: ast::ExprRng, expr: Option<ast::ExprId>) ->
 
 
 // Variable
-pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Result<hir::ExprId, Message> {
+pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Result<hir::ExprId, Message> {
   let (name, span) = match *ctx.src.get(item) {
     ast::Patt::One(ident) => (ident.sid(), ident),
 
@@ -61,7 +85,7 @@ pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init
   };
 
   let init = init.ok_or_else(|| Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(pos)))?;
-  let init_hir = ExprLow::low(ctx, init)?;
+  let init_hir = ExprLow::low(ctx, fctx, init)?;
   let init_ty = ctx.cre.get(init_hir).ety;
 
   let (kind, pos) = if let Some(kind) = kind {
@@ -87,11 +111,11 @@ pub fn low_let(ctx: &mut Ctx, item: ast::PattId, kind: Option<ast::TypeId>, init
   let local_id = ctx.loc.insert(name, kind, ism, span);
 
   // is DST
-  if ctx.get_type(kind).layout.is_dynamic() {
+  if ctx.get(kind).layout.is_dynamic() {
     return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
   }
   
-  if ctx.get_type(kind).layout.is_meta() {
+  if ctx.get(kind).layout.is_meta() {
     return Err(Message::error(META_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
   }
 

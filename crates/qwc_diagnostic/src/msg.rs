@@ -40,8 +40,10 @@ pub const CANNOT_CAST_X_TO_Y:                               CodedMsg = CodedMsg:
 pub const SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT:  CodedMsg = CodedMsg::new(0x0018, "`Self` type is only allowed in associated context");
 pub const SELF_PARAMETER_IS_ONLY_ALLOWED_IN_ASSOCIATED_FUN: CodedMsg = CodedMsg::new(0x0018, "self parameter is only allowed in associated function");
 pub const DUPLICATE_ATTRIBUTE:                              CodedMsg = CodedMsg::new(0x0019, "duplicate attribute");
-pub const ENTRY_FUNCTION_MUST_BE_PUBLIC:                    CodedMsg = CodedMsg::new(0x001A, "entry function must be public");
-pub const INCOMPATIBLE_METHOD:                              CodedMsg = CodedMsg::new(0x001B, "method has an incompatible for `{}`");
+pub const ENTRY_FUNCTION_MUST_BE_PUBLIC:                    CodedMsg = CodedMsg::new(0x001a, "entry function must be public");
+pub const INCOMPATIBLE_METHOD:                              CodedMsg = CodedMsg::new(0x001b, "method has an incompatible for `{}`");
+pub const USE_ASSOCIATED_FUNCTION_SYNTAX_INSTEAD:           CodedMsg = CodedMsg::new(0x001c, "use associated function syntax instead: `{}`");
+pub const UNREACHABLE_STATEMENT:                            CodedMsg = CodedMsg::new(0x001d, "unreachable statement");
 
 
 // Non Coded Messages

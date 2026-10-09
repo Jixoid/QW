@@ -12,10 +12,10 @@
 
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_diagnostic::Summary;
+use qwc_diagnostic::{Label, Message, Span, Summary, msg::*};
 use qwc_hir::{self as hir, CID, Deps, PrimTypes};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
-use qwc_string_interner::{StrInterner};
+use qwc_string_interner::{Sid, StrInterner};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{ItemLow, ty_interner::TypeInterner, type_p::TypeLow};
@@ -41,7 +41,13 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
 
 pub struct TypeMethods {
   pub traits: FxHashSet<hir::TypeId>,
-  //pub methods: FxHashMap<Sid, hir::ItemId>,
+  pub methods: FxHashMap<Sid, (usize, ast::ItemId)>,
+}
+
+
+pub struct FunCtx {
+  pub ret_ty: hir::TypeId,
+  pub sign_pos: Span,
 }
 
 
@@ -63,9 +69,9 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
 
-  pub fn get_type(&self, id: hir::TypeId) -> &hir::Type {
-    self.get_krate(id.cid()).get(id)
-  }
+  pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T { self.get_krate(id.cid()).get(id) }
+  
+  pub fn extra_get<T: hir::HirKind>(&self, rng: hir::Rng<T>) -> impl Iterator<Item = hir::HirId<T>> { self.get_krate(rng.cid()).extra_get(rng) }
 
 
   pub fn expr_name(&self, _id: hir::ExprId) -> String {
@@ -73,12 +79,12 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
   pub fn type_name(&self, id: hir::TypeId) -> String {
-    let ty = self.get_type(id);
+    let ty = self.get(id);
     match ty.kind {
       // Generic
       hir::TypeKind::GenericType => "<generic>".to_string(),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
-
+      hir::TypeKind::Error => "{error}".to_string(),
 
       // Primitive
       hir::TypeKind::Unit => "()".to_string(),
@@ -153,6 +159,9 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 }
 
 
+
+
+
 #[macro_export]
 macro_rules! ctx {
   ($lscp:ident -> $ctx:expr) => {
@@ -205,7 +214,9 @@ impl<'ast, 'hir, 'imod> HGen {
   fn pre1(ctx: &mut Ctx, implst: Vec<ImplFor>) -> Result<FxHashMap<hir::TypeId, TypeMethods>, ()> {
     let mut type_impls: FxHashMap<hir::TypeId, TypeMethods> = FxHashMap::default();
 
-    for ImplFor{ type_ty, trait_ty, container } in implst {
+    for ImplFor{ container, item } in implst {
+      let ast::ItemKind::Impl { type_ty, trait_ty, ctn: fields } = ctx.src.get(item).kind else { panic!() };
+
       let lscp = ctx.scp.get(&container).unwrap();
       let ctx = ctx!(lscp -> ctx);
 
@@ -220,26 +231,42 @@ impl<'ast, 'hir, 'imod> HGen {
       };
 
 
+      // Reg
+      let reg = |tyfuns: &mut TypeMethods| -> Result<(), Message> {
+        if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
+        
+        for (idx, id) in ctx.src.extra_get(fields).enumerate() {
+          if let ast::Field{kind: ast::FieldKind::Fun{..}, pos, name, ..} = ctx.src.get(id) {
+            let sid = name.unwrap().sid();
+            
+            if let Some(..) = tyfuns.methods.insert(sid, (idx, item)) {
+              return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)))
+            }
+          }
+        }
+
+        Ok(())
+      };
+
+
+      // Entry Api
       use std::collections::hash_map::Entry::*;
 
       match type_impls.entry(type_ty) {
         Occupied(mut entry) => {
-          let tyfuns = entry.get_mut();
-
-          if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
+          if let Err(msg) = reg(entry.get_mut()) { ctx.sum.add(msg); continue };
         }
         
         Vacant(entry) => {
-          let mut tyfuns = TypeMethods {
+          let tyfuns = TypeMethods {
             traits: FxHashSet::default(),
-            //methods: FxHashMap::default(),
+            methods: FxHashMap::default(),
           };
           
-          if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
-          
-          entry.insert(tyfuns);
+          if let Err(msg) = reg(entry.insert(tyfuns)) { ctx.sum.add(msg); continue };
         }
-      };
+      }
+
     }
 
     Ok(type_impls)

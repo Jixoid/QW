@@ -15,14 +15,14 @@ use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_hir::{self as hir, ExprCategory};
 
 use super::helper;
-use crate::{ExprLow, hgen::Ctx};
+use crate::{ExprLow, Ctx, FunCtx};
 
 
 // Loop
-pub fn low_loop(ctx: &mut Ctx, it: &ast::Expr, blok: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
-  let blok = ExprLow::low(ctx, blok)?;
+pub fn low_loop(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, blok: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+  let blok = ExprLow::low(ctx, fctx, blok)?;
 
-  let elsb = elsb.map(|id| ExprLow::low(ctx, id)).transpose()?;
+  let elsb = elsb.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
 
   let ety = helper::find_duo_res_ty(ctx, it.pos, blok, elsb)?;
 
@@ -37,9 +37,9 @@ pub fn low_loop(ctx: &mut Ctx, it: &ast::Expr, blok: ast::ExprId, elsb: Option<a
   Ok(ctx.cre.push(this))
 }
 
-pub fn low_while(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, blok: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_while(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, cond: ast::ExprId, blok: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
   let cond_ast = ctx.src.get(cond);
-  let cond = ExprLow::low(ctx, cond)?;
+  let cond = ExprLow::low(ctx, fctx, cond)?;
   let cond_ty = ctx.cre.get(cond).ety;
 
   if cond_ty != ctx.prims.ty_bool {
@@ -50,8 +50,8 @@ pub fn low_while(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, blok: ast::Ex
     ));
   }
 
-  let blok = ExprLow::low(ctx, blok)?;
-  let elsb = elsb.map(|id| ExprLow::low(ctx, id)).transpose()?;
+  let blok = ExprLow::low(ctx, fctx, blok)?;
+  let elsb = elsb.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
   let ety = helper::find_duo_res_ty(ctx, it.pos, blok, elsb)?;
 
 

@@ -94,14 +94,15 @@ pub type ThingId = HirId<Thing>;
 pub struct Rng<T>
   where T: HirKind
 {
+  cid: CID,
   start: u32,
   end: u32,
   pkind: PhantomData<T>,
 }
 
 impl<T: HirKind> Rng<T> {
-  pub fn new(start: u32, end: u32) -> Self {
-    Self { start, end, pkind: PhantomData }
+  pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
+    Self { cid, start, end, pkind: PhantomData }
   }
 
   pub fn count(&self) -> u32 {
@@ -112,8 +113,12 @@ impl<T: HirKind> Rng<T> {
     (self.start as usize)..(self.end as usize)
   }
 
-  pub fn empty() -> Self {
-    Self{start: 0, end: 0, pkind: PhantomData}
+  pub fn cid(&self) -> CID {
+    self.cid
+  }
+
+  pub fn empty(cid: CID) -> Self {
+    Self{cid, start: 0, end: 0, pkind: PhantomData}
   }
 
   pub fn is_empty(&self) -> bool {
@@ -131,21 +136,26 @@ pub type ThingRng = Rng<Thing>;
 // AnyRng
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AnyRng {
+  cid: CID,
   start: u32,
   end: u32,
 }
 
 impl AnyRng {
-  pub fn new(start: u32, end: u32) -> Self {
-    Self { start, end }
+  pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
+    Self { cid, start, end }
   }
 
   pub fn range(&self) -> std::ops::Range<usize> {
     (self.start as usize)..(self.end as usize)
   }
 
-  pub fn empty() -> Self {
-    Self{start: 0, end: 0 }
+  pub fn cid(&self) -> CID {
+    self.cid
+  }
+
+  pub fn empty(cid: CID) -> Self {
+    Self{cid, start: 0, end: 0 }
   }
 
   pub fn is_empty(&self) -> bool {

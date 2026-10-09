@@ -14,7 +14,7 @@ use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, ItemAttr, PushOkApi};
 
-use crate::{Ctx, ExprLow, TypeLow, ctx, TypeMatch};
+use crate::{Ctx, ExprLow, TypeLow, TypeMatch, ctx, FunCtx};
 
 mod impl_p;
 mod ns_p;
@@ -87,7 +87,7 @@ impl ItemLow {
     let kind = kind.unwrap();
     let kind = TypeLow::low(ctx, kind)?;
 
-    let expr = ExprLow::low(ctx, expr)?;
+    let expr = todo!(); // ExprLow::low(ctx, expr)?;
 
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
     
@@ -129,12 +129,15 @@ impl ItemLow {
       loc.insert(name, kind, false, name_pos);
     }
 
-    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?;
+    let fctx = FunCtx{ ret_ty: ret, sign_pos: ctx.src.get(kind).pos };
+
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
     
     let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
-    let ret = if let hir::TypeKind::Trait(..) = ctx.get_type(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get_type(expr_ty).kind {
+    // Trait Patch
+    let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
@@ -159,42 +162,8 @@ impl ItemLow {
     }.push_ok(ctx.cre)
   }
 
-  fn low_task(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
-    let hir_kind = TypeLow::low(ctx, kind)?;
-    
-    let mut loc = qwc_resolve::LocalScopeManager::new();
-
-    // Args
-    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
-    let hir::TypeKind::Fun{self_kind, args, ..} = ctx.cre.get(hir_kind).kind else { unreachable!() };
-    
-    if let Some(ty) = self_kind {
-      let self_pos = ctx.src.get(self_ast.unwrap()).pos;
-      
-      loc.insert(ctx.sin.sid_self(), ty, false, self_pos);
-    }
-
-    for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
-      let ast::Thing::NamedType(name_pos, ..) = *ctx.src.get(id_pos) else { panic!() };
-
-      loc.insert(name, kind, false, name_pos);
-    }
-
-    let expr = ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?;
-
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
-
-
-    // Post
-    hir::Item {
-      kind: hir::ItemKind::Task {
-        name: it.name.unwrap().sid(),
-        expr,
-        kind: hir_kind,
-      },
-      vis, attr
-    }.push_ok(ctx.cre)
+  fn low_task(_ctx: &mut Ctx, _id: ast::ItemId, _it: &ast::Item, _kind: ast::TypeId, _expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+    todo!()
   }
 
   fn low_fun_field(ctx: &mut Ctx, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
@@ -204,7 +173,7 @@ impl ItemLow {
 
     // Args
     let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
-    let hir::TypeKind::Fun{self_kind, args, ..} = ctx.cre.get(hir_kind).kind else { unreachable!() };
+    let hir::TypeKind::Fun{self_kind, args, ret} = ctx.cre.get(hir_kind).kind else { unreachable!() };
     
     if let Some(ty) = self_kind {
       let self_pos = ctx.src.get(self_ast.unwrap()).pos;
@@ -219,7 +188,24 @@ impl ItemLow {
       loc.insert(name, kind, false, name_pos);
     }
 
-    let expr = ExprLow::low(ctx!(loc loc -> ctx), expr.unwrap())?;
+    let fctx = FunCtx{ ret_ty: ret, sign_pos: ctx.src.get(kind).pos };
+
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
+    
+    let expr_pos = ctx.src.get(expr.unwrap()).pos;
+    let expr_ty = ctx.cre.get(expr_hir).ety;
+
+    // Trait Patch
+    let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+      let fun_sign = ctx.cre.get_mut(hir_kind);
+
+      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
+
+      *sign_ret = expr_ty;
+      expr_ty
+    } else { ret };
+
+    TypeMatch::matches_pos(ctx, ret, expr_ty, expr_pos)?;
 
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
@@ -228,7 +214,7 @@ impl ItemLow {
     hir::Item {
       kind: hir::ItemKind::Function {
         name: it.name.unwrap().sid(),
-        expr,
+        expr: expr_hir,
         kind: hir_kind,
       },
       vis, attr

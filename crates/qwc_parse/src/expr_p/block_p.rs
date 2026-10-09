@@ -46,7 +46,11 @@ impl ExprParser {
       let mut expr = None;
       
       loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        match lex.peek()?.kind() {
+          WK::BraceR => { lex.bump()?; break }
+          WK::Semicolon => { lex.bump()?; continue; }
+          _ => {}
+        }
         
         let ex_id = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
         

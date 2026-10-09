@@ -23,7 +23,7 @@ pub mod dump;
 
 pub use dpath::DPath;
 pub use krate::{Krate, Deps, CID, PushApi, GetApi};
-pub use id::{AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng, ThingRng};
+pub use id::{HirId, HirKind, AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng, ThingRng};
 pub use {items::*, types::*, exprs::*, things::* };
 pub use layout::*;
 pub use visitor::Visitor;

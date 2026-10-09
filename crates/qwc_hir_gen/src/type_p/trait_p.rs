@@ -68,11 +68,11 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
       let fun_ty = TypeLow::low(ctx, kind)?;
       
       // Check (self != DST)
-      if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get_type(fun_ty).kind {
+      if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind {
 
         let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
     
-        let lay = ctx.get_type(self_kind).layout;
+        let lay = ctx.get(self_kind).layout;
 
         if !lay.is_static() {
           let pos = self_pos;

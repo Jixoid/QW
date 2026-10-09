@@ -16,7 +16,7 @@ mod expr_p;
 mod item_p;
 mod ty_interner;
 
-use hgen::Ctx;
+use hgen::{Ctx, FunCtx};
 use {type_p::{TypeLow, TypeMatch}, expr_p::ExprLow, item_p::ItemLow};
 
 pub use hgen::HGen;

@@ -10,6 +10,7 @@
 */
 
 
+use bitflags::bitflags;
 use qwc_ast::{Expr, ExprId, ExprKind};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
@@ -27,23 +28,38 @@ mod helper;
 
 
 
+bitflags! {
+  pub struct ExprRestriction: u8 {
+    const NO_FIELD_INIT = 1;
+  }
+}
+
+
 pub struct ExprParser;
 
 impl ExprParser {
 
-  // Public
   pub fn read_expr(ctx: &mut Ctx) -> Result<ExprId, Message> {
     Self::read_expr_sub(ctx, 0)
   }
 
+  pub fn rest_read_expr(ctx: &mut Ctx, rest: ExprRestriction) -> Result<ExprId, Message> {
+    Self::rest_read_expr_sub(ctx, rest, 0)
+  }
+
+
   fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Result<ExprId, Message> {
+    Self::rest_read_expr_sub(ctx, ExprRestriction::empty(), min_bp)
+  }
+
+  fn rest_read_expr_sub(ctx: &mut Ctx, rest: ExprRestriction, min_bp: u8) -> Result<ExprId, Message> {
     // Starter / Pre Unary
     let mut lhs = match ctx.lex.peek()?.kind() {
       // Literal
       WK::SelfB => literal_p::pre_self_big(ctx)?,
       WK::SelfS => literal_p::pre_self_small(ctx)?,
       
-      WK::Word => literal_p::pre_nick(ctx)?,
+      WK::Word => if rest.contains(ExprRestriction::NO_FIELD_INIT) { literal_p::pre_nick_no_field_init(ctx)? } else { literal_p::pre_nick(ctx)? },
       
       WK::True | WK::False => literal_p::pre_bool(ctx)?,
       WK::Number => literal_p::pre_number(ctx)?,

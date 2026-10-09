@@ -12,7 +12,7 @@
 
 use qwc_ast::{self as ast, Ident};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
-use qwc_hir::{self as hir, ExprCategory};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_resolve::{self as resolve, Resolver};
 
 use crate::{ItemLow, TypeLow, ctx, hgen::Ctx};
@@ -39,6 +39,22 @@ pub fn low_self(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
     kind: hir::ExprKind::LocalRef(id),
     category: ExprCategory::lvalue(local.ism),
     ety: local.ty,
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+pub fn low_self_big(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
+  use qwc_diagnostic::msg::SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT;
+  let kind = match ctx.cmap.self_ty.last() {
+    Some(&v) => v,
+    None => return Err(Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(pos)))
+  };
+
+  let this = hir::Expr {
+    kind: hir::ExprKind::TypeOf { kind },
+    category: ExprCategory::RValue,
+    ety: ctx.tin.ty_meta(ctx.cre, kind),
   };
 
   Ok(ctx.cre.push(this))
@@ -125,25 +141,23 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         };
         ctx.cre.push(this)
       }
-    },
+    }
 
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
       resolve::ScopeKindHir::Expr(id, ty) => {
         let kind = ctx.tin.ty_ref(ctx.cre, ty, false); // TODO!
 
-        let this = hir::Expr {
+        hir::Expr {
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::RValue,
           ety: kind,
-        };
-
-        ctx.cre.push(this)
+        }.push(ctx.cre)
       }
 
       resolve::ScopeKindHir::Type(..) | resolve::ScopeKindHir::Module(..) => {
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
       }
-    },
+    }
   };
 
   Ok(expr)

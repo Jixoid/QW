@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, AnyRng, Expr, Item, ItemId, PrimTypes, Rng, Thing, ThingId, Type, TypeId, id::{ExprId, HirId, HirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
 
 
 
@@ -112,8 +112,8 @@ impl Krate {
 
   // Arena
   pub fn push<T: HirKind, P: PushApi<T>>(&mut self, obj: P) -> HirId<T> { P::push(self, obj) }
-  pub fn get<I: GetApi>(&self, id: I) -> &I::Node { I::get(self, id) }
-  pub fn get_mut<I: GetApi>(&mut self, id: I) -> &mut I::Node { I::get_mut(self, id) }
+  pub fn get<T: HirKind + GetApi<T>>(&self, id: HirId<T>) -> &T { T::get(self, id) }
+  pub fn get_mut<T: HirKind + GetApi<T>>(&mut self, id: HirId<T>) -> &mut T { T::get_mut(self, id) }
 
 
   // Extra
@@ -126,7 +126,7 @@ impl Krate {
     let krng = kds.extend_fill(T::kind(), vec.len());
     debug_assert_eq!(irng, krng);
 
-    Rng::new(u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
+    Rng::new(self.cid, u32::try_from(irng.start).unwrap(), u32::try_from(irng.end).unwrap())
   }
 
   pub fn extra_any(&mut self, vec: &[AnyId]) -> AnyRng {
@@ -136,10 +136,12 @@ impl Krate {
       ids.push(any.id());
       kds.push(any.kind());
     }
-    AnyRng::new(u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
+    AnyRng::new(self.cid, u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
   }
 
   pub fn extra_get<T: HirKind>(&self, rng: Rng<T>) -> impl Iterator<Item = HirId<T>> {
+    assert_eq!(rng.cid(), self.cid);
+
     let (ids, kinds) = &self.extra_data;
     let range = rng.range();
 
@@ -151,6 +153,8 @@ impl Krate {
   }
   
   pub fn extra_any_get(&self, rng: AnyRng) -> impl Iterator<Item = AnyId> {
+    assert_eq!(rng.cid(), self.cid);
+    
     let (ids, kinds) = &self.extra_data;
     let range = rng.range();
 
@@ -183,51 +187,49 @@ pub trait PushApi<T: HirKind> {
   fn push(krate: &mut Krate, obj: Self) -> HirId<T>;
 }
 
-pub trait GetApi {
-  type Node;
-
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node;
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
+pub trait GetApi<T: HirKind> {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self;
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self;
 }
+
 
 impl<T: HirKind> PushApi<T> for Type {
   fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_type.push(obj)).unwrap()) }
 }
 
-impl GetApi for TypeId {
-  type Node = Type;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { assert_eq!(id.cid(), krate.cid); &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_type[id.idx() as usize] }
+impl<T: HirKind> GetApi<T> for Type {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_type[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_type[id.idx() as usize] }
 }
+
 
 impl<T: HirKind> PushApi<T> for Expr {
   fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
 }
 
-impl GetApi for ExprId {
-  type Node = Expr;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { assert_eq!(id.cid(), krate.cid); &krate.list_expr[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_expr[id.idx() as usize] }
+impl<T: HirKind> GetApi<T> for Expr {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_expr[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_expr[id.idx() as usize] }
 }
+
 
 impl<T: HirKind> PushApi<T> for Item {
   fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_item.push(obj)).unwrap()) }
 }
 
-impl GetApi for ItemId {
-  type Node = Item;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { assert_eq!(id.cid(), krate.cid); &krate.list_item[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_item[id.idx() as usize] }
+impl<T: HirKind> GetApi<T> for Item {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_item[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_item[id.idx() as usize] }
 }
+
 
 impl<T: HirKind> PushApi<T> for Thing {
   fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_thin.push(obj)).unwrap()) }
 }
 
-impl GetApi for ThingId {
-  type Node = Thing;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { assert_eq!(id.cid(), krate.cid); &krate.list_thin[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { assert_eq!(id.cid(), krate.cid); &mut krate.list_thin[id.idx() as usize] }
+impl<T: HirKind> GetApi<T> for Thing {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_thin[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_thin[id.idx() as usize] }
 }
 
 

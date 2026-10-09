@@ -15,13 +15,13 @@ use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_hir::{self as hir, ExprCategory};
 
 use super::helper;
-use crate::{ExprLow, hgen::Ctx};
+use crate::{ExprLow, Ctx, FunCtx};
 
 
 // Condition
-pub fn low_if(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, then: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_if(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, cond: ast::ExprId, then: ast::ExprId, elsb: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
   let cond_ast = ctx.src.get(cond);
-  let cond = ExprLow::low(ctx, cond)?;
+  let cond = ExprLow::low(ctx, fctx, cond)?;
   let cond_ty = (ctx.cre.get(cond) as &hir::Expr).ety;
 
   if cond_ty != ctx.prims.ty_bool {
@@ -33,9 +33,9 @@ pub fn low_if(ctx: &mut Ctx, it: &ast::Expr, cond: ast::ExprId, then: ast::ExprI
   }
 
 
-  let then = ExprLow::low(ctx, then)?;
+  let then = ExprLow::low(ctx, fctx, then)?;
 
-  let elsb = elsb.map(|id| ExprLow::low(ctx, id)).transpose()?;
+  let elsb = elsb.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
 
   let ety = helper::find_duo_res_ty(ctx, it.pos, then, elsb)?;
 
