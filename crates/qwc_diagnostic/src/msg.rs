@@ -44,6 +44,7 @@ pub const ENTRY_FUNCTION_MUST_BE_PUBLIC:                    CodedMsg = CodedMsg:
 pub const INCOMPATIBLE_METHOD:                              CodedMsg = CodedMsg::new(0x001b, "method has an incompatible for `{}`");
 pub const USE_ASSOCIATED_FUNCTION_SYNTAX_INSTEAD:           CodedMsg = CodedMsg::new(0x001c, "use associated function syntax instead: `{}`");
 pub const UNREACHABLE_STATEMENT:                            CodedMsg = CodedMsg::new(0x001d, "unreachable statement");
+pub const TYPE_NOT_SPECIFIED:                               CodedMsg = CodedMsg::new(0x001e, "type not specified");
 
 
 // Non Coded Messages
@@ -61,6 +62,7 @@ pub const UNKNOWN_USE_SEGMENT:              CodedMsg = CodedMsg::new_str("unknow
 pub const VISIBILITY_AFTER_ATTRIBUTE:       CodedMsg = CodedMsg::new_str("a visibility modifier cannot appear after the attributes");
 pub const DUPLICATE_IDENTIFIER:             CodedMsg = CodedMsg::new_str("duplicate identifier");
 pub const DID_YOU_MEAN:                     CodedMsg = CodedMsg::new_str("did you mean `{}`?");
+pub const CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION: CodedMsg = CodedMsg::new_str("cannot use generic type without specialization");
 
 
 // Label

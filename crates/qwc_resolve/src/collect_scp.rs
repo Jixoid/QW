@@ -11,7 +11,7 @@
 
 
 use qwc_arena::Files;
-use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, Thing, ThingId, Type, TypeKind, Visitor};
+use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind, Visitor};
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
@@ -88,27 +88,48 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
         ItemKind::Import(rng) => {
           let mut segments = vec![];
           let mut glob = false;
+          let mut alias = None;
 
           for id in self.cre.extra_get(rng) {
-            let it: &Thing = self.cre.get(id);
-
-            match it {
-              Thing::Crate => segments.push(ImportSegment::Crate),
-              Thing::Super => segments.push(ImportSegment::Super),
-              Thing::Name(ident) => segments.push(ImportSegment::Name(*ident)),
-              Thing::Wildcard => { glob = true; break }
-              _ => todo!("{it:#?}")
+            match self.cre.get(id).kind {
+              ThingKind::Crate => segments.push(ImportSegment::Crate),
+              ThingKind::Super => segments.push(ImportSegment::Super),
+              ThingKind::Name(ident) => segments.push(ImportSegment::Name(ident)),
+              ThingKind::Wildcard => { glob = true; break }
+              ThingKind::Alias(inner_id, alias_ident) => {
+                alias = Some(alias_ident);
+                match self.cre.get(inner_id).kind {
+                  ThingKind::Crate => segments.push(ImportSegment::Crate),
+                  ThingKind::Super => segments.push(ImportSegment::Super),
+                  ThingKind::Name(ident) => segments.push(ImportSegment::Name(ident)),
+                  _ => panic!("invalid aliased thing")
+                }
+              }
+              it @_ => todo!("{it:#?}")
             }
           }
 
           if segments.is_empty() && !glob { panic!("empty import path"); }
 
-          current_scope.import.push(ImportDef::new(it.pos, it.vis, segments, glob));
+          current_scope.import.push(ImportDef::new(it.pos, it.vis, segments, glob, alias));
           continue
         }
         
-        // Ignore
-        ItemKind::Generic{..} => continue,
+        // Generic
+        ItemKind::Generic{ctn, ..} => {
+          for child_id in self.cre.extra_get(ctn) {
+            let child = self.cre.get(child_id);
+            let child_kind = match child.kind {
+              ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::GenericType(id, kind),
+              ItemKind::Fun{..} | ItemKind::Task{..} | ItemKind::Let{..} => ScopeKindAst::GenericExpr(id, child_id),
+              _ => continue,
+            };
+            if let Some(child_name) = child.name {
+              current_scope.insert(child_name, child_kind, &mut self.sum);
+            }
+          }
+          continue;
+        }
 
         _ => todo!("{it:#?}"),
       };
@@ -117,24 +138,24 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
     // Generic parametreleri varsa onları da mevcut kapsama ekle
     if let Some(params) = self.get_generic_params(container_id) {
-      for param_id in params {
+      for (idx, &param_id) in params.iter().enumerate() {
 
-        match self.cre.get(param_id) as &Thing {
-          Thing::Name(name) => {
-            let it = ScopeKindAst::TypeParam(param_id);
+        match self.cre.get(param_id).kind {
+          ThingKind::Name(name) => {
+            let it = ScopeKindAst::TypeParam(idx, param_id);
 
-            current_scope.insert(*name, it, &mut self.sum);
+            current_scope.insert(name, it, &mut self.sum);
           }
           
-          Thing::NamedType(name, kind) => {
-            let ty_obj: &Type = self.cre.get(*kind);
+          ThingKind::NamedType(name, kind) => {
+            let ty_obj = self.cre.get(kind);
 
             let it = match ty_obj.kind {
-              TypeKind::Type => ScopeKindAst::TypeParam(param_id),
-              _ => ScopeKindAst::ExprParam(param_id),
+              TypeKind::Type => ScopeKindAst::TypeParam(idx, param_id),
+              _ => ScopeKindAst::ExprParam(idx, param_id),
             };
 
-            current_scope.insert(*name, it, &mut self.sum);
+            current_scope.insert(name, it, &mut self.sum);
           }
 
           _ => panic!()
@@ -162,7 +183,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
   
 
   fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
-    let item: &Item = self.cre.get(ItemId::from_any(id));
+    let item = self.cre.get(ItemId::from_any(id));
     match item.kind {
       ItemKind::Krate(rng) | ItemKind::Module(rng) | ItemKind::ModuleFile(rng, ..) => {
         self.cre.extra_get(rng).collect()
@@ -177,7 +198,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
   }
 
   fn get_generic_params(&self, id: AnyId) -> Option<Vec<ThingId>> {
-    let item: &Item = self.cre.get(ItemId::from_any(id));
+    let item = self.cre.get(ItemId::from_any(id));
     if let ItemKind::Generic{params, ..} = item.kind {
       Some(self.cre.extra_get(params).collect())
     } else {

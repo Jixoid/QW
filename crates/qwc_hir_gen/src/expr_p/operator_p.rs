@@ -430,7 +430,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, fields: 
     let mut gived_keys = FxHashMap::default();
 
     for id in ctx.src.extra_get(fields) {
-      let ast::Thing::NamedExpr(name, expr) = *ctx.src.get(id) else { panic!() };
+      let ast::ThingKind::NamedExpr(name, expr) = ctx.src.get(id).kind else { panic!() };
       
       let expr_pos = ctx.src.get(expr).pos;
       let expr = ExprLow::low(ctx, fctx, expr)?;

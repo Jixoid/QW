@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, AnyRng, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, DefPath, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
 
 
 
@@ -73,6 +73,7 @@ pub struct Krate {
   list_expr: Arena<Expr>,
   list_item: Arena<Item>,
   list_thin: Arena<Thing>,
+  list_dpath: Arena<DefPath>,
 
   extra_data: (Arena<HirId<SpecAny>>, Arena<NodeKind>),
 }
@@ -90,6 +91,7 @@ impl Krate {
       list_expr: Arena::new(),
       list_item: Arena::new(),
       list_thin: Arena::new(),
+      list_dpath: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
     }
@@ -171,11 +173,11 @@ impl Krate {
   pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<DefPath>(&self) + Self::size_used::<AnyId>(&self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<DefPath>(&self) + Self::size_alloc::<AnyId>(&self)
   }
 
 }
@@ -233,6 +235,16 @@ impl<T: HirKind> GetApi<T> for Thing {
 }
 
 
+impl<T: HirKind> PushApi<T> for DefPath {
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_dpath.push(obj)).unwrap()) }
+}
+
+impl<T: HirKind> GetApi<T> for DefPath {
+  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_dpath[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_dpath[id.idx() as usize] }
+}
+
+
 // size api
 pub trait SizeApi {
   fn size_used(cre: &Krate) -> usize;
@@ -257,6 +269,11 @@ impl SizeApi for Item {
 impl SizeApi for Thing {
   fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thin.len() }
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thin.allocated_len() }
+}
+
+impl SizeApi for DefPath {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_dpath.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_dpath.allocated_len() }
 }
 
 impl SizeApi for AnyId {

@@ -36,7 +36,7 @@ impl ItemLow {
 
       ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(ns_p::low_module(ctx, id, it, rng)?),
       
-      ast::ItemKind::Generic{ctn: rng, ..} => Some(ns_p::low_generic(ctx, id, it, rng)?),
+      ast::ItemKind::Generic{ctn: rng, params: args, ..} => Some(ns_p::low_generic(ctx, id, it, rng, args)?),
 
 
       // Symbols
@@ -71,39 +71,21 @@ impl ItemLow {
 
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
     // Post
     hir::Item {
-      kind: hir::ItemKind::Using {
-        name: it.name.unwrap().sid(),
-        kind,
-      },
+      name: Some(name),
+      kind: hir::ItemKind::Using { kind },
+      path,
       vis, attr
     }.push_ok(ctx.cre)
   }
 
 
-  fn low_let(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: Option<ast::TypeId>, expr: ast::ExprId, ism: bool) -> Result<hir::ItemId, Message> {
-    let kind = kind.unwrap();
-    let kind = TypeLow::low(ctx, kind)?;
-
-    let expr = todo!(); // ExprLow::low(ctx, expr)?;
-
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
-    
-
-    // Post
-    let this = hir::Item {
-      kind: hir::ItemKind::Variable {
-        name: it.name.unwrap().sid(),
-        kind,
-        expr,
-        ism,
-      },
-      vis, attr
-    };
-
-    Ok(ctx.cre.push(this))
+  fn low_let(_ctx: &mut Ctx, _id: ast::ItemId, _it: &ast::Item, _kind: Option<ast::TypeId>, _expr: ast::ExprId, _ism: bool) -> Result<hir::ItemId, Message> {
+    todo!()
   }
 
 
@@ -124,7 +106,7 @@ impl ItemLow {
 
     for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
       let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
-      let ast::Thing::NamedType(name_pos, ..) = *ctx.src.get(id_pos) else { panic!() };
+      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { panic!() };
 
       loc.insert(name, kind, false, name_pos);
     }
@@ -151,13 +133,17 @@ impl ItemLow {
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
 
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+
     // Post
     hir::Item {
+      name: Some(name),
       kind: hir::ItemKind::Function {
-        name: it.name.unwrap().sid(),
         expr: expr_hir,
         kind: hir_kind,
       },
+      path,
       vis, attr
     }.push_ok(ctx.cre)
   }
@@ -183,7 +169,7 @@ impl ItemLow {
 
     for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
       let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
-      let ast::Thing::NamedType(name_pos, ..) = *ctx.src.get(id_pos) else { panic!() };
+      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { panic!() };
 
       loc.insert(name, kind, false, name_pos);
     }
@@ -210,13 +196,17 @@ impl ItemLow {
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
 
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+
     // Post
     hir::Item {
+      name: Some(name),
       kind: hir::ItemKind::Function {
-        name: it.name.unwrap().sid(),
         expr: expr_hir,
         kind: hir_kind,
       },
+      path,
       vis, attr
     }.push_ok(ctx.cre)
   }
@@ -227,7 +217,6 @@ impl ItemLow {
 fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -> Result<(hir::ItemVis, ItemAttr), Message> {
   let mut ivis: Option<(ast::Ident, hir::SymVis)> = None;
   let mut attr = ItemAttr::empty();
-
 
   if let Some(attrs) = attrs {
     for key in attrs {
@@ -294,10 +283,9 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
   }
 
 
-
   let vis = match vis {
     ast::Visibility::Inherited => hir::ItemVis::Private,
-    ast::Visibility::Public  => hir::ItemVis::Public(ivis.unwrap() /* TODO! */ .1),
+    ast::Visibility::Public  => hir::ItemVis::Public(ivis.map(|v| v.1).unwrap_or(hir::SymVis::Internal)),
     ast::Visibility::Private => hir::ItemVis::Private,
     _ => panic!()
   };

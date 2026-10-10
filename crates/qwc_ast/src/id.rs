@@ -193,7 +193,7 @@ impl AnyId {
     self.id
   }
 
-  pub(crate) fn kind(&self) -> NodeKind {
+  pub fn kind(&self) -> NodeKind {
     self.kind
   }
 

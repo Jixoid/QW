@@ -182,7 +182,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
     None
   }
 
-  fn resolve_imod_import(&self, imod: &Imod<'_>, mut current_item: qwc_hir::ItemId, segments: &[ImportSegment], glob: bool, span: Span) -> ResolveResult {
+  fn resolve_imod_import(&self, imod: &Imod<'_>, mut current_item: qwc_hir::ItemId, segments: &[ImportSegment], glob: bool, alias: Option<Ident>, span: Span) -> ResolveResult {
     for (idx, seg) in segments.iter().enumerate() {
       let seg_ident = match seg {
         ImportSegment::Name(ident) => *ident,
@@ -208,7 +208,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
           ExportKind::NameSpace(item) => ScopeKindHir::Module(item),
         };
         return ResolveResult::Specific {
-          name: seg_ident.sid(),
+          name: alias.map_or(seg_ident.sid(), |alias| alias.sid()),
           kind: ScopeKind::Hir(hir_kind),
           span,
         };
@@ -291,7 +291,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
                 Some(r) => r,
                 None => return ResolveResult::Failed,
               };
-              return self.resolve_imod_import(imod, root_id, &import.segments[1..], import.glob, import.span);
+              return self.resolve_imod_import(imod, root_id, &import.segments[1..], import.glob, import.alias, import.span);
             }
             return ResolveResult::Pending;
           }
@@ -303,7 +303,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
               ScopeKind::Ast(ScopeKindAst::Module(mod_id)) => mod_id.to_any(),
               ScopeKind::Hir(ScopeKindHir::Module(item_id)) => {
                 if let Some(imod) = self.imods.iter().find(|im| im.expmap.cid() == item_id.cid()) {
-                  return self.resolve_imod_import(imod, item_id, &[], true, import.span);
+                  return self.resolve_imod_import(imod, item_id, &[], true, import.alias, import.span);
                 }
                 return ResolveResult::Failed;
               }
@@ -311,7 +311,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
             }
           } else {
             return ResolveResult::Specific {
-              name: first_ident.sid(),
+              name: import.alias.map_or(first_ident.sid(), |alias| alias.sid()),
               kind,
               span,
             };
@@ -321,7 +321,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
             ScopeKind::Ast(ScopeKindAst::Module(mod_id)) => mod_id.to_any(),
             ScopeKind::Hir(ScopeKindHir::Module(item_id)) => {
               if let Some(imod) = self.imods.iter().find(|im| im.expmap.cid() == item_id.cid()) {
-                return self.resolve_imod_import(imod, item_id, &import.segments[1..], import.glob, import.span);
+                return self.resolve_imod_import(imod, item_id, &import.segments[1..], import.glob, import.alias, import.span);
               }
               return ResolveResult::Failed;
             }
@@ -350,7 +350,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         Some(&(item_kind, item_span)) => {
           if is_last_segment && !import.glob {
             return ResolveResult::Specific {
-              name: seg_ident.sid(),
+              name: import.alias.map_or(seg_ident.sid(), |alias| alias.sid()),
               kind: item_kind,
               span: item_span,
             };
@@ -362,7 +362,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
               ScopeKind::Hir(ScopeKindHir::Module(item_id)) => {
                 if let Some(imod) = self.imods.iter().find(|im| im.expmap.cid() == item_id.cid()) {
                   let remaining = &import.segments[(next_seg_idx + idx + 1)..];
-                  return self.resolve_imod_import(imod, item_id, remaining, import.glob, import.span);
+                  return self.resolve_imod_import(imod, item_id, remaining, import.glob, import.alias, import.span);
                 }
                 return ResolveResult::Failed;
               }

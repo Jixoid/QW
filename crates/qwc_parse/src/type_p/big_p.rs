@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{self as ast, FieldKind, IdentSave, Item, Thing, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
+use qwc_ast::{self as ast, FieldKind, IdentSave, Item, Thing, ThingKind, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -38,7 +38,7 @@ impl TypeParser {
         let it = cre.get(id);
         
         match it.kind {
-          FieldKind::MemberVar {kind} => ctn.push(Thing::NamedType(it.name.unwrap(), kind).push(cre)),
+          FieldKind::MemberVar {kind} => ctn.push(Thing{kind: ThingKind::NamedType(it.name.unwrap(), kind), pos: it.name.unwrap().into()}.push(cre)),
           
           FieldKind::ImplIn {trait_ty, ctn} => impin.push((trait_ty, ctn, it.pos, it.vis)),
 
@@ -102,9 +102,15 @@ impl TypeParser {
           lex.bump()?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
           
-          Thing::NamedExpr(name, val)
+          Thing {
+            kind: ThingKind::NamedExpr(name, val),
+            pos: name.into(),
+          }
         } else {
-          Thing::Name(name)
+          Thing {
+            kind: ThingKind::Name(name),
+            pos: name.into(),
+          }
         };
 
         vals.push(cre.push(item));
@@ -151,9 +157,15 @@ impl TypeParser {
           lex.bump()?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
           
-          Thing::NamedExpr(name, val)
+          Thing {
+            kind: ThingKind::NamedExpr(name, val),
+            pos: name.into(),
+          }
         } else {
-          Thing::Name(name)
+          Thing {
+            kind: ThingKind::Name(name),
+            pos: name.into(),
+          }
         };
 
         vals.push(cre.push(item));
@@ -199,9 +211,15 @@ impl TypeParser {
         let item = if lex.peek()?.kind() == WK::ParenL {
           let payload_type = TypeParser::pre_tuple(ctx!(cre, sin, far, lex, sum, side))?;
           
-          Thing::NamedType(name, payload_type)
+          Thing {
+            kind: ThingKind::NamedType(name, payload_type),
+            pos: name.into(),
+          }
         } else {
-          Thing::Name(name)
+          Thing {
+            kind: ThingKind::Name(name),
+            pos: name.into(),
+          }
         };
 
         vals.push(cre.push(item));

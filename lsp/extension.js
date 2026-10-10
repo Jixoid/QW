@@ -27,7 +27,7 @@ const tokenModifiers = ['declaration', 'definition', 'readonly', 'static'];
 const legend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
 const DECLARATION_KEYWORDS = new Set([
-  'fun', 'task', 'init', 'fini', 'let', 'var', 'using',
+  'fun', 'task', 'init', 'fini', 'let', 'var', 'using', 'type',
   'struct', 'iface', 'trait', 'enum', 'flags', 'impl', 'generic',
   'mod', 'use', 'requires', 'static', 'const', 'mut', 'imm',
   'pub', 'priv', 'prot', 'crate', 'super',
@@ -47,6 +47,7 @@ const WORD_MAP = new Map([
   ['let', 'keyword'],
   ['var', 'keyword'],
   ['using', 'keyword'],
+  ['type', 'keyword'],
   ['struct', 'keyword'],
   ['iface', 'keyword'],
   ['trait', 'keyword'],

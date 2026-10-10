@@ -28,7 +28,7 @@ impl From<NonZeroU32> for Sid {
 pub struct StrInterner {
   rodeo: Rodeo,
 
-  sid_sys: Sid,
+  sid_core: Sid,
   sid_types: Sid,
   
   sid_bool: Sid,
@@ -50,7 +50,7 @@ impl StrInterner {
     let mut rodeo = Rodeo::default();
 
     Self {
-      sid_sys:   Sid::from(rodeo.get_or_intern_static("sys").into_inner()),
+      sid_core:  Sid::from(rodeo.get_or_intern_static("core").into_inner()),
       sid_types: Sid::from(rodeo.get_or_intern_static("types").into_inner()),
       
       sid_bool: Sid::from(rodeo.get_or_intern_static("bool").into_inner()),
@@ -88,7 +88,7 @@ impl StrInterner {
   }
 
 
-  pub fn sid_sys(&self) -> Sid   { self.sid_sys }
+  pub fn sid_core(&self) -> Sid  { self.sid_core }
   pub fn sid_types(&self) -> Sid { self.sid_types }
 
   pub fn sid_bool(&self) -> Sid { self.sid_bool }

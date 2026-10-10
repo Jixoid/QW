@@ -38,6 +38,7 @@ mod const_p;
 mod block_p;
 mod loop_p;
 mod cast_p;
+mod spec_p;
 mod helper;
 
 
@@ -95,6 +96,8 @@ impl ExprLow {
       Member(rng) => operator_p::low_member(ctx, fctx, rng)?,
 
       Cast{expr, kind} => cast_p::low_cast(ctx, fctx, it, expr, kind)?,
+
+      Spec{callee, args} => spec_p::low_specialize(ctx, fctx, it, callee, args)?,
       
       _ => todo!("{:#?}", it)
     };

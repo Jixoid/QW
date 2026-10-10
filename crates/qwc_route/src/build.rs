@@ -356,6 +356,16 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   };
 
 
+  // Out Dir
+  let outdir: &Path = &info.path.join("build").join(
+    match info.variant {
+      BuildVariant::Debug => "debug",
+      BuildVariant::Release => "release",
+      BuildVariant::RelWithDebInfo => "relwithdebinfo",
+    }
+  );
+
+
   // Setup
   let mut far = Files::new();
 
@@ -419,8 +429,12 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   if info.dump.contains(&DumpStage::Export) { eprintln!("{}", qwc_resolve::dump_exp::Dump{exp: &exp, cre: hir_cre, deps: Some(&deps), sin: &sin, root: hir_cre.root().unwrap().to_any()}) }
 
 
+  if !outdir.exists() {
+    fs::create_dir_all(outdir)?;
+  }
+
   // QWU save
-  let mut qwu = fs::File::create(info.path.join("build").join("out.qwu"))?;
+  let mut qwu = fs::File::create(outdir.join("out.qwu"))?;
 
   Unit::serialize(&mut qwu, hir_cre, &exp)?;
 
@@ -442,10 +456,6 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Pass 4 (cgen)
   if info.verbose > 0 { eprintln!("{}", "PASS 4 (cgen)".red().bold()) }
   
-  if !info.path.join("build").exists() {
-    fs::create_dir(info.path.join("build"))?;
-  }
-  
   let (out, llir, time_pass4_cgen) = build_cgen(
     &info,
     &backend,
@@ -459,13 +469,13 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let object = (!info.execute /* OutKind::Object */).then_some(&out);
   
   if !info.execute {
-    fs::write(info.path.join("build").join("out.o"), &&object.unwrap())?;
+    fs::write(outdir.join("out.o"), &&object.unwrap())?;
   }
   
   if info.dump.contains(&DumpStage::Lir) {
     let llir = llir.unwrap();
 
-    fs::write(info.path.join("build").join("out.ll"), &llir)?;
+    fs::write(outdir.join("out.ll"), &llir)?;
     eprintln!("{}", llir);
   }
 

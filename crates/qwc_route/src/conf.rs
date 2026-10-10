@@ -20,9 +20,13 @@ use crate::Error;
 
 pub struct ConfSetup {
   pub name: String,
+  
+  #[allow(unused)]
   pub desc: String,
+  #[allow(unused)]
   pub vers: String,
   
+  #[allow(unused)]
   pub wspace: Option<HashMap<String, String>>,
 }
 

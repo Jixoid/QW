@@ -27,7 +27,6 @@ pub enum RawTerminator {
     else_bb: BlockHandle,
   },
   Return(Option<mir::Value>),
-  Unreachable,
 }
 
 
@@ -178,7 +177,6 @@ impl FunBuilder {
           else_bb: block_ids[else_bb.0],
         },
         Some(RawTerminator::Return(val)) => mir::Terminator::Return(val),
-        Some(RawTerminator::Unreachable) => mir::Terminator::Unreachable,
         None => {
           if is_ret_unit {
             mir::Terminator::Return(None)

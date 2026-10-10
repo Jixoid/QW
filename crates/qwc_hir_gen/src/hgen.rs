@@ -36,6 +36,7 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
   pub ideps: &'imod mut Deps,
   pub prims: &'imod PrimTypes,
   pub type_impls: &'loc FxHashMap<hir::TypeId, TypeMethods>,
+  pub path: hir::DefPathId,
 }
 
 
@@ -55,6 +56,11 @@ pub struct CacheMap {
   pub(crate) cache_type: FxHashMap<ast::TypeId, hir::TypeId>,
   pub(crate) cache_item: FxHashMap<ast::ItemId, Option<hir::ItemId>>,
   pub(crate) cache_expr: FxHashMap<ast::ExprId, hir::ExprId>,
+  
+  pub(crate) cache_generic_type: FxHashMap<(hir::TypeId, Vec<hir::TypeId>), hir::TypeId>,
+  pub(crate) cache_generic_item: FxHashMap<(hir::ItemId, Vec<hir::TypeId>), hir::ItemId>,
+  pub(crate) cache_generic_expr: FxHashMap<(hir::ExprId, Vec<hir::TypeId>), hir::ExprId>,
+
   pub(crate) self_ty: Vec<hir::TypeId>,
 }
 
@@ -82,7 +88,8 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     let ty = self.get(id);
     match ty.kind {
       // Generic
-      hir::TypeKind::GenericType => "<generic>".to_string(),
+      hir::TypeKind::GenericType{idx} => format!("<{}>", idx),
+      hir::TypeKind::GenericRaw{..} => "<raw generic>".to_string(),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
       hir::TypeKind::Error => "{error}".to_string(),
 
@@ -160,16 +167,22 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
 
 
-
-
 #[macro_export]
 macro_rules! ctx {
   ($lscp:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, path: $ctx.path, $lscp}
+  };
+
+  ($lscp:ident, $path:ident -> $ctx:expr) => {
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp, path: $path}
+  };
+
+  (path $path:ident -> $ctx:expr) => {
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, lscp: $ctx.lscp, path: $path}
   };
 
   (loc $loc:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp, path: $ctx.path}
   }
 }
 
@@ -186,20 +199,31 @@ impl<'ast, 'hir, 'imod> HGen {
     let prims = *ideps.prims().expect("core primitive types must be initialized in deps");
     let mut tin = TypeInterner::new();
     let mut sum = Summary::new();
-    let mut cmap = CacheMap{ cache_type: FxHashMap::default(), cache_item: FxHashMap::default(), cache_expr: FxHashMap::default(), self_ty: vec![]};
+    let mut cmap = CacheMap{
+      cache_type: FxHashMap::default(),
+      cache_item: FxHashMap::default(),
+      cache_expr: FxHashMap::default(),
+      cache_generic_type: FxHashMap::default(),
+      cache_generic_item: FxHashMap::default(),
+      cache_generic_expr: FxHashMap::default(),
+      self_ty: vec![],
+    };
     let mut loc = LocalScopeManager::new();
     
     let root = src.root().unwrap();
+    let root_it = src.get(root);
+    let root_name = root_it.name.map(|n| n.sid()).or_else(|| sin.get("main")).unwrap_or_else(|| sin.sid_entry());
+    let root_path = cre.push(hir::DefPath::Root(root_name));
     let lscp = scp.get(&root.to_any()).unwrap();
     
     // Pre 1
-    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc}, implst) {
+    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc, path: root_path}, implst) {
       Err(..) => return (None, sum),
       Ok(v) => v,
     };
 
     // Start
-    match ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc}, root) {
+    match ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc, path: root_path}, root) {
       Ok(root) => cre.set_root(root.unwrap()),
       
       Err(msg) => sum.add(msg),

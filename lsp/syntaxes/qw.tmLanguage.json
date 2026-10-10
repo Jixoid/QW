@@ -141,7 +141,7 @@
         },
         {
           "name": "keyword.declaration.qw",
-          "match": "\\b(fun|task|init|fini|let|var|using|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|static|const|mut|imm|self|Self)\\b"
+          "match": "\\b(fun|task|init|fini|let|var|using|type|struct|iface|trait|enum|flags|impl|generic|mod|use|requires|static|const|mut|imm|self|Self)\\b"
         },
         {
           "name": "keyword.other.visibility.qw",

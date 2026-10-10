@@ -14,8 +14,10 @@ mod hgen;
 mod type_p;
 mod expr_p;
 mod item_p;
+mod specialize;
 mod ty_interner;
 
+use specialize::Specialization;
 use hgen::{Ctx, FunCtx};
 use {type_p::{TypeLow, TypeMatch}, expr_p::ExprLow, item_p::ItemLow};
 

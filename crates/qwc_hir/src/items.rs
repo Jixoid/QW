@@ -13,7 +13,7 @@
 use bitflags::bitflags;
 use qwc_string_interner::Sid;
 
-use crate::{ExprId, ItemRng, TypeId};
+use crate::{DefPathId, ExprId, ItemRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -26,14 +26,14 @@ pub enum ItemVis { Private, Public(SymVis) }
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ItemKind {
   RootNS {rng: ItemRng},
-  NameSpace {rng: ItemRng, name: Sid},
-  GenericNS {rng: ItemRng},
+  NameSpace {rng: ItemRng},
+  GenericNS {rng: ItemRng, args: TypeRng},
 
-  Using {kind: TypeId, name: Sid},
+  Using {kind: TypeId},
   
-  Variable {kind: TypeId, expr: ExprId, name: Sid, ism: bool},
-  Function {kind: TypeId, expr: ExprId, name: Sid},
-  Task {kind: TypeId, expr: ExprId, name: Sid},
+  Variable {kind: TypeId, expr: ExprId, ism: bool},
+  Function {kind: TypeId, expr: ExprId},
+  Task {kind: TypeId, expr: ExprId},
 
   Impl {type_ty: TypeId, trait_ty: Option<TypeId>, methods: ItemRng},
 }
@@ -50,8 +50,10 @@ bitflags! {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Item {
   pub vis: ItemVis,
+  pub name: Option<Sid>,
   pub kind: ItemKind,
   pub attr: ItemAttr,
+  pub path: DefPathId,
 }
 
 impl Item {

@@ -18,7 +18,7 @@ use qwc_dump::{kw, name, op, punct, write_indent};
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, Field, FieldId, FieldKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt, PattId, Thing, ThingId, Type, TypeId, TypeKind, UnaryOp, Visibility, attrs::AttrKind, id::{AstId, NodeKind, SpecAny},
+  AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, Field, FieldId, FieldKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt, PattId, Thing, ThingId, ThingKind, Type, TypeId, TypeKind, UnaryOp, Visibility, attrs::AttrKind, id::{AstId, NodeKind, SpecAny},
 };
 
 
@@ -650,7 +650,7 @@ impl DumpHandler for Expr {
         write!(f, "{{")?;
         
         for id in cre.extra_get(fields) {
-          let Thing::NamedExpr(name, expr) = *cre.get(id) else { panic!() };
+          let ThingKind::NamedExpr(name, expr) = cre.get(id).kind else { panic!() };
           
           write!(f, "{}{} ", name.str(far), ":".bright_black())?;
           
@@ -940,7 +940,7 @@ impl DumpHandler for Expr {
 
       ExprKind::Spec { callee, args } => {
         callee.dump(cre, sin, far, f, indent)?;
-        write!(f, "<")?;
+        write!(f, "::<")?;
         let mut first = true;
         for id in cre.extra_any_get(args) {
           if !first { write!(f, ", ")?; }
@@ -1060,9 +1060,8 @@ impl DumpHandler for Field {
               write!(f, ", ")?;
             }
             first = false;
-            let thing: &Thing = cre.get(id);
-            match thing {
-              Thing::NamedExpr(ident, expr_id) => {
+            match cre.get(id).kind {
+              ThingKind::NamedExpr(ident, expr_id) => {
                 write!(f, "{}(", ident.str(far).white())?;
                 expr_id.dump(cre, sin, far, f, indent)?;
                 write!(f, ")")?;
@@ -1131,15 +1130,19 @@ impl DumpHandler for Field {
 
 impl DumpHandler for Thing {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-    match self {
-      Thing::Name(ident) => {
+    match self.kind {
+      ThingKind::Name(ident) => {
         write!(f, "{}", ident.str(far).white())?;
       }
+      ThingKind::Alias(inner, alias) => {
+        inner.dump(cre, sin, far, f, indent)?;
+        write!(f, " as {}", alias.str(far).white())?;
+      }
 
-      Thing::List(rng) => {
+      ThingKind::List(rng) => {
         write!(f, "(")?;
         let mut first = true;
-        for id in cre.extra_get(*rng) {
+        for id in cre.extra_get(rng) {
           if !first { write!(f, ", ")?; }
           first = false;
           
@@ -1148,46 +1151,46 @@ impl DumpHandler for Thing {
         write!(f, ")")?;
       }
 
-      Thing::Wildcard => {
+      ThingKind::Wildcard => {
         write!(f, "*")?;
       }
 
-      Thing::Crate => {
+      ThingKind::Crate => {
         write!(f, "{}", "crate".magenta())?;
       }
 
-      Thing::Super => {
+      ThingKind::Super => {
         write!(f, "{}", "super".magenta())?;
       }
 
-      Thing::NamedExpr(ident, expr_id) => {
+      ThingKind::NamedExpr(ident, expr_id) => {
         write!(f, "{}", ident.str(far).white())?;
         write!(f, " = ")?;
         expr_id.dump(cre, sin, far, f, indent)?;
       }
 
-      Thing::NamedType(ident, type_id) => {
+      ThingKind::NamedType(ident, type_id) => {
         write!(f, "{}", ident.str(far).white())?;
         write!(f, ": ")?;
         type_id.dump(cre, sin, far, f, indent)?;
       }
 
-      Thing::TypeVis(type_id, vis) => {
+      ThingKind::TypeVis(type_id, vis) => {
         vis.dump(cre, sin, far, f, indent)?;
         type_id.dump(cre, sin, far, f, indent)?;
       }
 
-      Thing::NamedTypeVis(ident, vis, type_id) => {
+      ThingKind::NamedTypeVis(ident, vis, type_id) => {
         vis.dump(cre, sin, far, f, indent)?;
         write!(f, "{}: ", ident.str(far).white())?;
         type_id.dump(cre, sin, far, f, indent)?;
       }
 
-      Thing::NamedTypeList(ident, rng) => {
+      ThingKind::NamedTypeList(ident, rng) => {
         write!(f, "{}: ", ident.str(far).white())?;
         let mut first = true;
         
-        for id in cre.extra_get(*rng) {
+        for id in cre.extra_get(rng) {
           if !first { write!(f, " | ")?; }
           first = false;
           
@@ -1195,10 +1198,10 @@ impl DumpHandler for Thing {
         }
       }
 
-      Thing::NamedExprList(ident, rng) => {
+      ThingKind::NamedExprList(ident, rng) => {
         write!(f, "{}(", ident.str(far).white())?;
         let mut first = true;
-        for id in cre.extra_get(*rng) {
+        for id in cre.extra_get(rng) {
           if !first { write!(f, ", ")?; }
           first = false;
           
@@ -1207,7 +1210,7 @@ impl DumpHandler for Thing {
         write!(f, ")")?;
       }
 
-      Thing::MatchArm(pat_expr, body_expr) => {
+      ThingKind::MatchArm(pat_expr, body_expr) => {
         pat_expr.dump(cre, sin, far, f, indent)?;
         write!(f, " => ")?;
         body_expr.dump(cre, sin, far, f, indent)?;

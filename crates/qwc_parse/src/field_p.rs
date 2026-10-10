@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{Field, FieldId, FieldKind, IdentSave, Rng, Thing, Visibility};
+use qwc_ast::{Field, FieldId, FieldKind, IdentSave, Rng, Thing, ThingKind, Visibility};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -136,15 +136,21 @@ impl FieldParser {
       let mut ils = vec![];
       
       loop {
+        let start = lex.peek()?;
+
         let name = if let (WK::Word, c) = lex.peek_k()? { lex.bump()?; c.ident(sin, far)? } else { break };
         
         lex.get()?.expect_kind(WK::ParenL)?;
         
         let v = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
-        
+
         lex.get()?.expect_kind(WK::ParenR)?;
+
         
-        let it = Thing::NamedExpr(name, v);
+        let it = Thing {
+          kind: ThingKind::NamedExpr(name, v),
+          pos: lex.pos_extend(start),
+        };
         ils.push(cre.push(it));
         
         if lex.peek()?.kind() == WK::Comma { lex.bump()? } else { break }

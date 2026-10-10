@@ -10,17 +10,15 @@
 */
 
 
-use std::num::NonZeroU32;
+use qwc_string_interner::Sid;
 
-use thin_vec::ThinVec;
+use crate::DefPathId;
 
 
-pub struct DPath(pub ThinVec<NonZeroU32>);
-
-impl DPath {
-  
-  pub fn new(vec: Vec<NonZeroU32>) -> Self {
-    Self(ThinVec::from(vec))
-  }
-
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum DefPath {
+  Root(Sid),
+  Path{base: DefPathId, name: Sid},
+  Impl{base: DefPathId, spec: DefPathId},
+  Spec{base: DefPathId, spec: DefPathId},
 }

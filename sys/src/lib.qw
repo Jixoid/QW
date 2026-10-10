@@ -1,7 +1,4 @@
 pub mod base;
 
-
-![feature("linux")]
 pub mod linux;
-![feature("linux")]
 pub use linux::IO as io;

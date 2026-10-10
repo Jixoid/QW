@@ -127,18 +127,18 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
 
           let mut found = None;
           for id in krate.extra_get(rng) {
-            let child_item: &hir::Item = krate.get(id);
-            match child_item.kind {
-              hir::ItemKind::NameSpace{name, ..} if name == seg.sid() => {
+            let it = krate.get(id);
+            match it.kind {
+              hir::ItemKind::NameSpace{..} if it.name.unwrap() == seg.sid() => {
                 found = Some(ScopeKind::Hir(ScopeKindHir::Module(id)));
                 break;
               }
-              hir::ItemKind::Using{name, kind} if name == seg.sid() => {
+              hir::ItemKind::Using{kind} if it.name.unwrap() == seg.sid() => {
                 found = Some(ScopeKind::Hir(ScopeKindHir::Type(kind)));
                 break;
               }
-              hir::ItemKind::Variable{name, kind: ty, ..} | hir::ItemKind::Function{name, kind: ty, ..} if name == seg.sid() => {
-                found = Some(ScopeKind::Hir(ScopeKindHir::Expr(id, ty)));
+              hir::ItemKind::Variable{kind, ..} | hir::ItemKind::Function{kind, ..} if it.name.unwrap() == seg.sid() => {
+                found = Some(ScopeKind::Hir(ScopeKindHir::Expr(id, kind)));
                 break;
               }
               _ => {}

@@ -1,6 +1,6 @@
-use sys::base::io::*;
+use crate::base::io::*;
 
-pub trait IO;
+pub trait IO {}
 
 priv impl i32 /* fd */: FD {}
 

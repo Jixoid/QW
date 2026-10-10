@@ -60,21 +60,22 @@ impl<'a> ExportCollector<'a> {
 
     // Mevcut modülün dışa açtığı tüm sembolleri kaydet
     for &id in &item_ids {
-      let item: &Item = self.cre.get(id);
+      let it = self.cre.get(id);
 
       // if !item.is_public() { continue; }
 
-      let (name, kind) = match item.kind {
+      let (name, kind) = match it.kind {
         // Modüller / İsim Alanları
-        ItemKind::NameSpace{name, ..} => (name, ExportKind::NameSpace(id)),
+        ItemKind::NameSpace{..} => (it.name.unwrap(), ExportKind::NameSpace(id)),
 
-        ItemKind::Using{name, kind} => (name, ExportKind::Type(kind)),
+        ItemKind::Using{kind} => (it.name.unwrap(), ExportKind::Type(kind)),
 
-        ItemKind::Variable{name, kind: ty, ..} | ItemKind::Function{name, kind: ty, ..} => (name, ExportKind::Expr(id, ty)),
+        ItemKind::Variable{kind, ..} | ItemKind::Function{kind, ..} => (it.name.unwrap(), ExportKind::Expr(id, kind)),
 
-        ItemKind::Impl { .. } => continue,
+        ItemKind::GenericNS{..} => continue,
+        ItemKind::Impl{..} => continue,
 
-        _ => todo!("{item:#?}"),
+        _ => todo!("{it:#?}"),
       };
 
       current_exports.insert(name, kind);

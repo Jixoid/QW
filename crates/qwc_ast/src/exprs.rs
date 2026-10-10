@@ -106,10 +106,10 @@ pub enum ExprKind {
   Relaxed (ExprId),
   
   // Specialize
-  Spec{callee: ExprId, args: AnyRng},
+  Spec {callee: ExprId, args: AnyRng},
 
   // Cast
-  Cast { expr: ExprId, kind: TypeId },
+  Cast {expr: ExprId, kind: TypeId},
 }
 
 

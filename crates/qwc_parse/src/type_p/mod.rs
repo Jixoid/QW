@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{AnyRng, IdentSave, Rng, Thing, ThingRng, Type, TypeId, TypeKind, TypeRng};
+use qwc_ast::{AnyRng, IdentSave, Rng, Thing, ThingKind, ThingRng, Type, TypeId, TypeKind, TypeRng};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -524,7 +524,10 @@ impl TypeParser {
       let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
       
       for x in names {
-        let thing = Thing::NamedType(x, kind);
+        let thing = Thing {
+          kind: ThingKind::NamedType(x, kind),
+          pos: x.into(),
+        };
 
         args.push(cre.push(thing));
       }

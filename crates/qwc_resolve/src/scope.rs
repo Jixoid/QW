@@ -60,10 +60,12 @@ pub enum ScopeKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScopeKindAst {
   Type(ast::TypeId),
-  TypeParam(ast::ThingId),
+  GenericType(ast::ItemId, ast::TypeId),
+  TypeParam(usize, ast::ThingId),
   
   Expr(ast::ItemId),
-  ExprParam(ast::ThingId),
+  GenericExpr(ast::ItemId, ast::ItemId),
+  ExprParam(usize, ast::ThingId),
   
   Module(ast::ItemId),
   Local(u32),
@@ -111,16 +113,18 @@ pub struct ImportDef {
   pub vis: qwc_ast::Visibility,
   pub segments: Vec<ImportSegment>,
   pub glob: bool,
+  pub alias: Option<Ident>,
   pub status: ImportStatus,
 }
 
 impl ImportDef {
-  pub fn new(span: Span, vis: qwc_ast::Visibility, segments: Vec<ImportSegment>, glob: bool) -> Self {
+  pub fn new(span: Span, vis: qwc_ast::Visibility, segments: Vec<ImportSegment>, glob: bool, alias: Option<Ident>) -> Self {
     Self {
       span,
       vis,
       segments,
       glob,
+      alias,
       status: ImportStatus::Unsolved,
     }
   }

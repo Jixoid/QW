@@ -20,34 +20,51 @@ use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()}.push(ctx.cre));
 
-  let methods = {
-    let mut ctn = vec![];
+  let (methods, types) = {
+    let mut methods = vec![];
+    let mut types = vec![];
 
     for id in ctx.src.extra_get(rng) {
       let it = ctx.src.get(id);
 
-      let ast::FieldKind::Fun{kind, ..} = it.kind else { panic!() };
+      match it.kind {
+        ast::FieldKind::Fun{kind, ..} => {
+          let fun_ty = TypeLow::low(ctx, kind)?;
 
-      let fun_ty = TypeLow::low(ctx, kind)?;
-      
-      
-      // Post
-      let id = hir::Thing::NamedType(
-        it.name.unwrap().sid(),
-        fun_ty
-      ).push(ctx.cre);
+          // Post
+          let id = hir::Thing::NamedType(
+            it.name.unwrap().sid(),
+            fun_ty
+          ).push(ctx.cre);
+    
+          methods.push(id);
+        }
 
-      ctn.push(id);
+        ast::FieldKind::Type(kind) => {
+          let kind = kind.map(|id| TypeLow::low(ctx, id)).transpose()?;
+
+          // Post
+          let id = match kind {
+            Some(kind) => hir::Thing::NamedType(it.name.unwrap().sid(), kind),
+            
+            None => hir::Thing::Name(it.name.unwrap().sid()),
+          }.push(ctx.cre) as hir::ThingId;
+
+          types.push(id);
+        }
+        
+        _ => todo!("{it:#?}")
+      }
     }
 
-    ctx.cre.extra(&ctn)
+    (ctx.cre.extra(&methods), ctx.cre.extra(&types))
   };
 
   ctx.cmap.self_ty.pop();
 
 
   hir::Type {
-    kind: hir::TypeKind::Trait(methods),
+    kind: hir::TypeKind::Trait(methods, types),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
   }.push_ok(ctx.cre)

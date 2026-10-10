@@ -13,7 +13,7 @@
 use qwc_diagnostic::Summary;
 use qwc_hir as hir;
 use qwc_mir::{self as mir, LayoutInfo};
-use qwc_string_interner::{Sid, StrInterner};
+use qwc_string_interner::StrInterner;
 
 use rustc_hash::FxHashMap;
 
@@ -26,8 +26,6 @@ pub struct Ctx<'ast, 'hir, 'mir, 'a> {
   pub sin: &'ast StrInterner,
   pub cre: &'mir mut mir::Krate,
   pub tin: &'mir mut TypeInterner<'a>,
-  pub sum: &'mir mut Summary,
-  pub mgr: &'mir mut Vec<Sid>,
   pub cmap: &'mir mut CacheMap,
 }
 
@@ -52,15 +50,6 @@ pub struct CacheMap {
 }
 
 
-#[macro_export]
-macro_rules! ctx {
-  ($mgr:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, src: $ctx.src, deps: $ctx.deps, sin: $ctx.sin, cmap: $ctx.cmap, $mgr}
-  };
-}
-
-
-
 pub struct MGen;
 
 impl<'ast, 'hir, 'mir, 'a> MGen {
@@ -78,7 +67,7 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
     let root = src.root().unwrap();
 
     let _ = SymbLow::low(
-      &mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, deps, sin, mgr: &mut vec![]},
+      &mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, deps, sin},
       root
     ).map_err(|msg| sum.add(msg));
 

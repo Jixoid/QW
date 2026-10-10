@@ -35,17 +35,21 @@ pub fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemR
 
   // Post
   hir::Item {
+    name: it.name.map(|n| n.sid()),
     kind: hir::ItemKind::RootNS { rng },
+    path: ctx.path,
     vis, attr
   }.push_ok(ctx.cre)
 }
 
 pub fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
+  let name = it.name.unwrap().sid();
+  let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
   let ids = &ctx.src.extra_get(rng)
     .filter_map(|id| {
-      ItemLow::low(ctx!(lscp -> ctx), id)
+      ItemLow::low(ctx!(lscp, path -> ctx), id)
         .map_err(|err| ctx.sum.add(err))
         .ok().flatten()
     }).collect_vec();
@@ -57,32 +61,44 @@ pub fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Item
 
   // Post
   hir::Item {
-    kind: hir::ItemKind::NameSpace {
-      name: it.name.unwrap().sid(),
-      rng,
-    },
+    name: Some(name),
+    kind: hir::ItemKind::NameSpace { rng },
+    path,
     vis, attr
   }.push_ok(ctx.cre)
 }
 
-pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
+pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng) -> Result<hir::ItemId, Message> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
-  let ids = &ctx.src.extra_get(rng)
+  let rng = &ctx.src.extra_get(rng)
     .filter_map(|id| {
       ItemLow::low(ctx!(lscp -> ctx), id)
         .map_err(|err| ctx.sum.add(err))
         .ok().flatten()
     }).collect_vec();
+  let rng = ctx.cre.extra(rng);
+  
+  
+  let args = &ctx.src.extra_get(args)
+    .map(|id| {
+      match ctx.src.get(id).kind {
+        ast::ThingKind::Name(name) => hir::Thing::NamedType(name.sid(), ctx.prims.ty_type).push(ctx.cre),
+        //ast::ThingKind::NamedType(name, kind)
 
-  let rng = ctx.cre.extra(ids);
+        _ => todo!()
+      }
+    }).collect_vec();
+  let args = ctx.cre.extra(args);
 
   let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
   
   // Post
   hir::Item {
-    kind: hir::ItemKind::GenericNS { rng },
+    name: None,
+    kind: hir::ItemKind::GenericNS { rng, args },
+    path: ctx.path,
     vis, attr
   }.push_ok(ctx.cre)
 }

@@ -60,6 +60,7 @@ pub enum BoolLogicOp {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExprKind {
   GenericExpr,
+  GenericRaw{generic: ItemId, kind: ExprId},
   Error,
   
   Const(Const),

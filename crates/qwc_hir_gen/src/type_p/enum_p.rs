@@ -24,9 +24,9 @@ pub fn low_enum(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Messag
   let mut enum_val: i128 = 0;
 
   let rng = ctx.src.extra_get(rng).map(|id| {
-    let (name, _expr) = match *ctx.src.get(id) {
-      ast::Thing::Name(name) => (name, None),
-      ast::Thing::NamedExpr(name, expr) => (name, Some(expr)),
+    let (name, _expr) = match ctx.src.get(id).kind {
+      ast::ThingKind::Name(name) => (name, None),
+      ast::ThingKind::NamedExpr(name, expr) => (name, Some(expr)),
       _ => unreachable!()
     };
 
@@ -49,6 +49,51 @@ pub fn low_enum(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Messag
     let id = hir::Thing::NamedConst(name.sid(), hir::Const::Int(enum_val as i32)).push(ctx.cre);
 
     enum_val += 1;
+
+    id
+  }).collect_vec();
+
+  let rng = ctx.cre.extra(&rng);
+  
+
+  // Post
+  hir::Type {
+    kind: hir::TypeKind::Enum(rng),
+    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
+  }.push_ok(ctx.cre)
+}
+
+pub fn low_flags(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+  let mut names = FxHashMap::default();
+  let mut flag_val: i128 = 0;
+
+  let rng = ctx.src.extra_get(rng).map(|id| {
+    let (name, _expr) = match ctx.src.get(id).kind {
+      ast::ThingKind::Name(name) => (name, None),
+      ast::ThingKind::NamedExpr(name, expr) => (name, Some(expr)),
+      _ => unreachable!()
+    };
+
+    use std::collections::hash_map::Entry::*;
+
+    // Duplicate Test
+    match names.entry(name.sid()) {
+      Occupied(entry) => {
+        ctx.sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
+          .add(Label::new(*entry.get(), FIRST_DEFINITION_HERE))
+        );
+      }
+
+      Vacant(entry) => {
+        entry.insert(Into::<Span>::into(name));
+      }
+    };
+    
+
+    let id = hir::Thing::NamedConst(name.sid(), hir::Const::Int(flag_val as i32)).push(ctx.cre);
+
+    flag_val <<= 1;
 
     id
   }).collect_vec();

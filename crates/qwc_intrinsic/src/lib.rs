@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{CID, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeAttr, TypeKind, Visitor};
+use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeAttr, TypeKind, Visitor};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
@@ -18,9 +18,12 @@ use qwc_string_interner::StrInterner;
 pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate, ExportMap, qwc_hir::PrimTypes) {
 	let mut cre = Krate::new(cid);
 
+	let path_root = cre.push(DefPath::Root(sin.sid_core()));
+	let path_types = cre.push(DefPath::Path{base: path_root, name: sin.sid_types()});
+
 	let mut root = vec![];
 
-	let ty_generic_type = cre.push(Type{kind: TypeKind::GenericType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
+	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
 	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
 	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
 	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
@@ -32,9 +35,17 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 		macro_rules! reg {
 			($name:literal => $kind:expr, $lay:expr) => {{
+				let name_sid = sin.sid($name);
+				let path = cre.push(DefPath::Path{base: path_types, name: name_sid});
 				let kind = cre.push(Type{kind: $kind, layout: $lay, attr: TypeAttr::empty()});
 
-				let item = cre.push(Item{vis: ItemVis::Public(SymVis::Internal), kind: ItemKind::Using { kind, name: sin.sid($name) }, attr: ItemAttr::empty() });
+				let item = cre.push(Item{
+					vis: ItemVis::Public(SymVis::Internal),
+					name: Some(name_sid),
+					kind: ItemKind::Using{kind},
+					path,
+					attr: ItemAttr::empty()
+				});
 
 				types.push(item);
 				kind
@@ -72,7 +83,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		let ty_f128 = reg!("f128" => TypeKind::Float(128), layinfo.f128_lay);
 
 		let prims = qwc_hir::PrimTypes {
-			ty_generic_type,
+			ty_type,
 			ty_generic_self_type,
 			ty_error,
 			ty_unit,
@@ -105,7 +116,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		// Post
 		let this = Item {
 			vis: ItemVis::Public(SymVis::Internal),
-			kind: ItemKind::NameSpace { rng: cre.extra(&types), name: sin.sid("types") },
+			name: Some(sin.sid_types()),
+			kind: ItemKind::NameSpace { rng: cre.extra(&types) },
+			path: path_types,
 			attr: ItemAttr::empty(),
 		};
 
@@ -118,7 +131,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	let root = {
 		let this = Item {
 			vis: ItemVis::Public(SymVis::Internal),
+			name: None,
 			kind: ItemKind::RootNS{ rng: cre.extra(&root) },
+			path: path_root,
 			attr: ItemAttr::empty(),
 		};
 

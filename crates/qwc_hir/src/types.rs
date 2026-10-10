@@ -12,13 +12,14 @@
 
 use bitflags::bitflags;
 
-use crate::{ExprId, Layout, ThingRng, TypeId, TypeRng};
+use crate::{ExprId, ItemId, Layout, ThingRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
   // Generic
-  GenericType,
+  GenericType{idx: usize},
+  GenericRaw{generic: ItemId, kind: TypeId},
   GenericSelfType,
   
   // Basic
@@ -54,7 +55,7 @@ pub enum TypeKind {
   Tuple(TypeRng),
   
   // Trait
-  Trait(ThingRng /* NamedType => fun name: type */),
+  Trait(ThingRng /* NamedType => fun name: type */, ThingRng /* Name | NamedType => using (= type)?; */),
   Iface(ThingRng /* NamedType => fun name: type */),
   
   TraitFrom{trait_ty: TypeId, hidden: TypeId},
@@ -88,7 +89,7 @@ pub struct Type {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PrimTypes {
-  pub ty_generic_type: TypeId,
+  pub ty_type: TypeId,
   pub ty_generic_self_type: TypeId,
   pub ty_error: TypeId,
   pub ty_unit: TypeId,

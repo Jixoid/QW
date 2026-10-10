@@ -25,6 +25,8 @@ pub struct TypeInterner {
   ty_vscale: FxHashMap<TypeId, TypeId>,
 
   ty_option: FxHashMap<TypeId, TypeId>,
+
+  ty_generic_type: FxHashMap<usize, TypeId>,
 }
 
 
@@ -37,6 +39,7 @@ impl TypeInterner {
       ty_slice: FxHashMap::default(),
       ty_vscale: FxHashMap::default(),
       ty_option: FxHashMap::default(),
+      ty_generic_type: FxHashMap::default(),
     }
   }
 
@@ -150,6 +153,26 @@ impl TypeInterner {
         let this = Type{
           kind: TypeKind::Option(id),
           layout,
+          attr: TypeAttr::empty(),
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
+  pub fn ty_generic_type(&mut self, cre: &mut Krate, idx: usize) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_generic_type.entry(idx) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let this = Type{
+          kind: TypeKind::GenericType{idx},
+          layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
         };
 

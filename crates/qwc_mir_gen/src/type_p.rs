@@ -86,10 +86,15 @@ impl TypeLow {
   fn low_ref(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
     use hir::TypeKind::*;
 
-    // is fat
-    let fat = matches!(ctx.get_type(id).kind, Str | Slice(..) | Iface(..));
+    let it = match ctx.get_type(id).kind {
+      Str | Slice(..) => ctx.tin.ty_fatptrint(),
+      
+      Iface(..) => ctx.tin.ty_fatptr(),
     
-    Ok(if fat {ctx.tin.ty_fatptr()} else {ctx.tin.ty_ptr()})
+      _ => ctx.tin.ty_ptr()
+    };
+    
+    Ok(it)
   }
 
 

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind, Thing};
+use qwc_ast::{Expr, ExprId, ExprKind, Thing, ThingKind};
 use qwc_diagnostic::Message;
 use qwc_lexer::WK;
 
@@ -57,12 +57,18 @@ pub fn pre_match(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
     
     loop {
       if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+
+      let start = lex.peek()?;
       
       let pat = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       lex.get()?.expect_kind(WK::FatArrow)?;
       let body = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       
-      let arm = Thing::MatchArm(pat, body);
+      let arm = Thing {
+        kind: ThingKind::MatchArm(pat, body),
+        pos: lex.pos_extend(start),
+      };
+      
       arm_ids.push(cre.push(arm));
       
       match lex.peek_k()? {

@@ -15,8 +15,9 @@ use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
-use crate::{Ctx, ExprLow};
+use crate::Ctx;
 
+mod spec_p;
 mod enum_p;
 mod trait_p;
 mod resolve_p;
@@ -62,7 +63,8 @@ impl TypeLow {
       Iface(rng) => trait_p::low_iface(ctx, rng)?,
 
       // Enum
-      Enum(rng) => enum_p::low_enum(ctx, rng)?,
+      Enum(rng)  => enum_p::low_enum(ctx, rng)?,
+      Flags(rng) => enum_p::low_flags(ctx, rng)?,
 
       // Context
       SelfT => match ctx.cmap.self_ty.last() {
@@ -72,6 +74,9 @@ impl TypeLow {
 
       // Function
       Fun{self_kind, args, ret, ..} => Self::low_fun(ctx, self_kind, args, ret)?,
+
+      // Specialize
+      Spec{base, args} => spec_p::low_specialize(ctx, it, base, args)?,
       
       _ => todo!("{:#?}", it)
     };
@@ -83,27 +88,8 @@ impl TypeLow {
 
 
   // Vector
-  fn low_vector(ctx: &mut Ctx, kind: ast::TypeId, ext: ast::ExprId) -> Result<hir::TypeId, Message> {
-    let hir_kind = TypeLow::low(ctx, kind)?;
-    let hir_ext  = todo!(); // ExprLow::low(ctx, ext)?;
-
-    // Check
-    let lay = ctx.get(hir_kind).layout;
-    let pos = ctx.src.get(kind).pos;
-    
-    if lay.is_dynamic() {
-      return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["vector"]), Label::new_pos(pos)))
-    }
-
-    
-    // Post
-    let this = hir::Type {
-      kind: hir::TypeKind::Vector(hir_kind, hir_ext),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
-      attr: TypeAttr::empty(),
-    };
-    
-    Ok(ctx.cre.push(this))
+  fn low_vector(_ctx: &mut Ctx, _kind: ast::TypeId, _ext: ast::ExprId) -> Result<hir::TypeId, Message> {
+    todo!()
   }
   
   fn low_vscale(ctx: &mut Ctx, kind: ast::TypeId) -> Result<hir::TypeId, Message> {
@@ -124,27 +110,8 @@ impl TypeLow {
 
 
   // Sequentiel
-  fn low_array(ctx: &mut Ctx, kind: ast::TypeId, ext: ast::ExprId) -> Result<hir::TypeId, Message> {
-    let hir_kind = TypeLow::low(ctx, kind)?;
-    let hir_ext  = todo!(); // ExprLow::low(ctx, ext)?;
-
-    // Check
-    let lay = ctx.get(hir_kind).layout;
-    let pos = ctx.src.get(kind).pos;
-    
-    if lay.is_dynamic() {
-      return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["array"]), Label::new_pos(pos)))
-    }
-
-    
-    // Post
-    let this = hir::Type {
-      kind: hir::TypeKind::Array(hir_kind, hir_ext),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
-      attr: TypeAttr::empty(),
-    };
-    
-    Ok(ctx.cre.push(this))
+  fn low_array(_ctx: &mut Ctx, _kind: ast::TypeId, _ext: ast::ExprId) -> Result<hir::TypeId, Message> {
+    todo!()
   }
   
   fn low_slice(ctx: &mut Ctx, kind: ast::TypeId) -> Result<hir::TypeId, Message> {
@@ -170,7 +137,7 @@ impl TypeLow {
       let mut ctn = vec![];
       
       for id in ctx.src.extra_get(rng) {
-        let ast::Thing::NamedType(name, kind) = *ctx.src.get(id) else { panic!() };
+        let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
 
         // Check
         let id = Self::low(ctx, kind)?;
@@ -240,7 +207,7 @@ impl TypeLow {
       let mut ctn = vec![];
 
       for id in ctx.src.extra_get(rng) {
-        let ast::Thing::NamedType(name, kind) = *ctx.src.get(id) else { panic!() };
+        let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
 
         ctn.push(hir::Thing::NamedType(name.sid(), Self::low(ctx, kind)?).push(ctx.cre));
       }
@@ -405,7 +372,7 @@ impl TypeMatch {
     for (id_1, id_2, id_ast) in izip!(args_1, args_2, args_ast) {
       let hir::Thing::NamedType(_, id_1) = *krate_1.get(id_1) else { unreachable!() };
       let hir::Thing::NamedType(_, id_2) = *krate_2.get(id_2) else { unreachable!() };
-      let ast::Thing::NamedType(_, id_ast) = *ctx.src.get(id_ast) else { unreachable!() };
+      let ast::ThingKind::NamedType(_, id_ast) = ctx.src.get(id_ast).kind else { unreachable!() };
 
       TypeMatch::matches(ctx, id_1, id_2, id_ast)?;
     }

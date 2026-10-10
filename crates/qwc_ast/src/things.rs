@@ -10,25 +10,36 @@
 */
 
 
-use crate::{ExprId, ExprRng, Ident, ThingRng, TypeId, TypeRng, Visibility};
+use qwc_diagnostic::Span;
+
+use crate::{ExprId, ExprRng, Ident, ThingId, ThingRng, TypeId, TypeRng, Visibility};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum Thing {
+pub enum ThingKind {
   Name(Ident),
   List(ThingRng),
-
+  
   Wildcard, Crate, Super,
   
   NamedExpr(Ident, ExprId),
   NamedType(Ident, TypeId),
   
+  Alias(ThingId, Ident),
+  
   TypeVis(TypeId, Visibility),
   
   NamedTypeVis(Ident, Visibility, TypeId),
-
+  
   NamedTypeList(Ident, TypeRng),
   NamedExprList(Ident, ExprRng),
-
+  
   MatchArm(ExprId /* pat */, ExprId /* body */),
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Thing {
+  pub kind: ThingKind,
+  pub pos: Span,
 }

@@ -62,7 +62,7 @@ fn dump(dmp: &Dump, lscp: &Scope, indent: usize, f: &mut fmt::Formatter) -> fmt:
           writeln!(f, "}}")?;
         }
 
-        ScopeKindAst::Type(..) => {
+        ScopeKindAst::Type(..) | ScopeKindAst::GenericType(..) => {
           write_indent(f, indent)?;
           writeln!(f, "{} {}{}", kw("type"), name(name_str), punct(";"))?;
         }
@@ -72,7 +72,7 @@ fn dump(dmp: &Dump, lscp: &Scope, indent: usize, f: &mut fmt::Formatter) -> fmt:
           writeln!(f, "{} {}{}", kw("type_param"), name(name_str), punct(";"))?;
         }
 
-        ScopeKindAst::Expr(..) => {
+        ScopeKindAst::Expr(..) | ScopeKindAst::GenericExpr(..) => {
           write_indent(f, indent)?;
           writeln!(f, "{} {}{}", kw("expr"), name(name_str), punct(";"))?;
         }

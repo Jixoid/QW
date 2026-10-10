@@ -10,11 +10,11 @@
 */
 
 
-use qwc_ast::{AnyRng, Expr, ExprId, ExprKind, IdentSave, Thing};
+use qwc_ast::{AnyRng, Expr, ExprId, ExprKind, IdentSave, Thing, ThingKind, id::PushOkApi};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_lexer::WK;
 
-use crate::{ctx, expr_p::{ExprParser, literal_p, postfix_p}, meta_p::WordCheck, parse::Ctx, type_p::TypeParser};
+use crate::{ctx, ExprParser, expr_p::{literal_p, postfix_p}, WordCheck, Ctx, TypeParser};
 
 
 // Postfix
@@ -73,6 +73,18 @@ pub fn post_scope(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mes
     loop {
       if lex.peek()?.kind() == WK::Colon2 {
         lex.bump()?;
+
+        if lex.peek()?.kind() == WK::Lt {
+          let rng = cre.extra(&ctn);
+
+          let this = Expr{
+            pos: lex.pos_extend(start),
+            kind: ExprKind::Path(rng)
+          }.push(ctx.cre);
+
+          return post_specialize(ctx, start, this);
+        }
+
         ctn.push(literal_p::pre_nick(ctx!(cre, sin, far, lex, sum, side))?);
       } else {
         break
@@ -146,14 +158,17 @@ pub fn post_field_create(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<Expr
     loop {
       if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
       
+      let start = lex.peek()?;
+
       let name = lex.get()?.ident(sin, far)?;
-      
       lex.get()?.expect_kind(WK::Colon)?;
-      
       let expr = ExprParser::read_expr(ctx!(cre,sin,far,lex,sum,side))?;
 
 
-      vec.push(cre.push(Thing::NamedExpr(name, expr)));
+      vec.push(cre.push(Thing {
+        kind: ThingKind::NamedExpr(name, expr),
+        pos: lex.pos_extend(start),
+      }));
 
       match lex.get_k()? {
         (WK::Comma, _)  => continue,
@@ -189,4 +204,3 @@ pub fn post_cast(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Mess
 
   Ok(ctx.cre.push(this))
 }
-

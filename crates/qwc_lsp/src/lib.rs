@@ -303,12 +303,12 @@ impl Backend {
           let name = analysis.interner.str(*sid).to_string();
           if seen.insert(name.clone()) {
             let item_kind = match kind {
-              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Type(_)) => CompletionItemKind::STRUCT,
-              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Expr(_)) => CompletionItemKind::FUNCTION,
+              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Type(_) | qwc_resolve::ScopeKindAst::GenericType(..)) => CompletionItemKind::STRUCT,
+              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Expr(_) | qwc_resolve::ScopeKindAst::GenericExpr(..)) => CompletionItemKind::FUNCTION,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Module(_)) => CompletionItemKind::MODULE,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Local(_)) => CompletionItemKind::VARIABLE,
-              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::TypeParam(_)) => CompletionItemKind::TYPE_PARAMETER,
-              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::ExprParam(_)) => CompletionItemKind::VARIABLE,
+              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::TypeParam(..)) => CompletionItemKind::TYPE_PARAMETER,
+              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::ExprParam(..)) => CompletionItemKind::VARIABLE,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Type(_)) => CompletionItemKind::STRUCT,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Expr(_, _)) => CompletionItemKind::FUNCTION,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Module(_)) => CompletionItemKind::MODULE,

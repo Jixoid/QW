@@ -12,10 +12,10 @@
 
 use qwc_ast::{self as ast, Ident};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
-use qwc_hir::{self as hir, ExprCategory, PushOkApi};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi, TypeAttr};
 use qwc_resolve::{self as resolve, Resolver};
 
-use crate::{ItemLow, TypeLow, ctx, hgen::Ctx};
+use crate::{ItemLow, TypeLow, ctx, Ctx};
 
 
 // Resolve
@@ -76,9 +76,9 @@ pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::Expr
 pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Result<hir::ExprId, Message> {
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
-      resolve::ScopeKindAst::ExprParam(thing) => {
-        if let ast::Thing::NamedType(_, ty) = ctx.src.get(thing) as &ast::Thing {
-          let ty = TypeLow::low(ctx!(lscp -> ctx), *ty)?;
+      resolve::ScopeKindAst::ExprParam(_, thing) => {
+        if let ast::ThingKind::NamedType(_, ty) = ctx.src.get(thing).kind {
+          let ty = TypeLow::low(ctx!(lscp -> ctx), ty)?;
 
           // Post
           let this = hir::Expr{
@@ -102,13 +102,11 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
 
 
         // Post
-        let this = hir::Expr{
+        hir::Expr{
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::lvalue(ism),
           ety: kind,
-        };
-
-        ctx.cre.push(this)
+        }.push(ctx.cre)
       }
 
       resolve::ScopeKindAst::Type(kind) => {
@@ -130,6 +128,40 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
 
       resolve::ScopeKindAst::Module(..) => {
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
+      }
+
+      resolve::ScopeKindAst::GenericType(..) => {
+        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+      }
+
+      resolve::ScopeKindAst::GenericExpr(generic, expr) => {
+        let id = ItemLow::low(ctx!(lscp -> ctx), expr)?.unwrap();
+        let it = ctx.cre.get(id);
+
+        let kind = it.symbol_kind().unwrap();
+        
+        let ism = it.assignable().unwrap();
+
+
+        let expr = hir::Expr{
+          kind: hir::ExprKind::GlobalRef(id),
+          category: ExprCategory::lvalue(ism),
+          ety: kind,
+        }.push(ctx.cre);
+
+        let kind = hir::Type {
+          kind: hir::TypeKind::GenericRaw { generic: ItemLow::low(ctx, generic)?.unwrap(), kind },
+          attr: TypeAttr::empty(),
+          layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+        }.push(ctx.cre);
+        
+        
+        // Post
+        hir::Expr {
+          kind: hir::ExprKind::GenericRaw { generic: ItemLow::low(ctx, generic)?.unwrap(), kind: expr },
+          category: ExprCategory::RValue,
+          ety: kind,
+        }.push(ctx.cre)
       }
 
       resolve::ScopeKindAst::Local(id) => {

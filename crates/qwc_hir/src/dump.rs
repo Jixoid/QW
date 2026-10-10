@@ -13,13 +13,11 @@
 use std::fmt;
 
 use owo_colors::OwoColorize;
-use qwc_dump::{attr, kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
+use qwc_dump::{attr, kw, lit_bool, lit_num, op, punct, tmpval, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  id::{HirId, NodeKind, SpecAny},
-  AnyId, Const, Deps, Expr, ExprId, ExprKind, Item, ItemId, ItemKind, ItemVis, Krate, Layout,
-  LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, CID,
+  AnyId, CID, Const, DefPath, DefPathId, Deps, Expr, ExprId, ExprKind, Item, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, NodeKind, SpecAny},
 };
 
 
@@ -145,10 +143,8 @@ impl DumpHandler for Item {
         writeln!(f, "}}")?;
       }
 
-      ItemKind::NameSpace {rng, name: ns_name} => {
-        let name_str = ctx.sin.str(ns_name);
-
-        writeln!(f, "{} {} {{", kw("namespace"), name(name_str))?;
+      ItemKind::NameSpace {rng} => {
+        writeln!(f, "{} {{", kw("namespace"))?;
         for id in ctx.cre.extra_get(rng) {
           id.dump(ctx, f, indent +1)?;
           writeln!(f)?;
@@ -157,8 +153,13 @@ impl DumpHandler for Item {
         writeln!(f, "}}")?;
       }
 
-      ItemKind::GenericNS { rng } => {
-        writeln!(f, "{} {{", kw("generic"))?;
+      ItemKind::GenericNS { rng, args } => {
+        write!(f, "{} <", kw("generic"))?;
+        for id in ctx.cre.extra_get(args) {
+          id.dump(ctx, f, indent)?;
+          write!(f, ", ")?;
+        }
+        writeln!(f, "> {{")?;
         for id in ctx.cre.extra_get(rng) {
           id.dump(ctx, f, indent +1)?;
           writeln!(f)?;
@@ -168,30 +169,25 @@ impl DumpHandler for Item {
       }
 
 
-      ItemKind::Using { kind, name: use_name } => {
-        let name_str = ctx.sin.str(use_name);
-        
-        write!(f, "{} {} {} ", kw("using"), name(name_str), punct("="))?;
+      ItemKind::Using { kind } => {
+        write!(f, "{} {} ", kw("using"), punct("="))?;
         kind.dump(ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }
 
 
-      ItemKind::Variable { kind, expr, name: var_name, ism } => {
+      ItemKind::Variable { kind, expr, ism } => {
         let kw_label = if ism { kw("var") } else { kw("let") };
-        let name_str = ctx.sin.str(var_name);
         
-        write!(f, "{} {}{} ", kw_label, name(name_str), punct(":"))?;
+        write!(f, "{} {} ", kw_label, punct(":"))?;
         kind.dump(ctx, f, indent)?;
         write!(f, " {} ", op("="))?;
         expr.dump(ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }
 
-      ItemKind::Function { kind, expr, name: fn_name } => {
-        let name_str = ctx.sin.str(fn_name);
-
-        write!(f, "{} {}{} ", kw("fun"), name(name_str), punct(":"))?;
+      ItemKind::Function { kind, expr } => {
+        write!(f, "{} {} ", kw("fun"), punct(":"))?;
         
         kind.dump(ctx, f, indent)?;
         write!(f, " ")?;
@@ -199,10 +195,8 @@ impl DumpHandler for Item {
         writeln!(f)?;
       }
 
-      ItemKind::Task { kind, expr, name: fn_name } => {
-        let name_str = ctx.sin.str(fn_name);
-
-        write!(f, "{} {}{} ", kw("task"), name(name_str), punct(":"))?;
+      ItemKind::Task { kind, expr } => {
+        write!(f, "{} {} ", kw("task"), punct(":"))?;
         
         kind.dump(ctx, f, indent)?;
         write!(f, " ")?;
@@ -237,7 +231,10 @@ impl DumpHandler for Type {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
       // Generic
-      TypeKind::GenericType => write!(f, "{}", punct("<generic>"))?,
+      TypeKind::GenericType{idx} => write!(f, "<{}>", idx)?,
+
+      TypeKind::GenericRaw{..} => write!(f, "<{}>", punct("raw generic"))?,
+
       TypeKind::GenericSelfType => write!(f, "{}", punct("Self"))?,
       
       // Basic
@@ -334,7 +331,7 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Tuple(rng) => {
-        write!(f, "{} {{ ", kw("struct"))?;
+        write!(f, "{} ( ", kw("tuple"))?;
         let mut first = true;
         for id in ctx.cre.extra_get(rng) {
           if !first { write!(f, "{} ", punct(","))? }
@@ -342,19 +339,20 @@ impl DumpHandler for Type {
 
           id.dump(ctx, f, indent)?;
         }
-        write!(f, " }}")?;
+        write!(f, " )")?;
       }
 
 
       // Trait
-      TypeKind::Trait(rng) => {
+      TypeKind::Trait(methods, types) => {
         write!(f, "{} {{ ", kw("trait"))?;
-        let mut first = true;
-        for id in ctx.cre.extra_get(rng) {
-          if !first { write!(f, "{} ", punct(","))? }
-          first = false;
-
+        for id in ctx.cre.extra_get(types) {
           id.dump(ctx, f, indent)?;
+          write!(f, "{} ", punct(","))?;
+        }
+        for id in ctx.cre.extra_get(methods) {
+          id.dump(ctx, f, indent)?;
+          write!(f, "{} ", punct(","))?;
         }
         write!(f, " }}")?;
       }
@@ -434,6 +432,9 @@ impl DumpHandler for Expr {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
       ExprKind::GenericExpr => write!(f, "{}", punct("<generic expr>"))?,
+
+      ExprKind::GenericRaw{..} => write!(f, "<{}>", punct("raw generic"))?,
+
       ExprKind::Error => write!(f, "{}", punct("{error}"))?,
 
       ExprKind::Const(c) => c.dump(ctx, f, indent)?,
@@ -451,9 +452,8 @@ impl DumpHandler for Expr {
       ExprKind::GlobalRef(item_id) => {
         let it = ctx.get_item(item_id);
         match it.map(|i| &i.kind) {
-          Some(ItemKind::Function { name, .. } | ItemKind::Variable { name, .. }) => {
-            let n = ctx.sin.str(*name);
-            write!(f, "{}{}", tmpval("@"), tmpval(n))?;
+          Some(ItemKind::Function { .. } | ItemKind::Variable { .. }) => {
+            write!(f, "{}", tmpval("@"))?;
           }
           _ => write!(f, "@item_{}", item_id.idx())?,
         }
@@ -681,6 +681,10 @@ impl DumpHandler for Expr {
 impl DumpHandler for Thing {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
+      Thing::Name(name) => {
+        write!(f, "{}", ctx.sin.str(name).white())?;
+      }
+      
       Thing::NamedType(name, expr) => {
         write!(f, "{}", ctx.sin.str(name).white())?;
         write!(f, " = ")?;
@@ -711,6 +715,37 @@ impl DumpHandler for Const {
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
       Const::Int(i) => write!(f, "{}", lit_num(i))?,
       Const::Str(s) => write!(f, "{}", format!("\"{}\"", ctx.sin.str(s)).yellow())?,
+    }
+
+    Ok(())
+  }
+}
+
+impl DumpHandler for DefPath {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    match *self {
+      DefPath::Root(name) => write!(f, "{}", ctx.sin.str(name))?,
+      
+      DefPath::Path{base, name} => {
+        base.dump(ctx, f, indent)?;
+        write!(f, "{}", punct("::"))?;
+        write!(f, "{}", ctx.sin.str(name))?;
+      }
+
+      DefPath::Impl{base, spec} => {
+        write!(f, "{}", punct("<"))?;
+        base.dump(ctx, f, indent)?;
+        write!(f, " {} ", punct("as"))?;
+        spec.dump(ctx, f, indent)?;
+        write!(f, "{}", punct(">"))?;
+      }
+
+      DefPath::Spec{base, spec} => {
+        base.dump(ctx, f, indent)?;
+        write!(f, "{}", punct("::<"))?;
+        spec.dump(ctx, f, indent)?;
+        write!(f, "{}", punct(">"))?;
+      }
     }
 
     Ok(())
@@ -767,6 +802,7 @@ impl_dump_id!(ItemId, Item);
 impl_dump_id!(TypeId, Type);
 impl_dump_id!(ExprId, Expr);
 impl_dump_id!(ThingId, Thing);
+impl_dump_id!(DefPathId, DefPath);
 
 impl DumpHandler for (HirId<SpecAny>, NodeKind) {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
@@ -775,6 +811,7 @@ impl DumpHandler for (HirId<SpecAny>, NodeKind) {
       NodeKind::Type  => TypeId::new_from(*self).dump(ctx, f, indent),
       NodeKind::Expr  => ExprId::new_from(*self).dump(ctx, f, indent),
       NodeKind::Thing => ThingId::new_from(*self).dump(ctx, f, indent),
+      NodeKind::DefPath => DefPathId::new_from(*self).dump(ctx, f, indent),
       NodeKind::Any => write!(f, "<any>"),
     }
   }

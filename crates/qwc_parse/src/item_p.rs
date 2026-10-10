@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, Visibility};
+use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, ThingKind, Visibility};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -160,29 +160,17 @@ impl ItemParser {
 
     lex.get()?.expect_kind(WK::BraceL)?;
 
-    let ctn = {
-      let mut impls = vec![];
+    let rng = {
+      let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
-      
+
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum, side), defvis)?;
-        
-        let next_kw = lex.peek_k()?;
-        if next_kw.0 == WK::Fun {
-          let fun = FieldParser::sub_fun(ctx!(cre, sin, far, lex, sum, side), vis)?;
-          
-          if let Some(a) = attrs { cre.attach(fun, a); }
-          
-          impls.push(fun);
-        } else {
-          let c = lex.get()?;
-          return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(c)));
-        }
+        ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), defvis)? );
       }
-      
-      cre.extra(&impls)
+
+      cre.extra(&ctn)
     };
 
 
@@ -191,7 +179,7 @@ impl ItemParser {
       pos: lex.pos_extend(start),
       vis,
       name: None,
-      kind: ItemKind::Impl{ type_ty, trait_ty, ctn },
+      kind: ItemKind::Impl{ type_ty, trait_ty, ctn: rng },
     };
     
     Ok(cre.push(this))
@@ -229,8 +217,8 @@ impl ItemParser {
         
         for x in names {
           let thing = match kind {
-            Some(kind) => Thing::NamedType(x, kind),
-            None => Thing::Name(x),
+            Some(kind) => Thing{kind: ThingKind::NamedType(x, kind), pos: x.into()},
+            None => Thing{kind: ThingKind::Name(x), pos: x.into()},
           };
 
           args.push(cre.push(thing));
@@ -271,7 +259,7 @@ impl ItemParser {
         
         let rng = cre.extra(&tys);
         
-        let this = Thing::NamedTypeList(name, rng);
+        let this = Thing{kind: ThingKind::NamedTypeList(name, rng), pos: name.into()};
         
         reqs.push(cre.push(this));
       }
@@ -316,9 +304,9 @@ impl ItemParser {
     let start = lex.get()?;
 
     let begin = match lex.get_k()? {
-      (WK::Crate, _) => cre.push(Thing::Crate),
-      (WK::Super, _) => cre.push(Thing::Super),
-      (WK::Word, c)  => { let a = c.ident(sin, far)?; cre.push(Thing::Name(a)) },
+      (WK::Crate, c) => cre.push(Thing{kind: ThingKind::Crate, pos: c.into()}),
+      (WK::Super, c) => cre.push(Thing{kind: ThingKind::Super, pos: c.into()}),
+      (WK::Word, c)  => { let a = c.ident(sin, far)?; cre.push(Thing{kind: ThingKind::Name(a), pos: a.into()}) },
 
       (_, c) => return Err(Message::error(UNKNOWN_USE_STARTER, Label::new_pos(c))),
     };
@@ -330,6 +318,11 @@ impl ItemParser {
         match lex.get_k()? {
           (WK::Semicolon, _) => break,
           (WK::Colon2, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?),
+          (WK::As, _) => {
+            let alias = lex.get()?.ident(sin, far)?;
+            let last_id = all.pop().unwrap();
+            all.push(cre.push(Thing{kind: ThingKind::Alias(last_id, alias), pos: alias.into()}));
+          }
         
           (_, c) => c.panic_kind2(WK::Colon2, WK::Semicolon)?,
         }
@@ -352,11 +345,11 @@ impl ItemParser {
 
   fn read_use_sub(ctx: &mut Ctx) -> Result<ThingId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let ret = match lex.get_k()? {
-      (WK::Crate, _) => cre.push(Thing::Crate),
-      (WK::Super, _) => cre.push(Thing::Super),
-      (WK::Mul, _)   => cre.push(Thing::Wildcard),
+      (WK::Crate, c) => cre.push(Thing{kind: ThingKind::Crate, pos: c.into()}),
+      (WK::Super, c) => cre.push(Thing{kind: ThingKind::Super, pos: c.into()}),
+      (WK::Mul, c)   => cre.push(Thing{kind: ThingKind::Wildcard, pos: c.into()}),
 
-      (WK::Word, c)  => { let a = c.ident(sin, far)?; cre.push(Thing::Name(a)) },
+      (WK::Word, c) => { let a = c.ident(sin, far)?; cre.push(Thing{kind: ThingKind::Name(a), pos: a.into()}) },
 
       (_, c) => return Err(Message::error(UNKNOWN_USE_SEGMENT, Label::new_pos(c))),
     };

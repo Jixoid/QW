@@ -944,6 +944,7 @@ dependencies = [
 name = "qwc_mangling"
 version = "0.1.0"
 dependencies = [
+ "qwc_hir",
  "qwc_string_interner",
 ]
 
