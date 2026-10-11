@@ -13,7 +13,7 @@
 use bitflags::bitflags;
 use qwc_string_interner::Sid;
 
-use crate::{DefPathId, ExprId, ItemRng, PathApi, TypeId, TypeRng};
+use crate::{DefPathId, ExprId, ItemRng, PathApi, ThingRng, TypeId};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -27,7 +27,7 @@ pub enum ItemVis { Private, Public(SymVis) }
 pub enum ItemKind {
   RootNS {rng: ItemRng},
   NameSpace {rng: ItemRng},
-  GenericNS {rng: ItemRng, args: TypeRng},
+  GenericNS {rng: ItemRng, args: ThingRng},
 
   Using {kind: TypeId},
   

@@ -10,8 +10,6 @@
 */
 
 
-#![feature(never_type)]
-
 mod parse;
 mod meta_p;
 mod type_p;

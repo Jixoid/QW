@@ -32,4 +32,3 @@ debug = 1
 [dependencies]
 qwc_route = { path = "crates/qwc_route" }
 qwc_diagnostic = { path = "crates/qwc_diagnostic" }
-rustc_apfloat = "0.2.3"
