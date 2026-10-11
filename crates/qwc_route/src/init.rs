@@ -12,7 +12,6 @@
 
 use std::{env, fs, path::PathBuf};
 use qwc_ds::Value;
-use uuid::Uuid;
 
 use crate::Error;
 
@@ -44,15 +43,10 @@ pub fn init(info: InitInfo) -> Result<(), Error> {
     Err(_) => path.file_name().and_then(|n| n.to_str()).unwrap_or("project name").to_string(),
   }} else { info.name };
 
-  conf.push_struct("uuid", Value::make_string(Uuid::new_v4().to_string()) )?;
   conf.push_struct("name", Value::make_string(proj_name))?;
   conf.push_struct("desc", Value::make_string(if info.desc.is_empty() { String::new() } else { info.desc }))?;
   conf.push_struct("vers", Value::make_string("0.1.0".to_string()))?;
   
-  conf.push_struct("onerepo", Value::make_struct())?;
-
-  conf.push_struct("deps", Value::make_struct())?;
-
   conf.save_file(String::from(match path.join("qw.conf").to_str() {
     Some(r) => r,
     None => return Err(Error::New | "cannot write: qw.conf"),
@@ -63,7 +57,7 @@ pub fn init(info: InitInfo) -> Result<(), Error> {
   let src_dir = path.join("src");
   fs::create_dir_all(&src_dir)?;
 
-  let main_content = "\nfun main() -> i32 {\n  ret 0;\n}\n";
+  let main_content = "\n![entry]\npub fun main() {\n  \n}\n";
   fs::write(src_dir.join("main.qw"), main_content)?;
 
   //: Writed Basic Files
