@@ -82,7 +82,7 @@ fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: h
   // Search
   ctx.type_impls.get(&expr_unwrap).map(|tyfuns| tyfuns.traits.get(&target_unwrap)).flatten()
     .ok_or_else(||
-      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["iface", &ctx.type_name(expr_ty), &ctx.type_name(target)]),
+      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["iface", &ctx.type_name(target), &ctx.type_name(expr_ty)]),
         Label::new_pos(it.pos),
       )
     )?;
@@ -121,7 +121,7 @@ fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::
   // Search
   ctx.type_impls.get(&expr_ty).map(|tyfuns| tyfuns.traits.get(&target)).flatten()
     .ok_or_else(||
-      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(expr_ty), &ctx.type_name(target)]),
+      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(target), &ctx.type_name(expr_ty)]),
         Label::new_pos(it.pos),
       )
     )?;

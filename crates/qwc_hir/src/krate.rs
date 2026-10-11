@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, AnyRng, DefPath, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
 
 
 
@@ -182,6 +182,12 @@ impl Krate {
 
 }
 
+
+
+// Path Api
+pub trait PathApi {
+  fn path(&self) -> DefPathId;
+}
 
 
 // push & get

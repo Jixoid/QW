@@ -21,12 +21,12 @@ use crate::{Ctx, TypeLow, Specialization};
 pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: ast::AnyRng) -> Result<hir::TypeId, Message> {
   let base = TypeLow::low(ctx, base)?;
 
-  let hir::TypeKind::GenericRaw { generic, kind } = ctx.cre.get(base).kind else { panic!() };
+  let hir::TypeKind::GenericRaw { generic, kind } = ctx.get(base).kind else { panic!() };
 
-  let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.cre.get(generic).kind else { panic!() };
+  let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.get(generic).kind else { panic!() };
 
 
-  let expected_args = ctx.cre.extra_get(generic_trait).collect_vec();
+  let expected_args = ctx.extra_get(generic_trait).collect_vec();
 
   let received_args = ctx.src.extra_any_get(args).filter_map(|id| {
     match id.kind() {

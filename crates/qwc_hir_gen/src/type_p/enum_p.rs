@@ -13,13 +13,13 @@
 use itertools::Itertools;
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast as ast;
-use qwc_hir::{self as hir, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 use rustc_hash::FxHashMap;
 
 use crate::Ctx;
 
 
-pub fn low_enum(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+pub fn low_enum(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
   let mut names = FxHashMap::default();
   let mut enum_val: i128 = 0;
 
@@ -61,10 +61,11 @@ pub fn low_enum(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Messag
     kind: hir::TypeKind::Enum(rng),
     layout: hir::Layout::new_static(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
+    path,
   }.push_ok(ctx.cre)
 }
 
-pub fn low_flags(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+pub fn low_flags(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
   let mut names = FxHashMap::default();
   let mut flag_val: i128 = 0;
 
@@ -106,5 +107,6 @@ pub fn low_flags(ctx: &mut Ctx, rng: ast::ThingRng) -> Result<hir::TypeId, Messa
     kind: hir::TypeKind::Enum(rng),
     layout: hir::Layout::new_static(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
+    path,
   }.push_ok(ctx.cre)
 }

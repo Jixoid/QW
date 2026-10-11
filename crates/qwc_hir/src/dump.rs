@@ -746,6 +746,19 @@ impl DumpHandler for DefPath {
         spec.dump(ctx, f, indent)?;
         write!(f, "{}", punct(">"))?;
       }
+
+      DefPath::AnonymousTuple(rng) => {
+        write!(f, "{}", punct("("))?;
+        let mut first = true;
+        for id in ctx.cre.extra_get(rng) {
+          if !first {
+            write!(f, "{}", punct(", "))?;
+          }
+          id.dump(ctx, f, indent)?;
+          first = false;
+        }
+        write!(f, "{}", punct(")"))?;
+      }
     }
 
     Ok(())

@@ -50,7 +50,8 @@ impl ItemLow {
 
 
       // Using
-      ast::ItemKind::Using(kind) | ast::ItemKind::ItemTy(kind) => Some(Self::low_using(ctx, id, it, kind)?),
+      ast::ItemKind::Using(kind)  => Some(Self::low_using(ctx, id, it, kind)?),
+      ast::ItemKind::ItemTy(kind) => Some(Self::low_itemty(ctx, id, it, kind)?),
 
 
       // Unexpected
@@ -83,6 +84,23 @@ impl ItemLow {
     }.push_ok(ctx.cre)
   }
 
+  fn low_itemty(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Result<hir::ItemId, Message> {
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+    
+    let kind = TypeLow::low_itemty(ctx, path, kind)?;
+    
+    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+    
+    // Post
+    hir::Item {
+      name: Some(name),
+      kind: hir::ItemKind::Using { kind },
+      path,
+      vis, attr
+    }.push_ok(ctx.cre)
+  }
+
 
   fn low_let(_ctx: &mut Ctx, _id: ast::ItemId, _it: &ast::Item, _kind: Option<ast::TypeId>, _expr: ast::ExprId, _ism: bool) -> Result<hir::ItemId, Message> {
     todo!()
@@ -90,7 +108,11 @@ impl ItemLow {
 
 
   fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
-    let hir_kind = TypeLow::low(ctx, kind)?;
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+
+
+    let hir_kind = TypeLow::low_itemty(ctx, path, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -132,9 +154,6 @@ impl ItemLow {
 
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
 
-
-    let name = it.name.unwrap().sid();
-    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
     // Post
     hir::Item {
@@ -153,7 +172,10 @@ impl ItemLow {
   }
 
   fn low_fun_field(ctx: &mut Ctx, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
-    let hir_kind = TypeLow::low(ctx, kind)?;
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+
+    let hir_kind = TypeLow::low_itemty(ctx, path, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -194,10 +216,6 @@ impl ItemLow {
     TypeMatch::matches_pos(ctx, ret, expr_ty, expr_pos)?;
 
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
-
-
-    let name = it.name.unwrap().sid();
-    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
     // Post
     hir::Item {

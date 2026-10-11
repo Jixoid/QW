@@ -13,12 +13,12 @@
 use crate::{hgen::Ctx, TypeLow};
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_hir::{self as hir, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 
 
 // Static Interface
-pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()}.push(ctx.cre));
+pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
   let (methods, types) = {
     let mut methods = vec![];
@@ -29,11 +29,13 @@ pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
 
       match it.kind {
         ast::FieldKind::Fun{kind, ..} => {
-          let fun_ty = TypeLow::low(ctx, kind)?;
+          let name = it.name.unwrap().sid();
+          let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
+          let fun_ty = TypeLow::low_itemty(ctx, fun_path, kind)?;
 
           // Post
           let id = hir::Thing::NamedType(
-            it.name.unwrap().sid(),
+            name,
             fun_ty
           ).push(ctx.cre);
     
@@ -67,13 +69,14 @@ pub fn low_trait(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
     kind: hir::TypeKind::Trait(methods, types),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
+    path,
   }.push_ok(ctx.cre)
 }
 
 
 // Dynamic Inteface
-pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()}.push(ctx.cre));
+pub fn low_iface(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
   let methods = {
     let mut ctn = vec![];
@@ -82,7 +85,9 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
       let it = ctx.src.get(id);
 
       let ast::FieldKind::Fun{kind, ..} = it.kind else { panic!() };
-      let fun_ty = TypeLow::low(ctx, kind)?;
+      let name = it.name.unwrap().sid();
+      let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
+      let fun_ty = TypeLow::low_itemty(ctx, fun_path, kind)?;
       
       // Check (self != DST)
       if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind {
@@ -100,7 +105,7 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
 
       // Push
       let id = hir::Thing::NamedType(
-        it.name.unwrap().sid(),
+        name,
         fun_ty
       ).push(ctx.cre);
 
@@ -117,5 +122,6 @@ pub fn low_iface(ctx: &mut Ctx, rng: ast::FieldRng) -> Result<hir::TypeId, Messa
     kind: hir::TypeKind::Iface(methods),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
+    path,
   }.push_ok(ctx.cre)
 }

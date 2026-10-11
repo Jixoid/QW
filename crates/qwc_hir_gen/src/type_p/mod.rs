@@ -13,14 +13,16 @@
 use itertools::{Itertools, izip};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Attribute};
-use qwc_hir::{self as hir, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, DefPathId, TypeAttr};
 
 use crate::Ctx;
 
+mod fun_p;
 mod spec_p;
 mod enum_p;
 mod trait_p;
 mod resolve_p;
+mod combinated_p;
 
 
 
@@ -55,16 +57,36 @@ impl TypeLow {
       Slice(kind) => Self::low_slice(ctx, kind)?,
       
       // Combinated
-      Struct(rng) => Self::low_struct(ctx, id, rng)?,
-      Tuple(rng)  => Self::low_tuple(ctx, rng)?,
+      Struct(..) => panic!("use itemty!"),
+      Tuple(rng) => {
+        let mut path_ids = vec![];
+        let elem_ids = {
+          let mut ctn = vec![];
+          for id in ctx.src.extra_get(rng) {
+            let elem_ty = Self::low(ctx, id)?;
+            path_ids.push(ctx.get(elem_ty).path);
+            ctn.push(elem_ty);
+          }
+          ctx.cre.extra(&ctn)
+        };
+        let path_rng = ctx.cre.extra(&path_ids);
+        let path = ctx.cre.push(hir::DefPath::AnonymousTuple(path_rng));
+        let this = hir::Type {
+          kind: hir::TypeKind::Tuple(elem_ids),
+          layout: hir::Layout::new_static(hir::LayoutBy::QW),
+          attr: TypeAttr::empty(),
+          path,
+        };
+        ctx.cre.push(this)
+      }
       
       // Trait
-      Trait(rng) => trait_p::low_trait(ctx, rng)?,
-      Iface(rng) => trait_p::low_iface(ctx, rng)?,
+      Trait(..) => panic!("use itemty!"),
+      Iface(..) => panic!("use itemty!"),
 
       // Enum
-      Enum(rng)  => enum_p::low_enum(ctx, rng)?,
-      Flags(rng) => enum_p::low_flags(ctx, rng)?,
+      Enum(..)  => panic!("use itemty!"),
+      Flags(..) => panic!("use itemty!"),
 
       // Context
       SelfT => match ctx.cmap.self_ty.last() {
@@ -73,12 +95,43 @@ impl TypeLow {
       }
 
       // Function
-      Fun{self_kind, args, ret, ..} => Self::low_fun(ctx, self_kind, args, ret)?,
+      Fun{..} => panic!("use itemty!"),
 
       // Specialize
       Spec{base, args} => spec_p::low_specialize(ctx, it, base, args)?,
       
       _ => todo!("{:#?}", it)
+    };
+
+    ctx.cmap.cache_type.insert(id, it);
+
+    Ok(it)
+  }
+
+  pub fn low_itemty(ctx: &mut Ctx, path: DefPathId, id: ast::TypeId) -> Result<hir::TypeId, Message> {
+    if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Ok(id) }
+    
+    let it = ctx.src.get(id);
+
+    use ast::TypeKind::*;
+  
+    let it = match it.kind {
+      // Combinated
+      Struct(rng) => combinated_p::low_struct(ctx, path, id, rng)?,
+      Tuple(rng)   => combinated_p::low_tuple(ctx, path, rng)?,
+
+      // Trait
+      Trait(rng) => trait_p::low_trait(ctx, path, rng)?,
+      Iface(rng) => trait_p::low_iface(ctx, path, rng)?,
+
+      // Enum
+      Enum(rng)  => enum_p::low_enum(ctx, path, rng)?,
+      Flags(rng) => enum_p::low_flags(ctx, path, rng)?,
+
+      // Function
+      Fun{self_kind, args, ret, ..} => fun_p::low_fun(ctx, path, self_kind, args, ret)?,
+
+      _ => Self::low(ctx, id)?,
     };
 
     ctx.cmap.cache_type.insert(id, it);
@@ -128,115 +181,6 @@ impl TypeLow {
     
     // Post
     Ok(ctx.tin.ty_slice(ctx.cre, hir_kind))
-  }
-
-
-  // Combinated
-  fn low_struct(ctx: &mut Ctx, id: ast::TypeId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
-    let fields_rng = {
-      let mut ctn = vec![];
-      
-      for id in ctx.src.extra_get(rng) {
-        let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
-
-        // Check
-        let id = Self::low(ctx, kind)?;
-        let lay = ctx.get(id).layout;
-
-        if lay.is_dynamic() {
-          return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(name)))
-        }
-        
-        let id = ctx.cre.push(hir::Thing::NamedType(name.sid(), id));
-        ctn.push(id);
-      }
-
-      ctx.cre.extra(&ctn)
-    };
-
-    let attr = read_attrs(ctx, ctx.src.get_attached(id))?;
-
-    let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::QW} else {hir::LayoutBy::C});
-
-
-    // Post
-    let this = hir::Type {
-      kind: hir::TypeKind::Struct(fields_rng),
-      layout,
-      attr,
-    };
-
-    Ok(ctx.cre.push(this))
-  }
-
-  fn low_tuple(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message> {
-    let rng = {
-      let mut ctn = vec![];
-      
-      for id in ctx.src.extra_get(rng) {
-        // Check
-        let pos = ctx.src.get(id).pos;
-        let id = Self::low(ctx, id)?;
-        let lay = ctx.get(id).layout;
-
-        if lay.is_dynamic() {
-          return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(pos)))
-        }
-        
-        ctn.push(id);
-      }
-
-      ctx.cre.extra(&ctn)
-    };
-
-
-    // Post
-    let this = hir::Type {
-      kind: hir::TypeKind::Tuple(rng),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
-      attr: TypeAttr::empty(),
-    };
-    
-    Ok(ctx.cre.push(this))
-  }
-
-
-  // Function
-  fn low_fun(ctx: &mut Ctx, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Result<hir::TypeId, Message> {
-    let args = {
-      let mut ctn = vec![];
-
-      for id in ctx.src.extra_get(rng) {
-        let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
-
-        ctn.push(hir::Thing::NamedType(name.sid(), Self::low(ctx, kind)?).push(ctx.cre));
-      }
-
-      ctx.cre.extra(&ctn)
-    };
-
-    if let Some(self_kind) = self_kind && ctx.cmap.self_ty.last().is_none() {
-      let self_kind = ctx.src.get(self_kind);
-      
-      return Err(Message::error(SELF_PARAMETER_IS_ONLY_ALLOWED_IN_ASSOCIATED_FUN, Label::new_pos(self_kind.pos)))
-    }
-
-    let self_kind = self_kind.map(|id| Self::low(ctx, id)).transpose()?;
-
-    let ret = match ret {
-      None => ctx.prims.ty_unit,
-      Some(kind) => Self::low(ctx, kind)?,
-    };
-
-
-    // Post
-    let this = hir::Type {
-      kind: hir::TypeKind::Fun{self_kind, args, ret},
-      layout: hir::Layout::new_dst(hir::LayoutBy::QW),
-      attr: TypeAttr::empty(),
-    };
-    
-    Ok(ctx.cre.push(this))
   }
 
 }

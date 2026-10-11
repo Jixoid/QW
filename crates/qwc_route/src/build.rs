@@ -195,8 +195,6 @@ pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast
 }
 
 pub fn build_hir_export(hir_cre: &hir::Krate, far: &Files) -> Result<(ExportMap, Duration), Error> {
-  use hir::Visitor;
-
   let now = Instant::now();
   let ret = ExportMap::visit(hir_cre);
   let time = now.elapsed();

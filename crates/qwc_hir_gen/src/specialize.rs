@@ -18,7 +18,7 @@ use crate::Ctx;
 
 macro_rules! convert {
   ($ctx:ident, $rng:ident, $i:expr, $o:expr $(,)?) => {{
-    let vec = $ctx.cre.extra_get($rng).map($i).collect_vec();
+    let vec = $ctx.extra_get($rng).map($i).collect_vec();
     
     let vec = vec.iter().map($o).collect_vec();
     
@@ -57,11 +57,17 @@ impl<'a> Specialization<'a> {
       return cached;
     }
 
+    let mut path = it.path;
+    for &arg in self.args {
+      let arg_path = ctx.get(arg).path;
+      path = ctx.cre.push(hir::DefPath::Spec { base: path, spec: arg_path });
+    }
+
     let id = match it.kind {
       hir::TypeKind::Struct(rng) => {
         let rng = convert!(ctx, rng,
           |id| {
-            if let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) { (name, kind) } else { panic!() }
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
           },
           |&(name, kind)| {
             hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
@@ -72,6 +78,7 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Struct(rng),
           layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         }.push(ctx.cre)
       }
 
@@ -82,6 +89,7 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Tuple(rng),
           layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         }.push(ctx.cre)
       }
 
@@ -94,7 +102,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Fun{self_kind, args, ret} => {
         let args = convert!(ctx, args,
           |id| {
-            if let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) { (name, kind) } else { panic!() }
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
           },
           |&(name, kind)| {
             hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
@@ -105,6 +113,7 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Fun { self_kind, args, ret: self.spec_type(ctx, ret) },
           layout: Layout::new_dsat(qwc_hir::LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         }.push(ctx.cre)
       }
 
@@ -162,8 +171,7 @@ impl<'a> Specialization<'a> {
 
         let mut path = it.path;
         for &arg in self.args {
-          let sid = ctx.sin.get(&ctx.type_name(arg)).unwrap_or_else(|| ctx.sin.sid_entry());
-          let arg_path = ctx.cre.push(hir::DefPath::Root(sid));
+          let arg_path = ctx.get(arg).path;
           path = ctx.cre.push(hir::DefPath::Spec { base: path, spec: arg_path });
         }
 

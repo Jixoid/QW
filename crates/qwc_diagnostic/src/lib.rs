@@ -12,12 +12,14 @@
 
 mod diag;
 mod span;
+mod poit;
 mod ice;
 mod sum;
 mod display;
 pub mod msg;
 
 pub use span::Span;
+pub use poit::Poit;
 pub use ice::*;
 pub use sum::*;
 pub use diag::*;

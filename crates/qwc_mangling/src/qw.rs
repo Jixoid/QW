@@ -47,5 +47,10 @@ fn read(cre: &Krate, sin: &StrInterner, id: DefPathId) -> String {
     DefPath::Spec{base, spec} => {
       format!("_spec_{}_{}", read(cre, sin, base), read(cre, sin, spec))
     }
+
+    DefPath::AnonymousTuple(rng) => {
+      let parts = cre.extra_get(rng).map(|id| read(cre, sin, id)).collect::<Vec<_>>();
+      format!("_tup_{}_{}", parts.len(), parts.join("_"))
+    }
   }
 }

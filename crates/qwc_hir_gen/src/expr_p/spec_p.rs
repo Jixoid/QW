@@ -21,12 +21,24 @@ use crate::{Ctx, ExprLow, FunCtx, TypeLow, Specialization};
 pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprId, args: ast::AnyRng) -> Result<hir::ExprId, Message> {
   let callee = ExprLow::low(ctx, fctx, callee)?;
   
-  let hir::ExprKind::GenericRaw { generic, kind } = ctx.cre.get(callee).kind else { panic!() };
+  enum KindTarget {
+    Expr(hir::ExprId),
+    Type(hir::TypeId),
+  }
 
-  let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.cre.get(generic).kind else { panic!() };
+  let (generic, kind_target) = match ctx.cre.get(callee).kind {
+    hir::ExprKind::GenericRaw { generic, kind } => (generic, KindTarget::Expr(kind)),
+    hir::ExprKind::TypeOf { kind } => {
+      let hir::TypeKind::GenericRaw { generic, kind } = ctx.get(kind).kind else { panic!() };
+      (generic, KindTarget::Type(kind))
+    }
+    _ => panic!(),
+  };
+
+  let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.get(generic).kind else { panic!() };
 
 
-  let expected_args = ctx.cre.extra_get(generic_trait).collect_vec();
+  let expected_args = ctx.extra_get(generic_trait).collect_vec();
 
   let received_args = ctx.src.extra_any_get(args).filter_map(|id| {
     match id.kind() {
@@ -51,7 +63,19 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast:
 
 
   // Specialize
-  let spec = Specialization{args: &received_args}.spec_expr(ctx, kind);
-
-  Ok(spec)
+  match kind_target {
+    KindTarget::Expr(kind) => {
+      let spec = Specialization{args: &received_args}.spec_expr(ctx, kind);
+      Ok(spec)
+    }
+    KindTarget::Type(kind) => {
+      let spec = Specialization{args: &received_args}.spec_type(ctx, kind);
+      let this = hir::Expr {
+        kind: hir::ExprKind::TypeOf { kind: spec },
+        category: hir::ExprCategory::RValue,
+        ety: ctx.tin.ty_meta(ctx.cre, spec),
+      };
+      Ok(ctx.cre.push(this))
+    }
+  }
 }

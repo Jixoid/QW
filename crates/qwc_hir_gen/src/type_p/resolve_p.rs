@@ -49,7 +49,10 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
         match ctx.src.get(thing).kind {
           ast::ThingKind::NamedType(_, ty) => TypeLow::low(ctx!(lscp -> ctx), ty)?,
 
-          ast::ThingKind::Name(_) => ctx.tin.ty_generic_type(ctx.cre, idx),
+          ast::ThingKind::Name(name) => {
+            let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name: name.sid() });
+            ctx.tin.ty_generic_type(ctx.cre, path, idx)
+          }
 
           _ => panic!()
         }
@@ -76,10 +79,13 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
       }
       
       resolve::ScopeKindAst::GenericType(generic, kind) => {
+        let generic_item = ItemLow::low(ctx, generic)?.unwrap();
+        let path = ctx.get(generic_item).path;
         hir::Type {
-          kind: hir::TypeKind::GenericRaw { generic: ItemLow::low(ctx, generic)?.unwrap(), kind: TypeLow::low(ctx, kind)? },
+          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind: TypeLow::low(ctx, kind)? },
           attr: TypeAttr::empty(),
           layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          path,
         }.push(ctx.cre)
       }
 

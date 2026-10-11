@@ -12,7 +12,7 @@
 
 use qwc_string_interner::Sid;
 
-use crate::DefPathId;
+use crate::{DefPathId, DefPathRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -21,4 +21,5 @@ pub enum DefPath {
   Path{base: DefPathId, name: Sid},
   Impl{base: DefPathId, spec: DefPathId},
   Spec{base: DefPathId, spec: DefPathId},
+  AnonymousTuple(DefPathRng),
 }

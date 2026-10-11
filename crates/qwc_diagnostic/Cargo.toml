@@ -11,6 +11,8 @@ lsp = ["dep:lsp-types", "dep:serde_json"]
 
 [dependencies]
 qwc_arena = { path = "../qwc_arena" }
+qwc_hir = { path = "../qwc_hir" }
+qwc_string_interner = { path = "../qwc_string_interner" }
 owo-colors = "4.3.0"
 backtrace = "0.3.76"
 thin-vec = "0.2.19"

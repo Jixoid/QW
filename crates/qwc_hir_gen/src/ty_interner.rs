@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{DefPathId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -50,10 +50,12 @@ impl TypeInterner {
     match self.ty_meta.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(id).path;
         let this = Type{
           kind: TypeKind::Meta(id),
           layout: Layout::new_meta(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -70,10 +72,12 @@ impl TypeInterner {
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(id).path;
         let this = Type{
           kind: TypeKind::Ref(id, ism),
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -90,10 +94,12 @@ impl TypeInterner {
     match self.ty_trait_from.entry((id, trait_ty)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(trait_ty).path;
         let this = Type{
           kind: TypeKind::TraitFrom{hidden: id, trait_ty},
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -110,10 +116,12 @@ impl TypeInterner {
     match self.ty_slice.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(id).path;
         let this = Type{
           kind: TypeKind::Slice(id),
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -130,10 +138,12 @@ impl TypeInterner {
     match self.ty_vscale.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(id).path;
         let this = Type{
           kind: TypeKind::VScale(id),
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -150,10 +160,12 @@ impl TypeInterner {
     match self.ty_option.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
+        let path = cre.get(id).path;
         let this = Type{
           kind: TypeKind::Option(id),
           layout,
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);
@@ -164,7 +176,7 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_generic_type(&mut self, cre: &mut Krate, idx: usize) -> TypeId {
+  pub fn ty_generic_type(&mut self, cre: &mut Krate, path: DefPathId, idx: usize) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_generic_type.entry(idx) {
@@ -174,6 +186,7 @@ impl TypeInterner {
           kind: TypeKind::GenericType{idx},
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
+          path,
         };
 
         let id = cre.push(this);

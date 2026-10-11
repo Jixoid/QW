@@ -13,7 +13,7 @@
 use bitflags::bitflags;
 use qwc_string_interner::Sid;
 
-use crate::{DefPathId, ExprId, ItemRng, TypeId, TypeRng};
+use crate::{DefPathId, ExprId, ItemRng, PathApi, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -54,6 +54,12 @@ pub struct Item {
   pub kind: ItemKind,
   pub attr: ItemAttr,
   pub path: DefPathId,
+}
+
+impl PathApi for Item {
+  fn path(&self) -> DefPathId {
+    self.path
+  }
 }
 
 impl Item {

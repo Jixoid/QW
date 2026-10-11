@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeAttr, TypeKind, Visitor};
+use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeAttr, TypeKind};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
@@ -23,11 +23,17 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 	let mut root = vec![];
 
-	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
-	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
-	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
-	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
-	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty()});
+	let path_type = cre.push(DefPath::Path{base: path_types, name: sin.sid("type")});
+	let path_self = cre.push(DefPath::Path{base: path_types, name: sin.sid("Self")});
+	let path_error = cre.push(DefPath::Path{base: path_types, name: sin.sid("{error}")});
+	let path_unit = cre.push(DefPath::Path{base: path_types, name: sin.sid("()")});
+	let path_never = cre.push(DefPath::Path{base: path_types, name: sin.sid("!")});
+
+	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_type});
+	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_self});
+	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_error});
+	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_unit});
+	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_never});
 
 	// types
 	let (types, prims) = {
@@ -37,7 +43,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 			($name:literal => $kind:expr, $lay:expr) => {{
 				let name_sid = sin.sid($name);
 				let path = cre.push(DefPath::Path{base: path_types, name: name_sid});
-				let kind = cre.push(Type{kind: $kind, layout: $lay, attr: TypeAttr::empty()});
+				let kind = cre.push(Type{kind: $kind, layout: $lay, attr: TypeAttr::empty(), path});
 
 				let item = cre.push(Item{
 					vis: ItemVis::Public(SymVis::Internal),

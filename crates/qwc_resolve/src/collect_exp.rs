@@ -11,15 +11,13 @@
 
 
 use qwc_diagnostic::Summary;
-use qwc_hir::{AnyId, Item, ItemId, ItemKind, Krate, Visitor};
+use qwc_hir::{AnyId, Item, ItemId, ItemKind, Krate};
 
 use crate::{Export, ExportKind, ExportMap};
 
 
-impl Visitor for ExportMap {
-  type Type = Self;
-
-  fn visit(cre: &Krate) -> Result<Self::Type, Summary> {
+impl ExportMap {
+  pub fn visit(cre: &Krate) -> Result<Self, Summary> {
     ExportCollector::collect(cre)
   }
 }

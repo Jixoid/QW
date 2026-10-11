@@ -12,8 +12,8 @@
 
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, Span, Summary, msg::*};
-use qwc_hir::{self as hir, CID, Deps, PrimTypes};
+use qwc_diagnostic::{Label, Message, Span, Summary, Poit, msg::*};
+use qwc_hir::{self as hir, CID, Deps, PathApi, PrimTypes};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
 use qwc_string_interner::{Sid, StrInterner};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -75,9 +75,18 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
 
-  pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T { self.get_krate(id.cid()).get(id) }
+  pub fn poit<T: hir::HirKind + hir::GetApi<T> + PathApi>(&self, id: hir::HirId<T>) -> Poit {
+    Poit::new(self.cre, self.ideps, self.sin, self.get(id).path())
+  }
+
+
+  pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T {
+    self.get_krate(id.cid()).get(id)
+  }
   
-  pub fn extra_get<T: hir::HirKind>(&self, rng: hir::Rng<T>) -> impl Iterator<Item = hir::HirId<T>> { self.get_krate(rng.cid()).extra_get(rng) }
+  pub fn extra_get<T: hir::HirKind>(&self, rng: hir::Rng<T>) -> impl Iterator<Item = hir::HirId<T>> {
+    self.get_krate(rng.cid()).extra_get(rng)
+  }
 
 
   pub fn expr_name(&self, _id: hir::ExprId) -> String {
@@ -85,8 +94,9 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
   pub fn type_name(&self, id: hir::TypeId) -> String {
-    let ty = self.get(id);
-    match ty.kind {
+    let it = self.get(id);
+
+    match it.kind {
       // Generic
       hir::TypeKind::GenericType{idx} => format!("<{}>", idx),
       hir::TypeKind::GenericRaw{..} => "<raw generic>".to_string(),
@@ -129,19 +139,19 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       
       
       // Combinated
-      hir::TypeKind::Struct(..) => format!("struct {{}}"),
-      hir::TypeKind::Tuple(..) => format!("tuple {{}}"),
+      hir::TypeKind::Struct(..) => self.poit(id).to_string(),
+      hir::TypeKind::Tuple(..) => self.poit(id).to_string(),
       
       
       // Trait
-      hir::TypeKind::Trait(..) => format!("trait {{}}"),
-      hir::TypeKind::Iface(..) => format!("iface {{}}"),
+      hir::TypeKind::Trait(..) => self.poit(id).to_string(),
+      hir::TypeKind::Iface(..) => self.poit(id).to_string(),
 
       hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("trait({}, hidden: {})", self.type_name(trait_ty), self.type_name(hidden)),
 
 
       // Enum
-      hir::TypeKind::Enum(..) => format!("enum {{}}"),
+      hir::TypeKind::Enum(..) => self.poit(id).to_string(),
 
       // Function
       hir::TypeKind::Fun{self_kind, args, ret} => {

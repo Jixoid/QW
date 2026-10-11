@@ -130,11 +130,27 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
       }
 
-      resolve::ScopeKindAst::GenericType(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+      resolve::ScopeKindAst::GenericType(generic, kind) => {
+        let generic_item = ItemLow::low(ctx, generic)?.unwrap();
+        let path = ctx.get(generic_item).path;
+        let kind = hir::Type {
+          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind: TypeLow::low(ctx, kind)? },
+          attr: TypeAttr::empty(),
+          layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          path,
+        }.push(ctx.cre);
+
+        let this = hir::Expr {
+          kind: hir::ExprKind::TypeOf { kind },
+          category: ExprCategory::RValue,
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
+        };
+
+        ctx.cre.push(this)
       }
 
       resolve::ScopeKindAst::GenericExpr(generic, expr) => {
+        let generic = ItemLow::low(ctx, generic)?.unwrap();
         let id = ItemLow::low(ctx!(lscp -> ctx), expr)?.unwrap();
         let it = ctx.cre.get(id);
 
@@ -142,23 +158,24 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         
         let ism = it.assignable().unwrap();
 
-
         let expr = hir::Expr{
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::lvalue(ism),
           ety: kind,
         }.push(ctx.cre);
 
+        let path = ctx.get(generic).path;
         let kind = hir::Type {
-          kind: hir::TypeKind::GenericRaw { generic: ItemLow::low(ctx, generic)?.unwrap(), kind },
+          kind: hir::TypeKind::GenericRaw { generic, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          path,
         }.push(ctx.cre);
         
         
         // Post
         hir::Expr {
-          kind: hir::ExprKind::GenericRaw { generic: ItemLow::low(ctx, generic)?.unwrap(), kind: expr },
+          kind: hir::ExprKind::GenericRaw { generic, kind: expr },
           category: ExprCategory::RValue,
           ety: kind,
         }.push(ctx.cre)
@@ -186,8 +203,18 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         }.push(ctx.cre)
       }
 
-      resolve::ScopeKindHir::Type(..) | resolve::ScopeKindHir::Module(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+      resolve::ScopeKindHir::Type(kind) => {
+        let this = hir::Expr {
+          kind: hir::ExprKind::TypeOf { kind },
+          category: ExprCategory::RValue,
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
+        };
+
+        ctx.cre.push(this)
+      }
+
+      resolve::ScopeKindHir::Module(..) => {
+        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
       }
     }
   };

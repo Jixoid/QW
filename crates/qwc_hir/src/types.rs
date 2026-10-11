@@ -12,7 +12,7 @@
 
 use bitflags::bitflags;
 
-use crate::{ExprId, ItemId, Layout, ThingRng, TypeId, TypeRng};
+use crate::{DefPathId, ExprId, ItemId, Layout, PathApi, ThingRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -85,7 +85,15 @@ pub struct Type {
   pub kind: TypeKind,
   pub layout: Layout,
   pub attr: TypeAttr,
+  pub path: DefPathId,
 }
+
+impl PathApi for Type {
+  fn path(&self) -> DefPathId {
+    self.path
+  }
+}
+
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PrimTypes {

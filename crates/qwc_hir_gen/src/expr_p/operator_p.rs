@@ -332,7 +332,10 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
     }
 
     // Non Member
-    (None, Some(..)) => return Err(Message::error(USE_ASSOCIATED_FUNCTION_SYNTAX_INSTEAD, Label::new_pos(it.pos))),
+    (None, Some(..)) => {
+      let fn_name = if let hir::ExprKind::GlobalRef(item) = ctx.cre.get(callee).kind { ctx.poit(item).to_string() } else { panic!() };
+      return Err(Message::error(USE_ASSOCIATED_FUNCTION_SYNTAX_INSTEAD.args(&[&fn_name]), Label::new_pos(it.pos)));
+    }
 
     (Some(..), None) => true
   };
@@ -404,6 +407,10 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, fields: 
   let hir::ExprKind::TypeOf{kind} = ctx.cre.get(lhs).kind else {
     return Err(Message::error(ONLY_TYPES_CAN_BE_INITIALIZED_IN_THIS_WAY, Label::new_pos(brace_span)))
   };
+
+  if matches!(ctx.get(kind).kind, hir::TypeKind::GenericRaw { .. }) {
+    return Err(Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(brace_span)));
+  }
 
 
   // Get Keys

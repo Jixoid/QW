@@ -17,17 +17,25 @@ use qwc_hir::{self as hir, PushOkApi};
 use qwc_string_interner::Sid;
 use rustc_hash::FxHashMap;
 
-use crate::{Ctx, TypeLow, TypeMatch, ItemLow, item_p::read_attrs};
+use crate::{Ctx, TypeLow, TypeMatch, ItemLow, item_p::read_attrs, ctx};
 
 
 pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::FieldRng) -> Result<hir::ItemId, Message> {
   let type_ty = TypeLow::low(ctx, type_ty)?;
   let trait_ty = trait_ty.map(|id| TypeLow::low(ctx, id)).transpose()?;
 
+  let impl_path = if let Some(trait_ty) = trait_ty {
+    ctx.cre.push(hir::DefPath::Impl { base: ctx.get(trait_ty).path, spec: ctx.get(type_ty).path })
+  } else {
+    ctx.get(type_ty).path
+  };
+
   let (method_ids, type_ids) = {
     let mut methods = vec![];
     let mut types = vec![];
     
+    let ctx = ctx!(path impl_path -> ctx);
+
     for id in ctx.src.extra_get(ctn) {
       let it = ctx.src.get(id);
       
@@ -78,7 +86,7 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
       trait_ty,
       methods,
     },
-    path: ctx.path,
+    path: impl_path,
     vis, attr
   }.push_ok(ctx.cre)
 }
@@ -153,17 +161,19 @@ fn low_impl_validate(
   };
 
 
+  let trait_name = ctx.poit(trait_ty).to_string();
+
   // Extra Check
   for (sid, (ident, _, pos)) in &impl_method_map {
     if !expected_methods.iter().any(|(exp_sid, _)| exp_sid == sid) {
-      return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far)]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE)));
+      return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
     }
   }
 
   for (sid, (ident, _, pos)) in &impl_types_map {
     if let Some(expected_types) = &expected_types {
       if !expected_types.iter().any(|(exp_sid, _)| exp_sid == sid) {
-        return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far)]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE)));
+        return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
       }
     }
   }
