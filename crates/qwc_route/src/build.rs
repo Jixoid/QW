@@ -410,7 +410,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, implst, &imod_cids, &mut deps)?;
   let hir_cre = deps.get(hir_cid);
   
-  if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, deps: Some(&deps), sin: &sin}) }
+  if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, deps: &deps, sin: &sin}) }
   
   if info.check_only { return Ok(()) }
 

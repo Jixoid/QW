@@ -9,7 +9,7 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-use qwc_hir::{DefPath, DefPathId, Krate};
+use qwc_hir::{DefPath, DefPathId, Deps, Krate};
 use qwc_string_interner::StrInterner;
 
 use crate::Mangler;
@@ -18,14 +18,19 @@ use crate::Mangler;
 pub struct ManglerQW;
 
 impl Mangler for ManglerQW {
-  fn new(cre: &Krate, sin: &StrInterner, id: DefPathId) -> String {
-    format!("qw_{}", read(cre, sin, id))
+  fn new(cre: &Krate, deps: &Deps, sin: &StrInterner, id: DefPathId) -> String {
+    format!("qw_{}", read(cre, deps, sin, id))
   }
 }
 
 
-fn read(cre: &Krate, sin: &StrInterner, id: DefPathId) -> String {
-  let it = *cre.get(id);
+fn read(cre: &Krate, deps: &Deps, sin: &StrInterner, id: DefPathId) -> String {
+  let target_cre = if id.cid() == cre.cid() {
+    cre
+  } else {
+    deps.get(id.cid())
+  };
+  let it = *target_cre.get(id);
 
   match it {
     DefPath::Root(name) => {
@@ -37,19 +42,19 @@ fn read(cre: &Krate, sin: &StrInterner, id: DefPathId) -> String {
       let str = sin.str(name);
       let str = format!("{}{}", str.len(), str);
     
-      format!("{}{}", read(cre, sin, base), str)
+      format!("{}{}", read(cre, deps, sin, base), str)
     }
     
     DefPath::Impl{base, spec} => {
-      format!("_impl_{}_{}", read(cre, sin, base), read(cre, sin, spec))
+      format!("_impl_{}_{}", read(cre, deps, sin, base), read(cre, deps, sin, spec))
     }
     
     DefPath::Spec{base, spec} => {
-      format!("_spec_{}_{}", read(cre, sin, base), read(cre, sin, spec))
+      format!("_spec_{}_{}", read(cre, deps, sin, base), read(cre, deps, sin, spec))
     }
 
     DefPath::AnonymousTuple(rng) => {
-      let parts = cre.extra_get(rng).map(|id| read(cre, sin, id)).collect::<Vec<_>>();
+      let parts = target_cre.extra_get(rng).map(|id| read(cre, deps, sin, id)).collect::<Vec<_>>();
       format!("_tup_{}_{}", parts.len(), parts.join("_"))
     }
   }

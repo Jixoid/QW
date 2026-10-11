@@ -22,6 +22,7 @@ use crate::{Ctx, TypeLow, TypeMatch, ItemLow, item_p::read_attrs, ctx};
 
 pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::FieldRng) -> Result<hir::ItemId, Message> {
   let type_ty = TypeLow::low(ctx, type_ty)?;
+  let trait_pos = trait_ty.map(|id| ctx.src.get(id).pos);
   let trait_ty = trait_ty.map(|id| TypeLow::low(ctx, id)).transpose()?;
 
   let impl_path = if let Some(trait_ty) = trait_ty {
@@ -34,7 +35,8 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
     let mut methods = vec![];
     let mut types = vec![];
     
-    let ctx = ctx!(path impl_path -> ctx);
+    let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
+    let ctx = ctx!(lscp, impl_path -> ctx);
 
     for id in ctx.src.extra_get(ctn) {
       let it = ctx.src.get(id);
@@ -69,7 +71,7 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
   
   
   let methods = if let Some(trait_ty) = trait_ty {
-    low_impl_validate(ctx, type_ty, trait_ty, it.pos, method_ids, type_ids)?
+    low_impl_validate(ctx, type_ty, trait_ty, it.pos, trait_pos.unwrap(), method_ids, type_ids)?
   } else {
     let ids = method_ids.into_iter().map(|(_, id, ..)| id).collect_vec();
     ctx.cre.extra(&ids)
@@ -93,16 +95,25 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
 
 fn low_impl_validate(
   ctx: &mut Ctx,
-  _type_ty: hir::TypeId,
+  type_ty: hir::TypeId,
   trait_ty: hir::TypeId,
   impl_span: Span,
+  trait_span: Span,
   implemented_methods: Vec<(Ident, hir::ItemId, ast::TypeId, Span)>,
   implemented_types: Vec<(Ident, hir::TypeId, Span)>,
 ) -> Result<hir::ItemRng, Message>
 {
-  let (hir::TypeKind::Iface(trait_methods) | hir::TypeKind::Trait(trait_methods, ..)) = ctx.get(trait_ty).kind else { unreachable!() };
-  
-  let trait_types = if let hir::TypeKind::Trait(.., types) = ctx.get(trait_ty).kind { Some(types) } else { None };
+  let (trait_methods, trait_types) = match ctx.get(trait_ty).kind {
+    hir::TypeKind::Iface(trait_methods) => (trait_methods, None),
+    hir::TypeKind::Trait(trait_methods, types) => (trait_methods, Some(types)),
+    hir::TypeKind::GenericRaw { .. } => {
+      return Err(Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span)));
+    }
+    _ => {
+      let found = ctx.type_name(trait_ty);
+      return Err(Message::error(EXPECTED_BUT_FOUND.args(&["trait", &found]), Label::new_pos(trait_span)));
+    }
+  };
 
   let krate = ctx.get_krate(trait_ty.cid());
 
@@ -207,13 +218,22 @@ fn low_impl_validate(
   };
 
 
+  let assoc_by_idx: FxHashMap<usize, hir::TypeId> = match &expected_types {
+    Some(expected_types) => {
+      expected_types.iter().enumerate().filter_map(|(idx, (name, _))| {
+        impl_types_map.get(name).map(|(_, ty, _)| (idx, *ty))
+      }).collect()
+    }
+    None => FxHashMap::default(),
+  };
+
   // Signature Matching
   for ((exp_sid, exp_fun), (_, _, fun2_ast, _)) in izip!(&expected_methods, &implemented_methods) {
     let (_, method_id, _) = impl_method_map.get(exp_sid).unwrap();
     
     let hir::ItemKind::Function{kind: act_fun, ..} = ctx.cre.get(*method_id).kind else { unreachable!() };
 
-    TypeMatch::match_fun(ctx, *exp_fun, act_fun, *fun2_ast)?;
+    TypeMatch::match_fun(ctx, *exp_fun, act_fun, *fun2_ast, Some(type_ty), Some(&assoc_by_idx))?;
   }
 
 

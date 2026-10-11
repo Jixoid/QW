@@ -118,8 +118,8 @@ impl DumpHandler for Item {
       }
 
       ItemKind::ItemTy(ty) => {
-        let name = self.name.map(|n| n.str(far)).unwrap_or("<anon>");
-        write!(f, "{} {} = ", "type".blue().bold(), name.yellow().bold())?;
+        let name = self.name.map(|n| n.str(far)).unwrap();
+        write!(f, "{} {} = ", "itemty".blue().bold(), name.yellow().bold())?;
         ty.dump(cre, sin, far, f, indent)?;
         writeln!(f, ";")?;
       }

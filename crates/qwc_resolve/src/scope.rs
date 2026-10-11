@@ -59,13 +59,14 @@ pub enum ScopeKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScopeKindAst {
-  Type(ast::TypeId),
+  Type(ast::ItemId),
   GenericType(ast::ItemId, ast::TypeId),
-  TypeParam(usize, ast::ThingId),
+  TypeParam(ast::ItemId, usize, ast::ThingId),
+  AssocType(usize, ast::FieldId),
   
   Expr(ast::ItemId),
   GenericExpr(ast::ItemId, ast::ItemId),
-  ExprParam(usize, ast::ThingId),
+  ExprParam(ast::ItemId, usize, ast::ThingId),
   
   Module(ast::ItemId),
   Local(u32),
@@ -80,8 +81,6 @@ pub enum ScopeKindHir {
   
   Module(hir::ItemId),  
 }
-
-
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

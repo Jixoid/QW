@@ -59,7 +59,7 @@ pub enum BoolLogicOp {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExprKind {
-  GenericExpr,
+  GenericExpr{generic: ItemId, idx: usize},
   GenericRaw{generic: ItemId, kind: ExprId},
   Error,
   
@@ -118,6 +118,9 @@ pub enum ExprKind {
   BoolNot(ExprId),
 
   // Cast
+
+  /// Primitive integer cast (x as i64, etc.)
+  IntCast(ExprId),
 
   /// &Type => &Iface
   CastToIfaceRef{ref_of_expr: ExprId, ref_of_type: TypeId, target_iface: TypeId},

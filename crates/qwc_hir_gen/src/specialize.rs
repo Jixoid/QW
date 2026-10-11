@@ -28,6 +28,7 @@ macro_rules! convert {
 
 
 pub struct Specialization<'a> {
+  pub generic: hir::ItemId,
   pub args: &'a [hir::TypeId],
 }
 
@@ -37,9 +38,16 @@ impl<'a> Specialization<'a> {
     let it = *ctx.get(id);
 
     match it.kind {
-      hir::TypeKind::GenericType{idx} => return self.args[idx],
+      hir::TypeKind::GenericType{generic, idx} => {
+        if generic == self.generic {
+          return self.args[idx];
+        } else {
+          return id;
+        }
+      }
 
-      hir::TypeKind::Unit
+      hir::TypeKind::GenericSelfType
+      | hir::TypeKind::Unit
       | hir::TypeKind::Never
       | hir::TypeKind::Bool
       | hir::TypeKind::Str
@@ -117,6 +125,62 @@ impl<'a> Specialization<'a> {
         }.push(ctx.cre)
       }
 
+      hir::TypeKind::AssociatedType { trait_ty, idx } => {
+        let trait_ty = self.spec_type(ctx, trait_ty);
+        hir::Type {
+          kind: hir::TypeKind::AssociatedType { trait_ty, idx },
+          layout: it.layout,
+          attr: it.attr,
+          path: it.path,
+        }.push(ctx.cre)
+      }
+
+      hir::TypeKind::Trait(methods, types) => {
+        let new_trait_ty = hir::Type {
+          kind: hir::TypeKind::Error,
+          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          attr: TypeAttr::empty(),
+          path,
+        }.push(ctx.cre);
+
+        ctx.cmap.cache_generic_type.insert(key.clone(), new_trait_ty);
+
+        let methods = convert!(ctx, methods,
+          |id| {
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
+          },
+          |&(name, kind)| {
+            hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
+          },
+        );
+
+        let types = convert!(ctx, types,
+          |id| {
+            match *ctx.get(id) {
+              hir::Thing::NamedType(name, kind) => (name, Some(kind)),
+              hir::Thing::Name(name) => (name, None),
+              _ => panic!(),
+            }
+          },
+          |&(name, kind)| {
+            match kind {
+              Some(kind) => hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre),
+              None => hir::Thing::Name(name).push(ctx.cre),
+            }
+          },
+        );
+
+        let this = hir::Type {
+          kind: hir::TypeKind::Trait(methods, types),
+          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          attr: TypeAttr::empty(),
+          path,
+        };
+        *ctx.cre.get_mut(new_trait_ty) = this;
+
+        new_trait_ty
+      }
+
       _ => todo!("{it:#?}")
     };
 
@@ -146,6 +210,13 @@ impl<'a> Specialization<'a> {
 
         hir::Expr {
           kind: hir::ExprKind::Block {stmt, expr},
+          category: hir::ExprCategory::RValue,
+          ety: self.spec_type(ctx, it.ety),
+        }.push(ctx.cre)
+      }
+      hir::ExprKind::IntCast(expr) => {
+        hir::Expr {
+          kind: hir::ExprKind::IntCast(self.spec_expr(ctx, expr)),
           category: hir::ExprCategory::RValue,
           ety: self.spec_type(ctx, it.ety),
         }.push(ctx.cre)

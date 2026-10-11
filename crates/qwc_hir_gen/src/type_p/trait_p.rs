@@ -18,6 +18,14 @@ use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 
 // Static Interface
 pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+  let trait_ty = hir::Type {
+    kind: hir::TypeKind::Error,
+    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
+    path,
+  }.push(ctx.cre);
+
+  ctx.cmap.current_trait.push(trait_ty);
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
   let (methods, types) = {
@@ -63,14 +71,17 @@ pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
   };
 
   ctx.cmap.self_ty.pop();
+  ctx.cmap.current_trait.pop();
 
-
-  hir::Type {
+  let this = hir::Type {
     kind: hir::TypeKind::Trait(methods, types),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
-  }.push_ok(ctx.cre)
+  };
+  *ctx.cre.get_mut(trait_ty) = this;
+
+  Ok(trait_ty)
 }
 
 

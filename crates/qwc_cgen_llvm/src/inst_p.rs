@@ -151,6 +151,13 @@ impl InstLow {
         };
       }
 
+      Expr::IntCast { kind, val, signed } => {
+        let val = ValueLow::low(uctx, ictx, fctx, &val).into_int_value();
+        let dest_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_int_type();
+        let casted = ictx.builder.build_int_cast_sign_flag(val, dest_ty, signed, "").unwrap();
+        fctx.ssa_map.insert(dest, casted.into());
+      }
+
     }
   }
 
@@ -200,7 +207,8 @@ impl InstLow {
       Expr::IntArithmetic{..} |
       Expr::IntCondition{..} |
       Expr::IntLogic{..} |
-      Expr::IntUnary{..} => panic!()
+      Expr::IntUnary{..} |
+      Expr::IntCast{..} => panic!()
     }
   }
 

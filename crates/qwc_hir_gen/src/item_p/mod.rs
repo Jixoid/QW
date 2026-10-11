@@ -88,7 +88,8 @@ impl ItemLow {
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
     
-    let kind = TypeLow::low_itemty(ctx, path, kind)?;
+    let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
+    let kind = TypeLow::low_itemty(ctx!(lscp -> ctx), path, kind)?;
     
     let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
     
@@ -172,6 +173,10 @@ impl ItemLow {
   }
 
   fn low_fun_field(ctx: &mut Ctx, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+    if let None = expr {
+      return Err(Message::error(ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY.args(&["impl"]), Label::new_pos(it.pos)))
+    }
+
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 

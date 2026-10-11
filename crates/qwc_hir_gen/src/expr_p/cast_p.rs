@@ -24,6 +24,32 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId,
   
   let expr_ty = ctx.cre.get(expr).ety;
 
+  // Identity cast
+  if expr_ty == target {
+    return Ok(expr);
+  }
+
+  // Inter integer cast
+  let is_int = |ty: hir::TypeId| -> bool {
+    matches!(ctx.get(ty).kind, hir::TypeKind::Int(..) | hir::TypeKind::ArchInt(..))
+  };
+
+  if is_int(expr_ty) && is_int(target) {
+    if let hir::ExprKind::Const(hir::Const::Int(val)) = ctx.cre.get(expr).kind {
+      return hir::Expr {
+        kind: hir::ExprKind::Const(hir::Const::Int(val)),
+        category: ExprCategory::RValue,
+        ety: target,
+      }.push_ok(ctx.cre);
+    }
+
+    return hir::Expr {
+      kind: hir::ExprKind::IntCast(expr),
+      category: ExprCategory::RValue,
+      ety: target,
+    }.push_ok(ctx.cre);
+  }
+
 
   // Choose
   let ret: Option<(fn(_, _, _, _, _) -> _, hir::TypeId)> =

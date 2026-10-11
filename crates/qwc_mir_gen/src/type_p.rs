@@ -46,7 +46,7 @@ impl TypeLow {
       hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
       
       // Logic Error
-      hir::TypeKind::Trait(..) => panic!("this type must not have infiltrated this layer!"),
+      hir::TypeKind::Trait(..) | hir::TypeKind::AssociatedType{..} | hir::TypeKind::GenericType{..} => panic!("this type must not have infiltrated this layer!"),
 
       kind @_ => todo!("{kind:#?}")
     };

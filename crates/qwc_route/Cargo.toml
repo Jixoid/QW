@@ -25,5 +25,4 @@ qwc_cgen = { path = "../qwc_cgen" }
 qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
 qwc_lsp = { path = "../qwc_lsp", optional = true }
 clap = { version = "4.5", features = ["derive"] }
-uuid = { version = "1.10", features = ["v4"] }
 owo-colors = "4.4.0"

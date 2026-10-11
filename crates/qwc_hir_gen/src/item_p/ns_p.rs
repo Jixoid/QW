@@ -71,6 +71,20 @@ pub fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Item
 pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng) -> Result<hir::ItemId, Message> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
+  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+
+  let empty_items: &[hir::ItemId] = &[];
+  let empty_things: &[hir::ThingId] = &[];
+  let generic_item = hir::Item {
+    name: None,
+    kind: hir::ItemKind::GenericNS { rng: ctx.cre.extra(empty_items), args: ctx.cre.extra(empty_things) },
+    path: ctx.path,
+    vis,
+    attr,
+  }.push(ctx.cre);
+
+  ctx.cmap.cache_item.insert(id, Some(generic_item));
+
   let rng = &ctx.src.extra_get(rng)
     .filter_map(|id| {
       ItemLow::low(ctx!(lscp -> ctx), id)
@@ -91,14 +105,12 @@ pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Ite
     }).collect_vec();
   let args = ctx.cre.extra(args);
 
-  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
-
-  
-  // Post
-  hir::Item {
+  *ctx.cre.get_mut(generic_item) = hir::Item {
     name: None,
     kind: hir::ItemKind::GenericNS { rng, args },
     path: ctx.path,
     vis, attr
-  }.push_ok(ctx.cre)
+  };
+
+  Ok(generic_item)
 }

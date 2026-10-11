@@ -69,7 +69,7 @@ impl SymbLow {
 
 
   fn low_variable(ctx: &mut Ctx, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> Result<mir::SymbId, Message> {
-    let sym = ManglerQW::new(ctx.src, ctx.sin, it.path);
+    let sym = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
 
     let ety = TypeLow::low(ctx, kind)?;
 
@@ -91,7 +91,7 @@ impl SymbLow {
     let sym = if it.attr.contains(ItemAttr::Entry) {
       String::from("qw_entry")
     } else {
-      ManglerQW::new(ctx.src, ctx.sin, it.path)
+      ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path)
     };
     
     let ety = TypeLow::low(ctx, kind)?;
@@ -129,7 +129,7 @@ impl SymbLow {
 
 
   fn low_method_sym(ctx: &mut Ctx, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId) -> Result<mir::SymbId, Message> {
-    let sym = ManglerQW::new(ctx.src, ctx.sin, it.path);
+    let sym = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
     
     let ety = TypeLow::low(ctx, kind)?;
 
@@ -190,7 +190,7 @@ impl SymbLow {
       let size = struct_type.layout.size().unwrap_or(0);
       let align = struct_type.layout.align().unwrap_or(1) as u64;
 
-      let vmt_sym_name = ManglerQW::new(ctx.src, ctx.sin, it.path);
+      let vmt_sym_name = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
       let table = ctx.cre.extra(&method_symbs);
 
       let arch_int_ty = ctx.tin.ty_arch_int();

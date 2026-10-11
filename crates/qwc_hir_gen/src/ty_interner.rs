@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{DefPathId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{DefPathId, ItemId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -26,7 +26,7 @@ pub struct TypeInterner {
 
   ty_option: FxHashMap<TypeId, TypeId>,
 
-  ty_generic_type: FxHashMap<usize, TypeId>,
+  ty_generic_type: FxHashMap<(ItemId, usize), TypeId>,
 }
 
 
@@ -176,14 +176,14 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_generic_type(&mut self, cre: &mut Krate, path: DefPathId, idx: usize) -> TypeId {
+  pub fn ty_generic_type(&mut self, cre: &mut Krate, path: DefPathId, generic: ItemId, idx: usize) -> TypeId {
     use std::collections::hash_map::Entry;
     
-    match self.ty_generic_type.entry(idx) {
+    match self.ty_generic_type.entry((generic, idx)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
         let this = Type{
-          kind: TypeKind::GenericType{idx},
+          kind: TypeKind::GenericType{generic, idx},
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
           path,

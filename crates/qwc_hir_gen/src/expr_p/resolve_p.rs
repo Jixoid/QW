@@ -76,13 +76,14 @@ pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::Expr
 pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Result<hir::ExprId, Message> {
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
-      resolve::ScopeKindAst::ExprParam(_, thing) => {
+      resolve::ScopeKindAst::ExprParam(generic, idx, thing) => {
         if let ast::ThingKind::NamedType(_, ty) = ctx.src.get(thing).kind {
           let ty = TypeLow::low(ctx!(lscp -> ctx), ty)?;
+          let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
 
           // Post
           let this = hir::Expr{
-            kind: hir::ExprKind::GenericExpr,
+            kind: hir::ExprKind::GenericExpr { generic: generic_hir, idx },
             category: ExprCategory::RValue,
             ety: ty,
           };
@@ -109,8 +110,9 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         }.push(ctx.cre)
       }
 
-      resolve::ScopeKindAst::Type(kind) => {
-        let kind = TypeLow::low(ctx, kind)?;
+      resolve::ScopeKindAst::Type(item) => {
+        let item = ItemLow::low(ctx!(lscp -> ctx), item)?.unwrap();
+        let hir::ItemKind::Using { kind } = ctx.get(item).kind else { unreachable!() };
 
         // Post
         let this = hir::Expr {
@@ -122,7 +124,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         ctx.cre.push(this)
       }
 
-      resolve::ScopeKindAst::TypeParam(..) => {
+      resolve::ScopeKindAst::TypeParam(..) | resolve::ScopeKindAst::AssocType(..) => {
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
       }
 
@@ -133,8 +135,12 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       resolve::ScopeKindAst::GenericType(generic, kind) => {
         let generic_item = ItemLow::low(ctx, generic)?.unwrap();
         let path = ctx.get(generic_item).path;
+        let kind = match ctx.cmap.cache_type.get(&kind) {
+          Some(&cached) => cached,
+          None => TypeLow::low(ctx, kind)?,
+        };
         let kind = hir::Type {
-          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind: TypeLow::low(ctx, kind)? },
+          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::new_meta(hir::LayoutBy::QW),
           path,

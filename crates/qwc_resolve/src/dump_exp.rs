@@ -85,7 +85,9 @@ fn dump(dmp: &Dump, exp: &Export, indent: usize, f: &mut fmt::Formatter) -> fmt:
       ExportKind::Expr(_id, ty_id) => {
         write_indent(f, indent)?;
         write!(f, "{} {}{} ", kw("expr"), name(name_str), punct(":"))?;
-        let ctx = DumpCtx::new(dmp.cre, dmp.deps, dmp.sin);
+        let dummy = Deps::new();
+        let deps = dmp.deps.unwrap_or(&dummy);
+        let ctx = DumpCtx::new(dmp.cre, deps, dmp.sin);
         ty_id.dump(&ctx, f, indent)?;
         writeln!(f, "{}", punct(";"))?;
       }

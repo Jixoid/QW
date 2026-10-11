@@ -42,7 +42,7 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
 
 pub struct TypeMethods {
   pub traits: FxHashSet<hir::TypeId>,
-  pub methods: FxHashMap<Sid, (usize, ast::ItemId)>,
+  pub methods: FxHashMap<Sid, ast::ItemId>,
 }
 
 
@@ -62,6 +62,7 @@ pub struct CacheMap {
   pub(crate) cache_generic_expr: FxHashMap<(hir::ExprId, Vec<hir::TypeId>), hir::ExprId>,
 
   pub(crate) self_ty: Vec<hir::TypeId>,
+  pub(crate) current_trait: Vec<hir::TypeId>,
 }
 
 impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
@@ -98,9 +99,25 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
     match it.kind {
       // Generic
-      hir::TypeKind::GenericType{idx} => format!("<{}>", idx),
+      hir::TypeKind::GenericType{generic, idx} => {
+        let it = self.cre.get(generic);
+        if let hir::ItemKind::GenericNS { args, .. } = it.kind {
+          if let Some(thing) = self.cre.extra_get(args).nth(idx) {
+            if let hir::Thing::Name(name) | hir::Thing::NamedType(name, _) = *self.cre.get(thing) {
+              self.sin.str(name).to_string()
+            } else {
+              format!("<{}>", idx)
+            }
+          } else {
+            format!("<{}>", idx)
+          }
+        } else {
+          format!("<{}>", idx)
+        }
+      }
       hir::TypeKind::GenericRaw{..} => "<raw generic>".to_string(),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
+      hir::TypeKind::AssociatedType{trait_ty, idx} => format!("{}::<{}>", self.type_name(trait_ty), idx),
       hir::TypeKind::Error => "{error}".to_string(),
 
       // Primitive
@@ -217,6 +234,7 @@ impl<'ast, 'hir, 'imod> HGen {
       cache_generic_item: FxHashMap::default(),
       cache_generic_expr: FxHashMap::default(),
       self_ty: vec![],
+      current_trait: vec![],
     };
     let mut loc = LocalScopeManager::new();
     
@@ -269,11 +287,11 @@ impl<'ast, 'hir, 'imod> HGen {
       let reg = |tyfuns: &mut TypeMethods| -> Result<(), Message> {
         if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
         
-        for (idx, id) in ctx.src.extra_get(fields).enumerate() {
+        for id in ctx.src.extra_get(fields) {
           if let ast::Field{kind: ast::FieldKind::Fun{..}, pos, name, ..} = ctx.src.get(id) {
             let sid = name.unwrap().sid();
             
-            if let Some(..) = tyfuns.methods.insert(sid, (idx, item)) {
+            if let Some(..) = tyfuns.methods.insert(sid, item) {
               return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)))
             }
           }

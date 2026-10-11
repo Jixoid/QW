@@ -18,9 +18,10 @@ use crate::{DefPathId, ExprId, ItemId, Layout, PathApi, ThingRng, TypeId, TypeRn
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
   // Generic
-  GenericType{idx: usize},
+  GenericType{generic: ItemId, idx: usize},
   GenericRaw{generic: ItemId, kind: TypeId},
   GenericSelfType,
+  AssociatedType{trait_ty: TypeId, idx: usize},
   
   // Basic
   Error,

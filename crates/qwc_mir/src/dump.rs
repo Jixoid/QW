@@ -326,6 +326,13 @@ impl DumpHandler for Expr {
 
         val.dump(cre, sin, f, indent)?;
       }
+
+      Expr::IntCast { kind, val, signed } => {
+        write!(f, "{} ", kw(if signed { "cast.i" } else { "cast.u" }))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+        val.dump(cre, sin, f, indent)?;
+      }
     
     }
     

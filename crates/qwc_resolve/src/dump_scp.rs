@@ -67,7 +67,7 @@ fn dump(dmp: &Dump, lscp: &Scope, indent: usize, f: &mut fmt::Formatter) -> fmt:
           writeln!(f, "{} {}{}", kw("type"), name(name_str), punct(";"))?;
         }
 
-        ScopeKindAst::TypeParam(..) => {
+        ScopeKindAst::TypeParam(..) | ScopeKindAst::AssocType(..) => {
           write_indent(f, indent)?;
           writeln!(f, "{} {}{}", kw("type_param"), name(name_str), punct(";"))?;
         }

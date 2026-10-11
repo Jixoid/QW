@@ -15,6 +15,7 @@ use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, DefPathId, TypeAttr};
 
+use rustc_hash::FxHashMap;
 use crate::Ctx;
 
 mod fun_p;
@@ -220,12 +221,51 @@ pub struct TypeMatch;
 
 impl TypeMatch {
 
-  pub fn matches(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, ty2_ast: ast::TypeId) -> Result<(), Message> {
+  pub fn matches(
+    ctx: &Ctx,
+    ty1: hir::TypeId,
+    ty2: hir::TypeId,
+    ty2_ast: ast::TypeId,
+    self_ty: Option<hir::TypeId>,
+    assoc_types: Option<&FxHashMap<usize, hir::TypeId>>,
+  ) -> Result<(), Message> {
     if ty1 == ty2 { return Ok(()) }
 
     let ty1_ty = ctx.get(ty1).kind;
     let ty2_ty = ctx.get(ty2).kind;
     let ty2_ast_ty = ctx.src.get(ty2_ast).kind;
+
+    if let Some(self_ty) = self_ty {
+      if ty1_ty == hir::TypeKind::GenericSelfType {
+        if self_ty == ty2 {
+          return Ok(());
+        } else {
+          let ty_pos = ctx.src.get(ty2_ast).pos;
+          return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(ty_pos)));
+        }
+      }
+    }
+
+    if let Some(assoc_types) = assoc_types {
+      if let hir::TypeKind::AssociatedType { idx, .. } = ty1_ty {
+        if let Some(&expected) = assoc_types.get(&idx) {
+          if expected == ty2 {
+            return Ok(());
+          } else {
+            return Self::matches(ctx, expected, ty2, ty2_ast, self_ty, Some(assoc_types));
+          }
+        }
+      }
+      if let hir::TypeKind::AssociatedType { idx, .. } = ty2_ty {
+        if let Some(&expected) = assoc_types.get(&idx) {
+          if ty1 == expected {
+            return Ok(());
+          } else {
+            return Self::matches(ctx, ty1, expected, ty2_ast, self_ty, Some(assoc_types));
+          }
+        }
+      }
+    }
 
     match (ty1_ty, ty2_ty) {
       (hir::TypeKind::Error, _) | (_, hir::TypeKind::Error) => Ok(()),
@@ -234,7 +274,13 @@ impl TypeMatch {
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
         let ast::TypeKind::Ref(t2_ast, _) = ty2_ast_ty else { panic!() };
 
-        Self::matches(ctx, t1, t2, t2_ast)
+        Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
+      }
+
+      (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
+        let ast::TypeKind::Ptr(t2_ast, _) = ty2_ast_ty else { panic!() };
+
+        Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
       }
 
       _ => {
@@ -265,7 +311,14 @@ impl TypeMatch {
   }
 
 
-  pub fn match_fun(ctx: &Ctx, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId) -> Result<(), Message> {
+  pub fn match_fun(
+    ctx: &Ctx,
+    fun1: hir::TypeId,
+    fun2: hir::TypeId,
+    fun2_ast: ast::TypeId,
+    self_ty: Option<hir::TypeId>,
+    assoc_types: Option<&FxHashMap<usize, hir::TypeId>>,
+  ) -> Result<(), Message> {
     let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { panic!() };
     let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { panic!() };
 
@@ -293,7 +346,7 @@ impl TypeMatch {
         match (self_1_ty, self_2_ty) {
           (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
           
-          _ => TypeMatch::matches(ctx, self_1, self_2, self_ast.unwrap())?,
+          _ => TypeMatch::matches(ctx, self_1, self_2, self_ast.unwrap(), self_ty, assoc_types)?,
         }
       }
     }
@@ -318,12 +371,12 @@ impl TypeMatch {
       let hir::Thing::NamedType(_, id_2) = *krate_2.get(id_2) else { unreachable!() };
       let ast::ThingKind::NamedType(_, id_ast) = ctx.src.get(id_ast).kind else { unreachable!() };
 
-      TypeMatch::matches(ctx, id_1, id_2, id_ast)?;
+      TypeMatch::matches(ctx, id_1, id_2, id_ast, self_ty, assoc_types)?;
     }
 
 
     // Ret Match
-    ret_ast.map(|ret_ast| TypeMatch::matches(ctx, ret_1, ret_2, ret_ast)).transpose()?;
+    ret_ast.map(|ret_ast| TypeMatch::matches(ctx, ret_1, ret_2, ret_ast, self_ty, assoc_types)).transpose()?;
     
     Ok(())
   }

@@ -307,7 +307,7 @@ impl Backend {
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Expr(_) | qwc_resolve::ScopeKindAst::GenericExpr(..)) => CompletionItemKind::FUNCTION,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Module(_)) => CompletionItemKind::MODULE,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::Local(_)) => CompletionItemKind::VARIABLE,
-              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::TypeParam(..)) => CompletionItemKind::TYPE_PARAMETER,
+              qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::TypeParam(..) | qwc_resolve::ScopeKindAst::AssocType(..)) => CompletionItemKind::TYPE_PARAMETER,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::ExprParam(..)) => CompletionItemKind::VARIABLE,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Type(_)) => CompletionItemKind::STRUCT,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Expr(_, _)) => CompletionItemKind::FUNCTION,

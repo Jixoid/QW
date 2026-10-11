@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{DefPathId, Krate};
+use qwc_hir::{DefPathId, Deps, Krate};
 use qwc_string_interner::StrInterner;
 
 mod qw;
@@ -18,5 +18,5 @@ pub use qw::ManglerQW;
 
 
 pub trait Mangler {
-  fn new(cre: &Krate, sin: &StrInterner, id: DefPathId) -> String;
+  fn new(cre: &Krate, deps: &Deps, sin: &StrInterner, id: DefPathId) -> String;
 }

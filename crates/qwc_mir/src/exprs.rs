@@ -103,6 +103,7 @@ pub enum Expr {
   IntCondition {op: IntConditionOp, flg2: IntConditionFlg2, kind: TypeId, lhs: Value, rhs: Value},
   IntLogic {op: IntLogicOp, kind: TypeId, lhs: Value, rhs: Value},
   IntUnary {op: IntUnaryOp, kind: TypeId, val: Value},
+  IntCast {kind: TypeId, val: Value, signed: bool},
 }
 
 impl Expr {
@@ -121,6 +122,7 @@ impl Expr {
       Expr::IntCondition{..} => true,
       Expr::IntLogic{..} => true,
       Expr::IntUnary{..} => true,
+      Expr::IntCast{..} => true,
     }
   }
 }

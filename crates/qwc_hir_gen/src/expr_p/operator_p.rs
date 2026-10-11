@@ -12,7 +12,7 @@
 
 use std::assert_matches;
 
-use itertools::{Itertools, izip};
+use itertools::izip;
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_ast::{self as ast, Ident};
@@ -530,11 +530,11 @@ pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, rng: ast::ExprRng) -> Result<hir
       match methods.methods.get(&ident.sid()) {
         None => None,
         
-        Some(&(idx, item)) => {
+        Some(&item) => {
           if let Ok(Some(item)) = ItemLow::low(ctx, item) {
             let hir::ItemKind::Impl{methods, ..} = ctx.cre.get(item).kind else { panic!() };
 
-            let method = ctx.cre.extra_get(methods).collect_vec()[idx];
+            let method = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name == Some(ident.sid())).unwrap();
 
             let hir::ItemKind::Function{kind, ..} = ctx.cre.get(method).kind else { panic!() };
             

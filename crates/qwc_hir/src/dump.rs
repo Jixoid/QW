@@ -17,29 +17,27 @@ use qwc_dump::{attr, kw, lit_bool, lit_num, lit_str, name, op, punct, tmpval, ty
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  AnyId, CID, Const, DefPath, DefPathId, Deps, Expr, ExprId, ExprKind, Item, ItemAttr, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, HirKind, NodeKind, Rng, SpecAny},
+  AnyId, CID, Const, DefPath, DefPathId, Deps, Expr, ExprId, ExprKind, GetApi, Item, ItemAttr, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, HirKind, NodeKind, Rng, SpecAny},
 };
 
 
 #[derive(Clone, Copy)]
 pub struct DumpCtx<'a> {
   pub cre: &'a Krate,
-  pub deps: Option<&'a Deps>,
+  pub deps: &'a Deps,
   pub sin: &'a StrInterner,
 }
 
 impl<'a> DumpCtx<'a> {
-  pub fn new(cre: &'a Krate, deps: Option<&'a Deps>, sin: &'a StrInterner) -> Self {
+  pub fn new(cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner) -> Self {
     Self { cre, deps, sin }
   }
 
-  pub fn get_krate(&self, cid: CID) -> Option<&'a Krate> {
+  pub fn get_krate(&self, cid: CID) -> &'a Krate {
     if cid == self.cre.cid() {
-      Some(self.cre)
-    } else if let Some(deps) = self.deps {
-      Some(deps.get(cid))
+      self.cre
     } else {
-      None
+      self.deps.get(cid)
     }
   }
 
@@ -51,32 +49,12 @@ impl<'a> DumpCtx<'a> {
     }
   }
 
-  pub fn get_type(&self, id: TypeId) -> Option<&'a Type> {
-    self.get_krate(id.cid()).map(|k| k.get(id))
-  }
-
-  pub fn get_item(&self, id: ItemId) -> Option<&'a Item> {
-    self.get_krate(id.cid()).map(|k| k.get(id))
-  }
-
-  pub fn get_expr(&self, id: ExprId) -> Option<&'a Expr> {
-    self.get_krate(id.cid()).map(|k| k.get(id))
-  }
-
-  pub fn get_thing(&self, id: ThingId) -> Option<&'a Thing> {
-    self.get_krate(id.cid()).map(|k| k.get(id))
-  }
-
-  pub fn get_dpath(&self, id: DefPathId) -> Option<&'a DefPath> {
-    self.get_krate(id.cid()).map(|k| k.get(id))
+  pub fn get<T: HirKind + GetApi<T>>(&self, id: HirId<T>) -> &'a T {
+    self.get_krate(id.cid()).get(id)
   }
 
   pub fn extra_get<T: HirKind>(&self, rng: Rng<T>) -> Vec<HirId<T>> {
-    if let Some(krate) = self.get_krate(rng.cid()) {
-      krate.extra_get(rng).collect()
-    } else {
-      vec![]
-    }
+    self.get_krate(rng.cid()).extra_get(rng).collect()
   }
 }
 
@@ -87,17 +65,13 @@ pub trait DumpHandler {
 
 pub struct Dump<'a> {
   pub cre: &'a Krate,
-  pub deps: Option<&'a Deps>,
+  pub deps: &'a Deps,
   pub sin: &'a StrInterner,
 }
 
 impl<'a> Dump<'a> {
-  pub fn new(cre: &'a Krate, sin: &'a StrInterner) -> Self {
-    Self { cre, deps: None, sin }
-  }
-
-  pub fn with_deps(cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner) -> Self {
-    Self { cre, deps: Some(deps), sin }
+  pub fn new(cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner) -> Self {
+    Self { cre, deps, sin }
   }
 }
 
@@ -189,7 +163,7 @@ impl DumpHandler for Item {
       }
 
       ItemKind::GenericNS { rng, args } => {
-        write!(f, "{} ", kw("generic"))?;
+        write!(f, "{}", kw("generic"))?;
         if let Some(name_sid) = self.name {
           write!(f, "{} ", name(ctx.sin.str(name_sid)))?;
         }
@@ -198,21 +172,22 @@ impl DumpHandler for Item {
         for id in ctx.extra_get(args) {
           if !first { write!(f, "{}", punct(", "))?; }
           first = false;
-          let thing = ctx.get_thing(id);
-          match thing {
-            Some(Thing::NamedType(name_sid, kind)) => {
-              write!(f, "{}", name(ctx.sin.str(*name_sid)))?;
+          let thing = ctx.get(id);
+          match *thing {
+            Thing::NamedType(name_sid, kind) => {
+              write!(f, "{}", name(ctx.sin.str(name_sid)))?;
               // Only print bound if it's not the default primitive `type`
-              let is_default_type = ctx.get_type(*kind).map(|t| match t.kind {
+              let t = ctx.get(kind);
+              let is_default_type = match t.kind {
                 TypeKind::GenericSelfType => {
-                  let path_name = ctx.get_krate(t.path.cid()).and_then(|k| match k.get(t.path) {
+                  let path_name = match ctx.get(t.path) {
                     DefPath::Path { name, .. } => Some(ctx.sin.str(*name)),
                     _ => None,
-                  });
+                  };
                   path_name == Some("type")
                 }
                 _ => false,
-              }).unwrap_or(false);
+              };
 
               if !is_default_type {
                 write!(f, "{} ", punct(":"))?;
@@ -283,11 +258,11 @@ impl DumpHandler for Item {
 
       ItemKind::Impl { type_ty, trait_ty, methods } => {
         write!(f, "{} ", kw("impl"))?;
-        type_ty.dump(ctx, f, indent)?;
+        ctx.get(type_ty).path.dump(ctx, f, indent)?;
         
         if let Some(iface) = trait_ty {
           write!(f, " {} ", punct(":"))?;
-          iface.dump(ctx, f, indent)?;
+          ctx.get(iface).path.dump(ctx, f, indent)?;
         }
         
         let methods_list = ctx.extra_get(methods);
@@ -317,12 +292,24 @@ impl DumpHandler for Type {
 
     match self.kind {
       // Generic
-      TypeKind::GenericType{idx} => write!(f, "{}", ty(format!("<{}>", idx)))?,
+      TypeKind::GenericType{generic, idx} => {
+        let it = ctx.get(generic);
+        if let ItemKind::GenericNS { args, .. } = it.kind {
+          let thing = ctx.extra_get(args)[idx];
+          if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
+            write!(f, "{}", ty(ctx.sin.str(name)))?;
+          } else {
+            write!(f, "{}", ty(format!("<{}>", idx)))?;
+          }
+        } else {
+          write!(f, "{}", ty(format!("<{}>", idx)))?;
+        }
+      }
 
       TypeKind::GenericRaw{generic, kind} => {
         write!(f, "{}<", punct("raw_generic"))?;
-        let it = ctx.get_item(generic);
-        if let Some(item) = it && let Some(name_sid) = item.name {
+        let it = ctx.get(generic);
+        if let Some(name_sid) = it.name {
           write!(f, "{}, ", name(ctx.sin.str(name_sid)))?;
         }
         kind.dump(ctx, f, indent)?;
@@ -330,15 +317,34 @@ impl DumpHandler for Type {
       }
 
       TypeKind::GenericSelfType => {
-        let is_type = ctx.get_krate(self.path.cid()).map(|k| match k.get(self.path) {
+        let is_type = match ctx.get(self.path) {
           DefPath::Path { name, .. } => ctx.sin.str(*name) == "type",
           _ => false,
-        }).unwrap_or(false);
+        };
         if is_type {
           write!(f, "{}", ty("type"))?;
         } else {
           write!(f, "{}", ty("Self"))?;
         }
+      }
+
+      TypeKind::AssociatedType{trait_ty, idx} => {
+        let trait_ty = ctx.get(trait_ty);
+        trait_ty.path.dump(ctx, f, indent)?;
+
+        let sub = match trait_ty.kind {
+          TypeKind::Trait(_, types) => {
+            let thing = ctx.extra_get(types)[idx];
+
+            if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
+               ctx.sin.str(name)
+            } else { panic!() }
+          }
+
+          _ => panic!()
+        };
+
+        write!(f, "{}{}", punct("::"), ty(sub))?;
       }
       
       // Basic
@@ -532,10 +538,10 @@ impl DumpHandler for Type {
         let mut first = true;
         if let Some(self_kind) = self_kind {
           first = false;
-          let self_kind_val = ctx.get_type(self_kind);
-          match self_kind_val.map(|t| &t.kind) {
-            Some(TypeKind::Ref(.., false)) => write!(f, "{}", tmpval("&self"))?,
-            Some(TypeKind::Ref(.., true)) => write!(f, "{}", tmpval("&mut self"))?,
+          let self_kind_val = ctx.get(self_kind);
+          match &self_kind_val.kind {
+            TypeKind::Ref(.., false) => write!(f, "{}", tmpval("&self"))?,
+            TypeKind::Ref(.., true) => write!(f, "{}", tmpval("&mut self"))?,
             _ => write!(f, "{}", tmpval("self"))?,
           }
         }
@@ -566,12 +572,24 @@ impl DumpHandler for Type {
 impl DumpHandler for Expr {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match self.kind {
-      ExprKind::GenericExpr => write!(f, "{}", ty("<generic expr>"))?,
+      ExprKind::GenericExpr{generic, idx} => {
+        let it = ctx.get(generic);
+        if let ItemKind::GenericNS { args, .. } = it.kind {
+          let thing = ctx.extra_get(args)[idx];
+          if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
+            write!(f, "{}", ty(ctx.sin.str(name)))?;
+          } else {
+            write!(f, "{}", ty(format!("<generic expr {}>", idx)))?;
+          }
+        } else {
+          write!(f, "{}", ty(format!("<generic expr {}>", idx)))?;
+        }
+      }
 
       ExprKind::GenericRaw{generic, kind} => {
         write!(f, "{}<", punct("raw_generic"))?;
-        let it = ctx.get_item(generic);
-        if let Some(item) = it && let Some(name_sid) = item.name {
+        let it = ctx.get(generic);
+        if let Some(name_sid) = it.name {
           write!(f, "{}, ", name(ctx.sin.str(name_sid)))?;
         }
         kind.dump(ctx, f, indent)?;
@@ -593,16 +611,12 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::GlobalRef(item_id) => {
-        let it = ctx.get_item(item_id);
+        let it = ctx.get(item_id);
         write!(f, "{}", punct("@"))?;
-        if let Some(item) = it {
-          if let Some(name_sid) = item.name {
-            write!(f, "{}", name(ctx.sin.str(name_sid)))?;
-          } else {
-            write!(f, "item_{}", item_id.idx())?;
-          }
+        if let Some(name_sid) = it.name {
+          write!(f, "{}", name(ctx.sin.str(name_sid)))?;
         } else {
-          write!(f, "ext_item_{}_{}", item_id.cid().0.get(), item_id.idx())?;
+          write!(f, "item_{}", item_id.idx())?;
         }
       }
 
@@ -612,9 +626,8 @@ impl DumpHandler for Expr {
 
       ExprKind::Let { local, init } => {
         write!(f, "{} {}{} ", kw("let"), tmpval(format!("_{}", local)), punct(":"))?;
-        if let Some(init_expr) = ctx.get_expr(init) {
-          init_expr.ety.dump(ctx, f, indent)?;
-        }
+        let init_expr = ctx.get(init);
+        init_expr.ety.dump(ctx, f, indent)?;
         write!(f, " {} ", op("="))?;
         init.dump(ctx, f, indent)?;
       }
@@ -628,8 +641,8 @@ impl DumpHandler for Expr {
           for id in stmts {
             write_indent(f, indent + 1)?;
             id.dump(ctx, f, indent + 1)?;
-            let ex = ctx.get_expr(id);
-            if let Some(ex) = ex && matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. } | ExprKind::If { .. }) {
+            let ex = ctx.get(id);
+            if matches!(ex.kind, ExprKind::Block { .. } | ExprKind::Loop { .. } | ExprKind::If { .. }) {
               writeln!(f)?;
             } else {
               writeln!(f, "{}", punct(";"))?;
@@ -822,6 +835,12 @@ impl DumpHandler for Expr {
 
 
       // Cast
+      ExprKind::IntCast(expr) => {
+        expr.dump(ctx, f, indent)?;
+        write!(f, " {} ", kw("as"))?;
+        self.ety.dump(ctx, f, indent)?;
+      }
+
       ExprKind::CastToIfaceRef { ref_of_expr, ref_of_type: _, target_iface } => {
         ref_of_expr.dump(ctx, f, indent)?;
         write!(f, " {} {}", kw("as"), op("&"))?;
@@ -882,12 +901,12 @@ impl DumpHandler for Const {
 impl DumpHandler for DefPath {
   fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
-      DefPath::Root(name_sid) => write!(f, "{}", name(ctx.sin.str(name_sid)))?,
+      DefPath::Root(name_sid) => write!(f, "{}", ty(ctx.sin.str(name_sid)))?,
       
       DefPath::Path{base, name: name_sid} => {
         base.dump(ctx, f, indent)?;
         write!(f, "{}", punct("::"))?;
-        write!(f, "{}", name(ctx.sin.str(name_sid)))?;
+        write!(f, "{}", ty(ctx.sin.str(name_sid)))?;
       }
 
       DefPath::Impl{base, spec} => {
@@ -957,13 +976,10 @@ macro_rules! impl_dump_id {
   ($id_ty:ident, $node_ty:ident) => {
     impl DumpHandler for $id_ty {
       fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-        if let Some(krate) = ctx.get_krate(self.cid()) {
-          let node: &$node_ty = krate.get(*self);
-          let sub_ctx = ctx.with_krate(krate);
-          node.dump(&sub_ctx, f, indent)
-        } else {
-          write!(f, "<external {} {:?}>", stringify!($node_ty), self.cid())
-        }
+        let krate = ctx.get_krate(self.cid());
+        let node: &$node_ty = ctx.get(*self);
+        let sub_ctx = ctx.with_krate(krate);
+        node.dump(&sub_ctx, f, indent)
       }
     }
   };

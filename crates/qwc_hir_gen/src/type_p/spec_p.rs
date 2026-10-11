@@ -51,7 +51,7 @@ pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: as
 
 
   // Specialize
-  let spec = Specialization{args: &received_args}.spec_type(ctx, kind);
+  let spec = Specialization{generic, args: &received_args}.spec_type(ctx, kind);
 
   Ok(spec)
 }

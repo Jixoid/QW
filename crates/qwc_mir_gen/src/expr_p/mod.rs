@@ -82,6 +82,17 @@ impl ExprLow {
       BoolNot(val) => Some(Self::low_bool_not(ctx, bbld, val)?),
 
       // Cast
+      IntCast(expr) => {
+        let val = Self::low(ctx, bbld, expr)?.unwrap();
+        let target_ty = TypeLow::low(ctx, it.ety)?;
+        let src_ty = ctx.src.get(expr).ety;
+        let is_signed = match ctx.get_type(src_ty).kind {
+          hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
+          _ => false,
+        };
+        let res = bbld.emit(mir::Expr::IntCast { kind: target_ty, val, signed: is_signed });
+        Some(res.unwrap().into())
+      }
       CastToIfaceRef{ref_of_expr, ref_of_type, target_iface} => Some(cast_p::low_cast_to_iface_ref(ctx, bbld, ref_of_expr, ref_of_type, target_iface)?),
       CastToTrait{expr, target_trait} => cast_p::low_cast_to_trait(ctx, bbld, expr, target_trait)?,
 

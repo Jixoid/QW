@@ -11,7 +11,7 @@
 
 
 use qwc_arena::Files;
-use qwc_ast::{AnyId, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind, Visitor};
+use qwc_ast::{AnyId, FieldKind, FieldRng, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind, Visitor};
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
@@ -76,7 +76,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
         
         ItemKind::Let{..} | ItemKind::Fun{..} | ItemKind::Task{..} => ScopeKindAst::Expr(id),
         
-        ItemKind::Using(kind) | ItemKind::ItemTy(kind) => ScopeKindAst::Type(kind),
+        ItemKind::Using(..) | ItemKind::ItemTy(..) => ScopeKindAst::Type(id),
 
         // Record Impl
         ItemKind::Impl{..} => {
@@ -138,11 +138,12 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
     // Generic parametreleri varsa onları da mevcut kapsama ekle
     if let Some(params) = self.get_generic_params(container_id) {
+      let generic_id = ItemId::from_any(container_id);
       for (idx, &param_id) in params.iter().enumerate() {
 
         match self.cre.get(param_id).kind {
           ThingKind::Name(name) => {
-            let it = ScopeKindAst::TypeParam(idx, param_id);
+            let it = ScopeKindAst::TypeParam(generic_id, idx, param_id);
 
             current_scope.insert(name, it, &mut self.sum);
           }
@@ -151,8 +152,8 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
             let ty_obj = self.cre.get(kind);
 
             let it = match ty_obj.kind {
-              TypeKind::Type => ScopeKindAst::TypeParam(idx, param_id),
-              _ => ScopeKindAst::ExprParam(idx, param_id),
+              TypeKind::Type => ScopeKindAst::TypeParam(generic_id, idx, param_id),
+              _ => ScopeKindAst::ExprParam(generic_id, idx, param_id),
             };
 
             current_scope.insert(name, it, &mut self.sum);
@@ -174,11 +175,68 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
           // Bir alt kapsayıcıya geçerken ebeveyn olarak mevcut container_id'yi ver
           self.process_container(id.to_any(), Some(container_id));
         }
+
+        ItemKind::Impl { ctn, .. } => {
+          self.process_impl(id, ctn, container_id);
+        }
+
+        ItemKind::ItemTy(kind) => {
+          if let TypeKind::Trait(rng) | TypeKind::Iface(rng) = self.cre.get(kind).kind  {
+            self.process_trait(id, rng, container_id);
+          }
+        }
         
         _ => {}
       }
     }
 
+  }
+
+
+  fn process_trait(&mut self, trait_item: ItemId, rng: FieldRng, parent_container: AnyId) {
+    let mut trait_scope = Scope::new(Some(parent_container));
+    let mut assoc_idx = 0;
+    for field_id in self.cre.extra_get(rng) {
+      let field = self.cre.get(field_id);
+      match field.kind {
+        FieldKind::Type(..) => {
+          if let Some(name) = field.name {
+            trait_scope.insert(name, ScopeKindAst::AssocType(assoc_idx, field_id), &mut self.sum);
+            assoc_idx += 1;
+          }
+        }
+        FieldKind::Fun{..} => {
+          if let Some(name) = field.name {
+            trait_scope.insert(name, ScopeKindAst::Expr(trait_item), &mut self.sum);
+          }
+        }
+        _ => {}
+      }
+    }
+    self.scp.map.insert(trait_item.to_any(), trait_scope);
+  }
+
+  fn process_impl(&mut self, impl_item: ItemId, ctn: FieldRng, parent_container: AnyId) {
+    let mut impl_scope = Scope::new(Some(parent_container));
+    let mut assoc_idx = 0;
+    for field_id in self.cre.extra_get(ctn) {
+      let field = self.cre.get(field_id);
+      match field.kind {
+        FieldKind::Type(..) => {
+          if let Some(name) = field.name {
+            impl_scope.insert(name, ScopeKindAst::AssocType(assoc_idx, field_id), &mut self.sum);
+            assoc_idx += 1;
+          }
+        }
+        FieldKind::Fun { .. } => {
+          if let Some(name) = field.name {
+            impl_scope.insert(name, ScopeKindAst::Expr(impl_item), &mut self.sum);
+          }
+        }
+        _ => {}
+      }
+    }
+    self.scp.map.insert(impl_item.to_any(), impl_scope);
   }
   
 

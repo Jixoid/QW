@@ -65,11 +65,11 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast:
   // Specialize
   match kind_target {
     KindTarget::Expr(kind) => {
-      let spec = Specialization{args: &received_args}.spec_expr(ctx, kind);
+      let spec = Specialization{generic, args: &received_args}.spec_expr(ctx, kind);
       Ok(spec)
     }
     KindTarget::Type(kind) => {
-      let spec = Specialization{args: &received_args}.spec_type(ctx, kind);
+      let spec = Specialization{generic, args: &received_args}.spec_type(ctx, kind);
       let this = hir::Expr {
         kind: hir::ExprKind::TypeOf { kind: spec },
         category: hir::ExprCategory::RValue,

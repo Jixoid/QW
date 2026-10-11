@@ -43,18 +43,44 @@ pub fn low_path(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message
 fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: Span) -> Result<hir::TypeId, Message> {
   let ty = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
-      resolve::ScopeKindAst::Type(ty) => TypeLow::low(ctx!(lscp -> ctx), ty)?,
+      resolve::ScopeKindAst::Type(item) => {
+        let item = ItemLow::low(ctx!(lscp -> ctx), item)?.unwrap();
+        let hir::ItemKind::Using { kind } = ctx.get(item).kind else { unreachable!() };
+        kind
+      }
 
-      resolve::ScopeKindAst::TypeParam(idx, thing) => {
-        match ctx.src.get(thing).kind {
-          ast::ThingKind::NamedType(_, ty) => TypeLow::low(ctx!(lscp -> ctx), ty)?,
+      resolve::ScopeKindAst::TypeParam(generic, idx, thing) => {
+        let name = match ctx.src.get(thing).kind {
+          ast::ThingKind::Name(name) => name,
+          ast::ThingKind::NamedType(name, _) => name,
+          _ => panic!(),
+        };
 
-          ast::ThingKind::Name(name) => {
-            let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name: name.sid() });
-            ctx.tin.ty_generic_type(ctx.cre, path, idx)
+        let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
+        let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name: name.sid() });
+        ctx.tin.ty_generic_type(ctx.cre, path, generic_hir, idx)
+      }
+
+      resolve::ScopeKindAst::AssocType(idx, field) => {
+        let field_obj = ctx.src.get(field);
+        match field_obj.kind {
+          ast::FieldKind::Type(Some(ty)) => {
+            TypeLow::low(ctx!(lscp -> ctx), ty)?
           }
 
-          _ => panic!()
+          ast::FieldKind::Type(None) => {
+            let trait_ty = *ctx.cmap.current_trait.last().expect("associated type outside trait");
+            let name = field_obj.name.unwrap().sid();
+            let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+            hir::Type {
+              kind: hir::TypeKind::AssociatedType { trait_ty, idx },
+              layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+              attr: TypeAttr::empty(),
+              path,
+            }.push(ctx.cre)
+          }
+
+          _ => unreachable!(),
         }
       }
 
@@ -72,7 +98,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "module"]), Label::new_pos(span)))
       }
 
-      resolve::ScopeKindAst::ExprParam(_, thing) => {
+      resolve::ScopeKindAst::ExprParam(.., thing) => {
         let span = ctx.src.get(thing).pos;
 
         return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
@@ -81,8 +107,12 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
       resolve::ScopeKindAst::GenericType(generic, kind) => {
         let generic_item = ItemLow::low(ctx, generic)?.unwrap();
         let path = ctx.get(generic_item).path;
+        let kind = match ctx.cmap.cache_type.get(&kind) {
+          Some(&cached) => cached,
+          None => TypeLow::low(ctx, kind)?,
+        };
         hir::Type {
-          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind: TypeLow::low(ctx, kind)? },
+          kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::new_meta(hir::LayoutBy::QW),
           path,
