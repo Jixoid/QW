@@ -13,14 +13,14 @@
 use crate::{BlokId, InstRng, Value};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Block {
   pub insts: InstRng,
   pub term: Terminator,
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Terminator {
   Jump(BlokId),
   Branch{cond: Value, then_bb: BlokId, else_bb: BlokId},

@@ -110,8 +110,18 @@ impl ExprLow {
     let this = match val {
       Unit => mir::Const::Unit.into(),
       Bool(b) => mir::Const::Bool(b).into(),
-      Int(i) => mir::Const::Int(i).into(),
-
+      
+      I8(i, _) => mir::Const::I8(i).into(),
+      I16(i, _) => mir::Const::I16(i).into(),
+      I32(i, _) => mir::Const::I32(i).into(),
+      I64(i, _) => mir::Const::I64(i).into(),
+      I128(i, _) => mir::Const::I128(i).into(),
+      
+      F16(fp) => mir::Const::F16(fp).into(),
+      F32(fp) => mir::Const::F32(fp).into(),
+      F64(fp) => mir::Const::F64(fp).into(),
+      F128(fp) => mir::Const::F128(fp).into(),
+      
       Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
     };
 
@@ -128,7 +138,7 @@ impl ExprLow {
     let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 0 }).unwrap();
     bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr, value: mir::Const::Str(sid).into() });
     let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 1 }).unwrap();
-    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::Int(ctx.sin.str(sid).len() as i32 -1).into() });
+    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::I32(ctx.sin.str(sid).len() as i32 -1).into() });
 
     let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
     

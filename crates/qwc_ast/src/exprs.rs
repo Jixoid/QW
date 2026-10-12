@@ -53,6 +53,7 @@ pub enum ExprKind {
   Unit,
   Bool   (Span, bool),
   Number (Span),
+  Float  (Span),
   String (Span, Sid),
   
   // Intrinsic

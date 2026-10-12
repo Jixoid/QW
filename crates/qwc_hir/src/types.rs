@@ -15,7 +15,7 @@ use bitflags::bitflags;
 use crate::{DefPathId, ExprId, ItemId, Layout, PathApi, ThingRng, TypeId, TypeRng};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TypeKind {
   // Generic
   GenericType{generic: ItemId, idx: usize},
@@ -81,7 +81,7 @@ bitflags! {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Type {
   pub kind: TypeKind,
   pub layout: Layout,

@@ -15,7 +15,7 @@ use qwc_string_interner::Sid;
 use crate::{Const, ExprId, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Thing {
   Name(Sid),
   

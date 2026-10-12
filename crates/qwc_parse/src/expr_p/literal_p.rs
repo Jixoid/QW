@@ -96,6 +96,18 @@ pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
   Ok(cre.push(this))
 }
 
+pub fn pre_number_point(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get()?;
+
+  // Post
+  let this = Expr {
+    pos: lex.pos_extend(start),
+    kind: ExprKind::Float(start.into()),
+  };
+
+  Ok(cre.push(this))
+}
+
 pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
   let sid = start.string_sid(sin, far)?;

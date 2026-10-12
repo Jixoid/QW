@@ -150,6 +150,7 @@ impl Krate {
 pub trait IdentSave {
   fn ident(self, sin: &mut StrInterner, far: &Files) -> Result<Ident, Message>;
   fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message>;
+  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message>;
 }
 
 impl IdentSave for Word {
@@ -177,6 +178,16 @@ impl IdentSave for Word {
     };
 
     let sid = sin.sid(&str);
+
+    Ok(sid)
+  }
+
+  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message> {
+    let (off, len, fid, _) = self.to();
+    
+    let str = str::from_utf8(&far.get(fid).map()[(off as usize)..((off as usize)+(len.get() as usize))]).unwrap();
+
+    let sid = sin.sid(str);
 
     Ok(sid)
   }

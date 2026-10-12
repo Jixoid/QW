@@ -890,8 +890,24 @@ impl DumpHandler for Const {
     match *self {
       Const::Unit => write!(f, "{}", punct("()"))?,
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
-      Const::Int(i) => write!(f, "{}", lit_num(i))?,
       Const::Str(s) => write!(f, "{}", lit_str(format!("\"{}\"", ctx.sin.str(s))))?,
+      
+      Const::I8(i, false) => write!(f, "{}{}{}{}", punct("{u8}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I16(i, false) => write!(f, "{}{}{}{}", punct("{u16}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I32(i, false) => write!(f, "{}{}{}{}", punct("{u32}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I64(i, false) => write!(f, "{}{}{}{}", punct("{u64}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I128(i, false) => write!(f, "{}{}{}{}", punct("{u128}"), punct("("), lit_num(i), punct(")"))?,
+
+      Const::I8(i, true) => write!(f, "{}{}{}{}", punct("{i8}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I16(i, true) => write!(f, "{}{}{}{}", punct("{i16}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I32(i, true) => write!(f, "{}{}{}{}", punct("{i32}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I64(i, true) => write!(f, "{}{}{}{}", punct("{i64}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I128(i, true) => write!(f, "{}{}{}{}", punct("{i128}"), punct("("), lit_num(i), punct(")"))?,
+
+      Const::F16(fp) => write!(f, "{}{}{}{}", punct("{f16}"), punct("("), lit_num(fp), punct(")"))?,
+      Const::F32(fp) => write!(f, "{}{}{}{}", punct("{f32}"), punct("("), lit_num(fp), punct(")"))?,
+      Const::F64(fp) => write!(f, "{}{}{}{}", punct("{f64}"), punct("("), lit_num(fp), punct(")"))?,
+      Const::F128(fp) => write!(f, "{}{}{}{}", punct("{f128"), punct("}("), lit_num(fp), punct(")"))?,
     }
 
     Ok(())

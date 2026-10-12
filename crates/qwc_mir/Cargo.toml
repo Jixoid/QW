@@ -8,3 +8,4 @@ owo-colors = "4.4.0"
 qwc_arena = { path = "../qwc_arena" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_dump = { path = "../qwc_dump" }
+rustc_apfloat = "0.2.3"

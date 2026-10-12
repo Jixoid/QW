@@ -91,7 +91,7 @@ pub type DefPathId = HirId<DefPath>;
 
 
 // Rng
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub struct Rng<T>
   where T: HirKind
 {
@@ -132,6 +132,22 @@ pub type ExprRng  = Rng<Expr>;
 pub type ItemRng  = Rng<Item>;
 pub type ThingRng = Rng<Thing>;
 pub type DefPathRng = Rng<DefPath>;
+
+impl<T: HirKind> PartialEq for Rng<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.cid == other.cid && self.start == other.start && self.end == other.end
+  }
+}
+
+impl<T: HirKind> Eq for Rng<T> {}
+
+impl<T: HirKind> std::hash::Hash for Rng<T> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    self.cid.hash(state);
+    self.start.hash(state);
+    self.end.hash(state);
+  }
+}
 
 
 

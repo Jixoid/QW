@@ -585,11 +585,7 @@ impl DumpHandler for Expr {
         write!(f, "()")?;
       }
 
-      ExprKind::Bool(span, ..) => {
-        write!(f, "{}", span.str(far).yellow())?;
-      }
-
-      ExprKind::Number(span) => {
+      ExprKind::Bool(span, ..) | ExprKind::Number(span) | ExprKind::Float(span) => {
         write!(f, "{}", span.str(far).yellow())?;
       }
 

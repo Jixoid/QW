@@ -11,6 +11,7 @@
 
 
 use qwc_string_interner::Sid;
+use rustc_apfloat::ieee;
 
 use crate::{SymbId, TypeId, ValueRng};
 
@@ -29,7 +30,7 @@ impl SSA {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Value {
   SSA(SSA),
   Const(Const),
@@ -47,15 +48,24 @@ impl Into<Value> for Const {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Const {
   Unit,
   
   Bool(bool),
-  Int(i32),
   Str(Sid),
+  
+  I8(i8),
+  I16(i16),
+  I32(i32),
+  I64(i64),
+  I128(i128),
+  
+  F16(ieee::Half),
+  F32(ieee::Single),
+  F64(ieee::Double),
+  F128(ieee::Quad),
 }
-
 
 
 
@@ -88,7 +98,7 @@ pub enum IntUnaryOp { Not }
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Expr {
   Alloca {kind: TypeId},
   
@@ -128,7 +138,7 @@ impl Expr {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Inst {
   pub kind: Expr,
   pub dest: Option<SSA>,

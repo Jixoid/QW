@@ -11,20 +11,34 @@
 
 
 use qwc_string_interner::Sid;
+use rustc_apfloat::ieee;
 
 use crate::{ExprId, ExprRng, ItemId, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Const {
   // ZST
   Unit,
 
   // Primitive
   Bool(bool),
-  Int(i32),
   Str(Sid),
+  
+  // Integer
+  I8(i8, bool),
+  I16(i16, bool),
+  I32(i32, bool),
+  I64(i64, bool),
+  I128(i128, bool),
+
+  // Float
+  F16(ieee::Half),
+  F32(ieee::Single),
+  F64(ieee::Double),
+  F128(ieee::Quad),
 }
+
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -57,7 +71,7 @@ pub enum BoolLogicOp {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ExprKind {
   GenericExpr{generic: ItemId, idx: usize},
   GenericRaw{generic: ItemId, kind: ExprId},
@@ -149,7 +163,7 @@ impl ExprCategory {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Expr {
   pub kind: ExprKind,
   

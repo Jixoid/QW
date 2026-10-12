@@ -64,6 +64,7 @@ impl ExprParser {
       WK::True | WK::False => literal_p::pre_bool(ctx)?,
       WK::Number => literal_p::pre_number(ctx)?,
       WK::String => literal_p::pre_string(ctx)?,
+      WK::NumberPoint => literal_p::pre_number_point(ctx)?,
 
       WK::ParenL   => literal_p::pre_tuple(ctx)?,
       WK::BracketL => literal_p::pre_propagate(ctx)?,

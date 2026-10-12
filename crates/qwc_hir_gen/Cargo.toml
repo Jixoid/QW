@@ -12,3 +12,4 @@ qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_resolve = { path = "../qwc_resolve" }
 rustc-hash = "2.1.3"
 itertools = "0.15.0"
+rustc_apfloat = "0.2.3"

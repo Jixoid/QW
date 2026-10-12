@@ -13,7 +13,7 @@
 use crate::{BlokId, BlokRng, SymbRng, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SymbolKind {
   Variable{ism: bool},
   Function{
@@ -28,7 +28,7 @@ pub enum SymbolKind {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SymbolStat {
   Private, // Private, only in module
   Internal, // Inter-Modules
@@ -37,7 +37,7 @@ pub enum SymbolStat {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Symbol {
   pub name: u32,
   pub kind: SymbolKind,

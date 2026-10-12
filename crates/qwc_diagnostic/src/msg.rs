@@ -47,6 +47,8 @@ pub const UNREACHABLE_STATEMENT:                            CodedMsg = CodedMsg:
 pub const TYPE_NOT_SPECIFIED:                               CodedMsg = CodedMsg::new(0x001e, "type not specified");
 pub const ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY:            CodedMsg = CodedMsg::new(0x001f, "associated function in `{}` without body");
 pub const AMBIGUOUS_METHOD_CALL:                            CodedMsg = CodedMsg::new(0x0020, "ambiguous method call");
+pub const CANNOT_CONVERT_TO_FLOAT:                          CodedMsg = CodedMsg::new(0x0021, "cannot convert to float");
+pub const INVALID_SUFFIX_X_FOR_X_LITERAL:                   CodedMsg = CodedMsg::new(0x0022, "invalid suffix `{}` for {} literal");
 
 
 // Non Coded Messages

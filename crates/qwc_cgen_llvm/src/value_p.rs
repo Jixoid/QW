@@ -12,6 +12,7 @@
 
 use inkwell::values::{AnyValue, AnyValueEnum, BasicValue, BasicValueEnum};
 use qwc_mir::{Const, Value};
+use rustc_apfloat::Float;
 
 use crate::{FunCtx, cgen::{CtxI, CtxM, SymbolVal}};
 
@@ -31,8 +32,45 @@ impl ValueLow {
       Value::Const(c) => match *c {
         Const::Unit => ictx.ctx.const_struct(&[], false).into(),
         Const::Bool(b) => ictx.ctx.bool_type().const_int(if b { 1 } else { 0 }, false).into(),
-        Const::Int(i) => ictx.ctx.i32_type().const_int(i as u64, true).into(),
+        
         Const::Str(s) => ictx.ctx.const_string(ictx.sin.str(s).as_bytes(), false).into(),
+        
+        Const::I8(i) => ictx.ctx.i8_type().const_int(i as u64, true).into(),
+        Const::I16(i) => ictx.ctx.i16_type().const_int(i as u64, true).into(),
+        Const::I32(i) => ictx.ctx.i32_type().const_int(i as u64, true).into(),
+        Const::I64(i) => ictx.ctx.i64_type().const_int(i as u64, true).into(),
+        Const::I128(i) => ictx.ctx.i128_type().const_int_arbitrary_precision(&[i as u64, (i >> 64) as u64]).into(),
+        
+        
+        Const::F16(fp) => ictx.builder.build_bit_cast(
+          ictx.ctx.i16_type().const_int(fp.to_bits() as u16 as u64, false),
+          ictx.ctx.f16_type(),
+          ""
+        ).unwrap(),
+        
+        Const::F32(fp) => ictx.builder.build_bit_cast(
+          ictx.ctx.i32_type().const_int(fp.to_bits() as u32 as u64, false),
+          ictx.ctx.f32_type(),
+          ""
+        ).unwrap(),
+        
+        Const::F64(fp) => ictx.builder.build_bit_cast(
+          ictx.ctx.i64_type().const_int(fp.to_bits() as u64, false),
+          ictx.ctx.f64_type(),
+          ""
+        ).unwrap(),
+        
+        Const::F128(fp) => {
+          let bits = fp.to_bits();
+
+          let (l,h) = (bits as u64, (bits >> 64) as u64);
+
+          ictx.builder.build_bit_cast(
+            ictx.ctx.i128_type().const_int_arbitrary_precision(&[l,h]),
+            ictx.ctx.i128_type(),
+            ""
+          ).unwrap()
+        }
       },
 
       Value::GlobalRef(symb) => match uctx.symbols.get(symb).unwrap_or_else(|| {
