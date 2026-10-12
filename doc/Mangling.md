@@ -9,8 +9,8 @@ This document defines the symbol naming conventions and Application Binary Inter
 All symbols produced by the QW compiler must be 100% compatible with standard operating system linkers (GNU `ld`, LLVM `lld`, and MSVC `link.exe`).
 
 ### Character Set Rules
-Symbols may only contain the following characters:
-- **Alphabetic:** `A-Z`, `a-z`
+Symbols may contain:
+- **Alphabetic & Identifier Characters:** `A-Z`, `a-z`, and valid UTF-8 identifier characters conforming to Unicode Standard Annex #31 (`XID_Start` / `XID_Continue`)
 - **Numeric:** `0-9`
 - **Linker-Safe Delimiters:** `_` (underscore), `$` (dollar sign), `@` (at sign)
 
@@ -98,7 +98,9 @@ For full signature-based type safety, method overloading, and template specializ
 <fixed-array>       ::= "A" <length> "_"
 
 <length>            ::= [0-9]+
-<identifier>        ::= [A-Za-z0-9_]+
+<identifier>        ::= <ident-start> <ident-continue>*
+<ident-start>       ::= [A-Za-z_] | <xid-start>
+<ident-continue>    ::= [A-Za-z0-9_] | <xid-continue>
 ```
 
 ### 3.1 Type Encoding Table

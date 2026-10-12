@@ -855,9 +855,7 @@ dependencies = [
  "qwc_arena",
  "qwc_dump",
  "qwc_string_interner",
- "rustc-hash",
  "serde",
- "thin-vec",
 ]
 
 [[package]]
@@ -867,10 +865,8 @@ dependencies = [
  "itertools",
  "qwc_arena",
  "qwc_ast",
- "qwc_comptime",
  "qwc_diagnostic",
  "qwc_hir",
- "qwc_mangling",
  "qwc_resolve",
  "qwc_string_interner",
  "rustc-hash",
@@ -891,6 +887,7 @@ version = "0.1.0"
 dependencies = [
  "qwc_arena",
  "qwc_diagnostic",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -924,22 +921,16 @@ dependencies = [
 name = "qwc_mir"
 version = "0.1.0"
 dependencies = [
- "bitflags 2.13.2",
  "owo-colors",
  "qwc_arena",
- "qwc_diagnostic",
  "qwc_dump",
- "qwc_lexer",
  "qwc_string_interner",
- "rustc-hash",
- "thin-vec",
 ]
 
 [[package]]
 name = "qwc_mir_gen"
 version = "0.1.0"
 dependencies = [
- "qwc_comptime",
  "qwc_diagnostic",
  "qwc_hir",
  "qwc_mangling",

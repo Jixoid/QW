@@ -14,6 +14,7 @@
 pub enum WK {
   // Bases
   Number,
+  NumberPoint,
   String,
   Word,
   Unknown,

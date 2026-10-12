@@ -9,3 +9,4 @@ ast-internal = []
 [dependencies]
 qwc_diagnostic = { path = "../qwc_diagnostic", features = ["lexer-internal"] }
 qwc_arena = { path = "../qwc_arena" }
+unicode-ident = "1.0"

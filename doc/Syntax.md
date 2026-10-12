@@ -20,7 +20,9 @@ Keyword        <- Pub / Priv / Prot / Crate / Super / Mut
                 / Unsafe / Relaxed / True / False / Undef / Unreachable
                 / SelfB / SelfS / TypeKwd
 
-Identifier     <- !Keyword [a-zA-Z_] [a-zA-Z0-9_]* Spacing
+IdentStart     <- [a-zA-Z_] / XID_Start
+IdentContinue  <- [a-zA-Z0-9_] / XID_Continue
+Identifier     <- !Keyword IdentStart IdentContinue* Spacing
 IntegerLiteral <- [0-9]+ ('.' [0-9]+)? Spacing
 StringLiteral  <- '"' (!'"' ('\\' . / .))* '"' Spacing
 CharLiteral    <- '\'' (!'\'' ('\\' . / .))* '\'' Spacing

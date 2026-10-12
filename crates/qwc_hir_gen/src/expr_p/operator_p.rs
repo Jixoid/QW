@@ -20,7 +20,7 @@ use qwc_string_interner::Sid;
 use rustc_hash::FxHashMap;
 
 use super::helper;
-use crate::{Ctx, ExprLow, ItemLow, TypeMatch, expr_p::const_p, FunCtx};
+use crate::{Ctx, ExprLow, TypeMatch, expr_p::const_p, FunCtx, Infer};
 
 
 // Unary
@@ -311,8 +311,25 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
     Some(this)
   } else { None };
   
-  let callee_ety = ctx.cre.get(callee).ety;
   err_bypass!(ctx, callee);
+
+  if let Some(this) = this {
+    err_bypass!(ctx, this);
+  }
+
+  let mut user_args = Vec::with_capacity(args.count() as usize);
+  for id in ctx.src.extra_get(args) {
+    let id = ExprLow::low(ctx, fctx, id)?;
+    err_bypass!(ctx, id);
+    user_args.push(id);
+  }
+
+  // Target Function Selection via Infer
+  if let Some(this) = this {
+    callee = Infer::resolve_method(ctx, this, callee, &user_args, it.pos)?;
+  }
+
+  let callee_ety = ctx.cre.get(callee).ety;
 
   let hir::TypeKind::Fun{self_kind, args: trait_args, ret: trait_ret} = ctx.get(callee_ety).kind else {
     return Err(Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", "core::ops::Call", &ctx.type_name(callee_ety)]), Label::new_pos(it.pos)))
@@ -347,17 +364,13 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
       vec.push(this);
     }
 
-    for id in ctx.src.extra_get(args) {
-      let id = ExprLow::low(ctx, fctx, id)?;
-
-      vec.push(id);
-    }
+    vec.extend(&user_args);
 
     ctx.cre.extra(&vec)
   };
 
 
-  let args_ct = args.count();
+  let args_ct = user_args.len() as u32;
 
   let trait_ct = if explicit_self {trait_args.count()+1} else {trait_args.count()};
 
@@ -379,13 +392,29 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
     )
   }
 
-  for (supp_hir, supp_ast, trt) in izip!(ctx.cre.extra_get(args_hir), ctx.src.extra_get(args), ctx.extra_get(trait_args)) {
-    let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { panic!() };
-    
-    let supp_pos = ctx.src.get(supp_ast).pos;
-    let supp_ty = ctx.cre.get(supp_hir).ety;
+  if explicit_self {
+    let self_arg = user_args[0];
+    let self_pos = ctx.src.get(ctx.src.extra_get(args).next().unwrap()).pos;
+    let self_ty = ctx.cre.get(self_arg).ety;
+    TypeMatch::matches_pos(ctx, self_kind.unwrap(), self_ty, self_pos)?;
 
-    TypeMatch::matches_pos(ctx, trt_ty, supp_ty, supp_pos)?;
+    for (&supp_hir, supp_ast, trt) in izip!(&user_args[1..], ctx.src.extra_get(args).skip(1), ctx.extra_get(trait_args)) {
+      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { panic!() };
+      
+      let supp_pos = ctx.src.get(supp_ast).pos;
+      let supp_ty = ctx.cre.get(supp_hir).ety;
+
+      TypeMatch::matches_pos(ctx, trt_ty, supp_ty, supp_pos)?;
+    }
+  } else {
+    for (&supp_hir, supp_ast, trt) in izip!(&user_args, ctx.src.extra_get(args), ctx.extra_get(trait_args)) {
+      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { panic!() };
+      
+      let supp_pos = ctx.src.get(supp_ast).pos;
+      let supp_ty = ctx.cre.get(supp_hir).ety;
+
+      TypeMatch::matches_pos(ctx, trt_ty, supp_ty, supp_pos)?;
+    }
   }
 
 
@@ -526,42 +555,7 @@ pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, rng: ast::ExprRng) -> Result<hir
 
 
     // Impl Search
-    let isearch = if let Some(methods) = ctx.type_impls.get(&ctx.cre.get(current_id).ety) {
-      match methods.methods.get(&ident.sid()) {
-        None => None,
-        
-        Some(&item) => {
-          if let Ok(Some(item)) = ItemLow::low(ctx, item) {
-            let hir::ItemKind::Impl{methods, ..} = ctx.cre.get(item).kind else { panic!() };
-
-            let method = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name == Some(ident.sid())).unwrap();
-
-            let hir::ItemKind::Function{kind, ..} = ctx.cre.get(method).kind else { panic!() };
-            
-            let callee = hir::Expr {
-              kind: hir::ExprKind::GlobalRef(method),
-              category: ExprCategory::RValue,
-              ety: kind,
-            }.push(ctx.cre);
-
-            Some(hir::Expr {
-              kind: hir::ExprKind::BoundSelfMethod {
-                callee,
-                this: current_id,
-              },
-              category: ExprCategory::RValue,
-              ety: ctx.prims.ty_unit
-            }.push(ctx.cre))
-          } else {
-            Some(hir::Expr {
-              kind: hir::ExprKind::Error,
-              category: ExprCategory::RValue,
-              ety: ctx.prims.ty_error,
-            }.push(ctx.cre))
-          }
-        }
-      }
-    } else { None };
+    let isearch = Infer::lookup_method(ctx, current_id, ident.sid());
 
     if let Some(chain) = isearch {
       current_id = chain; continue;

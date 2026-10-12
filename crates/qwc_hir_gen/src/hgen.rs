@@ -42,7 +42,8 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
 
 pub struct TypeMethods {
   pub traits: FxHashSet<hir::TypeId>,
-  pub methods: FxHashMap<Sid, ast::ItemId>,
+  pub inherent_methods: FxHashSet<Sid>,
+  pub methods: FxHashMap<Sid, Vec<ast::ItemId>>,
 }
 
 
@@ -277,6 +278,7 @@ impl<'ast, 'hir, 'imod> HGen {
         Err(err) => { ctx.sum.add(err); continue },
       };
       
+      let trait_span = trait_ty.map(|id| ctx.src.get(id).pos);
       let trait_ty = match trait_ty.map(|id| TypeLow::low(ctx, id)).transpose() {
         Ok(v) => v,
         Err(err) => { ctx.sum.add(err); continue },
@@ -285,14 +287,25 @@ impl<'ast, 'hir, 'imod> HGen {
 
       // Reg
       let reg = |tyfuns: &mut TypeMethods| -> Result<(), Message> {
-        if let Some(trait_ty) = trait_ty { tyfuns.traits.insert(trait_ty); }
+        if let Some(trait_ty) = trait_ty {
+          if !tyfuns.traits.insert(trait_ty) {
+            return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(trait_span.unwrap())));
+          }
+        }
         
         for id in ctx.src.extra_get(fields) {
           if let ast::Field{kind: ast::FieldKind::Fun{..}, pos, name, ..} = ctx.src.get(id) {
             let sid = name.unwrap().sid();
+
+            if trait_ty.is_none() {
+              if !tyfuns.inherent_methods.insert(sid) {
+                return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)));
+              }
+            }
             
-            if let Some(..) = tyfuns.methods.insert(sid, item) {
-              return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)))
+            let list = tyfuns.methods.entry(sid).or_default();
+            if !list.contains(&item) {
+              list.push(item);
             }
           }
         }
@@ -312,6 +325,7 @@ impl<'ast, 'hir, 'imod> HGen {
         Vacant(entry) => {
           let tyfuns = TypeMethods {
             traits: FxHashSet::default(),
+            inherent_methods: FxHashSet::default(),
             methods: FxHashMap::default(),
           };
           

@@ -46,6 +46,7 @@ pub const USE_ASSOCIATED_FUNCTION_SYNTAX_INSTEAD:           CodedMsg = CodedMsg:
 pub const UNREACHABLE_STATEMENT:                            CodedMsg = CodedMsg::new(0x001d, "unreachable statement");
 pub const TYPE_NOT_SPECIFIED:                               CodedMsg = CodedMsg::new(0x001e, "type not specified");
 pub const ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY:            CodedMsg = CodedMsg::new(0x001f, "associated function in `{}` without body");
+pub const AMBIGUOUS_METHOD_CALL:                            CodedMsg = CodedMsg::new(0x0020, "ambiguous method call");
 
 
 // Non Coded Messages

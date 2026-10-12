@@ -35,14 +35,6 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId,
   };
 
   if is_int(expr_ty) && is_int(target) {
-    if let hir::ExprKind::Const(hir::Const::Int(val)) = ctx.cre.get(expr).kind {
-      return hir::Expr {
-        kind: hir::ExprKind::Const(hir::Const::Int(val)),
-        category: ExprCategory::RValue,
-        ety: target,
-      }.push_ok(ctx.cre);
-    }
-
     return hir::Expr {
       kind: hir::ExprKind::IntCast(expr),
       category: ExprCategory::RValue,
