@@ -36,7 +36,7 @@ pub enum UnaryOp {
   
   Not,
   
-  Ref, Addr, Deref,
+  Ref{ism: bool}, Addr, Deref,
   
   Try, Unwrap,
 }
@@ -55,6 +55,7 @@ pub enum ExprKind {
   Number (Span),
   Float  (Span),
   String (Span, Sid),
+  Char   (Span, Sid),
   
   // Intrinsic
   SelfB(),

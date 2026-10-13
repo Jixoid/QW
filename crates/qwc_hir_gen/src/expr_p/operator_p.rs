@@ -29,8 +29,8 @@ pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, op: ast::UnaryOp, id: ast::ExprId
   
   match op {
     Deref => low_unary_deref(ctx, fctx, id),
-
-    Ref => low_unary_ref(ctx, fctx, id),
+    
+    Ref{ism} => low_unary_ref(ctx, fctx, id, ism),
 
     Not => low_unary_not(ctx, fctx, id),
     
@@ -63,16 +63,16 @@ fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir:
   Ok(ctx.cre.push(this))
 }
 
-fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
+fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId, ism: bool) -> Result<hir::ExprId, Message> {
   let id = ExprLow::low(ctx, fctx, id)?;
   err_bypass!(ctx, id);
   let it = ctx.cre.get(id);
 
-  let ty = ctx.tin.ty_ref(ctx.cre, it.ety, false);
+  let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, it.ety, ism);
 
   // Post
   let this = hir::Expr {
-    kind: hir::ExprKind::Ref(id),
+    kind: hir::ExprKind::Ref(id, ism),
     category: ExprCategory::RValue,
     ety: ty,
   };

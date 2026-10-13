@@ -41,7 +41,7 @@ impl ExprLow {
       LocalRef(local) => Some(Self::low_local_ref(ctx, bbld, it, local)?),
 
       // Ref & Deref
-      Ref(expr) => Some(Self::low_ref(ctx, bbld, expr)?),
+      Ref(expr, _) => Some(Self::low_ref(ctx, bbld, expr)?),
       Deref(expr) => Some(Self::low_deref(ctx, bbld, it, expr)?),
 
       // Variable
@@ -109,13 +109,21 @@ impl ExprLow {
     
     let this = match val {
       Unit => mir::Const::Unit.into(),
-      Bool(b) => mir::Const::Bool(b).into(),
       
-      I8(i, _) => mir::Const::I8(i).into(),
-      I16(i, _) => mir::Const::I16(i).into(),
-      I32(i, _) => mir::Const::I32(i).into(),
-      I64(i, _) => mir::Const::I64(i).into(),
-      I128(i, _) => mir::Const::I128(i).into(),
+      Bool(b) => mir::Const::Bool(b).into(),
+      Char(c) => mir::Const::I32(c.to_u32()).into(),
+      
+      U8(i) => mir::Const::I8(i).into(),
+      U16(i) => mir::Const::I16(i).into(),
+      U32(i) => mir::Const::I32(i).into(),
+      U64(i) => mir::Const::I64(i).into(),
+      U128(i) => mir::Const::I128(i).into(),
+      
+      I8(i) => mir::Const::I8(i as u8).into(),
+      I16(i) => mir::Const::I16(i as u16).into(),
+      I32(i) => mir::Const::I32(i as u32).into(),
+      I64(i) => mir::Const::I64(i as u64).into(),
+      I128(i) => mir::Const::I128(i as u128).into(),
       
       F16(fp) => mir::Const::F16(fp).into(),
       F32(fp) => mir::Const::F32(fp).into(),
@@ -138,7 +146,7 @@ impl ExprLow {
     let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 0 }).unwrap();
     bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr, value: mir::Const::Str(sid).into() });
     let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 1 }).unwrap();
-    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::I32(ctx.sin.str(sid).len() as i32 -1).into() });
+    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::I32(ctx.sin.str(sid).len() as u32 -1).into() });
 
     let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
     
@@ -344,7 +352,7 @@ impl ExprLow {
         let ptr_val = ExprLow::low(ctx, bbld, inner)?.unwrap();
         Ok(ptr_val)
       }
-      
+
       _ => panic!("unexpected lvalue expression: {:?}", it.kind)
     }
   }

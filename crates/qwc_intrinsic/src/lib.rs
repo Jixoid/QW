@@ -59,6 +59,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		}
 
 		let ty_bool = reg!("bool" => TypeKind::Bool, layinfo.bool_lay);
+		let ty_char = reg!("char" => TypeKind::Char, layinfo.bool_lay);
 		
 		let ty_str = reg!("str" => TypeKind::Str, layinfo.str_lay);
 
@@ -95,6 +96,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 			ty_unit,
 			ty_never,
 			ty_bool,
+			ty_char,
 			ty_str,
 			ty_isize,
 			ty_usize,

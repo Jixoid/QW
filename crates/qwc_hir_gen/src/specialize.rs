@@ -104,7 +104,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Ref(kind, ism) => {
         let kind = self.spec_type(ctx, kind);
 
-        ctx.tin.ty_ref(ctx.cre, kind, ism)
+        ctx.tin.ty_ref(ctx.cre, ctx.ideps, kind, ism)
       }
 
       hir::TypeKind::Fun{self_kind, args, ret} => {

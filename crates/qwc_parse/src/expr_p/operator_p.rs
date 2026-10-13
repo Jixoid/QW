@@ -23,7 +23,7 @@ use crate::{ExprParser, ctx, meta_p::WordCheck, parse::Ctx};
 pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get()?;
 
-  let op = helper::parse_unary_op(start.kind());
+  let op = helper::parse_unary_op(lex, start.kind())?;
   
   let val = ExprParser::read_expr_sub(ctx!(cre, sin, far, lex, sum, side), 85)?;
   
@@ -40,7 +40,7 @@ pub fn pre_unary(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
 pub fn post_unary(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let op = lex.get()?;
 
-  let op = helper::parse_unary_op(op.kind());
+  let op = helper::parse_unary_op(lex, op.kind())?;
   
 
   // Post

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{DefPathId, ItemId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{DefPathId, Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -43,14 +43,18 @@ impl TypeInterner {
     }
   }
 
-  // Sub
-  pub fn ty_meta(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+  fn get<'a, T: HirKind + GetApi<T>>(cre: &'a Krate, ideps: &'a Deps, id: HirId<T>) -> &'a T {
+    if id.cid() == cre.cid() { cre.get(id) } else { ideps.get(id.cid()).get(id) }
+  }
+
+  
+  pub fn ty_meta(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_meta.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(id).path;
+        let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::Meta(id),
           layout: Layout::new_meta(LayoutBy::QW),
@@ -66,13 +70,13 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_ref(&mut self, cre: &mut Krate, id: TypeId, ism: bool) -> TypeId {
+  pub fn ty_ref(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, ism: bool) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(id).path;
+        let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::Ref(id, ism),
           layout: Layout::new_static(LayoutBy::QW),
@@ -88,13 +92,13 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_trait_from(&mut self, cre: &mut Krate, id: TypeId, trait_ty: TypeId) -> TypeId {
+  pub fn ty_trait_from(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, trait_ty: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_trait_from.entry((id, trait_ty)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(trait_ty).path;
+        let path = Self::get(cre, ideps, trait_ty).path;
         let this = Type{
           kind: TypeKind::TraitFrom{hidden: id, trait_ty},
           layout: Layout::new_static(LayoutBy::QW),
@@ -110,13 +114,13 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_slice(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+  pub fn ty_slice(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_slice.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(id).path;
+        let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::Slice(id),
           layout: Layout::new_static(LayoutBy::QW),
@@ -132,13 +136,13 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_vscale(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
+  pub fn ty_vscale(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_vscale.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(id).path;
+        let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::VScale(id),
           layout: Layout::new_static(LayoutBy::QW),
@@ -154,13 +158,13 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_option(&mut self, cre: &mut Krate, id: TypeId, layout: Layout) -> TypeId {
+  pub fn ty_option(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, layout: Layout) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_option.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = cre.get(id).path;
+        let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::Option(id),
           layout,

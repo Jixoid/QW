@@ -11,7 +11,8 @@
 
 
 use qwc_ast::{BinaryOp, UnaryOp};
-use qwc_lexer::WK;
+use qwc_diagnostic::Message;
+use qwc_lexer::{Lexer, WK};
 
 
 // Helper
@@ -55,8 +56,8 @@ pub fn get_infix_bp(op: WK) -> Option<(u8, u8)> {
   }
 }
 
-pub fn parse_unary_op(op: WK) -> UnaryOp {
-  match op {
+pub fn parse_unary_op(lex: &mut Lexer, op: WK) -> Result<UnaryOp, Message> {
+  let it = match op {
     // Prefix
     WK::Sub  => UnaryOp::Neg,
     WK::Add  => UnaryOp::Poz,
@@ -65,11 +66,20 @@ pub fn parse_unary_op(op: WK) -> UnaryOp {
     // Postfix
     WK::Question => UnaryOp::Try,
     WK::Bang2    => UnaryOp::Unwrap,
-    WK::Amp      => UnaryOp::Ref,
     WK::Caret    => UnaryOp::Deref,
+    
+    WK::Amp => {
+      let ism = lex.peek()?.kind() == WK::Mut;
+      
+      if ism { lex.bump()? }
+      
+      UnaryOp::Ref { ism }
+    }
 
     _ => unreachable!("Unknown unary operator: {:?}", op),
-  }
+  };
+
+  Ok(it)
 }
 
 pub fn parse_binary_op(op: WK) -> BinOp {

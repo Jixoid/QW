@@ -10,6 +10,8 @@
 */
 
 
+#![feature(char_to_u32)]
+
 mod mgen;
 mod layout;
 mod symb_p;

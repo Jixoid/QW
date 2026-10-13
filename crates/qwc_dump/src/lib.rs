@@ -61,7 +61,7 @@ pub fn lit_bool(b: bool) -> Styled<&'static str> {
 }
 
 pub fn lit_str<T>(val: T) -> Styled<T> {
-  Styled { val, style: Style::new().green() }
+  Styled { val, style: Style::new().yellow() }
 }
 
 pub fn attr<T>(val: T) -> Styled<T> {

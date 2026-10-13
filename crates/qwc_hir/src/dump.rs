@@ -369,6 +369,7 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Bool => write!(f, "{}", ty("bool"))?,
+      TypeKind::Char => write!(f, "{}", ty("char"))?,
       
       TypeKind::Str => write!(f, "{}", ty("str"))?,
 
@@ -600,14 +601,14 @@ impl DumpHandler for Expr {
 
       ExprKind::Const(c) => c.dump(ctx, f, indent)?,
 
-      ExprKind::Ref(e) => {
-        write!(f, "{}", op("&"))?;
+      ExprKind::Ref(e, ism) => {
         e.dump(ctx, f, indent)?;
+        write!(f, "{}{}", op("&"), kw(if ism {"mut"} else {""}))?;
       }
 
       ExprKind::Deref(e) => {
-        write!(f, "{}", op("^"))?;
         e.dump(ctx, f, indent)?;
+        write!(f, "{}", op("^"))?;
       }
 
       ExprKind::GlobalRef(item_id) => {
@@ -890,19 +891,21 @@ impl DumpHandler for Const {
     match *self {
       Const::Unit => write!(f, "{}", punct("()"))?,
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
-      Const::Str(s) => write!(f, "{}", lit_str(format!("\"{}\"", ctx.sin.str(s))))?,
       
-      Const::I8(i, false) => write!(f, "{}{}{}{}", punct("{u8}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I16(i, false) => write!(f, "{}{}{}{}", punct("{u16}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I32(i, false) => write!(f, "{}{}{}{}", punct("{u32}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I64(i, false) => write!(f, "{}{}{}{}", punct("{u64}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I128(i, false) => write!(f, "{}{}{}{}", punct("{u128}"), punct("("), lit_num(i), punct(")"))?,
+      Const::Str(s) => write!(f, "{}", lit_str(format!("\"{}\"", ctx.sin.str(s))))?,
+      Const::Char(c) => write!(f, "{}", lit_str(format!("\'{}\'", c)))?,
+      
+      Const::U8(i) => write!(f, "{}{}{}{}", punct("{u8}"), punct("("), lit_num(i), punct(")"))?,
+      Const::U16(i) => write!(f, "{}{}{}{}", punct("{u16}"), punct("("), lit_num(i), punct(")"))?,
+      Const::U32(i) => write!(f, "{}{}{}{}", punct("{u32}"), punct("("), lit_num(i), punct(")"))?,
+      Const::U64(i) => write!(f, "{}{}{}{}", punct("{u64}"), punct("("), lit_num(i), punct(")"))?,
+      Const::U128(i) => write!(f, "{}{}{}{}", punct("{u128}"), punct("("), lit_num(i), punct(")"))?,
 
-      Const::I8(i, true) => write!(f, "{}{}{}{}", punct("{i8}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I16(i, true) => write!(f, "{}{}{}{}", punct("{i16}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I32(i, true) => write!(f, "{}{}{}{}", punct("{i32}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I64(i, true) => write!(f, "{}{}{}{}", punct("{i64}"), punct("("), lit_num(i), punct(")"))?,
-      Const::I128(i, true) => write!(f, "{}{}{}{}", punct("{i128}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I8(i) => write!(f, "{}{}{}{}", punct("{i8}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I16(i) => write!(f, "{}{}{}{}", punct("{i16}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I32(i) => write!(f, "{}{}{}{}", punct("{i32}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I64(i) => write!(f, "{}{}{}{}", punct("{i64}"), punct("("), lit_num(i), punct(")"))?,
+      Const::I128(i) => write!(f, "{}{}{}{}", punct("{i128}"), punct("("), lit_num(i), punct(")"))?,
 
       Const::F16(fp) => write!(f, "{}{}{}{}", punct("{f16}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F32(fp) => write!(f, "{}{}{}{}", punct("{f32}"), punct("("), lit_num(fp), punct(")"))?,

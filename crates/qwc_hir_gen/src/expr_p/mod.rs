@@ -65,8 +65,9 @@ impl ExprLow {
       Unit => const_p::low_unit(ctx)?,
       Bool(.., v)   => const_p::low_bool(ctx, v)?,
       Number(span)  => const_p::low_number(ctx, span)?,
-      Float(span)  => const_p::low_float(ctx, span)?,
+      Float(span)   => const_p::low_float(ctx, span)?,
       String(_, sid) => const_p::low_string(ctx, sid)?,
+      Char(span, sid) => const_p::low_char(ctx, span, sid)?,
       
       // Block
       Block{rng, expr, ..} => block_p::low_block(ctx, fctx, rng, expr)?,

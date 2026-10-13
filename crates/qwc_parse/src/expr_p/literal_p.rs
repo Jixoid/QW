@@ -112,10 +112,17 @@ pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
   let start = lex.get()?;
   let sid = start.string_sid(sin, far)?;
 
+  let kind = if lex.str(start).as_bytes()[0] == b'\'' {
+    ExprKind::Char(start.into(), sid)
+  } else {
+    ExprKind::String(start.into(), sid)
+  };
+
+
   // Post
   let this = Expr {
     pos: lex.pos_extend(start),
-    kind: ExprKind::String(start.into(), sid)
+    kind,
   };
 
   Ok(cre.push(this))

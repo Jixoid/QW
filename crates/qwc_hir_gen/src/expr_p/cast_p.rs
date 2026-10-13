@@ -146,7 +146,7 @@ fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::
 
 
   // Static & Hidden
-  let hidden = ctx.tin.ty_trait_from(ctx.cre, expr_ty, target);
+  let hidden = ctx.tin.ty_trait_from(ctx.cre, ctx.ideps, expr_ty, target);
 
 
   // Post

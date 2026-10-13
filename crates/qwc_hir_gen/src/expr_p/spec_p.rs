@@ -73,7 +73,7 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast:
       let this = hir::Expr {
         kind: hir::ExprKind::TypeOf { kind: spec },
         category: hir::ExprCategory::RValue,
-        ety: ctx.tin.ty_meta(ctx.cre, spec),
+        ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, spec),
       };
       Ok(ctx.cre.push(this))
     }

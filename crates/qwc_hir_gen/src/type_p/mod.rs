@@ -47,7 +47,7 @@ impl TypeLow {
       Unit => ctx.prims.ty_unit,
 
       // Reference
-      Ref(id, ism) => {let id = Self::low(ctx, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
+      Ref(id, ism) => {let id = Self::low(ctx, id)?; ctx.tin.ty_ref(ctx.cre, ctx.ideps, id, ism)},
       
       // Vector
       Vector(kind, ext) => Self::low_vector(ctx, kind, ext)?,
@@ -159,7 +159,7 @@ impl TypeLow {
 
     
     // Post
-    Ok(ctx.tin.ty_vscale(ctx.cre, hir_kind))
+    Ok(ctx.tin.ty_vscale(ctx.cre, ctx.ideps, hir_kind))
   }
 
 
@@ -181,7 +181,7 @@ impl TypeLow {
 
     
     // Post
-    Ok(ctx.tin.ty_slice(ctx.cre, hir_kind))
+    Ok(ctx.tin.ty_slice(ctx.cre, ctx.ideps, hir_kind))
   }
 
 }

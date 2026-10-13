@@ -53,18 +53,19 @@ pub enum Const {
   Unit,
   
   Bool(bool),
-  Str(Sid),
   
-  I8(i8),
-  I16(i16),
-  I32(i32),
-  I64(i64),
-  I128(i128),
+  I8(u8),
+  I16(u16),
+  I32(u32),
+  I64(u64),
+  I128(u128),
   
   F16(ieee::Half),
   F32(ieee::Single),
   F64(ieee::Double),
   F128(ieee::Quad),
+  
+  Str(Sid),
 }
 
 

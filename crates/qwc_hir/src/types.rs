@@ -34,6 +34,8 @@ pub enum TypeKind {
   Float(u16),
   Bit(u16),
   Bool,
+  Char,
+  
   Str,
 
   // Meta
@@ -104,6 +106,7 @@ pub struct PrimTypes {
   pub ty_unit: TypeId,
   pub ty_never: TypeId,
   pub ty_bool: TypeId,
+  pub ty_char: TypeId,
   pub ty_str: TypeId,
   pub ty_isize: TypeId,
   pub ty_usize: TypeId,

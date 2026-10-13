@@ -344,8 +344,8 @@ impl DumpHandler for Const {
   fn dump(&self, _cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     match *self {
       Const::Unit => write!(f, "{}", punct("()"))?,
+      
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
-      Const::Str(s) => write!(f, "\"{}\"", sin.str(s))?,
       
       Const::I8(i) => write!(f, "{}{}{}{}", punct("{i8}"), punct("("), lit_num(i), punct(")"))?,
       Const::I16(i) => write!(f, "{}{}{}{}", punct("{i16}"), punct("("), lit_num(i), punct(")"))?,
@@ -357,6 +357,8 @@ impl DumpHandler for Const {
       Const::F32(fp) => write!(f, "{}{}{}{}", punct("{f32}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F64(fp) => write!(f, "{}{}{}{}", punct("{f64}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F128(fp) => write!(f, "{}{}{}{}", punct("{f128}"), punct("("), lit_num(fp), punct(")"))?,
+      
+      Const::Str(s) => write!(f, "\"{}\"", sin.str(s))?,
     }
 
     Ok(())

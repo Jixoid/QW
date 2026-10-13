@@ -257,12 +257,12 @@ impl DumpHandler for Type {
 
       // Pointer
       TypeKind::Ptr(sub, ism) => {
-        write!(f, "{}{}", "^".bright_black(), if ism { "mut " } else { "" })?;
+        write!(f, "{}{}", "^".bright_black(), kw(if ism { "mut " } else { "" }))?;
         sub.dump(cre, sin, far, f, indent)?;
       }
 
       TypeKind::Ref(sub, ism) => {
-        write!(f, "{}{}", "&".bright_black(), if ism { "mut " } else { "" })?;
+        write!(f, "{}{}", "&".bright_black(), kw(if ism { "mut " } else { "" }))?;
         sub.dump(cre, sin, far, f, indent)?;
       }
 
@@ -592,6 +592,10 @@ impl DumpHandler for Expr {
       ExprKind::String(span, _) => {
         write!(f, "{}", span.str(far).yellow())?;
       }
+      
+      ExprKind::Char(span, _) => {
+        write!(f, "{}", span.str(far).yellow())?;
+      }
 
       ExprKind::Tuple(rng) => {
         write!(f, "(")?;
@@ -763,7 +767,7 @@ impl DumpHandler for Expr {
           UnaryOp::Poz => "+",
           UnaryOp::Not => "!",
           UnaryOp::Addr => "@",
-          UnaryOp::Ref => "&",
+          UnaryOp::Ref{ism} => if ism {&format!("&{}", kw("mut"))} else {"&"},
           UnaryOp::Try => "?",
           UnaryOp::Deref => "^",
           UnaryOp::Unwrap => "!!",
@@ -773,7 +777,7 @@ impl DumpHandler for Expr {
             write!(f, "{}", op(op_str))?;
             val.dump(cre, sin, far, f, indent)?;
           }
-          UnaryOp::Ref | UnaryOp::Try | UnaryOp::Deref | UnaryOp::Unwrap => {
+          UnaryOp::Ref{..} | UnaryOp::Try | UnaryOp::Deref | UnaryOp::Unwrap => {
             val.dump(cre, sin, far, f, indent)?;
             write!(f, "{}", op(op_str))?;
           }

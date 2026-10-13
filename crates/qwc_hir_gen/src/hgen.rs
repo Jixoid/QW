@@ -125,6 +125,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       hir::TypeKind::Unit => "()".to_string(),
       hir::TypeKind::Never => "!".to_string(),
       hir::TypeKind::Bool => "bool".to_string(),
+      hir::TypeKind::Char => "char".to_string(),
       hir::TypeKind::Str => "str".to_string(),
 
       hir::TypeKind::Bit(bits) => format!("b{}", bits),

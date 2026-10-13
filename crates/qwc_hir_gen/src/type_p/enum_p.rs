@@ -46,7 +46,7 @@ pub fn low_enum(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hi
     };
     
 
-    let id = hir::Thing::NamedConst(name.sid(), hir::Const::I32(enum_val as i32, true)).push(ctx.cre);
+    let id = hir::Thing::NamedConst(name.sid(), hir::Const::I32(enum_val as i32)).push(ctx.cre);
 
     enum_val += 1;
 
@@ -92,7 +92,7 @@ pub fn low_flags(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<h
     };
     
 
-    let id = hir::Thing::NamedConst(name.sid(), hir::Const::I32(flag_val as i32, true)).push(ctx.cre);
+    let id = hir::Thing::NamedConst(name.sid(), hir::Const::I32(flag_val as i32)).push(ctx.cre);
 
     flag_val <<= 1;
 

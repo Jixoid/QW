@@ -54,7 +54,7 @@ pub fn low_self_big(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
   let this = hir::Expr {
     kind: hir::ExprKind::TypeOf { kind },
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_meta(ctx.cre, kind),
+    ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
   };
 
   Ok(ctx.cre.push(this))
@@ -118,7 +118,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
-          ety: ctx.tin.ty_meta(ctx.cre, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
         };
 
         ctx.cre.push(this)
@@ -149,7 +149,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
-          ety: ctx.tin.ty_meta(ctx.cre, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
         };
 
         ctx.cre.push(this)
@@ -200,7 +200,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
 
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
       resolve::ScopeKindHir::Expr(id, ty) => {
-        let kind = ctx.tin.ty_ref(ctx.cre, ty, false); // TODO!
+        let kind = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, false); // TODO!
 
         hir::Expr {
           kind: hir::ExprKind::GlobalRef(id),
@@ -213,7 +213,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
-          ety: ctx.tin.ty_meta(ctx.cre, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
         };
 
         ctx.cre.push(this)

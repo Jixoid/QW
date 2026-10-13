@@ -34,6 +34,7 @@ impl TypeLow {
       hir::TypeKind::ArchInt(_) => ctx.tin.ty_arch_int(),
       hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
       hir::TypeKind::Bool => ctx.tin.ty_bool(),
+      hir::TypeKind::Char => ctx.tin.ty_i32(),
 
       hir::TypeKind::Ref(id, _) => Self::low_ref(ctx, id)?,
 

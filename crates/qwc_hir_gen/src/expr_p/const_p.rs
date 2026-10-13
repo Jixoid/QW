@@ -96,17 +96,17 @@ pub fn low_number(ctx: &mut Ctx, span: Span) -> Result<hir::ExprId, Message> {
   let str: &str = &str.replace('_', "");
 
   let (ety, cons) = match fp {
-    FP::U8   => (ctx.prims.ty_u8,   Const::I8(i8::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, false)),
-    FP::U16  => (ctx.prims.ty_u16,  Const::I16(i16::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, false)),
-    FP::U32  => (ctx.prims.ty_u32,  Const::I32(i32::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, false)),
-    FP::U64  => (ctx.prims.ty_u64,  Const::I64(i64::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, false)),
-    FP::U128 => (ctx.prims.ty_u128, Const::I128(i128::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, false)),
+    FP::U8   => (ctx.prims.ty_u8,   Const::U8(u8::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::U16  => (ctx.prims.ty_u16,  Const::U16(u16::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::U32  => (ctx.prims.ty_u32,  Const::U32(u32::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::U64  => (ctx.prims.ty_u64,  Const::U64(u64::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::U128 => (ctx.prims.ty_u128, Const::U128(u128::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
 
-    FP::I8   => (ctx.prims.ty_i8,   Const::I8(i8::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, true)),
-    FP::I16  => (ctx.prims.ty_i16,  Const::I16(i16::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, true)),
-    FP::I32  => (ctx.prims.ty_i32,  Const::I32(i32::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, true)),
-    FP::I64  => (ctx.prims.ty_i64,  Const::I64(i64::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, true)),
-    FP::I128 => (ctx.prims.ty_i128, Const::I128(i128::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?, true)),
+    FP::I8   => (ctx.prims.ty_i8,   Const::I8(i8::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::I16  => (ctx.prims.ty_i16,  Const::I16(i16::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::I32  => (ctx.prims.ty_i32,  Const::I32(i32::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::I64  => (ctx.prims.ty_i64,  Const::I64(i64::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
+    FP::I128 => (ctx.prims.ty_i128, Const::I128(i128::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
     
     FP::F16  => (ctx.prims.ty_f16,  Const::F16(ieee::Half::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
     FP::F32  => (ctx.prims.ty_f32,  Const::F32(ieee::Single::from_str(str).map_err(|_| Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span)))?)),
@@ -170,7 +170,24 @@ pub fn low_string(ctx: &mut Ctx, sid: Sid) -> Result<hir::ExprId, Message> {
   let this = hir::Expr{
     kind: hir::ExprKind::Const(Const::Str(sid)),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_ref(ctx.cre, ctx.prims.ty_str, false),
+    ety: ctx.tin.ty_ref(ctx.cre, ctx.ideps, ctx.prims.ty_str, false),
+  };
+
+  Ok(ctx.cre.push(this))
+}
+
+pub fn low_char(ctx: &mut Ctx, span: Span, sid: Sid) -> Result<hir::ExprId, Message> {
+  let str = ctx.sin.str(sid);
+  let str = &str[..str.len() - 1];
+
+  let c = str.parse::<char>().map_err(|_| Message::error(CANNOT_CONVERT_TO_CHAR, Label::new_pos(span)))?;
+
+
+  // Post
+  let this = hir::Expr{
+    kind: hir::ExprKind::Const(Const::Char(c)),
+    category: ExprCategory::RValue,
+    ety: ctx.prims.ty_char,
   };
 
   Ok(ctx.cre.push(this))
