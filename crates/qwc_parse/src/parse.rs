@@ -11,11 +11,11 @@
 
 
 use qwc_arena::{File, Files};
-use qwc_ast::{self as ast, ItemId};
+use qwc_ast::{self as ast, DefPath, ItemId};
 use qwc_ast::{Krate, Visibility};
 use qwc_diagnostic::{Span, Summary};
 use qwc_lexer::Lexer;
-use qwc_string_interner::StrInterner;
+use qwc_string_interner::{Sid, StrInterner};
 
 use crate::{ItemParser, MetaParser};
 
@@ -47,7 +47,7 @@ pub struct Parse;
 
 impl Parse {
 
-  pub fn parse(cre: &mut Krate, sin: &mut StrInterner, far: &Files, fi: &File) -> (Span, ast::ItemRng, Summary) {
+  pub fn parse(cre: &mut Krate, sid: Sid, sin: &mut StrInterner, far: &Files, fi: &File) -> (Span, ast::ItemRng, Summary) {
     let lex = &mut Lexer::new(fi);
     let mut sum = Summary::new();
     
@@ -59,13 +59,15 @@ impl Parse {
     let rng = {
       let mut av = vec![];
 
+      let path = cre.push(DefPath::Root(sid));
+
       loop {
         if lex.peek_safe().is_none() { break }
         
         let mut side = vec![];
 
         // Any
-        match ItemParser::read_item(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut side}, &mut Visibility::Inherited) {
+        match ItemParser::read_item(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut side}, path, &mut Visibility::Inherited) {
           Ok(aid) => {
             av.push(aid);
             av.extend(side);

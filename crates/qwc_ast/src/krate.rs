@@ -18,7 +18,7 @@ use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::{WK, Word};
 use qwc_string_interner::{Sid, StrInterner};
 
-use crate::{AnyId, AnyRng, Attribute, Expr, ExprId, Field, FieldId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, Rng, SpecAny}};
+use crate::{AnyId, AnyRng, Attribute, DefPath, DefPathId, Expr, ExprId, Field, FieldId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, Rng, SpecAny}};
 
 
 pub struct Krate {
@@ -32,6 +32,7 @@ pub struct Krate {
   list_patt: Arena<Patt>,
   list_fiel: Arena<Field>,
   list_thig: Arena<Thing>,
+  list_path: Arena<DefPath>,
 
   extra_data: (Arena<AstId<SpecAny>>, Arena<NodeKind>),
 
@@ -52,6 +53,7 @@ impl Krate {
       list_patt: Arena::new(),
       list_fiel: Arena::new(),
       list_thig: Arena::new(),
+      list_path: Arena::new(),
       
       extra_data: (Arena::new(), Arena::new()),
       
@@ -135,11 +137,11 @@ impl Krate {
   pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Field>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Field>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<DefPath>(&self) + Self::size_used::<AnyId>(&self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Field>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Field>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<DefPath>(&self) + Self::size_alloc::<AnyId>(&self)
   }
 
 }
@@ -266,6 +268,16 @@ impl GetApi for ThingId {
   fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_thig[id.idx() as usize] }
 }
 
+impl<T: AstKind> PushApi<T> for DefPath {
+  fn push(krate: &mut Krate, obj: Self) -> AstId<T> { AstId::<T>::new(u32::try_from(krate.list_path.push(obj)).unwrap()) }
+}
+
+impl GetApi for DefPathId {
+  type Node = DefPath;
+  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_path[id.idx() as usize] }
+  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_path[id.idx() as usize] }
+}
+
 
 // attach
 pub trait AttachNode: Sized {
@@ -315,6 +327,11 @@ impl SizeApi for Field {
 impl SizeApi for Thing {
   fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thig.len() }
   fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thig.allocated_len() }
+}
+
+impl SizeApi for DefPath {
+  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_path.len() }
+  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_path.allocated_len() }
 }
 
 impl SizeApi for AnyId {

@@ -10,12 +10,12 @@
 */
 
 
-use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, LayoutInfo, SymVis, Type, TypeAttr, TypeKind};
+use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutInfo, PrimOps, PrimTypes, SymVis, Thing, Type, TypeAttr, TypeKind};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
 
-pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate, ExportMap, qwc_hir::PrimTypes) {
+pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate, ExportMap, PrimTypes, PrimOps) {
 	let mut cre = Krate::new(cid);
 
 	let path_root = cre.push(DefPath::Root(sin.sid_core()));
@@ -36,7 +36,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_never});
 
 	// types
-	let (types, prims) = {
+	let (types, prim_ty) = {
 		let mut types = vec![];
 
 		macro_rules! reg {
@@ -89,7 +89,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		let ty_f64  = reg!("f64"  => TypeKind::Float(64),  layinfo.f64_lay);
 		let ty_f128 = reg!("f128" => TypeKind::Float(128), layinfo.f128_lay);
 
-		let prims = qwc_hir::PrimTypes {
+		let prims = PrimTypes {
 			ty_type,
 			ty_generic_self_type,
 			ty_error,
@@ -134,6 +134,148 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	};
 	root.push(types);
 
+	// ops
+	let (ops, prim_op) = {
+		let path_ops = cre.push(DefPath::Path{base: path_root, name: sin.sid("ops")});
+
+		macro_rules! def_bin_op {
+			($its:expr, $trait_name:literal, $method_name:literal) => {{
+				let sid_trait = sin.sid($trait_name);
+				let sid_method = sin.sid($method_name);
+				let sid_rhs = sin.sid("Rhs");
+				let sid_output = sin.sid("Output");
+				let sid_arg_rhs = sin.sid("rhs");
+
+				let path_trait = cre.push(DefPath::Path { base: path_ops, name: sid_trait });
+				let path_fn = cre.push(DefPath::Path { base: path_trait, name: sid_method });
+				let path_rhs = cre.push(DefPath::Path { base: path_trait, name: sid_rhs });
+				let path_output = cre.push(DefPath::Path { base: path_trait, name: sid_output });
+
+				// generic<Rhs>
+				let param_rhs = cre.push(Thing::NamedType(sid_rhs, ty_type));
+				let generic_args = cre.extra(&[param_rhs]);
+
+				let empty_items: &[qwc_hir::ItemId] = &[];
+				let empty_rng = cre.extra(empty_items);
+				let generic_item = cre.push(Item {
+					vis: ItemVis::Public(SymVis::Internal),
+					name: None,
+					kind: ItemKind::GenericNS { rng: empty_rng, args: generic_args },
+					path: path_trait,
+					attr: ItemAttr::empty(),
+				});
+
+				// Pre-allocate trait_ty
+				let trait_ty = cre.push(Type {
+					kind: TypeKind::Error,
+					layout: Layout::new_dsat(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_trait,
+				});
+
+				// GenericType for Rhs: generic_item, idx 0
+				let ty_rhs = cre.push(Type {
+					kind: TypeKind::GenericType { generic: generic_item, idx: 0 },
+					layout: Layout::new_static(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_rhs,
+				});
+
+				// AssociatedType for Output: trait_ty, idx 0
+				let ty_output = cre.push(Type {
+					kind: TypeKind::AssociatedType { trait_ty, idx: 0 },
+					layout: Layout::new_dsat(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_output,
+				});
+
+				// fun $method(self, rhs: Rhs) -> Output
+				let thing_rhs = cre.push(Thing::NamedType(sid_arg_rhs, ty_rhs));
+				let fn_args = cre.extra(&[thing_rhs]);
+
+				let ty_fn = cre.push(Type {
+					kind: TypeKind::Fun {
+						self_kind: Some(ty_generic_self_type),
+						args: fn_args,
+						ret: ty_output,
+					},
+					layout: Layout::new_dsat(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_fn,
+				});
+
+				let thing_method = cre.push(Thing::NamedType(sid_method, ty_fn));
+				let methods = cre.extra(&[thing_method]);
+
+				let thing_type_output = cre.push(Thing::Name(sid_output));
+				let types = cre.extra(&[thing_type_output]);
+
+				*cre.get_mut(trait_ty) = Type {
+					kind: TypeKind::Trait(methods, types),
+					layout: Layout::new_dsat(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_trait,
+				};
+
+				let ty_generic_raw = cre.push(Type {
+					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
+					layout: Layout::new_meta(LayoutBy::QW),
+					attr: TypeAttr::empty(),
+					path: path_trait,
+				});
+
+				let item_trait = cre.push(Item {
+					vis: ItemVis::Public(SymVis::Internal),
+					name: Some(sid_trait),
+					kind: ItemKind::Using { kind: ty_generic_raw },
+					path: path_trait,
+					attr: ItemAttr::empty(),
+				});
+
+				let item_trait_rng = cre.extra(&[item_trait]);
+				*cre.get_mut(generic_item) = Item {
+					vis: ItemVis::Public(SymVis::Internal),
+					name: None,
+					kind: ItemKind::GenericNS { rng: item_trait_rng, args: generic_args },
+					path: path_trait,
+					attr: ItemAttr::empty(),
+				};
+
+				$its.push(item_trait);
+				
+				trait_ty
+			}};
+		}
+
+		let mut its = vec![];
+		
+		let op_add = def_bin_op!(its, "Add", "add");
+		let op_sub = def_bin_op!(its, "Sub", "sub");
+		let op_mul = def_bin_op!(its, "Mul", "mul");
+		let op_div = def_bin_op!(its, "Div", "div");
+		let op_rem = def_bin_op!(its, "Rem", "rem");
+
+		let prim_op = PrimOps {
+			op_add,
+			op_sub,
+			op_mul,
+			op_div,
+			op_rem,
+		};
+
+		let ops_items_rng = cre.extra(&its);
+		let this = Item {
+			vis: ItemVis::Public(SymVis::Internal),
+			name: Some(sin.sid("ops")),
+			kind: ItemKind::NameSpace { rng: ops_items_rng },
+			path: path_ops,
+			attr: ItemAttr::empty(),
+		};
+
+		(cre.push(this), prim_op)
+	};
+	root.push(ops);
+
 
 	// root
 	let root = {
@@ -153,6 +295,6 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 	let exp = ExportMap::visit(&cre).map_err(|_| panic!()).unwrap();
 
-	(cre, exp, prims)
+	(cre, exp, prim_ty, prim_op)
 }
 

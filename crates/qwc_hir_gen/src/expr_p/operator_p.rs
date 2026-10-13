@@ -12,7 +12,7 @@
 
 use std::assert_matches;
 
-use itertools::izip;
+use itertools::{Itertools, izip};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_ast::{self as ast, Ident};
@@ -103,7 +103,7 @@ fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir::E
 
 
 // Binary
-pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId) -> Result<hir::ExprId, Message> {
+pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, pos: Span, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId) -> Result<hir::ExprId, Message> {
   let lhs = ExprLow::low(ctx, fctx, lhs)?;
   let rhs = ExprLow::low(ctx, fctx, rhs)?;
   
@@ -113,7 +113,7 @@ pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, op: ast::BinaryOp, lhs: ast::Exp
   
   let ex = match op {
     // Arithmetic
-    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, op, lhs, rhs)?,
+    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, pos, op, lhs, rhs)?,
 
     Gt | Lt | GtEq | LtEq | Eq | Ne => low_binary_condition(ctx, op, lhs, rhs)?,
 
@@ -125,38 +125,84 @@ pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, op: ast::BinaryOp, lhs: ast::Exp
   Ok(ex)
 }
 
-fn low_binary_arithmetic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<hir::ExprId, Message> {
+fn low_binary_arithmetic(ctx: &mut Ctx, pos: Span, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<hir::ExprId, Message> {
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
   let lhs_ty = ctx.get(lhs_ex.ety);
 
-  if lhs_ex.ety != rhs_ex.ety { panic!() }
+  if lhs_ex.ety == rhs_ex.ety {
+    if matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
+      use ast::BinaryOp::*;
+      let aop = match op {
+        Add => hir::IntArithmeticOp::Add,
+        Sub => hir::IntArithmeticOp::Sub,
+        Mul => hir::IntArithmeticOp::Mul,
+        Div => hir::IntArithmeticOp::Div,
+        Rem => hir::IntArithmeticOp::Rem,
+        _ => unreachable!(),
+      };
+      let flg = hir::IntArithmeticFlg::Overflow;
+      let this = hir::Expr {
+        kind: hir::ExprKind::IntArithmetic { op: aop, flg, lhs, rhs },
+        category: ExprCategory::RValue,
+        ety: lhs_ex.ety,
+      };
+      return Ok(ctx.cre.push(this));
+    }
 
-  if !matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | qwc_hir::TypeKind::Int(..) ) { panic!() }
+    if matches!(lhs_ty.kind, hir::TypeKind::Float(..)) {
+      use ast::BinaryOp::*;
+      let aop = match op {
+        Add => hir::FloatArithmeticOp::Add,
+        Sub => hir::FloatArithmeticOp::Sub,
+        Mul => hir::FloatArithmeticOp::Mul,
+        Div => hir::FloatArithmeticOp::Div,
+        Rem => hir::FloatArithmeticOp::Rem,
+        _ => unreachable!(),
+      };
+      let this = hir::Expr {
+        kind: hir::ExprKind::FloatArithmetic { op: aop, lhs, rhs },
+        category: ExprCategory::RValue,
+        ety: lhs_ex.ety,
+      };
+      return Ok(ctx.cre.push(this));
+    }
+  }
 
   use ast::BinaryOp::*;
-  
-  let op = match op {
-    Add => hir::IntArithmeticOp::Add,
-    Sub => hir::IntArithmeticOp::Sub,
-    Mul => hir::IntArithmeticOp::Mul,
-    Div => hir::IntArithmeticOp::Div,
-    Rem => hir::IntArithmeticOp::Rem,
-    _ => panic!()
+  let (op_trt, op_sid) = match op {
+    Add => (ctx.ideps.prim_op().unwrap().op_add, ctx.sin.sid_add()),
+    Sub => (ctx.ideps.prim_op().unwrap().op_sub, ctx.sin.sid_sub()),
+    Mul => (ctx.ideps.prim_op().unwrap().op_mul, ctx.sin.sid_mul()),
+    Div => (ctx.ideps.prim_op().unwrap().op_div, ctx.sin.sid_div()),
+    Rem => (ctx.ideps.prim_op().unwrap().op_rem, ctx.sin.sid_rem()),
+    _ => unreachable!()
   };
   
-  let flg = hir::IntArithmeticFlg::Overflow;
+  // Find Impl
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, op_trt, lhs, rhs, op_sid, pos)
+    .ok_or_else(||
+      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &format!("{}<{}>", ctx.type_name(op_trt), ctx.type_name(ctx.cre.get(rhs).ety)),
+          &ctx.type_name(ctx.cre.get(lhs).ety),
+        ]),
+        Label::new_pos(pos)
+      )
+    )?;
+  
+  
+  let args = ctx.cre.extra(&[lhs, rhs]);
 
-
-  // Post
-  let this = hir::Expr {
-    kind: hir::ExprKind::IntArithmetic{ op, flg, lhs, rhs },
+  let it = hir::Expr {
+    kind: hir::ExprKind::Call { callee: op_fun, args },
     category: ExprCategory::RValue,
-    ety: lhs_ex.ety,
-  };
-  
-  Ok(ctx.cre.push(this))
+    ety: op_ret,
+  }.push(ctx.cre);
+
+  Ok(it)
 }
 
 fn low_binary_condition(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<hir::ExprId, Message> {
@@ -265,7 +311,7 @@ pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, rhs: ast::Expr
 
 
 // Assign Op
-pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Result<hir::ExprId, Message> {
+pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Result<hir::ExprId, Message> {
   let lhs_hir = ExprLow::low(ctx, fctx, lhs)?;
   let rhs_hir = ExprLow::low(ctx, fctx, rhs)?;
   err_bypass!(ctx, lhs_hir, rhs_hir);
@@ -285,7 +331,7 @@ pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, op: ast::BinaryOp, lhs: ast::
   
   let id = match op {
     // Arithmetic
-    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, op, lhs_hir, rhs_hir)?,
+    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, it.pos, op, lhs_hir, rhs_hir)?,
 
     _ => todo!("{op:#?}")
   };
@@ -533,7 +579,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, fields: 
 
 // Member
 pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, rng: ast::ExprRng) -> Result<hir::ExprId, Message> {
-  let ids: Vec<ast::ExprId> = ctx.src.extra_get(rng).collect();
+  let ids = ctx.src.extra_get(rng).collect_vec();
   let mut current_id = ExprLow::low(ctx, fctx, ids[0])?;
 
   for &id in &ids[1..] {

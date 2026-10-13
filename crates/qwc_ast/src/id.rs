@@ -12,7 +12,7 @@
 
 use std::{marker::PhantomData, num::NonZeroU32};
 
-use crate::{Expr, Field, Item, Krate, Patt, PushApi, Thing, Type};
+use crate::{DefPath, Expr, Field, Item, Krate, Patt, PushApi, Thing, Type};
 
 
 // AstId
@@ -76,6 +76,7 @@ pub type ItemId  = AstId<Item>;
 pub type PattId  = AstId<Patt>;
 pub type FieldId = AstId<Field>;
 pub type ThingId = AstId<Thing>;
+pub type DefPathId = AstId<DefPath>;
 
 
 
@@ -117,6 +118,7 @@ pub type ItemRng  = Rng<Item>;
 pub type PattRng  = Rng<Patt>;
 pub type FieldRng = Rng<Field>;
 pub type ThingRng = Rng<Thing>;
+pub type DefPathRng = Rng<DefPath>;
 
 
 
@@ -202,7 +204,7 @@ impl AnyId {
 
 // Trait
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum NodeKind { Any, Type, Expr, Item, Patt, Thing, Field }
+pub enum NodeKind { Any, Type, Expr, Item, Patt, Thing, Field, DefPath }
 
 
 pub trait AstKind { fn kind() -> NodeKind; }
@@ -214,3 +216,4 @@ impl AstKind for Item  { fn kind() -> NodeKind { NodeKind::Item } }
 impl AstKind for Patt  { fn kind() -> NodeKind { NodeKind::Patt } }
 impl AstKind for Field { fn kind() -> NodeKind { NodeKind::Field } }
 impl AstKind for Thing { fn kind() -> NodeKind { NodeKind::Thing } }
+impl AstKind for DefPath { fn kind() -> NodeKind { NodeKind::DefPath } }

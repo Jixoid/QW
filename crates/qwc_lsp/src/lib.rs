@@ -37,11 +37,11 @@ pub struct CoreUnit {
   pub core_cid: hir::CID,
   pub core_cre: hir::Krate,
   pub core_prims: hir::PrimTypes,
+  pub core_prim_op: hir::PrimOps,
 }
 
 impl CoreUnit {
   pub fn new() -> Self {
-    let mut sin = StrInterner::new();
     let hir_layinfo = hir::LayoutInfo {
       str_lay:  hir::Layout::new_dst(hir::LayoutBy::SYS),
       bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
@@ -57,12 +57,17 @@ impl CoreUnit {
       f128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
       ptr_size: hir::Layout::new_static(hir::LayoutBy::SYS),
     };
+
+    let mut sin = StrInterner::new();
     let mut deps = hir::Deps::new();
     let core_cid = deps.get_next_id();
-    let (core_cre, core_exp, core_prims) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+    let (core_cre, core_exp, core_prims, core_prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+    //deps.add(core_cre);
+    deps.set_prims(core_prims);
+    deps.set_prim_op(core_prim_op);
     let core_name_sid = sin.sid("core");
 
-    Self { base_interner: sin, core_exp, core_name_sid, core_cid, core_cre, core_prims }
+    Self { base_interner: sin, core_exp, core_name_sid, core_cid, core_cre, core_prims, core_prim_op }
   }
 }
 
@@ -98,6 +103,7 @@ impl Backend {
               vis: ast::Visibility::Inherited,
               name: None,
               kind: ast::ItemKind::Krate(ast::Rng::empty()),
+              path: cre.push(ast::DefPath::Root(sin.sid("main")))
             },
             Summary::new(),
           );
@@ -106,7 +112,7 @@ impl Backend {
     };
 
     let fi = far.get(fid);
-    let (start, rng, mut sum) = Parse::parse(cre, sin, far, fi);
+    let (start, rng, mut sum) = Parse::parse(cre, sin.sid("main"), sin, far, fi);
 
     let mut submods_to_load = Vec::new();
     for id in cre.extra_get(rng) {
@@ -155,6 +161,7 @@ impl Backend {
       vis: ast::Visibility::Inherited,
       name: None,
       kind: ast::ItemKind::Krate(rng),
+      path: cre.push(ast::DefPath::Root(sin.sid("main"))),
     };
 
     (this, sum)
@@ -191,6 +198,7 @@ impl Backend {
       if summary.sumerr() == 0 {
         let mut deps = hir::Deps::new();
         deps.set_prims(self.core.core_prims);
+        deps.set_prim_op(self.core.core_prim_op);
         deps.add(self.core.core_cre.clone());
         let imod_cids = [self.core.core_cid];
 

@@ -42,6 +42,12 @@ pub struct StrInterner {
   sid_c: Sid,
 
   sid_self: Sid,
+
+  sid_add: Sid,
+  sid_sub: Sid,
+  sid_mul: Sid,
+  sid_div: Sid,
+  sid_rem: Sid,
 }
 
 impl StrInterner {
@@ -64,6 +70,12 @@ impl StrInterner {
       sid_c:      Sid::from(rodeo.get_or_intern_static("C").into_inner()),
 
       sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
+      
+      sid_add: Sid::from(rodeo.get_or_intern_static("add").into_inner()),
+      sid_sub: Sid::from(rodeo.get_or_intern_static("sub").into_inner()),
+      sid_mul: Sid::from(rodeo.get_or_intern_static("mul").into_inner()),
+      sid_div: Sid::from(rodeo.get_or_intern_static("div").into_inner()),
+      sid_rem: Sid::from(rodeo.get_or_intern_static("rem").into_inner()),
       
       rodeo,
     }
@@ -101,4 +113,10 @@ impl StrInterner {
   pub fn sid_entry(&self) -> Sid  { self.sid_entry }
   pub fn sid_c(&self) -> Sid  { self.sid_c }
   pub fn sid_self(&self) -> Sid   { self.sid_self }
+
+  pub fn sid_add(&self) -> Sid { self.sid_add }
+  pub fn sid_sub(&self) -> Sid { self.sid_sub }
+  pub fn sid_mul(&self) -> Sid { self.sid_mul }
+  pub fn sid_div(&self) -> Sid { self.sid_div }
+  pub fn sid_rem(&self) -> Sid { self.sid_rem }
 }

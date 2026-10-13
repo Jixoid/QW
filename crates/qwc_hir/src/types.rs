@@ -130,3 +130,12 @@ pub struct PrimTypes {
   pub ty_f64: TypeId,
   pub ty_f128: TypeId,
 }
+
+#[derive(Debug, Copy, Clone)]
+pub struct PrimOps {
+  pub op_add: TypeId,
+  pub op_sub: TypeId,
+  pub op_mul: TypeId,
+  pub op_div: TypeId,
+  pub op_rem: TypeId,
+}

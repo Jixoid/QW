@@ -84,8 +84,6 @@ impl Infer {
     } else if matched.len() > 1 {
       Err(Message::error(AMBIGUOUS_METHOD_CALL, Label::new_pos(pos_span)))
     } else {
-      // 0 candidates matched user arguments; return initial callee so low_call
-      // can emit standard mismatched type diagnostic with parameter positions
       Ok(callee)
     }
   }
@@ -98,9 +96,9 @@ impl Infer {
 
     for &item in items {
       if let Ok(Some(impl_id)) = ItemLow::low(ctx, item) {
-        let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { continue; };
-        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name == Some(sid)) else { continue; };
-        let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { continue; };
+        let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
+        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
+        let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
 
         let callee = hir::Expr {
           kind: hir::ExprKind::GlobalRef(method),
@@ -124,6 +122,57 @@ impl Infer {
       category: ExprCategory::RValue,
       ety: ctx.prims.ty_error,
     }.push(ctx.cre))
+  }
+
+  pub fn lookup_method_with_trait(ctx: &mut Ctx, target_trait: hir::TypeId, current_id: hir::ExprId, rhs_id: hir::ExprId, sid: Sid, pos: impl Into<Span>) -> Option<(hir::ExprId, hir::TypeId)> {
+    let this_ty = ctx.cre.get(current_id).ety;
+    let rhs_ty = ctx.cre.get(rhs_id).ety;
+    let pos_span = pos.into();
+
+    let methods = ctx.type_impls.get(&this_ty)?;
+    let items = methods.methods.get(&sid)?;
+
+    let target_path = ctx.get(target_trait).path;
+
+    for &item in items {
+      if let Ok(Some(impl_id)) = ItemLow::low(ctx, item) {
+        let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
+
+        let Some(trait_ty) = trait_ty else { continue; };
+
+        let mut impl_path = ctx.get(trait_ty).path;
+        while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
+          impl_path = base;
+        }
+
+        if impl_path != target_path {
+          continue;
+        }
+
+        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
+        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+        let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
+
+        if args.count() != 1 { continue; }
+        let arg_thing = ctx.extra_get(args).next().unwrap();
+
+        let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
+        if TypeMatch::matches_pos(ctx, param_ty, rhs_ty, pos_span).is_err() {
+          continue;
+        }
+
+        return Some((
+          hir::Expr {
+            kind: hir::ExprKind::GlobalRef(method),
+            category: ExprCategory::RValue,
+            ety: fn_ty,
+          }.push(ctx.cre),
+          ret,
+        ));
+      }
+    }
+
+    None
   }
 
 }

@@ -21,10 +21,12 @@ mod patts;
 mod things;
 mod fields;
 pub mod id;
+mod defpath;
 mod visitor;
 
 pub use krate::{Krate, IdentSave, PushApi, GetApi, AttachNode};
-pub use id::{AnyId, TypeId, ExprId, ItemId, FieldId, ThingId, PattId, Rng, AnyRng, TypeRng, ExprRng, ItemRng, FieldRng, ThingRng, PattRng};
+pub use id::{AnyId, TypeId, ExprId, ItemId, FieldId, ThingId, PattId, Rng, AnyRng, TypeRng, ExprRng, ItemRng, FieldRng, ThingRng, PattRng, DefPathId, DefPathRng};
 pub use {ident::Ident, attrs::Attribute, attrs::AttrKind, dump::Dump};
 pub use {items::*, fields::*, types::*, exprs::*, patts::*, things::*};
 pub use visitor::Visitor;
+pub use defpath::DefPath;

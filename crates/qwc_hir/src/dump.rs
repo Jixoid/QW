@@ -550,11 +550,16 @@ impl DumpHandler for Type {
         for id in ctx.extra_get(args) {
           if !first { write!(f, "{}", punct(", "))?; }
           first = false;
-          id.dump(ctx, f, indent)?;
+
+          let Thing::NamedType(nm, kind) = *ctx.get(id) else { unreachable!() };
+
+          write!(f, "{}{} ", name(ctx.sin.str(nm)), punct(":"))?;
+
+          ctx.get(kind).path.dump(ctx, f, indent)?;
         }
         
         write!(f, "{} {} ", punct(")"), op("->"))?;
-        ret.dump(ctx, f, indent)?;
+        ctx.get(ret).path.dump(ctx, f, indent)?;
       }
 
 

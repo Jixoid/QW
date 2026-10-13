@@ -12,7 +12,7 @@
 
 use qwc_diagnostic::Span;
 
-use crate::{ExprId, FieldRng, ItemRng, ThingRng, TypeId, ident::Ident};
+use crate::{DefPathId, ExprId, FieldRng, ItemRng, ThingRng, TypeId, ident::Ident};
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -80,4 +80,5 @@ pub struct Item {
   pub vis: Visibility,
   pub name: Option<Ident>,
   pub kind: ItemKind,
+  pub path: DefPathId,
 }

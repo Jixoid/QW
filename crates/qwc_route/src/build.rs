@@ -55,7 +55,9 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     far.get(fid)
   };
 
-  let (start, rng, mut sum) = Parse::parse(cre, sin, far, fi);
+  let sid = sin.sid(&fpath.iter().last().unwrap().to_string_lossy());
+
+  let (start, rng, mut sum) = Parse::parse(cre, sid, sin, far, fi);
 
   let submods_to_load = {
     let mut submods_to_load = vec![];
@@ -109,7 +111,8 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     pos: start,
     vis: ast::Visibility::Inherited,
     name: None,
-    kind: ast::ItemKind::Krate(rng)
+    kind: ast::ItemKind::Krate(rng),
+    path: cre.push(ast::DefPath::Root(sid))
   };
 
   Ok((this, sum))
@@ -388,9 +391,10 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Core & Imods
   let mut deps = hir::Deps::new();
   let core_cid = deps.get_next_id();
-  let (core_cre, core_exp, prims) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+  let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
   deps.add(core_cre);
   deps.set_prims(prims);
+  deps.set_prim_op(prim_op);
   let core_name = sin.sid("core");
   let imods = [Imod::new(core_name, &core_exp)];
   let imod_cids = [core_cid];

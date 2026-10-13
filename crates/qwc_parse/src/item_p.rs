@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, ThingKind, Visibility};
+use qwc_ast::{DefPath, DefPathId, IdentSave, Item, ItemId, ItemKind, Rng, Thing, ThingId, ThingKind, Visibility};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 
@@ -22,21 +22,21 @@ pub struct ItemParser;
 impl ItemParser {
 
   // Public
-  pub fn read_item(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<ItemId, Message> {
+  pub fn read_item(ctx: &mut Ctx, base: DefPathId, defvis: &mut Visibility) -> Result<ItemId, Message> {
     let (vis, attr) = MetaParser::read_start(ctx, defvis)?;
 
     let id = match ctx.lex.peek_k()? {
       (WK::Let |
-       WK::Var, _)     => Self::sub_let     (ctx, vis)?,
-      (WK::Using, _)   => Self::sub_using   (ctx, vis)?,
-      (WK::Fun, _)     => Self::sub_fun     (ctx, vis)?,
-      (WK::Task, _)    => Self::sub_task    (ctx, vis)?,
-      (WK::Impl, _)    => Self::sub_impl    (ctx, vis)?,
-      (WK::Generic, _) => Self::sub_generic (ctx, vis)?,
-      (WK::Use, _)     => Self::sub_use     (ctx, vis)?,
-      (WK::Mod, _)     => Self::sub_mod     (ctx, vis)?,
+       WK::Var, _)     => Self::sub_let     (ctx, base, vis)?,
+      (WK::Using, _)   => Self::sub_using   (ctx, base, vis)?,
+      (WK::Fun, _)     => Self::sub_fun     (ctx, base, vis)?,
+      (WK::Task, _)    => Self::sub_task    (ctx, base, vis)?,
+      (WK::Impl, _)    => Self::sub_impl    (ctx, base, vis)?,
+      (WK::Generic, _) => Self::sub_generic (ctx, base, vis)?,
+      (WK::Use, _)     => Self::sub_use     (ctx, base, vis)?,
+      (WK::Mod, _)     => Self::sub_mod     (ctx, base, vis)?,
       
-      (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => Self::sub_itemty(ctx, vis)?,
+      (WK::Struct | WK::Iface | WK::Trait | WK::Enum | WK::Flags | WK::Variant, _) => Self::sub_itemty(ctx, base, vis)?,
 
       (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
     };
@@ -48,7 +48,7 @@ impl ItemParser {
 
 
   // Sub
-  fn sub_let(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_let(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
@@ -64,20 +64,23 @@ impl ItemParser {
     let value = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
     lex.get()?.expect_kind(WK::Semicolon)?;
+
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
     
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Let{kind, value, ism: start.kind() == WK::Var},
+      name: Some(name),
       pos: lex.pos_extend(start),
       vis,
-      name: Some(name),
-      kind: ItemKind::Let{kind, value, ism: start.kind() == WK::Var}
+      path,
     };
     
     Ok(cre.push(this))
   }
 
-  fn sub_using(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_using(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
     
@@ -85,19 +88,22 @@ impl ItemParser {
     let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
     lex.get()?.expect_kind(WK::Semicolon)?;
 
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
+
     
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Using(kind),
+      name: Some(name),
       pos: lex.pos_extend(start),
       vis,
-      name: Some(name),
-      kind: ItemKind::Using(kind),
+      path,
     }; 
 
     Ok(cre.push(this))
   }
   
-  fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_fun(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
@@ -110,19 +116,22 @@ impl ItemParser {
       (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
     };
 
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
+
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Fun{ kind, blok },
+      name: Some(name),
       pos: lex.pos_extend(start),
       vis,
-      name: Some(name),
-      kind: ItemKind::Fun{ kind, blok },
+      path,
     };
     
     Ok(cre.push(this))
   }
 
-  fn sub_task(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_task(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
 
@@ -135,19 +144,22 @@ impl ItemParser {
       (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
     };
 
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
+
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Task{ kind, blok },
+      name: Some(name),
       pos: lex.pos_extend(start),
       vis,
-      name: Some(name),
-      kind: ItemKind::Task{ kind, blok },
+      path,
     };
     
     Ok(cre.push(this))
   }
 
-  fn sub_impl(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_impl(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let type_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
     
@@ -157,7 +169,7 @@ impl ItemParser {
     } else {
       None
     };
-
+    
     lex.get()?.expect_kind(WK::BraceL)?;
 
     let rng = {
@@ -173,21 +185,26 @@ impl ItemParser {
       cre.extra(&ctn)
     };
 
+    let path = cre.push(DefPath::Impl(base));
+
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Impl{ type_ty, trait_ty, ctn: rng },
+      name: None,
       pos: lex.pos_extend(start),
       vis,
-      name: None,
-      kind: ItemKind::Impl{ type_ty, trait_ty, ctn: rng },
+      path,
     };
     
     Ok(cre.push(this))
   }
   
-  fn sub_generic(ctx: &mut Ctx, mut vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_generic(ctx: &mut Ctx, base: DefPathId, mut vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     lex.get()?.expect_kind(WK::Lt)?;
+
+    let path = cre.push(DefPath::Generic(base));
     
     let params = {
       let mut args = vec![];
@@ -276,31 +293,32 @@ impl ItemParser {
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), &mut vis)?;
+        let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), path, &mut vis)?;
 
         ctn.push(id);
       }
 
       cre.extra(&ctn)
     } else {
-      let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), &mut vis)?;
+      let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), path, &mut vis)?;
 
       cre.extra(&[id])
     };
     
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Generic{ params, reqs, ctn },
+      name: None,
       pos: lex.pos_extend(start),
       vis,
-      name: None,
-      kind: ItemKind::Generic{ params, reqs, ctn },
+      path,
     };
 
     Ok(cre.push(this))
   }
 
-  fn sub_use(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_use(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
 
     let begin = match lex.get_k()? {
@@ -331,13 +349,16 @@ impl ItemParser {
       cre.extra(&all)
     };
 
+    let path = cre.push(DefPath::Use(base));
+
 
     // Post
-    let this = Item{
+    let this = Item {
+      kind: ItemKind::Import( rng ),
+      name: None,
       pos: lex.pos_extend(start),
       vis,
-      name: None,
-      kind: ItemKind::Import( rng )
+      path,
     };
 
     Ok(cre.push(this))
@@ -357,9 +378,11 @@ impl ItemParser {
     Ok(ret)
   }
 
-  fn sub_mod(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_mod(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
     let name = lex.get()?.ident(sin, far)?;
+
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
 
     let ctn = match lex.get_k()? {
       (WK::Semicolon, _) => None,
@@ -371,7 +394,7 @@ impl ItemParser {
         loop {
           if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
           
-          let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), defvis)?;
+          let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), path, defvis)?;
 
           ctn.push(id);
         }
@@ -384,42 +407,46 @@ impl ItemParser {
 
 
     // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: Some(name),
+    let this = Item {
       kind: match ctn {
         None => ItemKind::ModuleUnloaded,
         Some(v) => ItemKind::Module(v),
-      }
+      },
+      name: Some(name),
+      pos: lex.pos_extend(start),
+      vis,
+      path,
     };
     
     Ok(cre.push(this))
   }
 
-  fn sub_itemty(ctx: &mut Ctx, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  fn sub_itemty(ctx: &mut Ctx, base: DefPathId, vis: Visibility) -> Result<ItemId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get()?;
 
     let name = lex.get()?.ident(sin, far)?;
+
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
     
     let kind = match start.kind() {
-      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Iface   => TypeParser::sub_iface(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Trait   => TypeParser::sub_trait(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Enum    => TypeParser::sub_enum(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Flags   => TypeParser::sub_flags(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Variant => TypeParser::sub_variant(ctx!(cre, sin, far, lex, sum, side))?,
+      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Iface   => TypeParser::sub_iface(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Trait   => TypeParser::sub_trait(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Enum    => TypeParser::sub_enum(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Flags   => TypeParser::sub_flags(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Variant => TypeParser::sub_variant(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
 
       _ => panic!(),
     };
     
     
     // Post
-    let this = Item{
-      pos: lex.pos_extend(start),
-      vis,
-      name: Some(name),
+    let this = Item {
       kind: ItemKind::ItemTy(kind),
+      pos: lex.pos_extend(start),
+      name: Some(name),
+      vis,
+      path,
     }; 
 
     Ok(cre.push(this))

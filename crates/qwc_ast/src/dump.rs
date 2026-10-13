@@ -14,11 +14,11 @@ use std::fmt;
 
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
-use qwc_dump::{kw, name, op, punct, write_indent};
+use qwc_dump::{kw, name, op, punct, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  AnyId, Attribute, BinaryOp, Expr, ExprId, ExprKind, Field, FieldId, FieldKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt, PattId, Thing, ThingId, ThingKind, Type, TypeId, TypeKind, UnaryOp, Visibility, attrs::AttrKind, id::{AstId, NodeKind, SpecAny},
+  AnyId, Attribute, BinaryOp, DefPath, DefPathId, Expr, ExprId, ExprKind, Field, FieldId, FieldKind, FunAttrs, Item, ItemId, ItemKind, Krate, Patt, PattId, Thing, ThingId, ThingKind, Type, TypeId, TypeKind, UnaryOp, Visibility, attrs::AttrKind, id::{AstId, NodeKind, SpecAny},
 };
 
 
@@ -1221,6 +1221,37 @@ impl DumpHandler for Thing {
   }
 }
 
+impl DumpHandler for DefPath {
+  fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
+    match *self {
+      DefPath::Root(name_sid) => write!(f, "{}", ty(sin.str(name_sid)))?,
+      
+      DefPath::Path{base, name: name_sid} => {
+        base.dump(cre, sin, far, f, indent)?;
+        write!(f, "{}", punct("::"))?;
+        write!(f, "{}", ty(sin.str(name_sid)))?;
+      }
+
+      DefPath::Impl(base) => {
+        base.dump(cre, sin, far, f, indent)?;
+        write!(f, "{}{}{}", punct("<"), kw("impl"), punct(">"))?;
+      }
+      
+      DefPath::Generic(base) => {
+        base.dump(cre, sin, far, f, indent)?;
+        write!(f, "{}{}{}", punct("<"), kw("generic"), punct(">"))?;
+      }
+      
+      DefPath::Use(base) => {
+        base.dump(cre, sin, far, f, indent)?;
+        write!(f, "{}{}{}", punct("<"), kw("use"), punct(">"))?;
+      }
+    }
+
+    Ok(())
+  }
+}
+
 
 // Others
 fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
@@ -1309,6 +1340,7 @@ impl_dump_id!(ExprId, Expr);
 impl_dump_id!(PattId, Patt);
 impl_dump_id!(FieldId, Field);
 impl_dump_id!(ThingId, Thing);
+impl_dump_id!(DefPathId, DefPath);
 
 impl DumpHandler for (AstId<SpecAny>, NodeKind) {
   fn dump(&self, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
@@ -1319,6 +1351,7 @@ impl DumpHandler for (AstId<SpecAny>, NodeKind) {
       NodeKind::Patt => PattId::new_from(*self).dump(cre, sin, far, f, indent),
       NodeKind::Field => FieldId::new_from(*self).dump(cre, sin, far, f, indent),
       NodeKind::Thing => ThingId::new_from(*self).dump(cre, sin, far, f, indent),
+      NodeKind::DefPath => DefPathId::new_from(*self).dump(cre, sin, far, f, indent),
       NodeKind::Any => panic!(),
     }
   }

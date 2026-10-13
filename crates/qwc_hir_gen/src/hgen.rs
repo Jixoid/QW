@@ -41,7 +41,7 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
 
 
 pub struct TypeMethods {
-  pub traits: FxHashSet<hir::TypeId>,
+  pub traits: FxHashMap<hir::TypeId, ast::ItemId>,
   pub inherent_methods: FxHashSet<Sid>,
   pub methods: FxHashMap<Sid, Vec<ast::ItemId>>,
 }
@@ -269,7 +269,7 @@ impl<'ast, 'hir, 'imod> HGen {
     let mut type_impls: FxHashMap<hir::TypeId, TypeMethods> = FxHashMap::default();
 
     for ImplFor{ container, item } in implst {
-      let ast::ItemKind::Impl { type_ty, trait_ty, ctn: fields } = ctx.src.get(item).kind else { panic!() };
+      let ast::ItemKind::Impl { type_ty, trait_ty, ctn: fields } = ctx.src.get(item).kind else { unreachable!() };
 
       let lscp = ctx.scp.get(&container).unwrap();
       let ctx = ctx!(lscp -> ctx);
@@ -289,7 +289,7 @@ impl<'ast, 'hir, 'imod> HGen {
       // Reg
       let reg = |tyfuns: &mut TypeMethods| -> Result<(), Message> {
         if let Some(trait_ty) = trait_ty {
-          if !tyfuns.traits.insert(trait_ty) {
+          if tyfuns.traits.insert(trait_ty, item).is_some() {
             return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(trait_span.unwrap())));
           }
         }
@@ -325,9 +325,9 @@ impl<'ast, 'hir, 'imod> HGen {
         
         Vacant(entry) => {
           let tyfuns = TypeMethods {
-            traits: FxHashSet::default(),
-            inherent_methods: FxHashSet::default(),
+            traits: FxHashMap::default(),
             methods: FxHashMap::default(),
+            inherent_methods: FxHashSet::default(),
           };
           
           if let Err(msg) = reg(entry.insert(tyfuns)) { ctx.sum.add(msg); continue };

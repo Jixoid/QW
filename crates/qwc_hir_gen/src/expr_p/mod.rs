@@ -87,10 +87,10 @@ impl ExprLow {
 
       // Operator
       Unary{op, val} => operator_p::low_unary(ctx, fctx, op, val)?,
-      Binary{op, lhs, rhs} => operator_p::low_binary(ctx, fctx, op, lhs, rhs)?,
+      Binary{op, lhs, rhs} => operator_p::low_binary(ctx, fctx, it.pos, op, lhs, rhs)?,
       
       Assign{lhs, rhs, op_span} => operator_p::low_assign(ctx, fctx, lhs, rhs, op_span)?,
-      AssignOp{op, lhs, rhs, op_span} => operator_p::low_assign_op(ctx, fctx, op, lhs, rhs, op_span)?,
+      AssignOp{op, lhs, rhs, op_span} => operator_p::low_assign_op(ctx, fctx, it, op, lhs, rhs, op_span)?,
 
       Call{callee, args} => operator_p::low_call(ctx, fctx, it, callee, args)?,
 

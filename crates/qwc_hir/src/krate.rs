@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use qwc_arena::Arena;
 
-use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
+use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimOps, PrimTypes, Rng, Thing, Type, id::{HirId, HirKind, NodeKind, SpecAny}};
 
 
 
@@ -27,11 +27,12 @@ pub struct CID (pub(crate) NonZero<u16>);
 pub struct Deps {
   imod: Vec<Krate>,
   prims: Option<PrimTypes>,
+  prim_op: Option<PrimOps>,
 }
 
 impl Deps {
   pub fn new() -> Self {
-    Self { imod: vec![], prims: None }
+    Self { imod: vec![], prims: None, prim_op: None }
   }
 
   pub fn set_prims(&mut self, prims: PrimTypes) {
@@ -40,6 +41,14 @@ impl Deps {
 
   pub fn prims(&self) -> Option<&PrimTypes> {
     self.prims.as_ref()
+  }
+
+  pub fn set_prim_op(&mut self, prim_op: PrimOps) {
+    self.prim_op = Some(prim_op);
+  }
+
+  pub fn prim_op(&self) -> Option<&PrimOps> {
+    self.prim_op.as_ref()
   }
 
   pub fn add(&mut self, cre: Krate) -> CID {
