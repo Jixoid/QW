@@ -134,7 +134,7 @@ impl ItemLow {
       loc.insert(name, kind, false, name_pos);
     }
 
-    let fctx = FunCtx{ ret_ty: ret, sign_pos: ctx.src.get(kind).pos };
+    let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
 
     let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
     
@@ -201,7 +201,7 @@ impl ItemLow {
       loc.insert(name, kind, false, name_pos);
     }
 
-    let fctx = FunCtx{ ret_ty: ret, sign_pos: ctx.src.get(kind).pos };
+    let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
 
     let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
     

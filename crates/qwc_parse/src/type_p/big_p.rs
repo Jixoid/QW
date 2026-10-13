@@ -10,7 +10,7 @@
 */
 
 
-use qwc_ast::{self as ast, DefPath, DefPathId, FieldKind, IdentSave, Item, Thing, ThingKind, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
+use qwc_ast::{self as ast, DefPath, DefPathId, FieldKind, Ident, IdentSave, Item, Thing, ThingKind, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
 use qwc_diagnostic::{Label, Message, msg::*};
 use qwc_lexer::WK;
 use qwc_string_interner::Sid;
@@ -21,13 +21,13 @@ use crate::{Ctx, FieldParser, TypeParser, WordCheck, ctx, expr_p::ExprParser};
 impl TypeParser {
 
   // Big
-  pub fn sub_struct(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  pub fn sub_struct(ctx: &mut Ctx, base: DefPathId, name: Ident) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.peek()?;
     let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
 
     lex.get()?.expect_kind(WK::BraceL)?;
 
-    let path = cre.push(DefPath::Path { base, name });
+    let path = cre.push(DefPath::Path { base, name: name.sid() });
 
     let (rng, impin, hideimp) = {
       let mut ctn = vec![];
@@ -59,10 +59,14 @@ impl TypeParser {
       kind: TypeKind::Struct(rng),
     }.push(ctx.cre);
 
+    let name_ty = Type {
+      pos: name.into(),
+      kind: TypeKind::Nick(name),
+    }.push(ctx.cre);
     
     for (trait_ty, ctn, pos, vis) in impin {
       let sideimp = Item {
-        kind: ast::ItemKind::Impl { type_ty, trait_ty: Some(trait_ty), ctn },
+        kind: ast::ItemKind::Impl { type_ty: name_ty, trait_ty: Some(trait_ty), ctn },
         name: None,
         pos,
         vis,
@@ -74,7 +78,7 @@ impl TypeParser {
 
     if !hideimp.is_empty() {
       let hideimp = Item {
-        kind: ast::ItemKind::Impl { type_ty, trait_ty: None, ctn: ctx.cre.extra(&hideimp) },
+        kind: ast::ItemKind::Impl { type_ty: name_ty, trait_ty: None, ctn: ctx.cre.extra(&hideimp) },
         name: None,
         pos: lex.pos_extend(start),
         vis: Visibility::Public,

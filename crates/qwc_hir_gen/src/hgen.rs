@@ -47,9 +47,36 @@ pub struct TypeMethods {
 }
 
 
+#[allow(dead_code)]
+pub struct LoopCtx {
+  pub label: Option<Sid>,
+  pub break_ty: Option<hir::TypeId>,
+}
+
+
 pub struct FunCtx {
-  pub ret_ty: hir::TypeId,
+  pub ret_ty: Option<hir::TypeId>,
   pub sign_pos: Span,
+  #[allow(dead_code)]
+  pub loops: Vec<LoopCtx>,
+}
+
+impl FunCtx {
+  pub fn new_fun(ret_ty: hir::TypeId, sign_pos: Span) -> Self {
+    Self {
+      ret_ty: Some(ret_ty),
+      sign_pos,
+      loops: Vec::new(),
+    }
+  }
+
+  pub fn new_const(pos: Span) -> Self {
+    Self {
+      ret_ty: None,
+      sign_pos: pos,
+      loops: Vec::new(),
+    }
+  }
 }
 
 

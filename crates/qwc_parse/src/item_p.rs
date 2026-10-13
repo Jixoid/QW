@@ -429,7 +429,7 @@ impl ItemParser {
     let path = cre.push(DefPath::Path { base, name: name.sid() });
     
     let kind = match start.kind() {
-      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
+      WK::Struct  => TypeParser::sub_struct(ctx!(cre, sin, far, lex, sum, side), path, name)?,
       WK::Iface   => TypeParser::sub_iface(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
       WK::Trait   => TypeParser::sub_trait(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
       WK::Enum    => TypeParser::sub_enum(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,

@@ -16,7 +16,7 @@ use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, DefPathId, TypeAttr};
 
 use rustc_hash::FxHashMap;
-use crate::Ctx;
+use crate::{Ctx, ExprLow, FunCtx};
 
 mod fun_p;
 mod spec_p;
@@ -142,8 +142,29 @@ impl TypeLow {
 
 
   // Vector
-  fn low_vector(_ctx: &mut Ctx, _kind: ast::TypeId, _ext: ast::ExprId) -> Result<hir::TypeId, Message> {
-    todo!()
+  fn low_vector(ctx: &mut Ctx, kind: ast::TypeId, ext: ast::ExprId) -> Result<hir::TypeId, Message> {
+    let elem_ty = TypeLow::low(ctx, kind)?;
+
+    // Check
+    let lay = ctx.get(elem_ty).layout;
+    let pos = ctx.src.get(kind).pos;
+
+    if lay.is_dynamic() {
+      return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["vector"]), Label::new_pos(pos)));
+    }
+
+    let fctx = FunCtx::new_const(ctx.src.get(ext).pos);
+    let len_expr = ExprLow::low(ctx, &fctx, ext)?;
+
+    let path = ctx.get(elem_ty).path;
+    let this = hir::Type {
+      kind: hir::TypeKind::Vector(elem_ty, len_expr),
+      layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
+      path,
+    };
+
+    Ok(ctx.cre.push(this))
   }
   
   fn low_vscale(ctx: &mut Ctx, kind: ast::TypeId) -> Result<hir::TypeId, Message> {
@@ -164,8 +185,29 @@ impl TypeLow {
 
 
   // Sequentiel
-  fn low_array(_ctx: &mut Ctx, _kind: ast::TypeId, _ext: ast::ExprId) -> Result<hir::TypeId, Message> {
-    todo!()
+  fn low_array(ctx: &mut Ctx, kind: ast::TypeId, ext: ast::ExprId) -> Result<hir::TypeId, Message> {
+    let elem_ty = TypeLow::low(ctx, kind)?;
+
+    // Check
+    let lay = ctx.get(elem_ty).layout;
+    let pos = ctx.src.get(kind).pos;
+
+    if lay.is_dynamic() {
+      return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["array"]), Label::new_pos(pos)));
+    }
+
+    let fctx = FunCtx::new_const(ctx.src.get(ext).pos);
+    let len_expr = ExprLow::low(ctx, &fctx, ext)?;
+
+    let path = ctx.get(elem_ty).path;
+    let this = hir::Type {
+      kind: hir::TypeKind::Array(elem_ty, len_expr),
+      layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      attr: TypeAttr::empty(),
+      path,
+    };
+
+    Ok(ctx.cre.push(this))
   }
   
   fn low_slice(ctx: &mut Ctx, kind: ast::TypeId) -> Result<hir::TypeId, Message> {
@@ -221,14 +263,7 @@ pub struct TypeMatch;
 
 impl TypeMatch {
 
-  pub fn matches(
-    ctx: &Ctx,
-    ty1: hir::TypeId,
-    ty2: hir::TypeId,
-    ty2_ast: ast::TypeId,
-    self_ty: Option<hir::TypeId>,
-    assoc_types: Option<&FxHashMap<usize, hir::TypeId>>,
-  ) -> Result<(), Message> {
+  pub fn matches(ctx: &Ctx, ty1: hir::TypeId, ty2: hir::TypeId, ty2_ast: ast::TypeId, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Result<(), Message> {
     if ty1 == ty2 { return Ok(()) }
 
     let ty1_ty = ctx.get(ty1).kind;
@@ -311,14 +346,7 @@ impl TypeMatch {
   }
 
 
-  pub fn match_fun(
-    ctx: &Ctx,
-    fun1: hir::TypeId,
-    fun2: hir::TypeId,
-    fun2_ast: ast::TypeId,
-    self_ty: Option<hir::TypeId>,
-    assoc_types: Option<&FxHashMap<usize, hir::TypeId>>,
-  ) -> Result<(), Message> {
+  pub fn match_fun(ctx: &Ctx, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Result<(), Message> {
     let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { panic!() };
     let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { panic!() };
 

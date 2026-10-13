@@ -50,6 +50,7 @@ pub const AMBIGUOUS_METHOD_CALL:                            CodedMsg = CodedMsg:
 pub const CANNOT_CONVERT_TO_FLOAT:                          CodedMsg = CodedMsg::new(0x0021, "cannot convert to float");
 pub const INVALID_SUFFIX_X_FOR_X_LITERAL:                   CodedMsg = CodedMsg::new(0x0022, "invalid suffix `{}` for {} literal");
 pub const CANNOT_CONVERT_TO_CHAR:                           CodedMsg = CodedMsg::new(0x0023, "cannot convert to char");
+pub const RETURN_OUTSIDE_OF_FUNCTION:                       CodedMsg = CodedMsg::new(0x0024, "`return` outside of function");
 
 
 // Non Coded Messages

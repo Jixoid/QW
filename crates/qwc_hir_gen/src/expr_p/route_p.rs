@@ -19,12 +19,14 @@ use crate::{ExprLow, FunCtx, expr_p::const_p, hgen::Ctx, TypeMatch};
 
 // Route
 pub fn low_return(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+  let ret_ty = fctx.ret_ty.ok_or_else(|| Message::error(RETURN_OUTSIDE_OF_FUNCTION, Label::new_pos(it.pos)))?;
+
   let val_hir = val.map(|id| ExprLow::low(ctx, fctx, id)).unwrap_or_else(|| const_p::low_unit(ctx))?;
   let val_ty = ctx.cre.get(val_hir).ety;
 
   let ret_pos = val.map(|id| ctx.src.get(id).pos).unwrap_or(it.pos);
 
-  TypeMatch::matches_pos(ctx, fctx.ret_ty, val_ty, ret_pos).map_err(|err| err
+  TypeMatch::matches_pos(ctx, ret_ty, val_ty, ret_pos).map_err(|err| err
     .add(Label::new(fctx.sign_pos, DEFINED_HERE))
   )?;
 

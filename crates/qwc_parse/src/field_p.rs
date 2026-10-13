@@ -216,28 +216,16 @@ impl FieldParser {
     lex.get()?.expect_kind(WK::BraceL)?;
 
     let ctn = {
-      let mut impls = vec![];
+      let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
-      
+
       loop {
         if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
         
-        let (vis, attrs) = MetaParser::read_start(ctx!(cre, sin, far, lex, sum, side), defvis)?;
-        
-        let next_kw = lex.peek_k()?;
-        if next_kw.0 == WK::Fun {
-          let fun = Self::sub_fun(ctx!(cre, sin, far, lex, sum, side), vis)?;
-          
-          if let Some(a) = attrs { cre.attach(fun, a); }
-          
-          impls.push(fun);
-        } else {
-          let c = lex.get()?;
-          return Err(Message::error(EXPECTED_BUT_FOUND, Label::new_pos(c)));
-        }
+        ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), defvis)? );
       }
-      
-      cre.extra(&impls)
+
+      cre.extra(&ctn)
     };
 
 
