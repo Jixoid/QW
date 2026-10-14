@@ -153,7 +153,7 @@ impl DumpHandler for Item {
         writeln!(f, "}}")?;
       }
 
-      ItemKind::ModuleUnloaded => panic!(),
+      ItemKind::ModuleUnloaded => unreachable!(),
 
       ItemKind::ModuleFile(rng, fid) => {
         let name = self.name.map(|n| n.str(far)).unwrap();
@@ -650,7 +650,7 @@ impl DumpHandler for Expr {
         write!(f, "{{")?;
         
         for id in cre.extra_get(fields) {
-          let ThingKind::NamedExpr(name, expr) = cre.get(id).kind else { panic!() };
+          let ThingKind::NamedExpr(name, expr) = cre.get(id).kind else { unreachable!() };
           
           write!(f, "{}{} ", name.str(far), ":".bright_black())?;
           
@@ -689,7 +689,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::If { cond, then, elsb } => {
-        write!(f, "{} ", "if".blue().bold())?;
+        write!(f, "{} ", "if".cyan().bold())?;
         cond.dump(cre, sin, far, f, indent)?;
         write!(f, " ")?;
         then.dump(cre, sin, far, f, indent)?;
@@ -698,14 +698,14 @@ impl DumpHandler for Expr {
           let el_expr: &Expr = cre.get(el);
           match el_expr.kind {
             ExprKind::If { cond: ef_cond, then: ef_then, elsb: next_elsb } => {
-              write!(f, " {} ", "ef".blue().bold())?;
+              write!(f, " {} ", "ef".cyan().bold())?;
               ef_cond.dump(cre, sin, far, f, indent)?;
               write!(f, " ")?;
               ef_then.dump(cre, sin, far, f, indent)?;
               curr_elsb = next_elsb;
             }
             _ => {
-              write!(f, " {} ", "else".blue().bold())?;
+              write!(f, " {} ", "else".cyan().bold())?;
               el.dump(cre, sin, far, f, indent)?;
               break;
             }
@@ -714,7 +714,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Match { cond, arms } => {
-        write!(f, "{} ", "match".blue())?;
+        write!(f, "{} ", "match".cyan().bold())?;
         cond.dump(cre, sin, far, f, indent)?;
         writeln!(f, " {{")?;
         
@@ -729,7 +729,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::While { cond, blok, elsb } => {
-        write!(f, "{} ", "while".blue().bold())?;
+        write!(f, "{} ", "while".cyan().bold())?;
         cond.dump(cre, sin, far, f, indent)?;
         write!(f, " ")?;
         blok.dump(cre, sin, far, f, indent)?;
@@ -740,7 +740,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Loop { blok, elsb } => {
-        write!(f, "{} ", "loop".blue().bold())?;
+        write!(f, "{} ", "loop".cyan().bold())?;
         blok.dump(cre, sin, far, f, indent)?;
         if let Some(el) = elsb {
           write!(f, " {} ", "else".blue().bold())?;
@@ -749,14 +749,14 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::ForIn { vars, iter, blok, elsb } => {
-        write!(f, "{} ", "for".blue())?;
+        write!(f, "{} ", "for".cyan())?;
         vars.dump(cre, sin, far, f, indent)?;
         write!(f, " {} ", "in".blue())?;
         iter.dump(cre, sin, far, f, indent)?;
         write!(f, " ")?;
         blok.dump(cre, sin, far, f, indent)?;
         if let Some(el) = elsb {
-          write!(f, " {} ", "else".blue())?;
+          write!(f, " {} ", "else".cyan())?;
           el.dump(cre, sin, far, f, indent)?;
         }
       }
@@ -896,7 +896,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Return { label, val } => {
-        write!(f, "{}", "ret".blue().bold().bold())?;
+        write!(f, "{}", "ret".cyan().bold())?;
         if let Some(lbl) = label {
           write!(f, " `{}", lbl.str(far).bright_black())?;
         }
@@ -907,7 +907,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Break { label, val } => {
-        write!(f, "{}", "break".blue().bold())?;
+        write!(f, "{}", "break".cyan().bold())?;
         if let Some(lbl) = label {
           write!(f, " `{}", lbl.str(far).bright_black())?;
         }
@@ -918,7 +918,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Continue { label } => {
-        write!(f, "{}", "continue".blue())?;
+        write!(f, "{}", "continue".cyan().bold())?;
         if let Some(lbl) = label {
           write!(f, " `{}", lbl.str(far).bright_black())?;
         }
@@ -1352,7 +1352,7 @@ impl DumpHandler for (AstId<SpecAny>, NodeKind) {
       NodeKind::Field => FieldId::new_from(*self).dump(cre, sin, far, f, indent),
       NodeKind::Thing => ThingId::new_from(*self).dump(cre, sin, far, f, indent),
       NodeKind::DefPath => DefPathId::new_from(*self).dump(cre, sin, far, f, indent),
-      NodeKind::Any => panic!(),
+      NodeKind::Any => unreachable!(),
     }
   }
 }

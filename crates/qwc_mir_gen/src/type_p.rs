@@ -26,28 +26,29 @@ impl TypeLow {
 
     let it = ctx.get_type(id);
 
+    use hir::TypeKind::*;
     let ty = match it.kind {
       // Primitive
-      hir::TypeKind::Unit => ctx.tin.ty_unit(),
+      Unit => ctx.tin.ty_unit(),
       
-      hir::TypeKind::Int(len, _) => Self::low_int(ctx, len)?,
-      hir::TypeKind::ArchInt(_) => ctx.tin.ty_arch_int(),
-      hir::TypeKind::Float(len) => Self::low_float(ctx, len)?,
-      hir::TypeKind::Bool => ctx.tin.ty_bool(),
-      hir::TypeKind::Char => ctx.tin.ty_i32(),
+      Int(len, _) => Self::low_int(ctx, len)?,
+      ArchInt(_) => ctx.tin.ty_arch_int(),
+      Float(len) => Self::low_float(ctx, len)?,
+      Bool => ctx.tin.ty_bool(),
+      Char => ctx.tin.ty_i32(),
 
-      hir::TypeKind::Ref(id, _) => Self::low_ref(ctx, id)?,
+      Ref(id, _) => Self::low_ref(ctx, id)?,
 
       // Combinated
-      hir::TypeKind::Struct(rng) => Self::low_struct(ctx, id, rng, id.cid())?,
-      hir::TypeKind::Iface(rng) => Self::low_iface(ctx, rng)?,
-      hir::TypeKind::TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
+      Struct(rng) => Self::low_struct(ctx, id, rng, id.cid())?,
+      Iface(rng) => Self::low_iface(ctx, rng)?,
+      TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
       
       // Callable
-      hir::TypeKind::Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
+      Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
       
       // Logic Error
-      hir::TypeKind::Trait(..) | hir::TypeKind::AssociatedType{..} | hir::TypeKind::GenericType{..} => panic!("this type must not have infiltrated this layer!"),
+      Trait(..) | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -65,7 +66,7 @@ impl TypeLow {
       32  => ctx.tin.ty_i32(),
       64  => ctx.tin.ty_i64(),
       128 => ctx.tin.ty_i128(),
-      _ => panic!()
+      _ => unreachable!()
     };
 
     Ok(it)
@@ -77,7 +78,7 @@ impl TypeLow {
       32  => ctx.tin.ty_f32(),
       64  => ctx.tin.ty_f64(),
       128 => ctx.tin.ty_f128(),
-      _ => panic!()
+      _ => unreachable!()
     };
 
     Ok(it)
@@ -103,7 +104,7 @@ impl TypeLow {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(rng).map(|id| {
-        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { panic!() };
+        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { unreachable!() };
         kind
       }).collect()
     };
@@ -137,7 +138,7 @@ impl TypeLow {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(args).map(|id| {
-        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { panic!() };
+        let hir::Thing::NamedType(_, kind) = *krate.get(id) else { unreachable!() };
         kind
       }).collect()
     };

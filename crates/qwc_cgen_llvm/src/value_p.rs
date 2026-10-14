@@ -95,7 +95,7 @@ impl ValueLow {
         SymbolVal::Function(fv) => fv.as_any_value_enum(),
       },
       
-      _ => panic!()
+      _ => unreachable!()
     }
   }
 

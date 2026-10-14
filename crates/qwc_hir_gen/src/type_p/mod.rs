@@ -307,13 +307,13 @@ impl TypeMatch {
       (_, hir::TypeKind::Never) => Ok(()),
 
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
-        let ast::TypeKind::Ref(t2_ast, _) = ty2_ast_ty else { panic!() };
+        let ast::TypeKind::Ref(t2_ast, _) = ty2_ast_ty else { unreachable!() };
 
         Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
       }
 
       (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
-        let ast::TypeKind::Ptr(t2_ast, _) = ty2_ast_ty else { panic!() };
+        let ast::TypeKind::Ptr(t2_ast, _) = ty2_ast_ty else { unreachable!() };
 
         Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
       }
@@ -347,11 +347,11 @@ impl TypeMatch {
 
 
   pub fn match_fun(ctx: &Ctx, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Result<(), Message> {
-    let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { panic!() };
-    let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { panic!() };
+    let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { unreachable!() };
+    let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { unreachable!() };
 
     let fun2_ast = ctx.src.get(fun2_ast);
-    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ret: ret_ast, attr: _} = fun2_ast.kind else { panic!() };
+    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ret: ret_ast, attr: _} = fun2_ast.kind else { unreachable!() };
 
 
     // Self Match

@@ -81,9 +81,9 @@ impl ExprLow {
       While{cond, blok, elsb} => loop_p::low_while(ctx, fctx, it, cond, blok, elsb)?,
 
       // Route
-      Return{val, ..} => route_p::low_return(ctx, it, fctx, val)?,
-      Break{val, ..} => route_p::low_break(ctx, fctx, val)?,
-      Continue{..} => route_p::low_continue(ctx)?,
+      Return{val, ..} => route_p::low_return(ctx, fctx, it, val)?,
+      Break{val, ..} => route_p::low_break(ctx, fctx, it, val)?,
+      Continue{..} => route_p::low_continue(ctx, it, fctx)?,
 
       // Operator
       Unary{op, val} => operator_p::low_unary(ctx, fctx, op, val)?,

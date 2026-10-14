@@ -23,7 +23,7 @@ pub fn low_struct(ctx: &mut Ctx, path: DefPathId, id: ast::TypeId, rng: ast::Thi
     let mut ctn = vec![];
     
     for id in ctx.src.extra_get(rng) {
-      let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
+      let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { unreachable!() };
 
       // Check
       let id = TypeLow::low(ctx, kind)?;

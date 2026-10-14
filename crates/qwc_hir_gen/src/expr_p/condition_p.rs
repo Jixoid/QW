@@ -37,7 +37,7 @@ pub fn low_if(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, cond: ast::ExprId, t
 
   let elsb = elsb.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
 
-  let ety = helper::find_duo_res_ty(ctx, it.pos, then, elsb)?;
+  let ety = helper::find_duo_res_ty(ctx, it.pos, ctx.cre.get(then).ety, elsb.map(|id| ctx.cre.get(id).ety))?;
 
 
   // Post

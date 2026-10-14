@@ -19,7 +19,7 @@ mod specialize;
 mod ty_interner;
 
 use specialize::Specialization;
-use hgen::{Ctx, FunCtx};
+use hgen::{Ctx, FunCtx, LoopCtx};
 use {type_p::{TypeLow, TypeMatch}, expr_p::ExprLow, item_p::ItemLow, infer_p::Infer};
 
 pub use hgen::HGen;

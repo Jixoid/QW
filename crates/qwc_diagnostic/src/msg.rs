@@ -51,24 +51,27 @@ pub const CANNOT_CONVERT_TO_FLOAT:                          CodedMsg = CodedMsg:
 pub const INVALID_SUFFIX_X_FOR_X_LITERAL:                   CodedMsg = CodedMsg::new(0x0022, "invalid suffix `{}` for {} literal");
 pub const CANNOT_CONVERT_TO_CHAR:                           CodedMsg = CodedMsg::new(0x0023, "cannot convert to char");
 pub const RETURN_OUTSIDE_OF_FUNCTION:                       CodedMsg = CodedMsg::new(0x0024, "`return` outside of function");
+pub const CONTINUE_OUTSIDE_OF_LOOP:                         CodedMsg = CodedMsg::new(0x0025, "`continue` outside of loop");
+pub const BREAK_OUTSIDE_OF_LOOP:                            CodedMsg = CodedMsg::new(0x0026, "`break` outside of loop");
 
 
 // Non Coded Messages
-pub const FILE_FINISHED:                    CodedMsg = CodedMsg::new_str("file finished");
-pub const EXPECTED_IDENTIFIER:              CodedMsg = CodedMsg::new_str("expected identifier");
-pub const EXPECTED_IDENTIFIER_AFTER:        CodedMsg = CodedMsg::new_str("expected identifier after: `{}`");
-pub const EXPECTED_BUT_FOUND:               CodedMsg = CodedMsg::new_str("expected `{}`, but found `{}`");
-pub const EXPECTED_BUT_FOUND2:              CodedMsg = CodedMsg::new_str("expected `{}` or `{}`, but found `{}`");
-pub const EXPECTED_BUT_FOUND3:              CodedMsg = CodedMsg::new_str("expected `{}`, `{}` or `{}`, but found `{}`");
-pub const EXPECTED_BUT_FOUND4:              CodedMsg = CodedMsg::new_str("expected `{}`, `{}`, `{}` or `{}`, but found `{}`");
-pub const UNKNOWN_KEYWORD:                  CodedMsg = CodedMsg::new_str("unknown keyword");
-pub const UNKNOWN_PATTERN:                  CodedMsg = CodedMsg::new_str("unknown pattern");
-pub const UNKNOWN_USE_STARTER:              CodedMsg = CodedMsg::new_str("unknown use starter");
-pub const UNKNOWN_USE_SEGMENT:              CodedMsg = CodedMsg::new_str("unknown use segment");
-pub const VISIBILITY_AFTER_ATTRIBUTE:       CodedMsg = CodedMsg::new_str("a visibility modifier cannot appear after the attributes");
-pub const DUPLICATE_IDENTIFIER:             CodedMsg = CodedMsg::new_str("duplicate identifier");
-pub const DID_YOU_MEAN:                     CodedMsg = CodedMsg::new_str("did you mean `{}`?");
+pub const FILE_FINISHED:                             CodedMsg = CodedMsg::new_str("file finished");
+pub const EXPECTED_IDENTIFIER:                       CodedMsg = CodedMsg::new_str("expected identifier");
+pub const EXPECTED_IDENTIFIER_AFTER:                 CodedMsg = CodedMsg::new_str("expected identifier after: `{}`");
+pub const EXPECTED_BUT_FOUND:                        CodedMsg = CodedMsg::new_str("expected `{}`, but found `{}`");
+pub const EXPECTED_BUT_FOUND2:                       CodedMsg = CodedMsg::new_str("expected `{}` or `{}`, but found `{}`");
+pub const EXPECTED_BUT_FOUND3:                       CodedMsg = CodedMsg::new_str("expected `{}`, `{}` or `{}`, but found `{}`");
+pub const EXPECTED_BUT_FOUND4:                       CodedMsg = CodedMsg::new_str("expected `{}`, `{}`, `{}` or `{}`, but found `{}`");
+pub const UNKNOWN_KEYWORD:                           CodedMsg = CodedMsg::new_str("unknown keyword");
+pub const UNKNOWN_PATTERN:                           CodedMsg = CodedMsg::new_str("unknown pattern");
+pub const UNKNOWN_USE_STARTER:                       CodedMsg = CodedMsg::new_str("unknown use starter");
+pub const UNKNOWN_USE_SEGMENT:                       CodedMsg = CodedMsg::new_str("unknown use segment");
+pub const VISIBILITY_AFTER_ATTRIBUTE:                CodedMsg = CodedMsg::new_str("a visibility modifier cannot appear after the attributes");
+pub const DUPLICATE_IDENTIFIER:                      CodedMsg = CodedMsg::new_str("duplicate identifier");
+pub const DID_YOU_MEAN:                              CodedMsg = CodedMsg::new_str("did you mean `{}`?");
 pub const CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION: CodedMsg = CodedMsg::new_str("cannot use generic type without specialization");
+pub const YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP:    CodedMsg = CodedMsg::new_str("you might have meant to break the loop");
 
 
 // Label

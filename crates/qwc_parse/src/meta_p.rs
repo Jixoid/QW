@@ -91,7 +91,7 @@ impl<'a> WordCheck for Word {
   
   fn panic_kind(self, k1: WK) -> Fail<Message> {
     match self.kind() == k1 {
-      true  => panic!(),
+      true  => unreachable!(),
       false => Err(Message::error(EXPECTED_BUT_FOUND
         .args(&[
           &format!("{:?}", k1),
@@ -104,7 +104,7 @@ impl<'a> WordCheck for Word {
 
   fn panic_kind2(self, k1: WK, k2: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 {
-      true  => panic!(),
+      true  => unreachable!(),
       false => Err(Message::error(EXPECTED_BUT_FOUND2
         .args(&[
           &format!("{:?}", k1),
@@ -118,7 +118,7 @@ impl<'a> WordCheck for Word {
   
   fn panic_kind3(self, k1: WK, k2: WK, k3: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 {
-      true  => panic!(),
+      true  => unreachable!(),
       false => Err(Message::error(EXPECTED_BUT_FOUND3
         .args(&[
           &format!("{:?}", k1),
@@ -133,7 +133,7 @@ impl<'a> WordCheck for Word {
   
   fn panic_kind4(self, k1: WK, k2: WK, k3: WK, k4: WK) -> Fail<Message> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 || self.kind() == k4 {
-      true  => panic!(),
+      true  => unreachable!(),
       false => Err(Message::error(EXPECTED_BUT_FOUND4
         .args(&[
           &format!("{:?}", k1),

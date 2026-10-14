@@ -293,7 +293,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	cre.set_root(root);
 
 
-	let exp = ExportMap::visit(&cre).map_err(|_| panic!()).unwrap();
+	let exp = ExportMap::visit(&cre).map_err(|_| ()).unwrap();
 
 	(cre, exp, prim_ty, prim_op)
 }

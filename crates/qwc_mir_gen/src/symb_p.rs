@@ -134,7 +134,7 @@ impl SymbLow {
     let ety = TypeLow::low(ctx, kind)?;
 
     let is_ret_unit = {
-      let mir::TypeKind::Fun{ret, ..} = ctx.cre.get(ety).kind else { panic!() };
+      let mir::TypeKind::Fun{ret, ..} = ctx.cre.get(ety).kind else { unreachable!() };
       
       let ret_ty = ctx.cre.get(ret);
       matches!(ret_ty.kind, mir::TypeKind::Unit)
@@ -227,7 +227,8 @@ impl SymbLow {
     }
 
     let root = ctx.src.root().unwrap();
-    let hir::ItemKind::RootNS { rng } = ctx.src.get(root).kind else { panic!() };
+    let hir::ItemKind::RootNS { rng } = ctx.src.get(root).kind else { unreachable!() };
+    
     for id in ctx.src.extra_get(rng) {
       let it = ctx.src.get(id);
       if let hir::ItemKind::Impl { type_ty: s, trait_ty: Some(i), methods } = it.kind {

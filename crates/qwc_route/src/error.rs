@@ -62,7 +62,7 @@ impl BitOr<&str> for Error {
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      Error::New => panic!(),
+      Error::New => unreachable!(),
       Error::Io(e) => write!(f, "io: {}", e),
       Error::Ds(e) => write!(f, "ds: {}", e),
       Error::Str(v) => write!(f, "{}", v),

@@ -32,7 +32,7 @@ pub fn low_path(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message
   for id in ctx.src.extra_get(rng) {
     let it = ctx.src.get(id);
 
-    if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { panic!() }
+    if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
   }
 
   let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
@@ -53,7 +53,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
         let name = match ctx.src.get(thing).kind {
           ast::ThingKind::Name(name) => name,
           ast::ThingKind::NamedType(name, _) => name,
-          _ => panic!(),
+          _ => unreachable!(),
         };
 
         let generic_hir = ItemLow::low(ctx, generic)?.unwrap();

@@ -445,7 +445,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
     TypeMatch::matches_pos(ctx, self_kind.unwrap(), self_ty, self_pos)?;
 
     for (&supp_hir, supp_ast, trt) in izip!(&user_args[1..], ctx.src.extra_get(args).skip(1), ctx.extra_get(trait_args)) {
-      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { panic!() };
+      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { unreachable!() };
       
       let supp_pos = ctx.src.get(supp_ast).pos;
       let supp_ty = ctx.cre.get(supp_hir).ety;
@@ -454,7 +454,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprI
     }
   } else {
     for (&supp_hir, supp_ast, trt) in izip!(&user_args, ctx.src.extra_get(args), ctx.extra_get(trait_args)) {
-      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { panic!() };
+      let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { unreachable!() };
       
       let supp_pos = ctx.src.get(supp_ast).pos;
       let supp_ty = ctx.cre.get(supp_hir).ety;
@@ -497,7 +497,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, fields: 
     let mut sort = vec![];
     
     for id in krate.extra_get(fields) {
-      let hir::Thing::NamedType(name, kind) = *krate.get(id) else { panic!() };
+      let hir::Thing::NamedType(name, kind) = *krate.get(id) else { unreachable!() };
       
       keys.insert(name, kind);
       sort.push(name);
@@ -512,7 +512,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, lhs: ast::ExprId, fields: 
     let mut gived_keys = FxHashMap::default();
 
     for id in ctx.src.extra_get(fields) {
-      let ast::ThingKind::NamedExpr(name, expr) = ctx.src.get(id).kind else { panic!() };
+      let ast::ThingKind::NamedExpr(name, expr) = ctx.src.get(id).kind else { unreachable!() };
       
       let expr_pos = ctx.src.get(expr).pos;
       let expr = ExprLow::low(ctx, fctx, expr)?;
@@ -620,7 +620,7 @@ pub fn low_member_struct(ctx: &mut Ctx, chain: hir::ExprId, ident: Ident, fields
   let mut found = None;
 
   for (idx, id) in krate.extra_get(fields).enumerate() {
-    let hir::Thing::NamedType(name, fty) = *krate.get(id) else { panic!() };
+    let hir::Thing::NamedType(name, fty) = *krate.get(id) else { unreachable!() };
     if name == ident.sid() {
       found = Some((idx as u32, fty));
       break;

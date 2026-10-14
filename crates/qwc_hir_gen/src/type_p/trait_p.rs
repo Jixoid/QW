@@ -95,23 +95,22 @@ pub fn low_iface(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
     for id in ctx.src.extra_get(rng) {
       let it = ctx.src.get(id);
 
-      let ast::FieldKind::Fun{kind, ..} = it.kind else { panic!() };
+      let ast::FieldKind::Fun{kind, ..} = it.kind else { unreachable!() };
       let name = it.name.unwrap().sid();
       let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
       let fun_ty = TypeLow::low_itemty(ctx, fun_path, kind)?;
       
       // Check (self != DST)
-      if let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind {
+      let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind else { unreachable!() };
 
-        let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
-    
-        let lay = ctx.get(self_kind).layout;
+      let self_pos = if let ast::TypeKind::Fun{self_kind, ..} = ctx.src.get(kind).kind { ctx.src.get(self_kind.unwrap()).pos } else { unreachable!() }; 
+  
+      let lay = ctx.get(self_kind).layout;
 
-        if !lay.is_static() {
-          let pos = self_pos;
-          return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
-        }
-      } else { panic!() }
+      if !lay.is_static() {
+        let pos = self_pos;
+        return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
+      }
 
 
       // Push

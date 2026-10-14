@@ -18,7 +18,7 @@ use crate::{ExprLow, FunCtx, expr_p::const_p, hgen::Ctx, TypeMatch};
 
 
 // Route
-pub fn low_return(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
   let ret_ty = fctx.ret_ty.ok_or_else(|| Message::error(RETURN_OUTSIDE_OF_FUNCTION, Label::new_pos(it.pos)))?;
 
   let val_hir = val.map(|id| ExprLow::low(ctx, fctx, id)).unwrap_or_else(|| const_p::low_unit(ctx))?;
@@ -41,8 +41,33 @@ pub fn low_return(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx, val: Option<ast:
   Ok(ctx.cre.push(item))
 }
 
-pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
   let val = val.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
+  
+  let mut lloop = fctx.loops.borrow_mut();
+  
+  let lloop = lloop.last_mut().ok_or_else(||
+    Message::error(BREAK_OUTSIDE_OF_LOOP, Label::new_pos(it.pos))
+  )?;
+
+  match val {
+    None => lloop.opt_ty = true,
+    Some(val) => {
+      let ety = ctx.cre.get(val).ety;
+
+      if let Some(lty) = lloop.ret_ty {
+        return Err(Message::error(MISMATCHED_TYPES
+          .args(&[
+            &ctx.type_name(lty),
+            &ctx.type_name(ety),
+          ]),
+          Label::new_pos(it.pos)
+        ))
+      } else {
+        lloop.ret_ty = Some(ety)
+      };
+    }
+  }
 
 
   // Post
@@ -55,7 +80,12 @@ pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, val: Option<ast::ExprId>) -> Resu
   Ok(ctx.cre.push(item))
 }
 
-pub fn low_continue(ctx: &mut Ctx) -> Result<hir::ExprId, Message> {
+pub fn low_continue(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx) -> Result<hir::ExprId, Message> {
+  fctx.loops.borrow().last().ok_or_else(||
+    Message::error(CONTINUE_OUTSIDE_OF_LOOP, Label::new_pos(it.pos))
+  )?;
+
+
   // Post
   let item = hir::Expr {
     kind: hir::ExprKind::Continue,

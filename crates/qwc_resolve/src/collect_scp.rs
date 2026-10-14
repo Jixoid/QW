@@ -159,7 +159,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
             current_scope.insert(name, it, &mut self.sum);
           }
 
-          _ => panic!()
+          _ => unreachable!()
         }
       }
     }

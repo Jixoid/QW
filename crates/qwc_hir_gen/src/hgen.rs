@@ -10,6 +10,8 @@
 */
 
 
+use std::cell::RefCell;
+
 use qwc_arena::Files;
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, Span, Summary, Poit, msg::*};
@@ -47,18 +49,16 @@ pub struct TypeMethods {
 }
 
 
-#[allow(dead_code)]
 pub struct LoopCtx {
-  pub label: Option<Sid>,
-  pub break_ty: Option<hir::TypeId>,
+  pub ret_ty: Option<hir::TypeId>,
+  pub opt_ty: bool,
 }
 
 
 pub struct FunCtx {
   pub ret_ty: Option<hir::TypeId>,
   pub sign_pos: Span,
-  #[allow(dead_code)]
-  pub loops: Vec<LoopCtx>,
+  pub loops: RefCell<Vec<LoopCtx>>,
 }
 
 impl FunCtx {
@@ -66,7 +66,7 @@ impl FunCtx {
     Self {
       ret_ty: Some(ret_ty),
       sign_pos,
-      loops: Vec::new(),
+      loops: RefCell::new(vec![]),
     }
   }
 
@@ -74,7 +74,7 @@ impl FunCtx {
     Self {
       ret_ty: None,
       sign_pos: pos,
-      loops: Vec::new(),
+      loops: RefCell::new(vec![]),
     }
   }
 }
@@ -209,7 +209,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         }
         
         for id in krate.extra_get(args) {
-          let hir::Thing::NamedType(name, kind) = *self.cre.get(id) else { panic!() };
+          let hir::Thing::NamedType(name, kind) = *self.cre.get(id) else { unreachable!() };
 
           args_str.push(format!("{}: {}", self.sin.str(name), self.type_name(kind)));
         }

@@ -17,38 +17,29 @@ use qwc_hir::{self as hir, ExprCategory};
 use crate::hgen::Ctx;
 
 
-pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<hir::TypeId, Message> {
-  let ty_blok = (ctx.cre.get(blok) as &hir::Expr).ety;
-  let opt_ty_elsb = elsb.map(|id| (ctx.cre.get(id) as &hir::Expr).ety);
-
+pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::TypeId, elsb: Option<hir::TypeId>) -> Result<hir::TypeId, Message> {
   let ty_unit = ctx.prims.ty_unit;
   let ty_never = ctx.prims.ty_never;
 
-  let it = match opt_ty_elsb {
-    None => ty_blok,
+  let it = match elsb {
+    None => blok,
       
-    Some(ty_elsb) => {
+    Some(elsb) => {
       match () {
         // Durum 1: Blok '!' döndürüyor (örn. hep panic atıyor). Else'in tipini al.
-        _ if ty_blok == ty_never => ty_elsb,
+        _ if blok == ty_never => elsb,
 
         // Durum 2: Else '!' döndürüyor. Bloğun tipini al.
-        _ if ty_elsb == ty_never => ty_blok,
+        _ if elsb == ty_never => blok,
         
         // Durum 3: İkisi de aynı tip.
-        _ if ty_blok == ty_elsb => ty_blok,
+        _ if blok == elsb => blok,
         
         // Durum 4: Blok hiçbir şey döndürmüyor, Else T döndürüyor -> ?T
-        _ if ty_blok == ty_unit => {
-          let lay = ctx.get(ty_elsb).layout;
-          ctx.tin.ty_option(ctx.cre, ctx.ideps, ty_elsb, lay)
-        }
+        _ if blok == ty_unit => ctx.tin.ty_option(ctx.cre, ctx.ideps, elsb),
 
         // Durum 5: Blok T döndürüyor, Else hiçbir şey döndürmüyor -> ?T
-        _ if ty_elsb == ty_unit => {
-          let lay = ctx.get(ty_blok).layout;
-          ctx.tin.ty_option(ctx.cre, ctx.ideps, ty_blok, lay)
-        }
+        _ if elsb == ty_unit => ctx.tin.ty_option(ctx.cre, ctx.ideps, blok),
 
         // Durum 6: Birbiriyle alakasız iki tip (örn: i32 ve String)
         _ => return Err(Message::error(LOOP_BRANCHES_HAVE_INCOMPATIBLE_TYPE, Label::new_pos(pos)))

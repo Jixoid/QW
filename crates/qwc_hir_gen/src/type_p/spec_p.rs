@@ -37,7 +37,7 @@ pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: as
 
       ast::id::NodeKind::Expr => todo!(),
 
-      _ => panic!(),
+      _ => unreachable!(),
     }
   }).collect_vec();
 

@@ -273,7 +273,7 @@ impl ExprLow {
     bbld.push_loop(LoopFrame {
       continue_bb: body_bb,
       exit_bb,
-      result_slot: result_slot.map(|v| if let Value::SSA(v) = v {v} else { panic!() }),
+      result_slot: result_slot.map(|v| if let Value::SSA(v) = v {v} else { unreachable!() }),
       result_ty: loop_ty,
     });
 

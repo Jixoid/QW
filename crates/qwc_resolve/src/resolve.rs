@@ -72,7 +72,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
   }
 
   pub fn resolve_path(&self, segments: &[ast::Ident]) -> Result<LookupResult<'ast>, Message> {
-    if segments.is_empty() { panic!(); }
+    if segments.is_empty() { unreachable!(); }
 
     // İlk segmenti ara
     let mut current_target = self.lookup(segments[0])?;

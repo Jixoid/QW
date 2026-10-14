@@ -60,7 +60,7 @@ impl Infer {
 
         let mut all_match = true;
         for (&user_arg, cand_param) in user_args.iter().zip(ctx.extra_get(cand_params)) {
-          let hir::Thing::NamedType(_, cand_param_ty) = *ctx.get(cand_param) else { panic!() };
+          let hir::Thing::NamedType(_, cand_param_ty) = *ctx.get(cand_param) else { unreachable!() };
           let user_ty = ctx.cre.get(user_arg).ety;
           if TypeMatch::matches_pos(ctx, cand_param_ty, user_ty, pos_span).is_err() {
             all_match = false;

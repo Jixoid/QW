@@ -27,7 +27,7 @@ impl BlokLow {
 				let ret_ty: &Type = ictx.cre.get(ret);
 				matches!(ret_ty.kind, TypeKind::Unit)
 			}
-			_ => panic!("Expected function type for function symbol"),
+			_ => unreachable!("Expected function type for function symbol"),
 		};
 
 		let mut fctx = FunCtx::new(fv.get_params());

@@ -75,7 +75,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Struct(rng) => {
         let rng = convert!(ctx, rng,
           |id| {
-            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { unreachable!() }
           },
           |&(name, kind)| {
             hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
@@ -110,7 +110,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Fun{self_kind, args, ret} => {
         let args = convert!(ctx, args,
           |id| {
-            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { unreachable!() }
           },
           |&(name, kind)| {
             hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
@@ -147,7 +147,7 @@ impl<'a> Specialization<'a> {
 
         let methods = convert!(ctx, methods,
           |id| {
-            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { panic!() }
+            if let hir::Thing::NamedType(name, kind) = *ctx.get(id) { (name, kind) } else { unreachable!() }
           },
           |&(name, kind)| {
             hir::Thing::NamedType(name, self.spec_type(ctx, kind)).push(ctx.cre)
@@ -159,7 +159,7 @@ impl<'a> Specialization<'a> {
             match *ctx.get(id) {
               hir::Thing::NamedType(name, kind) => (name, Some(kind)),
               hir::Thing::Name(name) => (name, None),
-              _ => panic!(),
+              _ => unreachable!(),
             }
           },
           |&(name, kind)| {

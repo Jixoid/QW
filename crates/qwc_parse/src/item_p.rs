@@ -436,7 +436,7 @@ impl ItemParser {
       WK::Flags   => TypeParser::sub_flags(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
       WK::Variant => TypeParser::sub_variant(ctx!(cre, sin, far, lex, sum, side), path, name.sid())?,
 
-      _ => panic!(),
+      _ => unreachable!(),
     };
     
     

@@ -29,6 +29,10 @@ pub fn kw<T>(val: T) -> Styled<T> {
   Styled { val, style: Style::new().blue().bold() }
 }
 
+pub fn kw2<T>(val: T) -> Styled<T> {
+  Styled { val, style: Style::new().cyan().bold() }
+}
+
 pub fn name<T>(val: T) -> Styled<T> {
   Styled { val, style: Style::new().yellow().bold() }
 }
@@ -46,7 +50,7 @@ pub fn tmpval<T>(val: T) -> Styled<T> {
 }
 
 pub fn ty<T>(val: T) -> Styled<T> {
-  Styled { val, style: Style::new().cyan().bold() }
+  Styled { val, style: Style::new().green().bold() }
 }
 
 pub fn lit_num<T>(val: T) -> Styled<T> {

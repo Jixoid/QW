@@ -95,7 +95,7 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
 
   for (id, path) in submods_to_load {
     let _ = read_file(&path, cre, sin, far).map(|(it, ssum)| {
-      let rng = if let ast::ItemKind::Krate(rng) = it.kind { rng } else { panic!() };
+      let ast::ItemKind::Krate(rng) = it.kind else { unreachable!() };
       
       let this: &mut ast::Item = cre.get_mut(id);
       

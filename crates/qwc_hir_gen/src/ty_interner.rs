@@ -158,18 +158,18 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_option(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, layout: Layout) -> TypeId {
+  pub fn ty_option(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_option.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
         let this = Type{
           kind: TypeKind::Option(id),
-          layout,
+          layout: it.layout,
           attr: TypeAttr::empty(),
-          path,
+          path: it.path,
         };
 
         let id = cre.push(this);

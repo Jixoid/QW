@@ -13,7 +13,7 @@
 use std::fmt;
 
 use owo_colors::OwoColorize;
-use qwc_dump::{attr, kw, lit_bool, lit_num, lit_str, name, op, punct, tmpval, ty, write_indent};
+use qwc_dump::{attr, kw, kw2, lit_bool, lit_num, lit_str, name, op, punct, tmpval, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
 use crate::{
@@ -338,7 +338,7 @@ impl DumpHandler for Type {
 
             if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
                ctx.sin.str(name)
-            } else { panic!() }
+            } else { unreachable!() }
           }
 
           _ => panic!()
@@ -541,9 +541,9 @@ impl DumpHandler for Type {
           first = false;
           let self_kind_val = ctx.get(self_kind);
           match &self_kind_val.kind {
-            TypeKind::Ref(.., false) => write!(f, "{}", tmpval("&self"))?,
-            TypeKind::Ref(.., true) => write!(f, "{}", tmpval("&mut self"))?,
-            _ => write!(f, "{}", tmpval("self"))?,
+            TypeKind::Ref(.., false) => write!(f, "{}{}", op("&"), name("self"))?,
+            TypeKind::Ref(.., true) => write!(f, "{}{} {}", op("&"), kw("mut"), name("self"))?,
+            _ => write!(f, "{}", name("self"))?,
           }
         }
 
@@ -671,10 +671,10 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Loop { blok, elsb } => {
-        write!(f, "{} ", kw("loop"))?;
+        write!(f, "{} ", kw2("loop"))?;
         blok.dump(ctx, f, indent)?;
         if let Some(el) = elsb {
-          write!(f, " {} ", kw("else"))?;
+          write!(f, " {} ", kw2("else"))?;
           el.dump(ctx, f, indent)?;
         }
       }
@@ -682,12 +682,12 @@ impl DumpHandler for Expr {
 
       // Route
       ExprKind::Return (val) => {
-        write!(f, "{} ", kw("ret"))?;
+        write!(f, "{} ", kw2("ret"))?;
         val.dump(ctx, f, indent)?;
       }
 
       ExprKind::Break (val) => {
-        write!(f, "{}", kw("break"))?;
+        write!(f, "{}", kw2("break"))?;
         if let Some(v) = val {
           write!(f, " ")?;
           v.dump(ctx, f, indent)?;
@@ -695,19 +695,19 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::Continue => {
-        write!(f, "{}", kw("continue"))?;
+        write!(f, "{}", kw2("continue"))?;
       }
 
 
       // Condition
       ExprKind::If { cond, then, elsb } => {
-        write!(f, "{} ", kw("if"))?;
+        write!(f, "{} ", kw2("if"))?;
         cond.dump(ctx, f, indent)?;
         write!(f, " ")?;
         then.dump(ctx, f, indent)?;
         
         if let Some(elsb) = elsb {
-          write!(f, " {} ", kw("else"))?;
+          write!(f, " {} ", kw2("else"))?;
           elsb.dump(ctx, f, indent)?;
         }
       }

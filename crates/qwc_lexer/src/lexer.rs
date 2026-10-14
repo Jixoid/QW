@@ -137,7 +137,7 @@ impl<'a> Lexer<'a> {
       _ => panic!(),
     };
 
-    if let Some(..) = self.cache { panic!() }
+    if let Some(..) = self.cache { unreachable!() }
 
     self.cache = Some((bak, self.off));
 

@@ -128,8 +128,8 @@ impl ItemLow {
     }
 
     for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
-      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { panic!() };
+      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { unreachable!() };
+      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { unreachable!() };
 
       loc.insert(name, kind, false, name_pos);
     }
@@ -145,7 +145,7 @@ impl ItemLow {
     let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
-      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
+      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
 
       *sign_ret = expr_ty;
       expr_ty
@@ -195,8 +195,8 @@ impl ItemLow {
     }
 
     for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { panic!() };
-      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { panic!() };
+      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { unreachable!() };
+      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { unreachable!() };
 
       loc.insert(name, kind, false, name_pos);
     }
@@ -212,7 +212,7 @@ impl ItemLow {
     let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
-      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { panic!() };
+      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
 
       *sign_ret = expr_ty;
       expr_ty

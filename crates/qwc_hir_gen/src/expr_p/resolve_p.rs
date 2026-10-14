@@ -66,7 +66,7 @@ pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::Expr
   for id in ctx.src.extra_get(rng) {
     let it = ctx.src.get(id);
 
-    if let ast::ExprKind::Nick(ident) = it.kind { segment.push(ident) } else { panic!() }
+    if let ast::ExprKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
   }
 
   let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
@@ -77,20 +77,19 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::ExprParam(generic, idx, thing) => {
-        if let ast::ThingKind::NamedType(_, ty) = ctx.src.get(thing).kind {
-          let ty = TypeLow::low(ctx!(lscp -> ctx), ty)?;
-          let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
+        let ast::ThingKind::NamedType(_, ty) = ctx.src.get(thing).kind else { unreachable!() };
+        
+        let ty = TypeLow::low(ctx!(lscp -> ctx), ty)?;
+        let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
 
-          // Post
-          let this = hir::Expr{
-            kind: hir::ExprKind::GenericExpr { generic: generic_hir, idx },
-            category: ExprCategory::RValue,
-            ety: ty,
-          };
+        // Post
+        let this = hir::Expr{
+          kind: hir::ExprKind::GenericExpr { generic: generic_hir, idx },
+          category: ExprCategory::RValue,
+          ety: ty,
+        };
 
-          ctx.cre.push(this)
-        }
-        else { panic!() }
+        ctx.cre.push(this)
       }
 
       resolve::ScopeKindAst::Expr(id) => {
