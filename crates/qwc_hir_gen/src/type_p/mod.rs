@@ -11,6 +11,7 @@
 
 
 use itertools::{Itertools, izip};
+use qwc_comptime::{Evaluator, GetConst};
 use qwc_diagnostic::{Label, Message, Span, msg::*};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, DefPathId, TypeAttr};
@@ -37,7 +38,6 @@ impl TypeLow {
     let it = ctx.src.get(id);
 
     use ast::TypeKind::*;
-  
     let it = match it.kind {
       // Resolve
       Nick(ident)   => resolve_p::low_nick(ctx, ident)?,
@@ -81,6 +81,8 @@ impl TypeLow {
         ctx.cre.push(this)
       }
       
+      Range(kind) => Self::low_range(ctx, kind)?,
+
       // Trait
       Trait(..) => panic!("use itemty!"),
       Iface(..) => panic!("use itemty!"),
@@ -115,11 +117,12 @@ impl TypeLow {
     let it = ctx.src.get(id);
 
     use ast::TypeKind::*;
-  
     let it = match it.kind {
       // Combinated
       Struct(rng) => combinated_p::low_struct(ctx, path, id, rng)?,
       Tuple(rng)   => combinated_p::low_tuple(ctx, path, rng)?,
+
+      Range(kind) => Self::low_range(ctx, kind)?,
 
       // Trait
       Trait(rng) => trait_p::low_trait(ctx, path, rng)?,
@@ -226,6 +229,22 @@ impl TypeLow {
     Ok(ctx.tin.ty_slice(ctx.cre, ctx.ideps, hir_kind))
   }
 
+  fn low_range(ctx: &mut Ctx, kind: ast::TypeId) -> Result<hir::TypeId, Message> {
+    let hir_kind = TypeLow::low(ctx, kind)?;
+
+    // Check
+    let lay = ctx.get(hir_kind).layout;
+    let pos = ctx.src.get(kind).pos;
+
+    if lay.is_dynamic() {
+      return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["range"]), Label::new_pos(pos)))
+    }
+
+    
+    // Post
+    Ok(ctx.tin.ty_range(ctx.cre, ctx.ideps, hir_kind))
+  }
+
 }
 
 
@@ -255,8 +274,6 @@ fn read_attrs(ctx: &Ctx, attrs: Option<&Vec<Attribute>>) -> Result<TypeAttr, Mes
 
   Ok(attr)
 }
-
-
 
 
 pub struct TypeMatch;
@@ -318,6 +335,32 @@ impl TypeMatch {
         Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
       }
 
+      (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
+        if let ast::TypeKind::Slice(t2_ast) = ty2_ast_ty {
+          Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
+        } else {
+          Self::matches_pos(ctx, t1, t2, ctx.src.get(ty2_ast).pos)
+        }
+      }
+
+      (hir::TypeKind::Array(t1, l1), hir::TypeKind::Array(t2, l2)) => {
+        let eval = Evaluator::new(ctx.cre);
+
+        let len1 = eval.eval(l1)?.get_u64()?;
+        let len2 = eval.eval(l2)?.get_u64()?;
+
+        if l1 == l2 || len1 == len2 {
+          if let ast::TypeKind::Array(t2_ast, _) = ty2_ast_ty {
+            Self::matches(ctx, t1, t2, t2_ast, self_ty, assoc_types)
+          } else {
+            Self::matches_pos(ctx, t1, t2, ctx.src.get(ty2_ast).pos)
+          }
+        } else {
+          let ty_pos = ctx.src.get(ty2_ast).pos;
+          return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(ty_pos)));
+        }
+      }
+
       _ => {
         let ty_pos = ctx.src.get(ty2_ast).pos;
         return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(ty_pos)));
@@ -337,6 +380,27 @@ impl TypeMatch {
 
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
         Self::matches_pos(ctx, t1, t2, pos)
+      }
+
+      (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
+        Self::matches_pos(ctx, t1, t2, pos)
+      }
+
+      (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
+        Self::matches_pos(ctx, t1, t2, pos)
+      }
+
+      (hir::TypeKind::Array(t1, l1), hir::TypeKind::Array(t2, l2)) => {
+        let eval = Evaluator::new(ctx.cre);
+        
+        let len1 = eval.eval(l1)?.get_u64()?;
+        let len2 = eval.eval(l2)?.get_u64()?;
+
+        if l1 == l2 || len1 == len2 {
+          Self::matches_pos(ctx, t1, t2, pos)
+        } else {
+          return Err(Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(ty1), &ctx.type_name(ty2)]), Label::new_pos(pos)));
+        }
       }
 
       _ => {

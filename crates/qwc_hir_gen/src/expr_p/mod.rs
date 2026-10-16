@@ -31,6 +31,7 @@ macro_rules! err_bypass {
 }
 
 mod condition_p;
+mod op_unary_p;
 mod operator_p;
 mod resolve_p;
 mod route_p;
@@ -68,6 +69,8 @@ impl ExprLow {
       Float(span)   => const_p::low_float(ctx, span)?,
       String(_, sid) => const_p::low_string(ctx, sid)?,
       Char(span, sid) => const_p::low_char(ctx, span, sid)?,
+
+      Array(args) => const_p::low_array(ctx, fctx, args)?,
       
       // Block
       Block{rng, expr, ..} => block_p::low_block(ctx, fctx, rng, expr)?,
@@ -86,7 +89,7 @@ impl ExprLow {
       Continue{..} => route_p::low_continue(ctx, it, fctx)?,
 
       // Operator
-      Unary{op, val} => operator_p::low_unary(ctx, fctx, op, val)?,
+      Unary{op, val} => op_unary_p::low_unary(ctx, fctx, op, val)?,
       Binary{op, lhs, rhs} => operator_p::low_binary(ctx, fctx, it.pos, op, lhs, rhs)?,
       
       Assign{lhs, rhs, op_span} => operator_p::low_assign(ctx, fctx, lhs, rhs, op_span)?,

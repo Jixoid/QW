@@ -15,7 +15,7 @@ use qwc_ast as ast;
 use qwc_hir as hir;
 use qwc_diagnostic::{Label, Message, msg::*};
 
-use crate::{Ctx, TypeLow, Specialization};
+use crate::{Ctx, Specialization, TypeLow};
 
 
 pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: ast::AnyRng) -> Result<hir::TypeId, Message> {
@@ -26,32 +26,17 @@ pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: as
   let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.get(generic).kind else { panic!() };
 
 
-  let expected_args = ctx.extra_get(generic_trait).collect_vec();
+  let expected = ctx.extra_get(generic_trait).collect_vec();
+  let received = ctx.src.extra_any_get(args).collect_vec();
 
-  let received_args = ctx.src.extra_any_get(args).filter_map(|id| {
-    match id.kind() {
-      ast::id::NodeKind::Type => {
-        let id = ast::TypeId::from_any(id);
-        TypeLow::low(ctx, id).map_err(|msg| ctx.sum.add(msg)).ok()
-      }
-
-      ast::id::NodeKind::Expr => todo!(),
-
-      _ => unreachable!(),
-    }
-  }).collect_vec();
-
-
-  if expected_args.len() != received_args.len() {
+  if expected.len() != received.len() {
     return Err(Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[
-      &expected_args.len().to_string(),
-      &received_args.len().to_string(),
+      &expected.len().to_string(),
+      &received.len().to_string(),
     ]), Label::new_pos(it.pos)))
   }
 
-
-  // Specialize
-  let spec = Specialization{generic, args: &received_args}.spec_type(ctx, kind);
+  let spec = Specialization::spec_type(ctx, &expected, &received, generic, kind)?;
 
   Ok(spec)
 }

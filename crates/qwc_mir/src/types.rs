@@ -31,7 +31,7 @@ pub enum TypeKind {
   Struct(TypeRng),
   
   // Sequential
-  Array(TypeId, u32),
+  Array(TypeId, u64),
   Slice(TypeId),
   
   // Callable

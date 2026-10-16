@@ -15,7 +15,7 @@ use qwc_diagnostic::Message;
 use qwc_ast as ast;
 use qwc_hir::{self as hir, PushOkApi};
 
-use crate::{Ctx, ctx, ItemLow, item_p::read_attrs};
+use crate::{Ctx, ItemLow, ctx, item_p::read_attrs, TypeLow};
 
 
 pub fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
@@ -95,12 +95,21 @@ pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Ite
   
   
   let args = &ctx.src.extra_get(args)
-    .map(|id| {
-      match ctx.src.get(id).kind {
-        ast::ThingKind::Name(name) => hir::Thing::NamedType(name.sid(), ctx.prims.ty_type).push(ctx.cre),
-        //ast::ThingKind::NamedType(name, kind)
+    .filter_map(|id| {
+      let it = match ctx.src.get(id).kind {
+        ast::ThingKind::Name(name) => Ok(hir::Thing::Name(name.sid()).push(ctx.cre)),
 
+        ast::ThingKind::NamedType(name, kind) => {
+          TypeLow::low(ctx, kind).map(|kind|
+            hir::Thing::NamedType(name.sid(), kind).push(ctx.cre)
+          )
+        }
         _ => todo!()
+      };
+
+      match it {
+        Err(msg) => {ctx.sum.add(msg); None},
+        Ok(val) => Some(val),
       }
     }).collect_vec();
   let args = ctx.cre.extra(args);

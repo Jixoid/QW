@@ -13,11 +13,12 @@
 use std::str::FromStr;
 
 use qwc_diagnostic::{Label, Message, Span, msg::*};
-use qwc_hir::{self as hir, Const, ExprCategory};
+use qwc_hir::{self as hir, Const, ExprCategory, Layout, PushOkApi, TypeAttr};
+use qwc_ast as ast;
 use qwc_string_interner::Sid;
 use rustc_apfloat::ieee;
 
-use crate::Ctx;
+use crate::{Ctx, ExprLow, FunCtx, TypeMatch};
 
 
 // ZST
@@ -191,4 +192,48 @@ pub fn low_char(ctx: &mut Ctx, span: Span, sid: Sid) -> Result<hir::ExprId, Mess
   };
 
   Ok(ctx.cre.push(this))
+}
+
+
+// Array
+pub fn low_array(ctx: &mut Ctx, fctx: &FunCtx, args: ast::ExprRng) -> Result<hir::ExprId, Message> {
+  let (items_rng, kind) = {
+    let mut items = vec![];
+    let mut rety: Option<hir::TypeId> = None;
+    
+    for rid in ctx.src.extra_get(args) {
+      let id = ExprLow::low(ctx, fctx, rid)?;
+      let ty = ctx.cre.get(id).ety;
+      
+      if let Some(expected_ty) = rety {
+        TypeMatch::matches_pos(ctx, expected_ty, ty, ctx.src.get(rid).pos)?;
+      } else {
+        rety = Some(ty);
+      }
+
+      items.push(id);
+    }
+    
+    (ctx.cre.extra(&items), rety.unwrap_or(ctx.prims.ty_unit))
+  };
+
+  let len = hir::Expr {
+    kind: hir::ExprKind::Const(Const::U32(items_rng.count())),
+    category: ExprCategory::RValue,
+    ety: ctx.prims.ty_usize,
+  }.push(ctx.cre);
+
+  let path = ctx.get(kind).path;
+  let ety = hir::Type {
+    kind: hir::TypeKind::Array(kind, len),
+    attr: TypeAttr::empty(),
+    layout: Layout::new_static(qwc_hir::LayoutBy::QW),
+    path,
+  }.push(ctx.cre);
+
+  hir::Expr {
+    kind: hir::ExprKind::Const(Const::Array(kind, items_rng)),
+    category: ExprCategory::RValue,
+    ety,
+  }.push_ok(ctx.cre)
 }

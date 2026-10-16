@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 qwc_hir = { path = "../qwc_hir" }
+qwc_diagnostic = { path = "../qwc_diagnostic" }

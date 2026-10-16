@@ -10,24 +10,105 @@
 */
 
 
+use qwc_diagnostic::{Message, msg::ICE_UNSUPPORTED_FEATURE};
 use qwc_hir::{self as hir, Const};
 
 
-pub trait Evaluator {
-  fn evaluate(self, hir: &hir::Krate) -> Option<Const>;
+pub struct Evaluator<'a> {
+  hir: &'a hir::Krate,
+}
+
+impl<'a> Evaluator<'a> {
+  pub fn new(hir: &'a hir::Krate) -> Self {
+    Self { hir }
+  }
 }
 
 
-impl Evaluator for hir::ExprId {
-  fn evaluate(self, hir: &hir::Krate) -> Option<Const> {
-    let it: &hir::Expr = hir.get(self);
+impl<'a> Evaluator<'a> {
+  pub fn eval(&self, mut id: hir::ExprId) -> Result<Const, Message> {
+    'ml: loop {
+      macro_rules! next {
+        ($expr:expr) => { id = $expr; continue 'ml; };
+      }
 
-    let val = match it.kind {
-      hir::ExprKind::Const(v) => v,
+      let it = self.hir.get(id);
+      
+      let val = match it.kind {
+        hir::ExprKind::Const(v) => v,
+        
+        hir::ExprKind::Block {stmt, expr} => {
+          if !stmt.is_empty() { return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)) }
+          
+          let Some(expr) = expr else { return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)) };
+          
+          next!(expr);
+        }
+        
+        hir::ExprKind::IntArithmetic {op, flg, lhs, rhs} => {
+          let lhs = self.eval(lhs)?.get_u64()?;
+          let rhs = self.eval(rhs)?.get_u64()?;
 
-      _ => todo!("cannot evaluate yet")
+          let a = match op {
+            hir::IntArithmeticOp::Add => match flg {
+              hir::IntArithmeticFlg::Overflow => lhs.wrapping_add(rhs),
+              hir::IntArithmeticFlg::Saturating => lhs.saturating_add(rhs),
+              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+            },
+            hir::IntArithmeticOp::Sub => match flg {
+              hir::IntArithmeticFlg::Overflow => lhs.wrapping_sub(rhs),
+              hir::IntArithmeticFlg::Saturating => lhs.saturating_sub(rhs),
+              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+            },
+            hir::IntArithmeticOp::Mul => match flg {
+              hir::IntArithmeticFlg::Overflow => lhs.wrapping_mul(rhs),
+              hir::IntArithmeticFlg::Saturating => lhs.saturating_mul(rhs),
+              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+            },
+            hir::IntArithmeticOp::Div => match flg {
+              hir::IntArithmeticFlg::Overflow => lhs.wrapping_div(rhs),
+              hir::IntArithmeticFlg::Saturating => lhs.saturating_div(rhs),
+              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+            },
+            hir::IntArithmeticOp::Rem => match flg {
+              hir::IntArithmeticFlg::Overflow => lhs.wrapping_rem(rhs),
+              hir::IntArithmeticFlg::Saturating | hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+            },
+          };
+
+          Const::U64(a)
+        }
+
+        _ => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE))
+      };
+      
+      return Ok(val);
+    }
+  }
+}
+
+
+
+pub trait GetConst {
+  fn get_u64(self) -> Result<u64, Message>;
+}
+
+impl GetConst for Const {
+  fn get_u64(self) -> Result<u64, Message> {
+    let val = match self {
+      Const::U8(v) => v as u64,
+      Const::U16(v) => v as u64,
+      Const::U32(v) => v as u64,
+      Const::U64(v) => v,
+      
+      Const::I8(v) if v >= 0 => v as u64,
+      Const::I16(v) if v >= 0 => v as u64,
+      Const::I32(v) if v >= 0 => v as u64,
+      Const::I64(v) if v >= 0 => v as u64,
+      
+      _ => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE))
     };
 
-    Some(val)
+    Ok(val)
   }
 }

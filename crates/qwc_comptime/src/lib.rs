@@ -12,4 +12,4 @@
 
 mod evaluator;
 
-pub use evaluator::Evaluator;
+pub use evaluator::{Evaluator, GetConst};

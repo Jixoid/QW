@@ -37,6 +37,10 @@ pub fn name<T>(val: T) -> Styled<T> {
   Styled { val, style: Style::new().yellow().bold() }
 }
 
+pub fn ident<T>(val: T) -> Styled<T> {
+  Styled { val, style: Style::new().white() }
+}
+
 pub fn punct<T>(val: T) -> Styled<T> {
   Styled { val, style: Style::new().bright_black() }
 }

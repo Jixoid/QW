@@ -44,10 +44,18 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
       match it.kind {
         ast::FieldKind::Fun {kind, blok} => {
           ctx.cmap.self_ty.push(type_ty);
-          let item = ItemLow::low_fun_field(ctx, id, it, kind, blok)?;
+          let item = ItemLow::low_fun_field(ctx, id, it, kind, blok);
           ctx.cmap.self_ty.pop();
           
-          methods.push((it.name.unwrap(), item, kind, it.pos));
+          methods.push((it.name.unwrap(), item?, kind, it.pos));
+        }
+        
+        ast::FieldKind::Init {kind, blok, ils: _} => {
+          ctx.cmap.self_ty.push(type_ty);
+          let item = ItemLow::low_fun_field(ctx, id, it, kind, blok);
+          ctx.cmap.self_ty.pop();
+          
+          methods.push((it.name.unwrap(), item?, kind, it.pos));
         }
         
         ast::FieldKind::Type (kind) => {

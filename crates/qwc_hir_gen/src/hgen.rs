@@ -14,6 +14,7 @@ use std::cell::RefCell;
 
 use qwc_arena::Files;
 use qwc_ast as ast;
+use qwc_comptime::{Evaluator, GetConst};
 use qwc_diagnostic::{Label, Message, Span, Summary, Poit, msg::*};
 use qwc_hir::{self as hir, CID, Deps, PathApi, PrimTypes};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
@@ -85,9 +86,9 @@ pub struct CacheMap {
   pub(crate) cache_item: FxHashMap<ast::ItemId, Option<hir::ItemId>>,
   pub(crate) cache_expr: FxHashMap<ast::ExprId, hir::ExprId>,
   
-  pub(crate) cache_generic_type: FxHashMap<(hir::TypeId, Vec<hir::TypeId>), hir::TypeId>,
-  pub(crate) cache_generic_item: FxHashMap<(hir::ItemId, Vec<hir::TypeId>), hir::ItemId>,
-  pub(crate) cache_generic_expr: FxHashMap<(hir::ExprId, Vec<hir::TypeId>), hir::ExprId>,
+  pub(crate) cache_generic_type: FxHashMap<(hir::TypeId, Vec<hir::AnyId>), hir::TypeId>,
+  pub(crate) cache_generic_item: FxHashMap<(hir::ItemId, Vec<hir::AnyId>), hir::ItemId>,
+  pub(crate) cache_generic_expr: FxHashMap<(hir::ExprId, Vec<hir::AnyId>), hir::ExprId>,
 
   pub(crate) self_ty: Vec<hir::TypeId>,
   pub(crate) current_trait: Vec<hir::TypeId>,
@@ -118,18 +119,15 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
 
-  pub fn expr_name(&self, _id: hir::ExprId) -> String {
-    todo!()
-  }
-
   pub fn type_name(&self, id: hir::TypeId) -> String {
+    let eval = Evaluator::new(self.cre);
+
     let it = self.get(id);
 
     match it.kind {
       // Generic
       hir::TypeKind::GenericType{generic, idx} => {
-        let it = self.cre.get(generic);
-        if let hir::ItemKind::GenericNS { args, .. } = it.kind {
+        if let hir::ItemKind::GenericNS { args, .. } = self.cre.get(generic).kind {
           if let Some(thing) = self.cre.extra_get(args).nth(idx) {
             if let hir::Thing::Name(name) | hir::Thing::NamedType(name, _) = *self.cre.get(thing) {
               self.sin.str(name).to_string()
@@ -176,17 +174,19 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
       // Vector
       hir::TypeKind::VScale(sub) => format!("[{} *]", self.type_name(sub)),
-      hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sub), self.expr_name(len)),
+      hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sub), eval.eval(len).unwrap().get_u64().unwrap()),
       
 
       // Array
       hir::TypeKind::Slice(sub) => format!("[{}]", self.type_name(sub)),
-      hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sub), self.expr_name(len)),
+      hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sub), eval.eval(len).unwrap().get_u64().unwrap()),
       
       
       // Combinated
       hir::TypeKind::Struct(..) => self.poit(id).to_string(),
       hir::TypeKind::Tuple(..) => self.poit(id).to_string(),
+      
+      hir::TypeKind::Range(..) => self.poit(id).to_string(),
       
       
       // Trait

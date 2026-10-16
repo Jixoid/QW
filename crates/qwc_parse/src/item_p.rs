@@ -286,23 +286,30 @@ impl ItemParser {
       Rng::empty()
     };
     
-    let ctn = if lex.peek()?.kind() == WK::BraceL {
-      lex.bump()?;
-
+    let ctn = {
       let mut ctn = vec![];
-      loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
-        
-        let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), path, &mut vis)?;
+      let mut side = vec![];
 
+      if lex.peek()?.kind() == WK::BraceL {
+        lex.bump()?;
+        
+        loop {
+          if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+          
+          let id = Self::read_item(ctx!(cre, sin, far, lex, sum, &mut side), path, &mut vis)?;
+          
+          ctn.push(id);
+        }
+        
+      } else {
+        let id = Self::read_item(ctx!(cre, sin, far, lex, sum, &mut side), path, &mut vis)?;
+        
         ctn.push(id);
       }
 
-      cre.extra(&ctn)
-    } else {
-      let id = Self::read_item(ctx!(cre, sin, far, lex, sum, side), path, &mut vis)?;
+      ctn.extend(side);
 
-      cre.extra(&[id])
+      cre.extra(&ctn)
     };
     
 

@@ -112,7 +112,7 @@ fn lay_c_struct(cre: &Krate, rng: TypeRng) -> Layout {
 }
 
 
-fn lay_qw_array(cre: &Krate, ty: TypeId, count: u32) -> Layout {
+fn lay_qw_array(cre: &Krate, ty: TypeId, count: u64) -> Layout {
   let lay = (cre.get(ty) as &Type).layout;
 
   if lay.is_zst() || count == 0 {
@@ -122,7 +122,7 @@ fn lay_qw_array(cre: &Krate, ty: TypeId, count: u32) -> Layout {
   }
 }
 
-fn lay_c_array(cre: &Krate, ty: TypeId, count: u32) -> Layout {
+fn lay_c_array(cre: &Krate, ty: TypeId, count: u64) -> Layout {
   let lay = (cre.get(ty) as &Type).layout;
 
   Layout::new_sst(lay.aligned_size().unwrap() * (count as u64), lay.align().unwrap(), LayoutBy::C)

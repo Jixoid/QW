@@ -37,8 +37,8 @@ macro_rules! ctx {
     let Ctx{$cre, $sin, $far, $lex, $sum, $side} = $ctx;
   };
   
-  ($cre:ident, $sin:ident, $far:ident, $lex:ident, $sum:ident, $side:ident) => {
-    &mut Ctx{$cre, $sin, $far, $lex, $sum, $side}
+  ($cre:expr, $sin:expr, $far:expr, $lex:expr, $sum:expr, $side:expr) => {
+    &mut Ctx{cre: $cre, sin: $sin, far: $far, lex: $lex, sum: $sum, side: $side}
   };
 }
 

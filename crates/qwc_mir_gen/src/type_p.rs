@@ -10,6 +10,7 @@
 */
 
 
+use qwc_comptime::{Evaluator, GetConst};
 use qwc_diagnostic::Message;
 use qwc_hir as hir;
 use qwc_mir as mir;
@@ -44,6 +45,9 @@ impl TypeLow {
       Iface(rng) => Self::low_iface(ctx, rng)?,
       TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
       
+      // Sequential
+      Array(kind, ext) => Self::low_array(ctx, id, kind, ext)?,
+
       // Callable
       Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
       
@@ -97,6 +101,21 @@ impl TypeLow {
     };
     
     Ok(it)
+  }
+
+
+  fn low_array(ctx: &mut Ctx, id: hir::TypeId, kind: hir::TypeId, ext: hir::ExprId) -> Result<mir::TypeId, Message> {
+    let elem_ty = Self::low(ctx, kind)?;
+
+    let count = Evaluator::new(ctx.src).eval(ext)?.get_u64()?;
+
+    let kind = mir::TypeKind::Array(elem_ty, count);
+    let this = mir::Type {
+      kind,
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.get_type(id).layout.by()),
+    };
+
+    Ok(ctx.cre.push(this))
   }
 
 

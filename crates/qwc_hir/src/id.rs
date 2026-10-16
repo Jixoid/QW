@@ -235,7 +235,7 @@ impl AnyId {
     HirId { cid: self.cid, idx: self.idx, pkind: PhantomData }
   }
 
-  pub(crate) fn kind(&self) -> NodeKind {
+  pub fn kind(&self) -> NodeKind {
     self.kind
   }
 

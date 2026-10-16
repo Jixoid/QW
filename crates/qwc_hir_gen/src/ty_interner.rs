@@ -23,7 +23,9 @@ pub struct TypeInterner {
   
   ty_slice: FxHashMap<TypeId, TypeId>,
   ty_vscale: FxHashMap<TypeId, TypeId>,
-
+  
+  ty_range: FxHashMap<TypeId, TypeId>,
+  
   ty_option: FxHashMap<TypeId, TypeId>,
 
   ty_generic_type: FxHashMap<(ItemId, usize), TypeId>,
@@ -38,6 +40,7 @@ impl TypeInterner {
       ty_trait_from: FxHashMap::default(),
       ty_slice: FxHashMap::default(),
       ty_vscale: FxHashMap::default(),
+      ty_range: FxHashMap::default(),
       ty_option: FxHashMap::default(),
       ty_generic_type: FxHashMap::default(),
     }
@@ -145,6 +148,28 @@ impl TypeInterner {
         let path = Self::get(cre, ideps, id).path;
         let this = Type{
           kind: TypeKind::VScale(id),
+          layout: Layout::new_static(LayoutBy::QW),
+          attr: TypeAttr::empty(),
+          path,
+        };
+
+        let id = cre.push(this);
+
+        entry.insert(id);
+        id
+      }
+    }
+  }
+
+  pub fn ty_range(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
+    use std::collections::hash_map::Entry;
+    
+    match self.ty_range.entry(id) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let path = Self::get(cre, ideps, id).path;
+        let this = Type{
+          kind: TypeKind::Range(id),
           layout: Layout::new_static(LayoutBy::QW),
           attr: TypeAttr::empty(),
           path,

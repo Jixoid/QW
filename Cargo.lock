@@ -803,6 +803,7 @@ name = "qwc_cgen_llvm"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "itertools",
  "qwc_cgen",
  "qwc_mir",
  "qwc_string_interner",
@@ -814,6 +815,7 @@ dependencies = [
 name = "qwc_comptime"
 version = "0.1.0"
 dependencies = [
+ "qwc_diagnostic",
  "qwc_hir",
 ]
 
@@ -867,6 +869,7 @@ dependencies = [
  "itertools",
  "qwc_arena",
  "qwc_ast",
+ "qwc_comptime",
  "qwc_diagnostic",
  "qwc_hir",
  "qwc_resolve",
@@ -936,6 +939,7 @@ dependencies = [
 name = "qwc_mir_gen"
 version = "0.1.0"
 dependencies = [
+ "qwc_comptime",
  "qwc_diagnostic",
  "qwc_hir",
  "qwc_mangling",

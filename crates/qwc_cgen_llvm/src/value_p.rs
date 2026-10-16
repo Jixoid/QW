@@ -10,11 +10,14 @@
 */
 
 
-use inkwell::values::{AnyValue, AnyValueEnum, BasicValue, BasicValueEnum};
+use std::assert_matches;
+
+use inkwell::values::{AnyValue, AnyValueEnum, ArrayValue, BasicValue, BasicValueEnum};
+use itertools::Itertools;
 use qwc_mir::{Const, Value};
 use rustc_apfloat::Float;
 
-use crate::{FunCtx, cgen::{CtxI, CtxM, SymbolVal}};
+use crate::{FunCtx, cgen::{CtxI, CtxM, SymbolVal}, type_p::{TypeLow, any_type_to_basic}};
 
 
 pub struct ValueLow;
@@ -70,6 +73,21 @@ impl ValueLow {
             ictx.ctx.i128_type(),
             ""
           ).unwrap()
+        }
+
+        Const::Array {kind, rng} => {
+          let elem_ty = any_type_to_basic(TypeLow::low(ictx, ictx.cre.get(kind)));
+          
+          let rng = ictx.cre.extra_get(rng).map(|id| {
+            let value = ictx.cre.get(id);
+            assert_matches!(value, Value::Const(..));
+            
+            ValueLow::low(uctx, ictx, fctx, value)
+          }).collect_vec();
+          
+          let arr_val = unsafe { ArrayValue::new_const_array(&elem_ty, &rng) };
+
+          arr_val.as_basic_value_enum()
         }
       },
 

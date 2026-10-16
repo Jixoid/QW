@@ -57,6 +57,8 @@ pub enum TypeKind {
   Struct(ThingRng /* NamedType => name: type */),
   Tuple(TypeRng),
   
+  Range(TypeId),
+  
   // Trait
   Trait(ThingRng /* NamedType => fun name: type */, ThingRng /* Name | NamedType => using (= type)?; */),
   Iface(ThingRng /* NamedType => fun name: type */),

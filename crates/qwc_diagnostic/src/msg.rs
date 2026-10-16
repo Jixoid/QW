@@ -72,6 +72,7 @@ pub const DUPLICATE_IDENTIFIER:                      CodedMsg = CodedMsg::new_st
 pub const DID_YOU_MEAN:                              CodedMsg = CodedMsg::new_str("did you mean `{}`?");
 pub const CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION: CodedMsg = CodedMsg::new_str("cannot use generic type without specialization");
 pub const YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP:    CodedMsg = CodedMsg::new_str("you might have meant to break the loop");
+pub const ICE_UNSUPPORTED_FEATURE:                   CodedMsg = CodedMsg::new_str("internal compiler error: unsupported feature");
 
 
 // Label

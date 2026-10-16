@@ -64,6 +64,8 @@ pub enum Const {
   F32(ieee::Single),
   F64(ieee::Double),
   F128(ieee::Quad),
+
+  Array{kind: TypeId, rng: ValueRng},
   
   Str(Sid),
 }

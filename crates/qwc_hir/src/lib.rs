@@ -11,7 +11,7 @@
 
 
 mod krate;
-mod id;
+pub mod id;
 mod items;
 mod types;
 mod exprs;

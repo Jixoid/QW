@@ -44,6 +44,9 @@ pub enum Const {
   F32(ieee::Single),
   F64(ieee::Double),
   F128(ieee::Quad),
+
+  // Array
+  Array(TypeId, ExprRng /* must be const */),
 }
 
 
@@ -84,15 +87,17 @@ pub enum ExprKind {
   GenericRaw{generic: ItemId, kind: ExprId},
   Error,
   
+  // Const
   Const(Const),
 
+  // Addr
   Ref(ExprId, bool /* ism */),
   Deref(ExprId),
 
   // Ref
   GlobalRef(ItemId),
   LocalRef(u32),
-  
+
   // Variable
   Let{local: u32, init: ExprId},
 

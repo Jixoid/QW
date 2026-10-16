@@ -14,7 +14,7 @@ use std::fmt;
 
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
-use qwc_dump::{kw, name, op, punct, ty, write_indent};
+use qwc_dump::{ident, kw, name, op, punct, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
 use crate::{
@@ -371,9 +371,7 @@ impl DumpHandler for Type {
         write!(f, "{} {{ ", "flags".blue().bold())?;
         let mut first = true;
         for thing_id in cre.extra_get(rng) {
-          if !first {
-            write!(f, ", ")?;
-          }
+          if !first { write!(f, ", ")?; }
           first = false;
           thing_id.dump(cre, sin, far, f, indent)?;
         }
@@ -383,12 +381,14 @@ impl DumpHandler for Type {
 
       // Combinated
       TypeKind::Struct(rng) => {
-        write!(f, "{} {{", kw("struct"))?;
+        write!(f, "{} {}", kw("struct"), punct("{"))?;
+        let mut first = true;
         for field_id in cre.extra_get(rng) {
+          if !first { write!(f, ", ")?; }
+          first = false;
           field_id.dump(cre, sin, far, f, indent)?;
-          write!(f, ", ")?;
         }
-        write!(f, "}}")?;
+        write!(f, "{}", punct("}"))?;
       }
 
       TypeKind::Tuple(rng) => {
@@ -423,16 +423,16 @@ impl DumpHandler for Type {
 
       // Function
       TypeKind::Fun { self_kind, args, ret, attr } => {
-        write!(f, "(")?;
+        write!(f, "{}", punct("("))?;
         let mut first = true;
         if let Some(self_id) = self_kind {
           let self_ty: &Type = cre.get(self_id);
           match self_ty.kind {
-            TypeKind::Ref(_, false) => write!(f, "{}", "&self".magenta())?,
-            TypeKind::Ref(_, true) => write!(f, "{}", "&mut self".magenta())?,
-            TypeKind::SelfT => write!(f, "{}", "self".magenta())?,
+            TypeKind::Ref(_, false) => write!(f, "{}{}", punct("&"), ident("self"))?,
+            TypeKind::Ref(_, true) => write!(f, "{}{} {}", punct("&"), kw("mut"), ident("self"))?,
+            TypeKind::SelfT => write!(f, "{}", ident("self"))?,
             _ => {
-              write!(f, "self: ")?;
+              write!(f, "{}{} ", ident("self"), punct(":"))?;
               self_id.dump(cre, sin, far, f, indent)?;
             }
           }
@@ -440,19 +440,19 @@ impl DumpHandler for Type {
         }
         for thing_id in cre.extra_get(args) {
           if !first {
-            write!(f, ", ")?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           thing_id.dump(cre, sin, far, f, indent)?;
         }
-        write!(f, ")")?;
+        write!(f, "{}", punct(")"))?;
 
         if attr & FunAttrs::Pure as u8 != 0 {
           write!(f, " {}", "pure".blue())?;
         }
 
         if let Some(r) = ret {
-          write!(f, " -> ")?;
+          write!(f, " {} ", punct("->"))?;
           r.dump(cre, sin, far, f, indent)?;
         }
       }
@@ -493,16 +493,16 @@ impl DumpHandler for Type {
       }
 
       TypeKind::Init { args, attr } => {
-        write!(f, "(")?;
+        write!(f, "{}", punct("("))?;
         let mut first = true;
         for thing_id in cre.extra_get(args) {
           if !first {
-            write!(f, ", ")?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           thing_id.dump(cre, sin, far, f, indent)?;
         }
-        write!(f, ")")?;
+        write!(f, "{}", punct(")"))?;
 
         if attr & FunAttrs::Pure as u8 != 0 {
           write!(f, " {}", "pure".blue())?;
@@ -1027,7 +1027,7 @@ impl DumpHandler for Field {
 
 
       FieldKind::Fun {kind, blok} => {
-        write!(f, "{} ", "fun".blue().bold())?;
+        write!(f, "{} ", kw("fun"))?;
 
         if let Some(name) = self.name {
           write!(f, "{}", name.str(far).yellow().bold())?;
@@ -1044,7 +1044,7 @@ impl DumpHandler for Field {
       }
 
       FieldKind::Init {kind, blok, ils} => {
-        write!(f, "{} ", "init".blue())?;
+        write!(f, "{} ", kw("init"))?;
         if let Some(name) = self.name {
           write!(f, "{}", name.str(far).yellow().bold())?;
         }
@@ -1052,7 +1052,7 @@ impl DumpHandler for Field {
         kind.dump(cre, sin, far, f, indent)?;
 
         if !ils.is_empty() {
-          write!(f, " : ")?;
+          write!(f, "{} ", punct(":"))?;
           let mut first = true;
 
           for id in cre.extra_get(ils) {
@@ -1080,7 +1080,7 @@ impl DumpHandler for Field {
       }
 
       FieldKind::Fini {kind, blok} => {
-        write!(f, "{} ", "fini".blue())?;
+        write!(f, "{} ", kw("fini"))?;
         if let Some(name) = self.name {
           write!(f, "{}", name.str(far).yellow().bold())?;
         }
@@ -1096,7 +1096,7 @@ impl DumpHandler for Field {
 
 
       FieldKind::ImplIn {trait_ty, ctn} => {
-        write!(f, "{}{} ", "impl".blue().bold(), ":".bright_black())?;
+        write!(f, "{}{} ", kw("impl"), ":".bright_black())?;
         trait_ty.dump(cre, sin, far, f, indent)?;
         writeln!(f, " {{")?;
 
@@ -1111,7 +1111,7 @@ impl DumpHandler for Field {
 
       FieldKind::Type(ty) => {
         let name = self.name.map(|n| n.str(far)).unwrap();
-        write!(f, "{} {}", "type".blue().bold(), name.yellow().bold())?;
+        write!(f, "{} {}", kw("type"), name.yellow().bold())?;
 
         if let Some(ty) = ty {
           write!(f, " {} ", "=".bright_black())?;
@@ -1169,9 +1169,9 @@ impl DumpHandler for Thing {
         expr_id.dump(cre, sin, far, f, indent)?;
       }
 
-      ThingKind::NamedType(ident, type_id) => {
-        write!(f, "{}", ident.str(far).white())?;
-        write!(f, ": ")?;
+      ThingKind::NamedType(idnt, type_id) => {
+        write!(f, "{}", ident(idnt.str(far)))?;
+        write!(f, "{} ", punct(":"))?;
         type_id.dump(cre, sin, far, f, indent)?;
       }
 

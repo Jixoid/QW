@@ -129,6 +129,8 @@ impl ExprLow {
       F32(fp) => mir::Const::F32(fp).into(),
       F64(fp) => mir::Const::F64(fp).into(),
       F128(fp) => mir::Const::F128(fp).into(),
+
+      Array(kind, rng) => Self::low_const_array(ctx, bbld, kind, rng)?,
       
       Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
     };
@@ -151,6 +153,29 @@ impl ExprLow {
     let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
     
     Ok(fat_val.into())
+  }
+
+  fn low_const_array(ctx: &mut Ctx, bbld: &mut FunBuilder, kind: hir::TypeId, rng: hir::ExprRng) -> Result<Value, Message> {
+    let kind = TypeLow::low(ctx, kind)?;
+
+    let rng = {
+      let mut vec = vec![];
+
+      for id in ctx.src.extra_get(rng) {
+        let it = ExprLow::low(ctx, bbld, id)?.unwrap();
+        let id = ctx.cre.push(it) as mir::ValueId;
+        vec.push(id);
+      }
+
+      ctx.cre.extra(&vec)
+    };
+
+    let id = mir::Const::Array {
+      kind,
+      rng
+    }.into();
+
+    Ok(id)
   }
 
 

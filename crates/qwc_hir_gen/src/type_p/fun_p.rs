@@ -25,7 +25,9 @@ pub fn low_fun(ctx: &mut Ctx, path: DefPathId, self_kind: Option<ast::TypeId>, r
     for id in ctx.src.extra_get(rng) {
       let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
 
-      ctn.push(hir::Thing::NamedType(name.sid(), TypeLow::low(ctx, kind)?).push(ctx.cre));
+      let id = hir::Thing::NamedType(name.sid(), TypeLow::low(ctx, kind)?).push(ctx.cre);
+      
+      ctn.push(id);
     }
 
     ctx.cre.extra(&ctn)

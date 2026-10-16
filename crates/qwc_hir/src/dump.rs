@@ -430,6 +430,11 @@ impl DumpHandler for Type {
         write!(f, "{}", punct("]"))?;
       }
 
+      TypeKind::Range(sub) => {
+        write!(f, "{}", punct(".."))?;
+        sub.dump(ctx, f, indent)?;
+      }
+
 
       // Combinated
       TypeKind::Struct(rng) => {
@@ -892,7 +897,7 @@ impl DumpHandler for Thing {
 }
 
 impl DumpHandler for Const {
-  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
+  fn dump(&self, ctx: &DumpCtx, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
       Const::Unit => write!(f, "{}", punct("()"))?,
       Const::Bool(b) => write!(f, "{}", lit_bool(b))?,
@@ -916,6 +921,21 @@ impl DumpHandler for Const {
       Const::F32(fp) => write!(f, "{}{}{}{}", punct("{f32}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F64(fp) => write!(f, "{}{}{}{}", punct("{f64}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F128(fp) => write!(f, "{}{}{}{}", punct("{f128"), punct("}("), lit_num(fp), punct(")"))?,
+
+      Const::Array(kind, rng) => {
+        write!(f, "{}", punct("{["))?;
+        kind.dump(ctx, f, indent)?;
+        write!(f, "{} {}{}", punct(";"), rng.count(), punct("]}"))?;
+
+        write!(f, "{}", punct("["))?;
+        let mut first = true;
+        for id in ctx.cre.extra_get(rng) {
+          if !first { write!(f, "{} ", punct(","))?; }
+          first = false;
+          id.dump(ctx, f, indent)?;
+        }
+        write!(f, "{}", punct("]"))?;
+      }
     }
 
     Ok(())

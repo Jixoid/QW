@@ -53,7 +53,7 @@ impl TypeLow {
 
       TypeKind::Array(elem, count) => {
         let elem_ty = any_type_to_basic(Self::low(ictx, ictx.cre.get(elem)));
-        elem_ty.array_type(count).into()
+        elem_ty.array_type(u32::try_from(count).unwrap()).into()
       }
 
       TypeKind::Slice(..) => panic!(),
