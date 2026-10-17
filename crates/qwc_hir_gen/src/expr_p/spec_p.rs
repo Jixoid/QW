@@ -13,13 +13,13 @@
 use itertools::Itertools;
 use qwc_ast as ast;
 use qwc_hir::{self as hir, PushOkApi};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, Summary, msg::*, ret_err};
 
 use crate::{Ctx, ExprLow, FunCtx, Specialization};
 
 
-pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast::ExprId, args: ast::AnyRng) -> Result<hir::ExprId, Message> {
-  let callee = ExprLow::low(ctx, fctx, callee)?;
+pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, callee: ast::ExprId, args: ast::AnyRng) -> Status<hir::ExprId> {
+  let callee = ExprLow::low(ctx, fctx, sum, callee)?;
   
   enum KindTarget {
     Expr(hir::ExprId),
@@ -42,17 +42,17 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast:
   let received = ctx.src.extra_any_get(args).collect_vec();
 
   if expected.len() != received.len() {
-    return Err(Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[
+    ret_err!(sum, Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[
       &expected.len().to_string(),
       &received.len().to_string(),
     ]), Label::new_pos(it.pos)))
   }
 
   let spec = match kind_target {
-    KindTarget::Expr(expr) => Specialization::spec_expr(ctx, fctx, &expected, &received, generic, expr)?,
+    KindTarget::Expr(expr) => Specialization::spec_expr(ctx, sum, fctx, &expected, &received, generic, expr)?,
 
     KindTarget::Type(kind) => {
-      let spec = Specialization::spec_type(ctx, &expected, &received, generic, kind)?;
+      let spec = Specialization::spec_type(ctx, sum, &expected, &received, generic, kind)?;
     
       hir::Expr {
         kind: hir::ExprKind::TypeOf { kind: spec },
@@ -62,5 +62,5 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, callee: ast:
     }
   };
 
-  Ok(spec)
+  Success(spec)
 }

@@ -66,13 +66,18 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
 
     let root = src.root().unwrap();
 
-    let _ = SymbLow::low(
-      &mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, deps, sin},
-      root
-    ).map_err(|msg| sum.add(msg));
+    let mut ctx = Ctx {
+      cre: &mut cre,
+      tin: &mut tin,
+      cmap: &mut cmap,
+      src,
+      deps,
+      sin,
+    };
+
+    let _ = SymbLow::low(&mut ctx, &mut sum, root);
 
     (Some(cre), sum)
   }
 
 }
-

@@ -21,8 +21,6 @@ mod expr_p;
 mod builder;
 mod ty_interner;
 
-type MayFail<T> = Result<(), T>;
-
 use mgen::Ctx;
 use {symb_p::*, type_p::*, blok_p::*, expr_p::*};
 use builder::*;

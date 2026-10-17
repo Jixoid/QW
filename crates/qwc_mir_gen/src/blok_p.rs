@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
 use qwc_mir as mir;
 
@@ -21,7 +21,7 @@ pub struct BlokLow;
 
 impl BlokLow {
 
-  pub fn low_fn(ctx: &mut Ctx, id: hir::ExprId, is_ret_unit: bool, param_tys: &[mir::TypeId]) -> Result<(mir::BlokId, mir::BlokRng), Message> {
+  pub fn low_fn(ctx: &mut Ctx, sum: &mut Summary, id: hir::ExprId, is_ret_unit: bool, param_tys: &[mir::TypeId]) -> Status<(mir::BlokId, mir::BlokRng)> {
     let mut fbld = FunBuilder::new();
 
     // Args to stack
@@ -38,11 +38,11 @@ impl BlokLow {
     match ctx.src.get(id).kind {
       hir::ExprKind::Block{stmt, expr} => {
         for id in ctx.src.extra_get(stmt) {
-          ExprLow::low(ctx, &mut fbld, id)?;
+          ExprLow::low(ctx, sum, &mut fbld, id)?;
         }
 
         if let Some(expr) = expr {
-          let ret = ExprLow::low(ctx, &mut fbld, expr)?;
+          let ret = ExprLow::low(ctx, sum, &mut fbld, expr)?;
           if !fbld.is_current_terminated() {
             RawTerminator::Return(ret).terminate(&mut fbld);
           }
@@ -50,14 +50,14 @@ impl BlokLow {
       }
 
       _ => {
-        let ret = ExprLow::low(ctx, &mut fbld, id)?;
+        let ret = ExprLow::low(ctx, sum, &mut fbld, id)?;
         if !fbld.is_current_terminated() {
           RawTerminator::Return(ret).terminate(&mut fbld);
         }
       }
     }
 
-    Ok(fbld.finish(ctx.cre, is_ret_unit))
+    Success(fbld.finish(ctx.cre, is_ret_unit))
   }
 
 }

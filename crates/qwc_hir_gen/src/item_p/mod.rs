@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, ItemAttr, PushOkApi};
 
@@ -25,33 +25,33 @@ pub struct ItemLow;
 
 impl ItemLow {
 
-  pub fn low(ctx: &mut Ctx, id: ast::ItemId) -> Result<Option<hir::ItemId>, Message> {
-    if let Some(&id) = ctx.cmap.cache_item.get(&id) { return Ok(id) }
+  pub fn low(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId) -> Status<Option<hir::ItemId>> {
+    if let Some(&id) = ctx.cmap.cache_item.get(&id) { return Status::Success(id) }
 
     let it = ctx.src.get(id);
 
     let it = match it.kind {
       // Scope
-      ast::ItemKind::Krate(rng) => Some(ns_p::low_krate(ctx, id, it, rng)?),
+      ast::ItemKind::Krate(rng) => Some(ns_p::low_krate(ctx, sum, id, it, rng)?),
 
-      ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(ns_p::low_module(ctx, id, it, rng)?),
+      ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(ns_p::low_module(ctx, sum, id, it, rng)?),
       
-      ast::ItemKind::Generic{ctn: rng, params: args, ..} => Some(ns_p::low_generic(ctx, id, it, rng, args)?),
+      ast::ItemKind::Generic{ctn: rng, params: args, ..} => Some(ns_p::low_generic(ctx, sum, id, it, rng, args)?),
 
 
       // Symbols
-      ast::ItemKind::Fun{kind, blok} => Some(Self::low_fun(ctx, id, it, kind, blok)?),
+      ast::ItemKind::Fun{kind, blok} => Some(Self::low_fun(ctx, sum, id, it, kind, blok)?),
       
-      ast::ItemKind::Task{kind, blok} => Some(Self::low_task(ctx, id, it, kind, blok)?),
+      ast::ItemKind::Task{kind, blok} => Some(Self::low_task(ctx, sum, id, it, kind, blok)?),
       
-      ast::ItemKind::Let{kind, value, ism} => Some(Self::low_let(ctx, id, it, kind, value, ism)?),
+      ast::ItemKind::Let{kind, value, ism} => Some(Self::low_let(ctx, sum, id, it, kind, value, ism)?),
       
-      ast::ItemKind::Impl{type_ty, trait_ty, ctn} => Some(impl_p::low_impl(ctx, id, it, type_ty, trait_ty, ctn)?),
+      ast::ItemKind::Impl{type_ty, trait_ty, ctn} => Some(impl_p::low_impl(ctx, sum, id, it, type_ty, trait_ty, ctn)?),
 
 
       // Using
-      ast::ItemKind::Using(kind)  => Some(Self::low_using(ctx, id, it, kind)?),
-      ast::ItemKind::ItemTy(kind) => Some(Self::low_itemty(ctx, id, it, kind)?),
+      ast::ItemKind::Using(kind)  => Some(Self::low_using(ctx, sum, id, it, kind)?),
+      ast::ItemKind::ItemTy(kind) => Some(Self::low_itemty(ctx, sum, id, it, kind)?),
 
 
       // Unexpected
@@ -63,14 +63,14 @@ impl ItemLow {
 
     ctx.cmap.cache_item.insert(id, it);
 
-    Ok(it)
+    Status::Success(it)
   }
 
 
-  fn low_using(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Result<hir::ItemId, Message> {
-    let kind = TypeLow::low(ctx, kind)?;
+  fn low_using(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Status<hir::ItemId> {
+    let kind = TypeLow::low(ctx, sum, kind)?;
 
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
@@ -84,14 +84,14 @@ impl ItemLow {
     }.push_ok(ctx.cre)
   }
 
-  fn low_itemty(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Result<hir::ItemId, Message> {
+  fn low_itemty(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId) -> Status<hir::ItemId> {
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
     
     let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
-    let kind = TypeLow::low_itemty(ctx!(lscp -> ctx), path, kind)?;
+    let kind = TypeLow::low_itemty(ctx!(lscp -> ctx), sum, path, kind)?;
     
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
     
     // Post
     hir::Item {
@@ -103,17 +103,17 @@ impl ItemLow {
   }
 
 
-  fn low_let(_ctx: &mut Ctx, _id: ast::ItemId, _it: &ast::Item, _kind: Option<ast::TypeId>, _expr: ast::ExprId, _ism: bool) -> Result<hir::ItemId, Message> {
+  fn low_let(_ctx: &mut Ctx, _sum: &mut Summary, _id: ast::ItemId, _it: &ast::Item, _kind: Option<ast::TypeId>, _expr: ast::ExprId, _ism: bool) -> Status<hir::ItemId> {
     todo!()
   }
 
 
-  fn low_fun(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+  fn low_fun(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Status<hir::ItemId> {
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
 
-    let hir_kind = TypeLow::low_itemty(ctx, path, kind)?;
+    let hir_kind = TypeLow::low_itemty(ctx, sum, path, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -136,13 +136,13 @@ impl ItemLow {
 
     let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
 
-    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
     
     let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
     // Trait Patch
-    let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+    let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
@@ -151,9 +151,9 @@ impl ItemLow {
       expr_ty
     } else { ret };
 
-    TypeMatch::matches_pos(ctx, ret, expr_ty, expr_pos)?;
+    TypeMatch::matches_pos(ctx, sum, ret, expr_ty, expr_pos)?;
 
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
 
     // Post
@@ -168,19 +168,19 @@ impl ItemLow {
     }.push_ok(ctx.cre)
   }
 
-  fn low_task(_ctx: &mut Ctx, _id: ast::ItemId, _it: &ast::Item, _kind: ast::TypeId, _expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+  fn low_task(_ctx: &mut Ctx, _sum: &mut Summary, _id: ast::ItemId, _it: &ast::Item, _kind: ast::TypeId, _expr: Option<ast::ExprId>) -> Status<hir::ItemId> {
     todo!()
   }
 
-  fn low_fun_field(ctx: &mut Ctx, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Result<hir::ItemId, Message> {
+  pub(crate) fn low_fun_field(ctx: &mut Ctx, sum: &mut Summary, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Status<hir::ItemId> {
     if let None = expr {
-      return Err(Message::error(ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY.args(&["impl"]), Label::new_pos(it.pos)))
+      ret_err!(sum, Message::error(ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY.args(&["impl"]), Label::new_pos(it.pos)))
     }
 
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
-    let hir_kind = TypeLow::low_itemty(ctx, path, kind)?;
+    let hir_kind = TypeLow::low_itemty(ctx, sum, path, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -203,13 +203,13 @@ impl ItemLow {
 
     let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
 
-    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, expr.unwrap())?;
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
     
     let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
     // Trait Patch
-    let ret = if let hir::TypeKind::Trait(..) = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+    let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
@@ -218,9 +218,9 @@ impl ItemLow {
       expr_ty
     } else { ret };
 
-    TypeMatch::matches_pos(ctx, ret, expr_ty, expr_pos)?;
+    TypeMatch::matches_pos(ctx, sum, ret, expr_ty, expr_pos)?;
 
-    let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
     // Post
     hir::Item {
@@ -237,7 +237,7 @@ impl ItemLow {
 }
 
 
-fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -> Result<(hir::ItemVis, ItemAttr), Message> {
+fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -> Status<(hir::ItemVis, ItemAttr)> {
   let mut ivis: Option<(ast::Ident, hir::SymVis)> = None;
   let mut attr = ItemAttr::empty();
 
@@ -249,10 +249,10 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
         // C
         _ if key.sid() == ctx.sin.sid_c() => {
           if attr.contains(ItemAttr::C) {
-            return Err(Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
               //.add(Label::new(pos, FIRST_DEFINITION_HERE))
               .add(ONLY_ONE_DEFINITION_REMAIN)
-            )
+            );
           };
           attr |= ItemAttr::C;
         }
@@ -260,10 +260,10 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
         // Import
         _ if key.sid() == ctx.sin.sid_import() => {
           if let Some((pos, _)) = ivis {
-            return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
+            ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
               .add(Label::new(pos, FIRST_DEFINITION_HERE))
               .add(ONLY_ONE_DEFINITION_REMAIN)
-            )
+            );
           };
           ivis = Some((key, hir::SymVis::Import))
         }
@@ -271,10 +271,10 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
         // Export
         _ if key.sid() == ctx.sin.sid_export() => {
           if let Some((pos, _)) = ivis {
-            return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
+            ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
               .add(Label::new(pos, FIRST_DEFINITION_HERE))
               .add(ONLY_ONE_DEFINITION_REMAIN)
-            )
+            );
           };
           ivis = Some((key, hir::SymVis::Export))
         }
@@ -282,25 +282,25 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
         // Entry
         _ if key.sid() == ctx.sin.sid_entry() => {
           if let Some((pos, _)) = ivis {
-            return Err(Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
+            ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
               .add(Label::new(pos, FIRST_DEFINITION_HERE))
               .add(ONLY_ONE_DEFINITION_REMAIN)
-            )
+            );
           };
           if attr.contains(ItemAttr::Entry) {
-            return Err(Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
               //.add(Label::new(pos, FIRST_DEFINITION_HERE))
               .add(ONLY_ONE_DEFINITION_REMAIN)
-            )
+            );
           };
           if vis != ast::Visibility::Public {
-            return Err(Message::error(ENTRY_FUNCTION_MUST_BE_PUBLIC, Label::new_pos(key)))
+            ret_err!(sum, Message::error(ENTRY_FUNCTION_MUST_BE_PUBLIC, Label::new_pos(key)));
           }
           ivis = Some((key, hir::SymVis::Export));
           attr |= ItemAttr::Entry;
         }
       
-        _ => return Err(Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)))
+        _ => ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)))
       }
     }
   }
@@ -313,5 +313,5 @@ fn read_attrs(ctx: &Ctx, vis: ast::Visibility, attrs: Option<&Vec<Attribute>>) -
     _ => panic!()
   };
 
-  Ok((vis, attr))
+  Status::Success((vis, attr))
 }

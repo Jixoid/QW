@@ -11,26 +11,23 @@
 
 
 use itertools::Itertools;
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{CollectOrErrors, Status, Summary};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, PushOkApi};
 
 use crate::{Ctx, ItemLow, ctx, item_p::read_attrs, TypeLow};
 
 
-pub fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
+pub fn low_krate(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Status<hir::ItemId> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
   
-  let ids = &ctx.src.extra_get(rng)
-    .filter_map(|id| {
-      ItemLow::low(ctx!(lscp -> ctx), id)
-        .map_err(|err| ctx.sum.add(err))
-        .ok().flatten()
-    }).collect_vec();
+  let ids = ctx.src.extra_get(rng)
+    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
+    .collect_or_errors()?;
 
-  let rng = ctx.cre.extra(ids);
+  let rng = ctx.cre.extra(&ids);
 
-  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
 
   // Post
@@ -42,21 +39,18 @@ pub fn low_krate(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemR
   }.push_ok(ctx.cre)
 }
 
-pub fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Result<hir::ItemId, Message> {
+pub fn low_module(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng) -> Status<hir::ItemId> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
   let name = it.name.unwrap().sid();
   let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
-  let ids = &ctx.src.extra_get(rng)
-    .filter_map(|id| {
-      ItemLow::low(ctx!(lscp, path -> ctx), id)
-        .map_err(|err| ctx.sum.add(err))
-        .ok().flatten()
-    }).collect_vec();
+  let ids = ctx.src.extra_get(rng)
+    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
+    .collect_or_errors()?;
 
-  let rng = ctx.cre.extra(ids);
+  let rng = ctx.cre.extra(&ids);
 
-  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
 
   // Post
@@ -68,10 +62,10 @@ pub fn low_module(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Item
   }.push_ok(ctx.cre)
 }
 
-pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng) -> Result<hir::ItemId, Message> {
+pub fn low_generic(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng) -> Status<hir::ItemId> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
-  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
   let empty_items: &[hir::ItemId] = &[];
   let empty_things: &[hir::ThingId] = &[];
@@ -85,31 +79,24 @@ pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Ite
 
   ctx.cmap.cache_item.insert(id, Some(generic_item));
 
-  let rng = &ctx.src.extra_get(rng)
-    .filter_map(|id| {
-      ItemLow::low(ctx!(lscp -> ctx), id)
-        .map_err(|err| ctx.sum.add(err))
-        .ok().flatten()
-    }).collect_vec();
-  let rng = ctx.cre.extra(rng);
+  let ids = ctx.src.extra_get(rng)
+    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
+    .collect_or_errors()?;
+
+  let rng = ctx.cre.extra(&ids);
   
   
   let args = &ctx.src.extra_get(args)
     .filter_map(|id| {
-      let it = match ctx.src.get(id).kind {
-        ast::ThingKind::Name(name) => Ok(hir::Thing::Name(name.sid()).push(ctx.cre)),
+      match ctx.src.get(id).kind {
+        ast::ThingKind::Name(name) => Some(hir::Thing::Name(name.sid()).push(ctx.cre)),
 
         ast::ThingKind::NamedType(name, kind) => {
-          TypeLow::low(ctx, kind).map(|kind|
+          TypeLow::low(ctx, sum, kind).map(|kind|
             hir::Thing::NamedType(name.sid(), kind).push(ctx.cre)
-          )
+          ).ok()
         }
         _ => todo!()
-      };
-
-      match it {
-        Err(msg) => {ctx.sum.add(msg); None},
-        Ok(val) => Some(val),
       }
     }).collect_vec();
   let args = ctx.cre.extra(args);
@@ -121,5 +108,5 @@ pub fn low_generic(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, rng: ast::Ite
     vis, attr
   };
 
-  Ok(generic_item)
+  Status::Success(generic_item)
 }

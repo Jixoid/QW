@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
 use qwc_mir as mir;
 
@@ -18,23 +18,23 @@ use crate::{Ctx, ExprLow, FunBuilder, RawTerminator, ExprEmit};
 
 
 
-pub fn low_return(ctx: &mut Ctx, bbld: &mut FunBuilder, val: hir::ExprId) -> Result<(), Message> {
-  let val = ExprLow::low(ctx, bbld, val)?;
+pub fn low_return(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: hir::ExprId) -> Status<()> {
+  let val = ExprLow::low(ctx, sum, bbld, val)?;
 
   RawTerminator::Return(val).terminate(bbld);
   
   let dead_bb = bbld.create_block();
   bbld.switch_to(dead_bb);
   
-  Ok(())
+  Success(())
 }
 
-pub fn low_break(ctx: &mut Ctx, bbld: &mut FunBuilder, val: Option<hir::ExprId>) -> Result<(), Message> {
+pub fn low_break(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: Option<hir::ExprId>) -> Status<()> {
   let frame = bbld.peek_loop().cloned().expect("break used outside of loop");
 
   if let Some(val_id) = val {
     if let Some(slot) = frame.result_slot {
-      if let Some(v) = ExprLow::low(ctx, bbld, val_id)? {
+      if let Some(v) = ExprLow::low(ctx, sum, bbld, val_id)? {
         mir::Expr::Store {
           target: slot.into(),
           kind: frame.result_ty,
@@ -49,10 +49,10 @@ pub fn low_break(ctx: &mut Ctx, bbld: &mut FunBuilder, val: Option<hir::ExprId>)
   let dead_bb = bbld.create_block();
   bbld.switch_to(dead_bb);
 
-  Ok(())
+  Success(())
 }
 
-pub fn low_continue(_ctx: &mut Ctx, bbld: &mut FunBuilder) -> Result<(), Message> {
+pub fn low_continue(_ctx: &mut Ctx, _sum: &mut Summary, bbld: &mut FunBuilder) -> Status<()> {
   let frame = bbld.peek_loop().cloned().expect("continue used outside of loop");
 
   RawTerminator::Jump(frame.continue_bb).terminate(bbld);
@@ -60,5 +60,5 @@ pub fn low_continue(_ctx: &mut Ctx, bbld: &mut FunBuilder) -> Result<(), Message
   let dead_bb = bbld.create_block();
   bbld.switch_to(dead_bb);
 
-  Ok(())
+  Success(())
 }

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Message, msg::ICE_UNSUPPORTED_FEATURE};
+use qwc_diagnostic::{Message, Status, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, Const};
 
 
@@ -26,7 +26,9 @@ impl<'a> Evaluator<'a> {
 
 
 impl<'a> Evaluator<'a> {
-  pub fn eval(&self, mut id: hir::ExprId) -> Result<Const, Message> {
+  pub fn eval(&self, sum: &mut Summary, id: hir::ExprId) -> Status<Const> {
+    let mut id = id;
+
     'ml: loop {
       macro_rules! next {
         ($expr:expr) => { id = $expr; continue 'ml; };
@@ -38,51 +40,51 @@ impl<'a> Evaluator<'a> {
         hir::ExprKind::Const(v) => v,
         
         hir::ExprKind::Block {stmt, expr} => {
-          if !stmt.is_empty() { return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)) }
+          if !stmt.is_empty() { ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)) }
           
-          let Some(expr) = expr else { return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)) };
+          let Some(expr) = expr else { ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)) };
           
           next!(expr);
         }
         
         hir::ExprKind::IntArithmetic {op, flg, lhs, rhs} => {
-          let lhs = self.eval(lhs)?.get_u64()?;
-          let rhs = self.eval(rhs)?.get_u64()?;
+          let lhs = self.eval(sum, lhs)?.get_u64(sum)?;
+          let rhs = self.eval(sum, rhs)?.get_u64(sum)?;
 
           let a = match op {
             hir::IntArithmeticOp::Add => match flg {
               hir::IntArithmeticFlg::Overflow => lhs.wrapping_add(rhs),
               hir::IntArithmeticFlg::Saturating => lhs.saturating_add(rhs),
-              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+              hir::IntArithmeticFlg::Checked => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)),
             },
             hir::IntArithmeticOp::Sub => match flg {
               hir::IntArithmeticFlg::Overflow => lhs.wrapping_sub(rhs),
               hir::IntArithmeticFlg::Saturating => lhs.saturating_sub(rhs),
-              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+              hir::IntArithmeticFlg::Checked => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)),
             },
             hir::IntArithmeticOp::Mul => match flg {
               hir::IntArithmeticFlg::Overflow => lhs.wrapping_mul(rhs),
               hir::IntArithmeticFlg::Saturating => lhs.saturating_mul(rhs),
-              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+              hir::IntArithmeticFlg::Checked => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)),
             },
             hir::IntArithmeticOp::Div => match flg {
               hir::IntArithmeticFlg::Overflow => lhs.wrapping_div(rhs),
               hir::IntArithmeticFlg::Saturating => lhs.saturating_div(rhs),
-              hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+              hir::IntArithmeticFlg::Checked => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)),
             },
             hir::IntArithmeticOp::Rem => match flg {
               hir::IntArithmeticFlg::Overflow => lhs.wrapping_rem(rhs),
-              hir::IntArithmeticFlg::Saturating | hir::IntArithmeticFlg::Checked => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE)),
+              hir::IntArithmeticFlg::Saturating | hir::IntArithmeticFlg::Checked => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE)),
             },
           };
 
           Const::U64(a)
         }
 
-        _ => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE))
+        _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE))
       };
       
-      return Ok(val);
+      return Status::Success(val);
     }
   }
 }
@@ -90,11 +92,11 @@ impl<'a> Evaluator<'a> {
 
 
 pub trait GetConst {
-  fn get_u64(self) -> Result<u64, Message>;
+  fn get_u64(self, sum: &mut Summary) -> Status<u64>;
 }
 
 impl GetConst for Const {
-  fn get_u64(self) -> Result<u64, Message> {
+  fn get_u64(self, sum: &mut Summary) -> Status<u64> {
     let val = match self {
       Const::U8(v) => v as u64,
       Const::U16(v) => v as u64,
@@ -106,9 +108,9 @@ impl GetConst for Const {
       Const::I32(v) if v >= 0 => v as u64,
       Const::I64(v) if v >= 0 => v as u64,
       
-      _ => return Err(Message::fatal(ICE_UNSUPPORTED_FEATURE))
+      _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE))
     };
 
-    Ok(val)
+    Status::Success(val)
   }
 }

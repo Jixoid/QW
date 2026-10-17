@@ -10,14 +10,14 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, ExprCategory};
 
 use crate::hgen::Ctx;
 
 
-pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::TypeId, elsb: Option<hir::TypeId>) -> Result<hir::TypeId, Message> {
+pub fn find_duo_res_ty(ctx: &mut Ctx, sum: &mut Summary, pos: Span, blok: hir::TypeId, elsb: Option<hir::TypeId>) -> Status<hir::TypeId> {
   let ty_unit = ctx.prims.ty_unit;
   let ty_never = ctx.prims.ty_never;
 
@@ -42,28 +42,29 @@ pub fn find_duo_res_ty(ctx: &mut Ctx, pos: Span, blok: hir::TypeId, elsb: Option
         _ if elsb == ty_unit => ctx.tin.ty_option(ctx.cre, ctx.ideps, blok),
 
         // Durum 6: Birbiriyle alakasız iki tip (örn: i32 ve String)
-        _ => return Err(Message::error(LOOP_BRANCHES_HAVE_INCOMPATIBLE_TYPE, Label::new_pos(pos)))
+        _ => ret_err!(sum, Message::error(LOOP_BRANCHES_HAVE_INCOMPATIBLE_TYPE, Label::new_pos(pos))),
       }
     }
   };
 
-  Ok(it)
+  Status::Success(it)
 }
 
-pub fn verify_assignable(ctx: &Ctx, lhs_ast: ast::ExprId, lhs_hir: hir::ExprId, op_span: Span) -> Result<(), Message> {
+pub fn verify_assignable(ctx: &Ctx, sum: &mut Summary, lhs_ast: ast::ExprId, lhs_hir: hir::ExprId, op_span: Span) -> Status<()> {
   let lhs_ast = ctx.src.get(lhs_ast);
   let lhs_hir = ctx.cre.get(lhs_hir);
 
 
   match lhs_hir.category {
-    ExprCategory::RValue => Err(Message::error(CANNOT_ASSIGN_RVALUE, Label::new_pos(op_span))
+    ExprCategory::RValue => ret_err!(sum, Message::error(CANNOT_ASSIGN_RVALUE, Label::new_pos(op_span))
       .add(Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION))
     ),
     
-    ExprCategory::LValueImm => Err(Message::error(CANNOT_ASSIGN_IMMUTABLE, Label::new_pos(op_span))
+    ExprCategory::LValueImm => ret_err!(sum, Message::error(CANNOT_ASSIGN_IMMUTABLE, Label::new_pos(op_span))
       .add(Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION))
     ),
 
-    ExprCategory::LValueMut => Ok(())
+    ExprCategory::LValueMut => Status::Success(())
   }
 }
+

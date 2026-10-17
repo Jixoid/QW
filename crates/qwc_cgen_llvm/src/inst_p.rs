@@ -158,6 +158,20 @@ impl InstLow {
         fctx.ssa_map.insert(dest, casted.into());
       }
 
+
+      Expr::FloatArithmetic{op, kind: _, lhs, rhs} => {
+        let lhs = ValueLow::low(uctx, ictx, fctx, &lhs).into_float_value();
+        let rhs = ValueLow::low(uctx, ictx, fctx, &rhs).into_float_value();
+
+        match op {
+          mir::FloatArithmeticOp::Add => fctx.ssa_map.insert(dest, ictx.builder.build_float_add(lhs, rhs, "").unwrap().into()),
+          mir::FloatArithmeticOp::Sub => fctx.ssa_map.insert(dest, ictx.builder.build_float_sub(lhs, rhs, "").unwrap().into()),
+          mir::FloatArithmeticOp::Mul => fctx.ssa_map.insert(dest, ictx.builder.build_float_mul(lhs, rhs, "").unwrap().into()),
+          mir::FloatArithmeticOp::Div => fctx.ssa_map.insert(dest, ictx.builder.build_float_div(lhs, rhs, "").unwrap().into()),
+          mir::FloatArithmeticOp::Rem => fctx.ssa_map.insert(dest, ictx.builder.build_float_rem(lhs, rhs, "").unwrap().into()),
+        };
+      }
+    
     }
   }
 
@@ -208,7 +222,9 @@ impl InstLow {
       Expr::IntCondition{..} |
       Expr::IntLogic{..} |
       Expr::IntUnary{..} |
-      Expr::IntCast{..} => panic!()
+      Expr::IntCast{..} => panic!(),
+
+      Expr::FloatArithmetic{..} => panic!(),
     }
   }
 

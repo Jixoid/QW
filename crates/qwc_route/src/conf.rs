@@ -13,6 +13,7 @@
 use std::{collections::HashMap, path::Path};
 
 use qwc_arena::Files;
+use qwc_diagnostic::{Status::{Fail, Success}, Summary};
 use qwc_ds::Value;
 
 use crate::Error;
@@ -39,8 +40,14 @@ pub fn parse_conf(fpath: &Path, far: &mut Files) -> Result<ConfSetup, Error> {
     far.get(fid)
   };
   
-  let conf = Value::load_file(fi).map_err(|e| format!("{}", e.display_human(far)))?;
+  let conf = {
+    let mut sum = Summary::new();
 
+    match Value::load_file(fi, &mut sum) {
+      Fail => return Err(Error::New | format!("{}", sum)),
+      Success(v) => v,
+    }
+  };
 
   struct Setup {
     name: Option<String>,

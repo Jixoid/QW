@@ -41,6 +41,19 @@ impl Summary {
     self.msgs.push(msg);
   }
 
+  pub fn extend(&mut self, msgs: Vec<Message>) {
+    for msg in &msgs {
+      match msg.level {
+        Level::Fatal => self.fatal += 1,
+        Level::Error => self.error += 1,
+        Level::Warn => self.warn += 1,
+        Level::Hint => self.hint += 1,
+      };
+    }
+    
+    self.msgs.extend(msgs);
+  }
+
   pub fn is_empty(&self) -> bool { return (self.fatal + self.error + self.warn + self.hint) == 0; }
   
   pub fn msgs(&self) -> &Vec<Message> { return &self.msgs; }

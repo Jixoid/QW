@@ -10,8 +10,8 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind, IdentSave};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{Expr, ExprId, ExprKind, IdentSave, PushOkApi};
+use qwc_diagnostic::{ret_err, Label, Message, Status, msg::*};
 use qwc_lexer::WK;
 
 use crate::{ExprParser, ctx, WordCheck, parse::Ctx, PattParser, TypeParser};
@@ -20,25 +20,25 @@ use crate::{ExprParser, ctx, WordCheck, parse::Ctx, PattParser, TypeParser};
 // Block
 impl ExprParser {
 
-  pub fn pre_block(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  pub fn pre_block(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let label = match start.kind() {
       WK::BraceL => None,
 
       WK::Backtick => {
-        let name = match lex.get_k()? {
-          (WK::Word, c) => c.ident(sin, far)?,
-          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+        let name = match lex.get_k(sum)? {
+          (WK::Word, c) => c.ident(sum, sin, far)?,
+          (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
         };
         
-        lex.get()?.expect_kind(WK::Colon)?;
-        lex.get()?.expect_kind(WK::BraceL)?;
+        lex.get(sum)?.expect_kind(sum, WK::Colon)?;
+        lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
         
         Some(name.into())
       }
       
-      _ => start.panic_kind2(WK::Backtick, WK::BraceL)?
+      _ => start.panic_kind2(sum, WK::Backtick, WK::BraceL)?
     };
 
     let (rng, expr) = {
@@ -46,16 +46,16 @@ impl ExprParser {
       let mut expr = None;
       
       loop {
-        match lex.peek()?.kind() {
-          WK::BraceR => { lex.bump()?; break }
-          WK::Semicolon => { lex.bump()?; continue; }
+        match lex.peek(sum)?.kind() {
+          WK::BraceR => { lex.bump(sum)?; break }
+          WK::Semicolon => { lex.bump(sum)?; continue; }
           _ => {}
         }
         
         let ex_id = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
         
-        match lex.peek_k()? {
-          (WK::Semicolon, _) => { lex.bump()?; ctn.push(ex_id); },
+        match lex.peek_k(sum)? {
+          (WK::Semicolon, _) => { lex.bump(sum)?; ctn.push(ex_id); },
           
           (WK::BraceR, _) => { expr = Some(ex_id); }
           
@@ -63,7 +63,7 @@ impl ExprParser {
             if cre.get(ex_id).is_like_blok() {
               ctn.push(ex_id);
             } else {
-              c.panic_kind(WK::Semicolon)?;
+              c.panic_kind(sum, WK::Semicolon)?;
             }
           }
         }
@@ -74,64 +74,58 @@ impl ExprParser {
 
 
     // Post
-    let this = Expr{
+    Expr{
       pos: lex.pos_extend(start),
       kind: ExprKind::Block{ label, rng, expr }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 }
 
 
 // Context
-pub fn pre_unsafe(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_unsafe(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Unsafe(blok)
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_relaxed(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_relaxed(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Relaxed(blok)
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
 
 // Variable
-pub fn pre_let(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_let(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let item = PattParser::read_patt(ctx!(cre, sin, far, lex, sum, side))?;
 
-  let kind = if lex.peek()?.kind() == WK::Colon {
-    lex.bump()?;
+  let kind = if lex.peek(sum)?.kind() == WK::Colon {
+    lex.bump(sum)?;
     Some(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
   };
 
-  let init = if lex.peek()?.kind() == WK::Eq {
-    lex.bump()?;
+  let init = if lex.peek(sum)?.kind() == WK::Eq {
+    lex.bump(sum)?;
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   }
   else {
@@ -140,10 +134,8 @@ pub fn pre_let(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
 
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Let{ item, kind, init, ism: start.kind() == WK::Var }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }

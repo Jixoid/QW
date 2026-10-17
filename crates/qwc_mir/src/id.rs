@@ -12,6 +12,8 @@
 
 use std::{marker::PhantomData, num::NonZeroU32};
 
+use qwc_diagnostic::Status;
+
 use crate::{Block, Inst, Krate, PushApi, Symbol, Type, Value};
 
 
@@ -148,15 +150,15 @@ impl AnyRng {
 // PushOkApi
 pub trait PushOkApi<T: MirKind> {
   fn push(self, cre: &mut Krate) -> MirId<T>;
-  fn push_ok<E>(self, cre: &mut Krate) -> Result<MirId<T>, E>;
+  fn push_ok(self, cre: &mut Krate) -> Status<MirId<T>>;
 }
 
 impl<T: MirKind, P: PushApi<T>> PushOkApi<T> for P {
   fn push(self, cre: &mut Krate) -> MirId<T> {
     cre.push(self)
   }
-  fn push_ok<E>(self, cre: &mut Krate) -> Result<MirId<T>, E> {
-    Ok(cre.push(self))
+  fn push_ok(self, cre: &mut Krate) -> Status<MirId<T>> {
+    Status::Success(cre.push(self))
   }
 }
 

@@ -12,6 +12,7 @@
 
 use std::{marker::PhantomData, num::NonZero};
 
+use qwc_diagnostic::Status;
 use serde::Serialize;
 
 use crate::{Expr, Item, Krate, PushApi, Thing, Type, DefPath, krate::CID};
@@ -186,7 +187,7 @@ impl AnyRng {
 // PushOkApi
 pub trait PushOkApi<T: HirKind> {
   fn push(self, cre: &mut Krate) -> HirId<T>;
-  fn push_ok<E>(self, cre: &mut Krate) -> Result<HirId<T>, E>;
+  fn push_ok(self, cre: &mut Krate) -> Status<HirId<T>>;
 }
 
 impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
@@ -194,8 +195,8 @@ impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
     cre.push(self)
   }
   
-  fn push_ok<E>(self, cre: &mut Krate) -> Result<HirId<T>, E> {
-    Ok(cre.push(self))
+  fn push_ok(self, cre: &mut Krate) -> Status<HirId<T>> {
+    Status::Success(cre.push(self))
   }
 }
 

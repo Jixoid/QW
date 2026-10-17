@@ -10,24 +10,20 @@
 */
 
 
-use qwc_ast::{self as ast, DefPath, DefPathId, FieldKind, Ident, IdentSave, Item, Thing, ThingKind, Type, TypeId, TypeKind, Visibility, id::PushOkApi};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{self as ast, DefPathId, FieldKind, Ident, IdentSave, Item, PushOkApi, Thing, ThingKind, Type, TypeId, TypeKind, Visibility};
+use qwc_diagnostic::{ret_err, Label, Message, Status::{self, Success}, msg::*};
 use qwc_lexer::WK;
-use qwc_string_interner::Sid;
 
-use crate::{Ctx, FieldParser, TypeParser, WordCheck, ctx, expr_p::ExprParser};
+use crate::{Ctx, FieldParser, TypeParser, WordCheck, ctx, ExprParser, type_p::helper};
 
 
 impl TypeParser {
 
   // Big
-  pub fn sub_struct(ctx: &mut Ctx, base: DefPathId, name: Ident) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
-    let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
+  pub fn sub_struct(ctx: &mut Ctx, path: DefPathId, name: Ident) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
 
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let path = cre.push(DefPath::Path { base, name: name.sid() });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let (rng, impin, hideimp) = {
       let mut ctn = vec![];
@@ -35,7 +31,7 @@ impl TypeParser {
       let mut hideimp = vec![];
 
       loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
 
         let id = FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), &mut Visibility::Inherited)?;
         let it = cre.get(id);
@@ -56,7 +52,7 @@ impl TypeParser {
 
     let type_ty = Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Struct(rng),
+      kind: TypeKind::Struct { vars: rng, path },
     }.push(ctx.cre);
 
     let name_ty = Type {
@@ -88,29 +84,27 @@ impl TypeParser {
       ctx.side.push(hideimp);
     }
 
-    Ok(type_ty)
+    Success(type_ty)
   }
 
-  pub fn sub_enum(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
+  pub fn sub_enum(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
     
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let _path: DefPathId = cre.push(DefPath::Path { base, name });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
       
       loop {
-        let name = match lex.get_k()? {
-          (WK::Word, c) => c.ident(sin, far)?,
+        let name = match lex.get_k(sum)? {
+          (WK::Word, c) => c.ident(sum, sin, far)?,
           (WK::BraceR, _) => break,
           
-          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
+          (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
-        let item = if lex.peek()?.kind() == WK::Eq {
-          lex.bump()?;
+        let item = if lex.peek(sum)?.kind() == WK::Eq {
+          lex.bump(sum)?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
           
           Thing {
@@ -124,14 +118,14 @@ impl TypeParser {
           }
         };
 
-        vals.push(cre.push(item));
+        vals.push(item.push(cre));
 
-        match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
+        match lex.get_k(sum)? {
+          (WK::Comma, _) => if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break },
 
           (WK::BraceR, _) => break,
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
+          (_, c) => c.panic_kind2(sum, WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -140,34 +134,30 @@ impl TypeParser {
 
     
     // Post
-    let this = Type {
+    Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Enum(vals),
-    };
-
-    Ok(cre.push(this))
+      kind: TypeKind::Enum { fields: vals, path },
+    }.push_ok(cre)
   }
 
-  pub fn sub_flags(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
+  pub fn sub_flags(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
     
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let _path: DefPathId = cre.push(DefPath::Path { base, name });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
       
       loop {
-        let name = match lex.get_k()? {
-          (WK::Word, c) => c.ident(sin, far)?,
+        let name = match lex.get_k(sum)? {
+          (WK::Word, c) => c.ident(sum, sin, far)?,
           (WK::BraceR, _) => break,
           
-          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
+          (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
         
-        let item = if lex.peek()?.kind() == WK::Eq {
-          lex.bump()?;
+        let item = if lex.peek(sum)?.kind() == WK::Eq {
+          lex.bump(sum)?;
           let val = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
           
           Thing {
@@ -181,14 +171,14 @@ impl TypeParser {
           }
         };
 
-        vals.push(cre.push(item));
+        vals.push(item.push(cre));
 
-        match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
+        match lex.get_k(sum)? {
+          (WK::Comma, _) => if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break },
 
           (WK::BraceR, _) => break,
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
+          (_, c) => c.panic_kind2(sum, WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -197,33 +187,29 @@ impl TypeParser {
 
     
     // Post
-    let this = Type {
+    Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Flags(vals),
-    };
-
-    Ok(cre.push(this))
+      kind: TypeKind::Flags { fields: vals, path },
+    }.push_ok(cre)
   }
 
-  pub fn sub_variant(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
+  pub fn sub_variant(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
     
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let _path: DefPathId = cre.push(DefPath::Path { base, name });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let vals = {
       let mut vals = vec![];
 
       loop {
-        let name = match lex.get_k()? {
-          (WK::Word, c) => c.ident(sin, far)?,
+        let name = match lex.get_k(sum)? {
+          (WK::Word, c) => c.ident(sum, sin, far)?,
           (WK::BraceR, _) => break,
           
-          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
+          (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c))),
         };
 
-        let item = if lex.peek()?.kind() == WK::ParenL {
+        let item = if lex.peek(sum)?.kind() == WK::ParenL {
           let payload_type = TypeParser::pre_tuple(ctx!(cre, sin, far, lex, sum, side))?;
           
           Thing {
@@ -237,13 +223,13 @@ impl TypeParser {
           }
         };
 
-        vals.push(cre.push(item));
+        vals.push(item.push(cre));
 
-        match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break },
+        match lex.get_k(sum)? {
+          (WK::Comma, _) => if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break },
           (WK::BraceR, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::BraceR)?,
+          (_, c) => c.panic_kind2(sum, WK::Comma, WK::BraceR)?,
         }
       }
 
@@ -252,28 +238,23 @@ impl TypeParser {
 
 
     // Post
-    let this = Type {
+    Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Variant(vals),
-    };
-
-    Ok(cre.push(this))
+      kind: TypeKind::Variant { fields: vals, path },
+    }.push_ok(cre)
   }
 
-  pub fn sub_iface(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
-    let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
+  pub fn sub_iface(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
 
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let _path: DefPathId = cre.push(DefPath::Path { base, name });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let rng = {
       let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
 
       loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
         
         ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), defvis)? );
       }
@@ -283,28 +264,25 @@ impl TypeParser {
 
     
     // Post
-    let this = Type {
+    Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Iface(rng),
-    };
-
-    Ok(cre.push(this))
+      kind: TypeKind::Iface { fields: rng, path },
+    }.push_ok(cre)
   }
 
-  pub fn sub_trait(ctx: &mut Ctx, base: DefPathId, name: Sid) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
-    let _bases = Self::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
+  pub fn sub_trait(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
+    
+    let reqs = helper::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
 
-    lex.get()?.expect_kind(WK::BraceL)?;
-
-    let _path: DefPathId = cre.push(DefPath::Path { base, name });
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let rng = {
       let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
 
       loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
         
         ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), defvis)? );
       }
@@ -314,12 +292,10 @@ impl TypeParser {
 
     
     // Post
-    let this = Type {
+    Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Trait(rng),
-    };
-
-    Ok(cre.push(this))
+      kind: TypeKind::Trait { fields: rng, reqs, path },
+    }.push_ok(cre)
   }
 
 }

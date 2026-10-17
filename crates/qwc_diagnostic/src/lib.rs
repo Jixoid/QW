@@ -10,12 +10,16 @@
 */
 
 
+#![feature(try_trait_v2)]
+#![feature(try_trait_v2_residual)]
+
 mod diag;
 mod span;
 mod poit;
 mod ice;
 mod sum;
 mod display;
+mod collect;
 pub mod msg;
 
 pub use span::Span;
@@ -23,3 +27,4 @@ pub use poit::Poit;
 pub use ice::*;
 pub use sum::*;
 pub use diag::*;
+pub use collect::{Status, Status::Fail, Status::Success, StatusApi, StatusApi2, CollectOrErrors};

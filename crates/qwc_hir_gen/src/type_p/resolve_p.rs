@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
 use qwc_resolve::Resolver;
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
@@ -21,12 +21,12 @@ use crate::{Ctx, ctx, ItemLow, TypeLow};
 
 
 // Resolve
-pub fn low_nick(ctx: &mut Ctx, ident: Ident) -> Result<hir::TypeId, Message> {
-  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).lookup(ident)?.get_k();
-  low_resolved(ctx, kind, lscp, span)
+pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, ident: Ident) -> Status<hir::TypeId> {
+  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).lookup(sum, ident)?.get_k();
+  low_resolved(ctx, sum, kind, lscp, span)
 }
 
-pub fn low_path(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message> {
+pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<hir::TypeId> {
   let mut segment = vec![];
 
   for id in ctx.src.extra_get(rng) {
@@ -35,16 +35,16 @@ pub fn low_path(ctx: &mut Ctx, rng: ast::TypeRng) -> Result<hir::TypeId, Message
     if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
   }
 
-  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
-  low_resolved(ctx, kind, lscp, span)
+  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
+  low_resolved(ctx, sum, kind, lscp, span)
 }
 
 
-fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: Span) -> Result<hir::TypeId, Message> {
+fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: Span) -> Status<hir::TypeId> {
   let ty = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::Type(item) => {
-        let item = ItemLow::low(ctx!(lscp -> ctx), item)?.unwrap();
+        let item = ItemLow::low(ctx!(lscp -> ctx), sum, item)?.unwrap();
         let hir::ItemKind::Using { kind } = ctx.get(item).kind else { unreachable!() };
         kind
       }
@@ -56,7 +56,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
           _ => unreachable!(),
         };
 
-        let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
+        let generic_hir = ItemLow::low(ctx, sum, generic)?.unwrap();
         let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name: name.sid() });
         ctx.tin.ty_generic_type(ctx.cre, path, generic_hir, idx)
       }
@@ -65,7 +65,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
         let field_obj = ctx.src.get(field);
         match field_obj.kind {
           ast::FieldKind::Type(Some(ty)) => {
-            TypeLow::low(ctx!(lscp -> ctx), ty)?
+            TypeLow::low(ctx!(lscp -> ctx), sum, ty)?
           }
 
           ast::FieldKind::Type(None) => {
@@ -88,28 +88,28 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
       resolve::ScopeKindAst::Expr(item) => {
         let span = ctx.src.get(item).pos;
 
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
       }
 
       // Module
       resolve::ScopeKindAst::Module(item) => {
         let span = ctx.src.get(item).pos;
 
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "module"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "module"]), Label::new_pos(span)))
       }
 
       resolve::ScopeKindAst::ExprParam(.., thing) => {
         let span = ctx.src.get(thing).pos;
 
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
       }
       
       resolve::ScopeKindAst::GenericType(generic, kind) => {
-        let generic_item = ItemLow::low(ctx, generic)?.unwrap();
+        let generic_item = ItemLow::low(ctx, sum, generic)?.unwrap();
         let path = ctx.get(generic_item).path;
         let kind = match ctx.cmap.cache_type.get(&kind) {
           Some(&cached) => cached,
-          None => TypeLow::low(ctx, kind)?,
+          None => TypeLow::low(ctx, sum, kind)?,
         };
         hir::Type {
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
@@ -120,7 +120,7 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
       }
 
       resolve::ScopeKindAst::GenericExpr(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
       }
 
       resolve::ScopeKindAst::Local(..) => panic!("value in type position"),
@@ -130,10 +130,10 @@ fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, 
       resolve::ScopeKindHir::Type(ty) => ty,
 
       resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
       }
     }
   };
 
-  Ok(ty)
+  Status::Success(ty)
 }

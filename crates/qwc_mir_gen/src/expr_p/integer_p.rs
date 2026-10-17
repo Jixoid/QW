@@ -10,17 +10,17 @@
 */
 
 
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
 use qwc_mir::{self as mir, Value};
 
 use crate::{Ctx, ExprLow, FunBuilder, TypeLow, ExprEmit};
 
 
-pub fn low_int_arithmetic(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
-  let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
-  let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
-  let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+pub fn low_int_arithmetic(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<Value> {
+  let kind = TypeLow::low(ctx, sum, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+  let lhs = ExprLow::low(ctx, sum, bbld, lhs)?.unwrap();
+  let rhs = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
   let kind_ty = ctx.cre.get(kind);
 
 
@@ -53,13 +53,13 @@ pub fn low_int_arithmetic(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntArit
     rhs
   }.emit(bbld).unwrap();
 
-  Ok(this.into())
+  Success(this.into())
 }
 
-pub fn low_int_arithmetic_op(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<(), Message> {
-  let target = ExprLow::low_lval(ctx, bbld, lhs)?;
-  let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
-  let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+pub fn low_int_arithmetic_op(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, op: hir::IntArithmeticOp, flg: hir::IntArithmeticFlg, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<()> {
+  let target = ExprLow::low_lval(ctx, sum, bbld, lhs)?;
+  let kind = TypeLow::low(ctx, sum, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+  let rhs = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
   let kind_ty: &mir::Type = ctx.cre.get(kind);
   
   let op = match op {
@@ -102,14 +102,14 @@ pub fn low_int_arithmetic_op(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntA
     value,
   }.emit(bbld);
 
-  Ok(())
+  Success(())
 }
 
 
-pub fn low_int_condition(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntConditionOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
-  let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
-  let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
-  let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+pub fn low_int_condition(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, op: hir::IntConditionOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<Value> {
+  let kind = TypeLow::low(ctx, sum, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+  let lhs = ExprLow::low(ctx, sum, bbld, lhs)?.unwrap();
+  let rhs = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
   let kind_ty: &mir::Type = ctx.cre.get(kind);
 
   let op = match op {
@@ -138,5 +138,5 @@ pub fn low_int_condition(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::IntCondi
     rhs
   }.emit(bbld).unwrap();
 
-  Ok(this.into())
+  Success(this.into())
 }

@@ -71,33 +71,42 @@ pub enum Const {
 }
 
 
+mod int_s {
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntArithmeticOp { Add, Sub, Mul, Div, Rem }
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntArithmeticFlg { Overflow, Checked, Saturating }
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntArithmeticFlg2 { Signed, Unsigned }
+  
+  
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntConditionOp { GtEq, LtEq, Gt, Lt, Eq, Ne }
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntConditionFlg2 { Signed, Unsigned }
+  
+  
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntLogicOp { And, Or, Xor }
+  
+  
+  
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum IntUnaryOp { Not }
+}
+pub use int_s::*;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntArithmeticOp { Add, Sub, Mul, Div, Rem }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntArithmeticFlg { Overflow, Checked, Saturating }
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntArithmeticFlg2 { Signed, Unsigned }
-
-
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntConditionOp { GtEq, LtEq, Gt, Lt, Eq, Ne }
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntConditionFlg2 { Signed, Unsigned }
-
-
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntLogicOp { And, Or, Xor }
-
-
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IntUnaryOp { Not }
+mod float_s {
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum FloatArithmeticOp { Add, Sub, Mul, Div, Rem }
+}
+pub use float_s::*;
 
 
 
@@ -117,6 +126,8 @@ pub enum Expr {
   IntLogic {op: IntLogicOp, kind: TypeId, lhs: Value, rhs: Value},
   IntUnary {op: IntUnaryOp, kind: TypeId, val: Value},
   IntCast {kind: TypeId, val: Value, signed: bool},
+
+  FloatArithmetic {op: FloatArithmeticOp, kind: TypeId, lhs: Value, rhs: Value},
 }
 
 impl Expr {
@@ -136,6 +147,8 @@ impl Expr {
       Expr::IntLogic{..} => true,
       Expr::IntUnary{..} => true,
       Expr::IntCast{..} => true,
+
+      Expr::FloatArithmetic{..} => true,
     }
   }
 }

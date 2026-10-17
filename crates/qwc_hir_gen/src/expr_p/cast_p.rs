@@ -13,20 +13,20 @@
 use crate::{ExprLow, TypeLow, Ctx, FunCtx};
 
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, StatusApi2, Summary, msg::*, ret_err, send_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 
 
 // Cast
-pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId, target: ast::TypeId) -> Result<hir::ExprId, Message> {
-  let expr = ExprLow::low(ctx, fctx, expr)?;
-  let target = TypeLow::low(ctx, target)?;
+pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, expr: ast::ExprId, target: ast::TypeId) -> Status<hir::ExprId> {
+  let expr = ExprLow::low(ctx, fctx, sum, expr)?;
+  let target = TypeLow::low(ctx, sum, target)?;
   
   let expr_ty = ctx.cre.get(expr).ety;
 
   // Identity cast
   if expr_ty == target {
-    return Ok(expr);
+    return Success(expr);
   }
 
   // Inter integer cast
@@ -44,7 +44,7 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId,
 
 
   // Choose
-  let ret: Option<(fn(_, _, _, _, _) -> _, hir::TypeId)> =
+  let ret: Option<(fn(_, _, _, _, _, _) -> _, hir::TypeId)> =
   match ctx.get(target).kind {
     hir::TypeKind::Ref(target, _) => {
 
@@ -55,16 +55,16 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId,
         _ => None,
       }
     }
-    hir::TypeKind::Trait(..) => Some((cast_to_trait, target)),
+    hir::TypeKind::Trait{..} => Some((cast_to_trait, target)),
     
     _ => None
   };
 
   match ret {
-    Some((fun, target_unwrap)) => fun(ctx, it, expr, target, target_unwrap),
+    Some((fun, target_unwrap)) => fun(ctx, sum, it, expr, target, target_unwrap),
     
-    None => Err(Message::error(
-      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+    None => ret_err!(sum, Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(sum, expr_ty), &ctx.type_name(sum, target)]),
       Label::new(it.pos, CANNOT_CAST),
     ))
   }
@@ -72,7 +72,7 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, expr: ast::ExprId,
 
 
 
-fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, target_unwrap: hir::TypeId) -> Result<hir::ExprId, Message> {
+fn cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, target_unwrap: hir::TypeId) -> Status<hir::ExprId> {
   let expr_ty = ctx.cre.get(expr).ety;
   
   // Choose
@@ -89,20 +89,22 @@ fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: h
 
     _ => None
   }
-  .ok_or_else(||
-    Message::error(
-      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+  .status()
+  .map_err(||
+    send_err!(sum, Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(sum, expr_ty), &ctx.type_name(sum, target)]),
       Label::new(it.pos, CANNOT_CAST),
-    )
+    ))
   )?;
 
 
   // Search
-  ctx.type_impls.get(&expr_unwrap).map(|tyfuns| tyfuns.traits.get(&target_unwrap)).flatten()
-    .ok_or_else(||
-      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["iface", &ctx.type_name(target), &ctx.type_name(expr_ty)]),
+  ctx.type_impls.get(&expr_unwrap).map(|tyfuns| tyfuns.traits.get(&target_unwrap)).flatten().status()
+    .map_err(||
+      send_err!(sum, Message::error(
+        X_NOT_IMPLEMENTED_FOR_TYPE.args(&["iface", &ctx.type_name(sum, target), &ctx.type_name(sum, expr_ty)]),
         Label::new_pos(it.pos),
-      )
+      ))
     )?;
 
   
@@ -119,7 +121,7 @@ fn cast_to_iface_ref(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: h
   }.push_ok(ctx.cre)
 }
 
-fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, _: hir::TypeId) -> Result<hir::ExprId, Message> {
+fn cast_to_trait(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, _: hir::TypeId) -> Status<hir::ExprId> {
   let expr_ty = ctx.cre.get(expr).ety;
   
   // Choose
@@ -128,20 +130,22 @@ fn cast_to_trait(ctx: &mut Ctx, it: &ast::Expr, expr: hir::ExprId, target: hir::
 
     _ => None
   }
-  .ok_or_else(||
-    Message::error(
-      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(expr_ty), &ctx.type_name(target)]),
+  .status()
+  .map_err(||
+    send_err!(sum, Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(sum, expr_ty), &ctx.type_name(sum, target)]),
       Label::new(it.pos, CANNOT_CAST),
-    )
+    ))
   )?;
 
 
   // Search
-  ctx.type_impls.get(&expr_ty).map(|tyfuns| tyfuns.traits.get(&target)).flatten()
-    .ok_or_else(||
-      Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(target), &ctx.type_name(expr_ty)]),
+  ctx.type_impls.get(&expr_ty).map(|tyfuns| tyfuns.traits.get(&target)).flatten().status()
+    .map_err(||
+      send_err!(sum, Message::error(
+        X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(sum, target), &ctx.type_name(sum, expr_ty)]),
         Label::new_pos(it.pos),
-      )
+      ))
     )?;
 
 

@@ -10,8 +10,8 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind, IdentSave};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{Expr, ExprId, ExprKind, IdentSave, PushOkApi};
+use qwc_diagnostic::{ret_err, Label, Message, Status, msg::*};
 use qwc_lexer::WK;
 
 use crate::{ctx, ExprParser, parse::Ctx};
@@ -19,21 +19,21 @@ use crate::{ctx, ExprParser, parse::Ctx};
 
 
 // Route
-pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_ret(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
-  let label = if lex.peek()?.kind() == WK::Backtick {
-    lex.bump()?;
-    let name = match lex.get_k()? {
-      (WK::Word, c) => c.ident(sin, far)?,
-      (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+  let label = if lex.peek(sum)?.kind() == WK::Backtick {
+    lex.bump(sum)?;
+    let name = match lex.get_k(sum)? {
+      (WK::Word, c) => c.ident(sum, sin, far)?,
+      (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
     };
     Some(name.into())
   } else {
     None
   };
 
-  let val = if lex.peek()?.kind() != WK::Semicolon {
+  let val = if lex.peek(sum)?.kind() != WK::Semicolon {
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
@@ -41,29 +41,27 @@ pub fn pre_ret(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
 
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::Return{ label, val }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_break(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
-  let label = if lex.peek()?.kind() == WK::Backtick {
-    lex.bump()?;
-    let name = match lex.get_k()? {
-      (WK::Word, c) => c.ident(sin, far)?,
-      (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+  let label = if lex.peek(sum)?.kind() == WK::Backtick {
+    lex.bump(sum)?;
+    let name = match lex.get_k(sum)? {
+      (WK::Word, c) => c.ident(sum, sin, far)?,
+      (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
     };
     Some(name.into())
   } else {
     None
   };
 
-  let val = if lex.peek()?.kind() != WK::Semicolon {
+  let val = if lex.peek(sum)?.kind() != WK::Semicolon {
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
@@ -71,22 +69,20 @@ pub fn pre_break(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
 
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Break{ label, val }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_continue(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_continue(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
-  let label = if lex.peek()?.kind() == WK::Backtick {
-    lex.bump()?;
-    let name = match lex.get_k()? {
-      (WK::Word, c) => c.ident(sin, far)?,
-      (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+  let label = if lex.peek(sum)?.kind() == WK::Backtick {
+    lex.bump(sum)?;
+    let name = match lex.get_k(sum)? {
+      (WK::Word, c) => c.ident(sum, sin, far)?,
+      (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
     };
     Some(name.into())
   } else {
@@ -95,10 +91,8 @@ pub fn pre_continue(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre,
 
   
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Continue{ label }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }

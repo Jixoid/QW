@@ -11,9 +11,9 @@
 
 
 use qwc_comptime::{Evaluator, GetConst};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
-use qwc_mir as mir;
+use qwc_mir::{self as mir, PushOkApi};
 
 use crate::{Ctx, Layouter};
 
@@ -22,8 +22,8 @@ pub struct TypeLow;
 
 impl TypeLow {
 
-  pub fn low(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
-    if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Ok(id) }
+  pub fn low(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
+    if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Success(id) }
 
     let it = ctx.get_type(id);
 
@@ -32,38 +32,38 @@ impl TypeLow {
       // Primitive
       Unit => ctx.tin.ty_unit(),
       
-      Int(len, _) => Self::low_int(ctx, len)?,
+      Int(len, _) => Self::low_int(ctx, sum, len)?,
       ArchInt(_) => ctx.tin.ty_arch_int(),
-      Float(len) => Self::low_float(ctx, len)?,
+      Float(len) => Self::low_float(ctx, sum, len)?,
       Bool => ctx.tin.ty_bool(),
       Char => ctx.tin.ty_i32(),
 
-      Ref(id, _) => Self::low_ref(ctx, id)?,
+      Ref(id, _) => Self::low_ref(ctx, sum, id)?,
 
       // Combinated
-      Struct(rng) => Self::low_struct(ctx, id, rng, id.cid())?,
-      Iface(rng) => Self::low_iface(ctx, rng)?,
-      TraitFrom{hidden, ..} => Self::low_trait_from(ctx, hidden)?,
+      Struct(rng) => Self::low_struct(ctx, sum, id, rng, id.cid())?,
+      Iface(rng) => Self::low_iface(ctx, sum, rng)?,
+      TraitFrom{hidden, ..} => Self::low_trait_from(ctx, sum, hidden)?,
       
       // Sequential
-      Array(kind, ext) => Self::low_array(ctx, id, kind, ext)?,
+      Array(kind, ext) => Self::low_array(ctx, sum, id, kind, ext)?,
 
       // Callable
-      Fun{self_kind, args, ret} => Self::low_fun(ctx, id, self_kind, args, ret, id.cid())?,
+      Fun{self_kind, args, ret} => Self::low_fun(ctx, sum, id, self_kind, args, ret, id.cid())?,
       
       // Logic Error
-      Trait(..) | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
+      Trait{..} | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
 
       kind @_ => todo!("{kind:#?}")
     };
 
     ctx.cmap.cache_type.insert(id, ty);
 
-    Ok(ty)
+    Success(ty)
   }
 
 
-  fn low_int(ctx: &mut Ctx, len: u16) -> Result<mir::TypeId, Message> {
+  fn low_int(ctx: &mut Ctx, _sum: &mut Summary, len: u16) -> Status<mir::TypeId> {
     let it = match len {
       8   => ctx.tin.ty_i8(),
       16  => ctx.tin.ty_i16(),
@@ -73,10 +73,10 @@ impl TypeLow {
       _ => unreachable!()
     };
 
-    Ok(it)
+    Success(it)
   }
 
-  fn low_float(ctx: &mut Ctx, len: u16) -> Result<mir::TypeId, Message> {
+  fn low_float(ctx: &mut Ctx, _sum: &mut Summary, len: u16) -> Status<mir::TypeId> {
     let it = match len {
       16  => ctx.tin.ty_f16(),
       32  => ctx.tin.ty_f32(),
@@ -85,11 +85,11 @@ impl TypeLow {
       _ => unreachable!()
     };
 
-    Ok(it)
+    Success(it)
   }
 
 
-  fn low_ref(ctx: &mut Ctx, id: hir::TypeId) -> Result<mir::TypeId, Message> {
+  fn low_ref(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
     use hir::TypeKind::*;
 
     let it = match ctx.get_type(id).kind {
@@ -100,26 +100,24 @@ impl TypeLow {
       _ => ctx.tin.ty_ptr()
     };
     
-    Ok(it)
+    Success(it)
   }
 
 
-  fn low_array(ctx: &mut Ctx, id: hir::TypeId, kind: hir::TypeId, ext: hir::ExprId) -> Result<mir::TypeId, Message> {
-    let elem_ty = Self::low(ctx, kind)?;
+  fn low_array(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, kind: hir::TypeId, ext: hir::ExprId) -> Status<mir::TypeId> {
+    let elem_ty = Self::low(ctx, sum, kind)?;
 
-    let count = Evaluator::new(ctx.src).eval(ext)?.get_u64()?;
+    let count = Evaluator::new(ctx.src).eval(sum, ext)?.get_u64(sum)?;
 
     let kind = mir::TypeKind::Array(elem_ty, count);
-    let this = mir::Type {
+    mir::Type {
       kind,
       layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.get_type(id).layout.by()),
-    };
-
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
 
-  fn low_struct(ctx: &mut Ctx, id: hir::TypeId, rng: hir::ThingRng, cid: hir::CID) -> Result<mir::TypeId, Message> {
+  fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, rng: hir::ThingRng, cid: hir::CID) -> Status<mir::TypeId> {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(rng).map(|id| {
@@ -130,30 +128,28 @@ impl TypeLow {
 
     let mut sub = Vec::with_capacity(kinds.len());
     for kind in kinds {
-      sub.push(TypeLow::low(ctx, kind)?);
+      sub.push(TypeLow::low(ctx, sum, kind)?);
     }
     let rng = ctx.cre.extra(&sub);
 
     // Post
     let kind = mir::TypeKind::Struct(rng);
 
-    let this = mir::Type {
+    mir::Type {
       kind,
       layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
-    };
-
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
-  fn low_iface(_ctx: &mut Ctx, _rng: hir::ThingRng) -> Result<mir::TypeId, Message> {
+  fn low_iface(_ctx: &mut Ctx, _sum: &mut Summary, _rng: hir::ThingRng) -> Status<mir::TypeId> {
     todo!()
   }
 
-  fn low_trait_from(ctx: &mut Ctx, hidden: hir::TypeId) -> Result<mir::TypeId, Message> {
-    TypeLow::low(ctx, hidden)
+  fn low_trait_from(ctx: &mut Ctx, sum: &mut Summary, hidden: hir::TypeId) -> Status<mir::TypeId> {
+    TypeLow::low(ctx, sum, hidden)
   }
 
-  fn low_fun(ctx: &mut Ctx, id: hir::TypeId, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId, cid: hir::CID) -> Result<mir::TypeId, Message> {
+  fn low_fun(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId, cid: hir::CID) -> Status<mir::TypeId> {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(args).map(|id| {
@@ -164,26 +160,24 @@ impl TypeLow {
 
     let mut ctn = Vec::with_capacity(kinds.len() + (self_kind.is_some() as usize));
     if let Some(self_kind) = self_kind {
-      ctn.push(Self::low(ctx, self_kind)?);
+      ctn.push(Self::low(ctx, sum, self_kind)?);
     }
     for kind in kinds {
-      ctn.push(Self::low(ctx, kind)?);
+      ctn.push(Self::low(ctx, sum, kind)?);
     }
     let args = ctx.cre.extra(&ctn);
 
-    let ret = Self::low(ctx, ret)?;
+    let ret = Self::low(ctx, sum, ret)?;
 
     // Post
     let kind = mir::TypeKind::Fun{
       args, ret,
     };
 
-    let this = mir::Type{
+    mir::Type{
       kind,
       layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
-    };
-
-    Ok(ctx.cre.push(this))
+    }.push_ok(ctx.cre)
   }
 
 }

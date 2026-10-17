@@ -334,6 +334,20 @@ impl DumpHandler for Expr {
         val.dump(cre, sin, f, indent)?;
       }
     
+
+      Expr::FloatArithmetic{op, kind, lhs, rhs} => {
+        use crate::FloatArithmeticOp::*;
+
+        let op = match op { Add => "add", Sub => "sub", Mul => "mul", Div => "div", Rem => "rem" };
+        write!(f, "{}{} ", kw(op), kw(".f"))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+
+        lhs.dump(cre, sin, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        rhs.dump(cre, sin, f, indent)?;
+      }
+    
     }
     
     Ok(())

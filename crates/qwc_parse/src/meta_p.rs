@@ -11,115 +11,115 @@
 
 
 use qwc_ast::{Attribute, Visibility};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status::{self, Fail, Success}, Summary, msg::*, ret_err};
 use qwc_lexer::{WK, Word};
 
-use crate::{Ctx, Fail, AttrParser, ctx};
+use crate::{Ctx, AttrParser, ctx};
 
 
 pub struct MetaParser;
 
 impl MetaParser {
 
-  pub fn pmr_global(ctx: &mut Ctx) -> Result<(),  Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  pub fn pmr_global(ctx: &mut Ctx) -> Status<()> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let mut level: isize = 0;
 
     loop {
-      let t = match lex.get() {
-        Ok(t) => t,
-        Err(..) => return Ok(()),
+      let t = match lex.get(sum) {
+        Success(t) => t,
+        Fail => return Success(()),
       };
 
       if t.kind() == WK::BraceL { level += 1; continue; }
       if t.kind() == WK::BraceR {
         level -= 1;
 
-        if level <= 0 { return Ok(()); }
+        if level <= 0 { return Success(()); }
       }
     }
   }
 
 
-  pub fn read_start(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<(Visibility, Option<Vec<Attribute>>), Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  pub fn read_start(ctx: &mut Ctx, defvis: &mut Visibility) -> Status<(Visibility, Option<Vec<Attribute>>)> { ctx!(ctx => cre, sin, far, lex, sum, side);
     loop {
-      let attr = if lex.peek()?.kind() == WK::BangAttr { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum, side))? } else { None };
+      let attr = if lex.peek(sum)?.kind() == WK::BangAttr { AttrParser::read_attr(ctx!(cre, sin, far, lex, sum, side))? } else { None };
 
-      let vis = match lex.peek()?.kind() {
-        WK::Pub   => Some((lex.get()?, Visibility::Public)),
-        WK::Priv  => Some((lex.get()?, Visibility::Private)),
-        WK::Prot  => Some((lex.get()?, Visibility::Protected)),
-        WK::Crate => Some((lex.get()?, Visibility::Crate)),
-        WK::Super => Some((lex.get()?, Visibility::Super)),
+      let vis = match lex.peek(sum)?.kind() {
+        WK::Pub   => Some((lex.get(sum)?, Visibility::Public)),
+        WK::Priv  => Some((lex.get(sum)?, Visibility::Private)),
+        WK::Prot  => Some((lex.get(sum)?, Visibility::Protected)),
+        WK::Crate => Some((lex.get(sum)?, Visibility::Crate)),
+        WK::Super => Some((lex.get(sum)?, Visibility::Super)),
       
         _ => None
       };
 
       if let Some((w, vis)) = vis {
-        if lex.peek()?.kind() == WK::Colon {
+        if lex.peek(sum)?.kind() == WK::Colon {
           if let Some(..) = attr {
-            return Err(Message::error(VISIBILITY_AFTER_ATTRIBUTE, Label::new_pos(w)))
+            ret_err!(sum, Message::error(VISIBILITY_AFTER_ATTRIBUTE, Label::new_pos(w)));
           }
 
-          lex.bump()?;
+          lex.bump(sum)?;
           *defvis = vis;
           continue;
         } 
-        break Ok((vis, attr));
+        break Success((vis, attr));
       }
-      break Ok((*defvis, attr));
+      break Success((*defvis, attr));
     }
   }
 
 }
 
 
-impl<'a> WordCheck for Word {
+impl WordCheck for Word {
 
-  fn expect_kind(self, k1: WK) -> Result<Self, Message> {
+  fn expect_kind(self, sum: &mut Summary, k1: WK) -> Status<Self> {
     match self.kind() == k1 {
-      true  => Ok(self),
-      false => Err(Message::error(EXPECTED_BUT_FOUND
+      true  => Success(self),
+      false => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND
         .args(&[
           &format!("{:?}", k1),
           &format!("{:?}", self.kind()),
         ]),
         Label::new_pos(self)
-      ))
+      )),
     }
   }
 
   
-  fn panic_kind(self, k1: WK) -> Fail<Message> {
+  fn panic_kind(self, sum: &mut Summary, k1: WK) -> Status<!> {
     match self.kind() == k1 {
       true  => unreachable!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND
+      false => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND
         .args(&[
           &format!("{:?}", k1),
           &format!("{:?}", self.kind()),
         ]),
         Label::new_pos(self)
-      ))
+      )),
     }
   }
 
-  fn panic_kind2(self, k1: WK, k2: WK) -> Fail<Message> {
+  fn panic_kind2(self, sum: &mut Summary, k1: WK, k2: WK) -> Status<!> {
     match self.kind() == k1 || self.kind() == k2 {
       true  => unreachable!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND2
+      false => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND2
         .args(&[
           &format!("{:?}", k1),
           &format!("{:?}", k2),
           &format!("{:?}", self.kind()),
         ]),
         Label::new_pos(self)
-      ))
+      )),
     }
   }
   
-  fn panic_kind3(self, k1: WK, k2: WK, k3: WK) -> Fail<Message> {
+  fn panic_kind3(self, sum: &mut Summary, k1: WK, k2: WK, k3: WK) -> Status<!> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 {
       true  => unreachable!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND3
+      false => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND3
         .args(&[
           &format!("{:?}", k1),
           &format!("{:?}", k2),
@@ -127,14 +127,14 @@ impl<'a> WordCheck for Word {
           &format!("{:?}", self.kind()),
         ]),
         Label::new_pos(self)
-      ))
+      )),
     }
   }
   
-  fn panic_kind4(self, k1: WK, k2: WK, k3: WK, k4: WK) -> Fail<Message> {
+  fn panic_kind4(self, sum: &mut Summary, k1: WK, k2: WK, k3: WK, k4: WK) -> Status<!> {
     match self.kind() == k1 || self.kind() == k2 || self.kind() == k3 || self.kind() == k4 {
       true  => unreachable!(),
-      false => Err(Message::error(EXPECTED_BUT_FOUND4
+      false => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND4
         .args(&[
           &format!("{:?}", k1),
           &format!("{:?}", k2),
@@ -143,17 +143,17 @@ impl<'a> WordCheck for Word {
           &format!("{:?}", self.kind()),
         ]),
         Label::new_pos(self)
-      ))
+      )),
     }
   }
 
 }
 
 pub trait WordCheck {
-  fn expect_kind(self, k1: WK) -> Result<Word, Message>;
+  fn expect_kind(self, sum: &mut Summary, k1: WK) -> Status<Word>;
 
-  fn panic_kind(self, k1: WK) -> Fail<Message>;
-  fn panic_kind2(self, k1: WK, k2: WK) -> Fail<Message>;
-  fn panic_kind3(self, k1: WK, k2: WK, k3: WK) -> Fail<Message>;
-  fn panic_kind4(self, k1: WK, k2: WK, k3: WK, k4: WK) -> Fail<Message>;
+  fn panic_kind(self, sum: &mut Summary, k1: WK) -> Status<!>;
+  fn panic_kind2(self, sum: &mut Summary, k1: WK, k2: WK) -> Status<!>;
+  fn panic_kind3(self, sum: &mut Summary, k1: WK, k2: WK, k3: WK) -> Status<!>;
+  fn panic_kind4(self, sum: &mut Summary, k1: WK, k2: WK, k3: WK, k4: WK) -> Status<!>;
 }

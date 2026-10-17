@@ -13,10 +13,10 @@
 use std::cell::RefCell;
 
 use qwc_arena::Files;
-use qwc_ast as ast;
+use qwc_ast::self as ast;
 use qwc_comptime::{Evaluator, GetConst};
-use qwc_diagnostic::{Label, Message, Span, Summary, Poit, msg::*};
-use qwc_hir::{self as hir, CID, Deps, PathApi, PrimTypes};
+use qwc_diagnostic::{Label, Message, Span, Status::{Fail, Success}, StatusApi, Summary, msg::*};
+use qwc_hir::{self as hir, CID, Deps, HPoit, PathApi, PrimTypes};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
 use qwc_string_interner::{Sid, StrInterner};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -32,7 +32,6 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
   pub lscp: &'ast Scope,
   pub cre:  &'hir mut hir::Krate,
   pub tin:  &'hir mut TypeInterner,
-  pub sum:  &'hir mut Summary,
   pub cmap: &'hir mut CacheMap,
   pub loc:  &'loc mut LocalScopeManager,
   pub imods: &'imod [CID],
@@ -58,6 +57,7 @@ pub struct LoopCtx {
 
 pub struct FunCtx {
   pub ret_ty: Option<hir::TypeId>,
+  #[allow(unused)]
   pub sign_pos: Span,
   pub loops: RefCell<Vec<LoopCtx>>,
 }
@@ -87,6 +87,7 @@ pub struct CacheMap {
   pub(crate) cache_expr: FxHashMap<ast::ExprId, hir::ExprId>,
   
   pub(crate) cache_generic_type: FxHashMap<(hir::TypeId, Vec<hir::AnyId>), hir::TypeId>,
+  pub(crate) cache_generic_type_rev: FxHashMap<hir::TypeId, (hir::ItemId, hir::TypeId, Vec<hir::AnyId>)>,
   pub(crate) cache_generic_item: FxHashMap<(hir::ItemId, Vec<hir::AnyId>), hir::ItemId>,
   pub(crate) cache_generic_expr: FxHashMap<(hir::ExprId, Vec<hir::AnyId>), hir::ExprId>,
 
@@ -105,8 +106,8 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
 
-  pub fn poit<T: hir::HirKind + hir::GetApi<T> + PathApi>(&self, id: hir::HirId<T>) -> Poit {
-    Poit::new(self.cre, self.ideps, self.sin, self.get(id).path())
+  pub fn poit<T: hir::HirKind + hir::GetApi<T> + PathApi>(&self, id: hir::HirId<T>) -> HPoit {
+    HPoit::new(self.cre, self.ideps, self.sin, self.get(id).path())
   }
 
 
@@ -119,7 +120,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
   }
 
 
-  pub fn type_name(&self, id: hir::TypeId) -> String {
+  pub fn type_name(&self, sum: &mut Summary, id: hir::TypeId) -> String {
     let eval = Evaluator::new(self.cre);
 
     let it = self.get(id);
@@ -143,7 +144,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       }
       hir::TypeKind::GenericRaw{..} => "<raw generic>".to_string(),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
-      hir::TypeKind::AssociatedType{trait_ty, idx} => format!("{}::<{}>", self.type_name(trait_ty), idx),
+      hir::TypeKind::AssociatedType{trait_ty, idx} => format!("{}::<{}>", self.type_name(sum, trait_ty), idx),
       hir::TypeKind::Error => "{error}".to_string(),
 
       // Primitive
@@ -160,26 +161,26 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       
       hir::TypeKind::Float(bits) => format!("f{}", bits),
 
-      hir::TypeKind::Meta(kind) => format!("#{}", self.type_name(kind)),
-      hir::TypeKind::Option(sub) => format!("?{}", self.type_name(sub)),
+      hir::TypeKind::Meta(kind) => format!("#{}", self.type_name(sum, kind)),
+      hir::TypeKind::Option(sub) => format!("?{}", self.type_name(sum, sub)),
       
       hir::TypeKind::ArchInt(true) => "isize".to_string(),
       hir::TypeKind::ArchInt(false) => "usize".to_string(),
 
 
       // Reference
-      hir::TypeKind::Ref(sub, ism) => format!("&{}{}", if ism {"mut "} else {""}, self.type_name(sub)),
-      hir::TypeKind::Ptr(sub, ism) => format!("^{}{}", if ism {"mut "} else {""}, self.type_name(sub)),
+      hir::TypeKind::Ref(sub, ism) => format!("&{}{}", if ism {"mut "} else {""}, self.type_name(sum, sub)),
+      hir::TypeKind::Ptr(sub, ism) => format!("^{}{}", if ism {"mut "} else {""}, self.type_name(sum, sub)),
       
 
       // Vector
-      hir::TypeKind::VScale(sub) => format!("[{} *]", self.type_name(sub)),
-      hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sub), eval.eval(len).unwrap().get_u64().unwrap()),
+      hir::TypeKind::VScale(sub) => format!("[{} *]", self.type_name(sum, sub)),
+      hir::TypeKind::Vector(sub, len) => format!("[{} * {}]", self.type_name(sum, sub), eval.eval(sum, len).unwrap().get_u64(sum).unwrap()),
       
 
       // Array
-      hir::TypeKind::Slice(sub) => format!("[{}]", self.type_name(sub)),
-      hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sub), eval.eval(len).unwrap().get_u64().unwrap()),
+      hir::TypeKind::Slice(sub) => format!("[{}]", self.type_name(sum, sub)),
+      hir::TypeKind::Array(sub, len) => format!("[{}; {}]", self.type_name(sum, sub), eval.eval(sum, len).unwrap().get_u64(sum).unwrap()),
       
       
       // Combinated
@@ -190,10 +191,10 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       
       
       // Trait
-      hir::TypeKind::Trait(..) => self.poit(id).to_string(),
+      hir::TypeKind::Trait{..} => self.poit(id).to_string(),
       hir::TypeKind::Iface(..) => self.poit(id).to_string(),
 
-      hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("trait({}, hidden: {})", self.type_name(trait_ty), self.type_name(hidden)),
+      hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("trait({}, hidden: {})", self.type_name(sum, trait_ty), self.type_name(sum, hidden)),
 
 
       // Enum
@@ -205,16 +206,16 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         let mut args_str = vec![];
         
         if let Some(id) = self_kind {
-          args_str.push(self.type_name(id));
+          args_str.push(self.type_name(sum, id));
         }
         
         for id in krate.extra_get(args) {
           let hir::Thing::NamedType(name, kind) = *self.cre.get(id) else { unreachable!() };
 
-          args_str.push(format!("{}: {}", self.sin.str(name), self.type_name(kind)));
+          args_str.push(format!("{}: {}", self.sin.str(name), self.type_name(sum, kind)));
         }
         
-        let ret_name = self.type_name(ret);
+        let ret_name = self.type_name(sum, ret);
         format!("fun({}) -> {}", args_str.join(", "), ret_name)
       }
     }
@@ -226,19 +227,19 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 #[macro_export]
 macro_rules! ctx {
   ($lscp:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, path: $ctx.path, $lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, path: $ctx.path, $lscp}
   };
 
   ($lscp:ident, $path:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp, path: $path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp, path: $path}
   };
 
   (path $path:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, lscp: $ctx.lscp, path: $path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, lscp: $ctx.lscp, path: $path}
   };
 
   (loc $loc:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, sum: $ctx.sum, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp, path: $ctx.path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp, path: $ctx.path}
   }
 }
 
@@ -260,6 +261,7 @@ impl<'ast, 'hir, 'imod> HGen {
       cache_item: FxHashMap::default(),
       cache_expr: FxHashMap::default(),
       cache_generic_type: FxHashMap::default(),
+      cache_generic_type_rev: FxHashMap::default(),
       cache_generic_item: FxHashMap::default(),
       cache_generic_expr: FxHashMap::default(),
       self_ty: vec![],
@@ -274,17 +276,15 @@ impl<'ast, 'hir, 'imod> HGen {
     let lscp = scp.get(&root.to_any()).unwrap();
     
     // Pre 1
-    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc, path: root_path}, implst) {
+    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc, path: root_path}, &mut sum, implst) {
       Err(..) => return (None, sum),
       Ok(v) => v,
     };
 
     // Start
-    match ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, sum: &mut sum, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc, path: root_path}, root) {
-      Ok(root) => cre.set_root(root.unwrap()),
-      
-      Err(msg) => sum.add(msg),
-    };
+    if let Success(Some(root)) = ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc, path: root_path}, &mut sum, root) {
+      cre.set_root(root);
+    }
     
     ideps.add(cre);
 
@@ -292,7 +292,7 @@ impl<'ast, 'hir, 'imod> HGen {
   }
 
 
-  fn pre1(ctx: &mut Ctx, implst: Vec<ImplFor>) -> Result<FxHashMap<hir::TypeId, TypeMethods>, ()> {
+  fn pre1(ctx: &mut Ctx, sum: &mut Summary, implst: Vec<ImplFor>) -> Result<FxHashMap<hir::TypeId, TypeMethods>, ()> {
     let mut type_impls: FxHashMap<hir::TypeId, TypeMethods> = FxHashMap::default();
 
     for ImplFor{ container, item } in implst {
@@ -301,15 +301,15 @@ impl<'ast, 'hir, 'imod> HGen {
       let lscp = ctx.scp.get(&container).unwrap();
       let ctx = ctx!(lscp -> ctx);
 
-      let type_ty = match TypeLow::low(ctx, type_ty) {
-        Ok(v) => v,
-        Err(err) => { ctx.sum.add(err); continue },
+      let type_ty = match TypeLow::low(ctx, sum, type_ty) {
+        Success(v) => v,
+        Fail => continue,
       };
       
       let trait_span = trait_ty.map(|id| ctx.src.get(id).pos);
-      let trait_ty = match trait_ty.map(|id| TypeLow::low(ctx, id)).transpose() {
-        Ok(v) => v,
-        Err(err) => { ctx.sum.add(err); continue },
+      let trait_ty = match trait_ty.map(|id| TypeLow::low(ctx, sum, id)).transpose() {
+        Success(v) => v,
+        Fail => continue,
       };
 
 
@@ -347,7 +347,7 @@ impl<'ast, 'hir, 'imod> HGen {
 
       match type_impls.entry(type_ty) {
         Occupied(mut entry) => {
-          if let Err(msg) = reg(entry.get_mut()) { ctx.sum.add(msg); continue };
+          if let Err(msg) = reg(entry.get_mut()) { sum.add(msg); continue };
         }
         
         Vacant(entry) => {
@@ -357,7 +357,7 @@ impl<'ast, 'hir, 'imod> HGen {
             inherent_methods: FxHashSet::default(),
           };
           
-          if let Err(msg) = reg(entry.insert(tyfuns)) { ctx.sum.add(msg); continue };
+          if let Err(msg) = reg(entry.insert(tyfuns)) { sum.add(msg); continue };
         }
       }
 

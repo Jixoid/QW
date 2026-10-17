@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, ExprCategory};
 use qwc_ast as ast;
 
@@ -18,85 +18,97 @@ use crate::{Ctx, ExprLow, TypeLow, TypeMatch, FunCtx};
 
 
 // Block
-pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
+pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Status<hir::ExprId> {
   ctx.loc.push_scope();
 
-  let res = (|| {
-    let mut stmt = vec![];
-    let mut unreachable = false;
+  let mut stmt = vec![];
+  let mut unreachable = false;
 
-    for id in ctx.src.extra_get(rng) {
-      if unreachable {
-        let pos = ctx.src.get(id).pos;
-        ctx.sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
-        break;
-      }
-
-      let hir_id = ExprLow::low(ctx, fctx, id)?;
-      stmt.push(hir_id);
-      
-      if ctx.cre.get(hir_id).ety == ctx.prims.ty_never {
-        unreachable = true;
-      }
-    }
-
-    let stmt_rng = ctx.cre.extra(&stmt);
-    
+  for id in ctx.src.extra_get(rng) {
     if unreachable {
-      if let Some(id) = expr {
-        let pos = ctx.src.get(id).pos;
-        ctx.sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
-      }
-      Ok((stmt_rng, None, true))
-    } else {
-      let expr = expr.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
-      Ok((stmt_rng, expr, false))
+      let pos = ctx.src.get(id).pos;
+      sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
+      break;
     }
-  })();
+
+    let hir_id = ExprLow::low(ctx, fctx, sum, id);
+    if hir_id.is_fail() {
+      ctx.loc.pop_scope();
+      return Status::Fail;
+    }
+    let hir_id = hir_id.unwrap();
+    stmt.push(hir_id);
+    
+    if ctx.cre.get(hir_id).ety == ctx.prims.ty_never {
+      unreachable = true;
+    }
+  }
+
+  let stmt_rng = ctx.cre.extra(&stmt);
+  
+  let (expr_hir, is_unreachable) = if unreachable {
+    if let Some(id) = expr {
+      let pos = ctx.src.get(id).pos;
+      sum.add(Message::warn(UNREACHABLE_STATEMENT.args(&[]), Label::new_pos(pos)));
+    }
+    (None, true)
+  } else {
+    let expr_hir = match expr {
+      Some(id) => {
+        let e = ExprLow::low(ctx, fctx, sum, id);
+        if e.is_fail() {
+          ctx.loc.pop_scope();
+          return Status::Fail;
+        }
+        Some(e.unwrap())
+      }
+      None => None,
+    };
+    (expr_hir, false)
+  };
 
   ctx.loc.pop_scope();
-  
-  let (stmt, expr, is_unreachable) = res?;
 
   let ety = if is_unreachable {
     ctx.prims.ty_never
   } else {
-    expr.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.prims.ty_unit)
+    expr_hir.map(|id| ctx.cre.get(id).ety).unwrap_or_else(|| ctx.prims.ty_unit)
   };
 
 
   // Post
   let this = hir::Expr{
-    kind: hir::ExprKind::Block { stmt, expr },
+    kind: hir::ExprKind::Block { stmt: stmt_rng, expr: expr_hir },
     category: ExprCategory::RValue,
     ety,
   };
 
-  Ok(ctx.cre.push(this))
+  Status::Success(ctx.cre.push(this))
 }
 
 
 // Variable
-pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Result<hir::ExprId, Message> {
+pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Status<hir::ExprId> {
   let (name, span) = match *ctx.src.get(item) {
     ast::Patt::One(ident) => (ident.sid(), ident),
 
     _ => todo!("patterns in let bindings not implemented yet"),
   };
 
-  let init = init.ok_or_else(|| Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(pos)))?;
-  let init_hir = ExprLow::low(ctx, fctx, init)?;
+  let Some(init) = init else {
+    ret_err!(sum, Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(pos)));
+  };
+  let init_hir = ExprLow::low(ctx, fctx, sum, init)?;
   let init_ty = ctx.cre.get(init_hir).ety;
 
   let (kind, pos) = if let Some(kind) = kind {
     let init_pos = ctx.src.get(init).pos;
     let kind_pos = ctx.src.get(kind).pos;
 
-    let kind_ty = TypeLow::low(ctx, kind)?;
+    let kind_ty = TypeLow::low(ctx, sum, kind)?;
 
     if init_ty != kind_ty {
-      TypeMatch::matches_pos(ctx, kind_ty, init_ty, init_pos)
-        .map_err(|err| err.add(Label::new(kind_pos, X_DEFINED_HERE.args(&[&ctx.type_name(kind_ty)]))))?;
+      TypeMatch::matches_pos(ctx, sum, kind_ty, init_ty, init_pos)?;
     }
 
     (kind_ty, kind_pos)
@@ -112,11 +124,11 @@ pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, item: ast::PattId, kind: Option<ast
 
   // is DST
   if ctx.get(kind).layout.is_dynamic() {
-    return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
+    ret_err!(sum, Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)));
   }
   
   if ctx.get(kind).layout.is_meta() {
-    return Err(Message::error(META_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)))
+    ret_err!(sum, Message::error(META_TYPES_CANNOT_EXIST_IN_X.args(&["stack"]), Label::new_pos(pos)));
   }
 
 
@@ -127,5 +139,5 @@ pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, item: ast::PattId, kind: Option<ast
     ety: ctx.prims.ty_unit,
   };
 
-  Ok(ctx.cre.push(this))
+  Status::Success(ctx.cre.push(this))
 }

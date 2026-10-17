@@ -10,21 +10,21 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind};
-use qwc_diagnostic::Message;
+use qwc_ast::{Expr, ExprId, ExprKind, PushOkApi};
+use qwc_diagnostic::Status;
 use qwc_lexer::WK;
 
 use crate::{ExprParser, PattParser, WordCheck, ctx, expr_p::ExprRestriction, parse::Ctx};
 
 
 // Loop
-pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_loop(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
-  let elsb = if lex.peek()?.kind() == WK::Else {
-    lex.bump()?;
+  let elsb = if lex.peek(sum)?.kind() == WK::Else {
+    lex.bump(sum)?;
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
@@ -32,23 +32,21 @@ pub fn pre_loop(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin
 
   
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::Loop{ blok, elsb }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_while(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let cond = ExprParser::rest_read_expr(ctx!(cre, sin, far, lex, sum, side), ExprRestriction::NO_FIELD_INIT)?;
   
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
-  let elsb = if lex.peek()?.kind() == WK::Else {
-    lex.bump()?;
+  let elsb = if lex.peek(sum)?.kind() == WK::Else {
+    lex.bump(sum)?;
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
@@ -56,27 +54,25 @@ pub fn pre_while(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
 
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::While{ cond, blok, elsb }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_for(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_for(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   let vars = PattParser::read_patt(ctx!(cre, sin, far, lex, sum, side))?;
 
-  lex.get()?.expect_kind(WK::In)?;
+  lex.get(sum)?.expect_kind(sum, WK::In)?;
   
   let iter = ExprParser::rest_read_expr(ctx!(cre, sin, far, lex, sum, side), ExprRestriction::NO_FIELD_INIT)?;
 
   let blok = ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?;
 
-  let elsb = if lex.peek()?.kind() == WK::Else {
-    lex.bump()?;
+  let elsb = if lex.peek(sum)?.kind() == WK::Else {
+    lex.bump(sum)?;
     Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?)
   } else {
     None
@@ -84,10 +80,8 @@ pub fn pre_for(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin,
 
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::ForIn{ vars, iter, blok, elsb }
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }

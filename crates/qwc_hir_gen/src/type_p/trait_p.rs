@@ -12,18 +12,54 @@
 
 use crate::{hgen::Ctx, TypeLow};
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status::{self, Fail, Success}, StatusApi, Summary, msg::*, ret_err, send_err};
 use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 
 
 // Static Interface
-pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::FieldRng, reqs: ast::TypeRng) -> Status<hir::TypeId> {
   let trait_ty = hir::Type {
     kind: hir::TypeKind::Error,
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
   }.push(ctx.cre);
+
+  let mut has_error = false;
+  let mut req_vec = vec![];
+
+  for id in ctx.src.extra_get(reqs) {
+    let id_hir = match TypeLow::low(ctx, sum, id) {
+      Success(id_hir) => id_hir,
+      Fail => {
+        has_error = true;
+        continue;
+      }
+    };
+
+    match ctx.get(id_hir).kind {
+      hir::TypeKind::Iface(..) | hir::TypeKind::Trait{..} => {
+        req_vec.push(id_hir);
+      }
+      hir::TypeKind::GenericRaw{..} => {
+        has_error = true;
+        send_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(ctx.src.get(id).pos)));
+      }
+      hir::TypeKind::Error => {
+        has_error = true;
+      }
+      _ => {
+        has_error = true;
+        send_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["trait", &ctx.type_name(sum, trait_ty)]), Label::new_pos(ctx.src.get(id).pos)));
+      }
+    }
+  }
+
+  if has_error {
+    return Status::Success(trait_ty);
+  }
+
+  let reqs = ctx.cre.extra(&req_vec);
 
   ctx.cmap.current_trait.push(trait_ty);
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
@@ -39,7 +75,7 @@ pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
         ast::FieldKind::Fun{kind, ..} => {
           let name = it.name.unwrap().sid();
           let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
-          let fun_ty = TypeLow::low_itemty(ctx, fun_path, kind)?;
+          let fun_ty = TypeLow::low_itemty(ctx, sum, fun_path, kind)?;
 
           // Post
           let id = hir::Thing::NamedType(
@@ -51,7 +87,7 @@ pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
         }
 
         ast::FieldKind::Type(kind) => {
-          let kind = kind.map(|id| TypeLow::low(ctx, id)).transpose()?;
+          let kind = kind.map(|id| TypeLow::low(ctx, sum, id)).transpose()?;
 
           // Post
           let id = match kind {
@@ -74,19 +110,19 @@ pub fn low_trait(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
   ctx.cmap.current_trait.pop();
 
   let this = hir::Type {
-    kind: hir::TypeKind::Trait(methods, types),
+    kind: hir::TypeKind::Trait{methods, types, reqs},
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
   };
   *ctx.cre.get_mut(trait_ty) = this;
 
-  Ok(trait_ty)
+  Status::Success(trait_ty)
 }
 
 
 // Dynamic Inteface
-pub fn low_iface(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<hir::TypeId, Message> {
+pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::FieldRng) -> Status<hir::TypeId> {
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
   let methods = {
@@ -98,7 +134,7 @@ pub fn low_iface(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
       let ast::FieldKind::Fun{kind, ..} = it.kind else { unreachable!() };
       let name = it.name.unwrap().sid();
       let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
-      let fun_ty = TypeLow::low_itemty(ctx, fun_path, kind)?;
+      let fun_ty = TypeLow::low_itemty(ctx, sum, fun_path, kind)?;
       
       // Check (self != DST)
       let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind else { unreachable!() };
@@ -109,7 +145,7 @@ pub fn low_iface(ctx: &mut Ctx, path: DefPathId, rng: ast::FieldRng) -> Result<h
 
       if !lay.is_static() {
         let pos = self_pos;
-        return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["iface"]), Label::new_pos(pos)));
       }
 
 

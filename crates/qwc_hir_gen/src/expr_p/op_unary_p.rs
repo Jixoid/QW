@@ -13,29 +13,29 @@
 use std::assert_matches;
 
 use qwc_ast as ast;
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 
 use crate::{Ctx, FunCtx, ExprLow};
 
 
 // Unary
-pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, op: ast::UnaryOp, id: ast::ExprId) -> Result<hir::ExprId, Message> {
+pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, op: ast::UnaryOp, id: ast::ExprId) -> Status<hir::ExprId> {
   use ast::UnaryOp::*;
   
   match op {
-    Deref => low_unary_deref(ctx, fctx, id),
+    Deref => low_unary_deref(ctx, fctx, sum, id),
     
-    Ref{ism} => low_unary_ref(ctx, fctx, id, ism),
+    Ref{ism} => low_unary_ref(ctx, fctx, sum, id, ism),
 
-    Not => low_unary_not(ctx, fctx, id),
+    Not => low_unary_not(ctx, fctx, sum, id),
     
     _ => todo!("{op:#?}")
   }
 }
 
-fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
-  let id = ExprLow::low(ctx, fctx, id)?;
+fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId) -> Status<hir::ExprId> {
+  let id = ExprLow::low(ctx, fctx, sum, id)?;
   err_bypass!(ctx, id);
   let it = ctx.cre.get(id);
   let ty = ctx.get(it.ety);
@@ -56,11 +56,11 @@ fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir:
     ety: ty,
   };
 
-  Ok(ctx.cre.push(this))
+  Success(ctx.cre.push(this))
 }
 
-fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId, ism: bool) -> Result<hir::ExprId, Message> {
-  let id = ExprLow::low(ctx, fctx, id)?;
+fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId, ism: bool) -> Status<hir::ExprId> {
+  let id = ExprLow::low(ctx, fctx, sum, id)?;
   err_bypass!(ctx, id);
   let it = ctx.cre.get(id);
 
@@ -73,11 +73,11 @@ fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId, ism: bool) -> Re
     ety: ty,
   };
 
-  Ok(ctx.cre.push(this))
+  Success(ctx.cre.push(this))
 }
 
-fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir::ExprId, Message> {
-  let id = ExprLow::low(ctx, fctx, id)?;
+fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId) -> Status<hir::ExprId> {
+  let id = ExprLow::low(ctx, fctx, sum, id)?;
   err_bypass!(ctx, id);
   let it = ctx.cre.get(id);
   let ty = ctx.get(it.ety);
@@ -94,5 +94,5 @@ fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, id: ast::ExprId) -> Result<hir::E
     ety: it.ety,
   };
 
-  Ok(ctx.cre.push(this))
+  Success(ctx.cre.push(this))
 }

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Applicability, Label, Message, Span, Suggestion, msg::*};
+use qwc_diagnostic::{Applicability, Label, Message, Span, Status::{self, Success}, Suggestion, Summary, msg::*, ret_err};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, CID, Deps};
 use qwc_string_interner::StrInterner;
@@ -67,15 +67,15 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
   }
 
 
-  pub fn lookup(&self, ident: ast::Ident) -> Result<LookupResult<'ast>, Message> {
-    self.lookup_in_scope(ident, self.current)
+  pub fn lookup(&self, sum: &mut Summary, ident: ast::Ident) -> Status<LookupResult<'ast>> {
+    self.lookup_in_scope(sum, ident, self.current)
   }
 
-  pub fn resolve_path(&self, segments: &[ast::Ident]) -> Result<LookupResult<'ast>, Message> {
+  pub fn resolve_path(&self, sum: &mut Summary, segments: &[ast::Ident]) -> Status<LookupResult<'ast>> {
     if segments.is_empty() { unreachable!(); }
 
     // İlk segmenti ara
-    let mut current_target = self.lookup(segments[0])?;
+    let mut current_target = self.lookup(sum, segments[0])?;
 
     // Kalan segmentleri eklemeli ara
     for (i, &seg) in segments[1..].iter().enumerate() {
@@ -102,7 +102,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
                 })
               };
 
-              return Err(Message::error(NOT_FOUND_IN_SCOPE
+              ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE
                 .args(&[
                   self.sin.str(seg.sid()),
                   self.sin.str(segments[i].sid())
@@ -148,7 +148,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
           let next_kind = match found {
             Some(k) => k,
             None => {
-              return Err(Message::error(NOT_FOUND_IN_SCOPE
+              ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE
                 .args(&[
                   self.sin.str(seg.sid()),
                   self.sin.str(segments[i].sid())
@@ -170,17 +170,17 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
       }
     }
 
-    Ok(current_target)
+    Success(current_target)
   }
 
   
-  fn lookup_in_scope(&self, ident: ast::Ident, scope: &'ast Scope) -> Result<LookupResult<'ast>, Message> {
+  fn lookup_in_scope(&self, sum: &mut Summary, ident: ast::Ident, scope: &'ast Scope) -> Status<LookupResult<'ast>> {
     // Local scope check (only when searching the starting/current scope)
     if std::ptr::eq(scope, self.current) {
       if let Some(loc) = self.loc {
         if let Some(local_id) = loc.lookup(&ident.sid()) {
           let local = loc.get_local(local_id);
-          return Ok(LookupResult {
+          return Success(LookupResult {
             kind: ScopeKind::Ast(ScopeKindAst::Local(local_id)),
             in_scope: scope,
             span: local.span,
@@ -191,14 +191,14 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
 
     // Yerel Kapsam
     if let Some(&(kind, span)) = scope.get(&ident.sid()) {
-      return Ok(LookupResult { kind, in_scope: scope, span });
+      return Success(LookupResult { kind, in_scope: scope, span });
     }
 
     // Üst Kapsam Fallback
     if let Some(parent_id) = scope.parent {
       let parent = self.scp.get(&parent_id).unwrap();
 
-      return self.lookup_in_scope(ident, parent);
+      return self.lookup_in_scope(sum, ident, parent);
     }
 
     // Suggestion
@@ -225,7 +225,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
     };
 
     // Hiçbir yerde bulunamadı
-    Err(Message::error(CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(ident.sid())]), Label::new_pos(ident)).add_if(sugg))
+    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(ident.sid())]), Label::new_pos(ident)).add_if(sugg))
   }
 
 }

@@ -19,8 +19,6 @@ mod attr_p;
 mod patt_p;
 mod field_p;
 
-type Fail<T> = Result<!, T>;
-
 use parse::Ctx;
 use {item_p::ItemParser, meta_p::{MetaParser, WordCheck}, attr_p::AttrParser, expr_p::ExprParser, type_p::TypeParser, patt_p::PattParser, field_p::FieldParser};
 

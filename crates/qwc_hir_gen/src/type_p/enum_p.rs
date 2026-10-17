@@ -11,7 +11,7 @@
 
 
 use itertools::Itertools;
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 use rustc_hash::FxHashMap;
@@ -19,7 +19,7 @@ use rustc_hash::FxHashMap;
 use crate::Ctx;
 
 
-pub fn low_enum(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
   let mut names = FxHashMap::default();
   let mut enum_val: i128 = 0;
 
@@ -35,7 +35,7 @@ pub fn low_enum(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hi
     // Duplicate Test
     match names.entry(name.sid()) {
       Occupied(entry) => {
-        ctx.sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
+        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
           .add(Label::new(*entry.get(), FIRST_DEFINITION_HERE))
         );
       }
@@ -65,7 +65,7 @@ pub fn low_enum(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hi
   }.push_ok(ctx.cre)
 }
 
-pub fn low_flags(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
   let mut names = FxHashMap::default();
   let mut flag_val: i128 = 0;
 
@@ -81,7 +81,7 @@ pub fn low_flags(ctx: &mut Ctx, path: DefPathId, rng: ast::ThingRng) -> Result<h
     // Duplicate Test
     match names.entry(name.sid()) {
       Occupied(entry) => {
-        ctx.sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
+        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
           .add(Label::new(*entry.get(), FIRST_DEFINITION_HERE))
         );
       }

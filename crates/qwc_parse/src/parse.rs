@@ -11,9 +11,9 @@
 
 
 use qwc_arena::{File, Files};
-use qwc_ast::{self as ast, DefPath, ItemId};
+use qwc_ast::{self as ast, DefPath, ItemId, PushOkApi};
 use qwc_ast::{Krate, Visibility};
-use qwc_diagnostic::{Span, Summary};
+use qwc_diagnostic::{Span, Status::{Fail, Success}, Summary};
 use qwc_lexer::Lexer;
 use qwc_string_interner::{Sid, StrInterner};
 
@@ -59,7 +59,7 @@ impl Parse {
     let rng = {
       let mut av = vec![];
 
-      let path = cre.push(DefPath::Root(sid));
+      let path = DefPath::Root(sid).push(cre);
 
       loop {
         if lex.peek_safe().is_none() { break }
@@ -68,14 +68,13 @@ impl Parse {
 
         // Any
         match ItemParser::read_item(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut side}, path, &mut Visibility::Inherited) {
-          Ok(aid) => {
+          Success(aid) => {
             av.push(aid);
             av.extend(side);
           }
           
-          Err(e) => {
-            sum.add(e);
-            if let Err(e) = MetaParser::pmr_global(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut vec![]}) { sum.add(e) }
+          Fail => {
+            let _ = MetaParser::pmr_global(&mut Ctx{cre, sin, far, lex, sum: &mut sum, side: &mut vec![]});
           }
         }
       }

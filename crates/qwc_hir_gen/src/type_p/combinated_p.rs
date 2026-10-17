@@ -11,14 +11,14 @@
 
 
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_hir::{self as hir, DefPathId, TypeAttr};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
 
 use crate::{Ctx, TypeLow, type_p::read_attrs};
 
 
 // Combinated
-pub fn low_struct(ctx: &mut Ctx, path: DefPathId, id: ast::TypeId, rng: ast::ThingRng) -> Result<hir::TypeId, Message> {
+pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, id: ast::TypeId, rng: ast::ThingRng) -> Status<hir::TypeId> {
   let fields_rng = {
     let mut ctn = vec![];
     
@@ -26,11 +26,11 @@ pub fn low_struct(ctx: &mut Ctx, path: DefPathId, id: ast::TypeId, rng: ast::Thi
       let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { unreachable!() };
 
       // Check
-      let id = TypeLow::low(ctx, kind)?;
+      let id = TypeLow::low(ctx, sum, kind)?;
       let lay = ctx.get(id).layout;
 
       if lay.is_dynamic() {
-        return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(name)))
+        ret_err!(sum, Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(name)));
       }
       
       let id = ctx.cre.push(hir::Thing::NamedType(name.sid(), id));
@@ -40,34 +40,32 @@ pub fn low_struct(ctx: &mut Ctx, path: DefPathId, id: ast::TypeId, rng: ast::Thi
     ctx.cre.extra(&ctn)
   };
 
-  let attr = read_attrs(ctx, ctx.src.get_attached(id))?;
+  let attr = read_attrs(ctx, sum, ctx.src.get_attached(id))?;
 
   let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::QW} else {hir::LayoutBy::C});
 
 
   // Post
-  let this = hir::Type {
+  hir::Type {
     kind: hir::TypeKind::Struct(fields_rng),
     layout,
     attr,
     path,
-  };
-
-  Ok(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }
 
-pub fn low_tuple(ctx: &mut Ctx, path: DefPathId, rng: ast::TypeRng) -> Result<hir::TypeId, Message> {
+pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::TypeRng) -> Status<hir::TypeId> {
   let rng = {
     let mut ctn = vec![];
     
     for id in ctx.src.extra_get(rng) {
       // Check
       let pos = ctx.src.get(id).pos;
-      let id = TypeLow::low(ctx, id)?;
+      let id = TypeLow::low(ctx, sum, id)?;
       let lay = ctx.get(id).layout;
 
       if lay.is_dynamic() {
-        return Err(Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(pos)))
+        ret_err!(sum, Message::error(DST_TYPES_CANNOT_EXIST_IN_X.args(&["tuple"]), Label::new_pos(pos)))
       }
       
       ctn.push(id);
@@ -78,12 +76,38 @@ pub fn low_tuple(ctx: &mut Ctx, path: DefPathId, rng: ast::TypeRng) -> Result<hi
 
 
   // Post
-  let this = hir::Type {
+  hir::Type {
     kind: hir::TypeKind::Tuple(rng),
     layout: hir::Layout::new_static(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
+  }.push_ok(ctx.cre)
+}
+
+pub fn low_tuple_anon(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<hir::TypeId> {
+  let mut path_ids = vec![];
+  
+  let elem_ids = {
+    let mut ctn = vec![];
+
+    for id in ctx.src.extra_get(rng) {
+      let elem_ty = TypeLow::low(ctx, sum, id)?;
+      path_ids.push(ctx.get(elem_ty).path);
+      ctn.push(elem_ty);
+    }
+    
+    ctx.cre.extra(&ctn)
   };
   
-  Ok(ctx.cre.push(this))
+  let path_rng = ctx.cre.extra(&path_ids);
+  let path = ctx.cre.push(hir::DefPath::AnonymousTuple(path_rng));
+  
+
+  // Post
+  hir::Type {
+    kind: hir::TypeKind::Tuple(elem_ids),
+    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    attr: TypeAttr::empty(),
+    path,
+  }.push_ok(ctx.cre)
 }

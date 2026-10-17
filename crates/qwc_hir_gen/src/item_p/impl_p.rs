@@ -11,7 +11,7 @@
 
 
 use itertools::{Itertools, izip};
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi};
 use qwc_string_interner::Sid;
@@ -20,10 +20,10 @@ use rustc_hash::FxHashMap;
 use crate::{Ctx, TypeLow, TypeMatch, ItemLow, item_p::read_attrs, ctx};
 
 
-pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::FieldRng) -> Result<hir::ItemId, Message> {
-  let type_ty = TypeLow::low(ctx, type_ty)?;
+pub fn low_impl(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, type_ty: ast::TypeId, trait_ty: Option<ast::TypeId>, ctn: ast::FieldRng) -> Status<hir::ItemId> {
+  let type_ty = TypeLow::low(ctx, sum, type_ty)?;
   let trait_pos = trait_ty.map(|id| ctx.src.get(id).pos);
-  let trait_ty = trait_ty.map(|id| TypeLow::low(ctx, id)).transpose()?;
+  let trait_ty = trait_ty.map(|id| TypeLow::low(ctx, sum, id)).transpose()?;
 
   let impl_path = if let Some(trait_ty) = trait_ty {
     ctx.cre.push(hir::DefPath::Impl { base: ctx.get(trait_ty).path, spec: ctx.get(type_ty).path })
@@ -44,7 +44,7 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
       match it.kind {
         ast::FieldKind::Fun {kind, blok} => {
           ctx.cmap.self_ty.push(type_ty);
-          let item = ItemLow::low_fun_field(ctx, id, it, kind, blok);
+          let item = ItemLow::low_fun_field(ctx, sum, id, it, kind, blok);
           ctx.cmap.self_ty.pop();
           
           methods.push((it.name.unwrap(), item?, kind, it.pos));
@@ -52,7 +52,7 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
         
         ast::FieldKind::Init {kind, blok, ils: _} => {
           ctx.cmap.self_ty.push(type_ty);
-          let item = ItemLow::low_fun_field(ctx, id, it, kind, blok);
+          let item = ItemLow::low_fun_field(ctx, sum, id, it, kind, blok);
           ctx.cmap.self_ty.pop();
           
           methods.push((it.name.unwrap(), item?, kind, it.pos));
@@ -60,11 +60,11 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
         
         ast::FieldKind::Type (kind) => {
           let Some(kind) = kind else {
-            return Err(Message::error(TYPE_NOT_SPECIFIED, Label::new_pos(it.pos)))
+            ret_err!(sum, Message::error(TYPE_NOT_SPECIFIED, Label::new_pos(it.pos)))
           };
 
           ctx.cmap.self_ty.push(type_ty);
-          let kind = TypeLow::low(ctx, kind)?;
+          let kind = TypeLow::low(ctx, sum, kind)?;
           ctx.cmap.self_ty.pop();
 
           types.push((it.name.unwrap(), kind, it.pos));
@@ -79,13 +79,13 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
   
   
   let methods = if let Some(trait_ty) = trait_ty {
-    low_impl_validate(ctx, type_ty, trait_ty, it.pos, trait_pos.unwrap(), method_ids, type_ids)?
+    low_impl_validate(ctx, sum, type_ty, trait_ty, it.pos, trait_pos.unwrap(), method_ids, type_ids)?
   } else {
     let ids = method_ids.into_iter().map(|(_, id, ..)| id).collect_vec();
     ctx.cre.extra(&ids)
   };
 
-  let (vis, attr) = read_attrs(ctx, it.vis, ctx.src.get_attached(id))?;
+  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
 
   // Post
@@ -103,27 +103,44 @@ pub fn low_impl(ctx: &mut Ctx, id: ast::ItemId, it: &ast::Item, type_ty: ast::Ty
 
 fn low_impl_validate(
   ctx: &mut Ctx,
+  sum: &mut Summary,
   type_ty: hir::TypeId,
   trait_ty: hir::TypeId,
   impl_span: Span,
   trait_span: Span,
   implemented_methods: Vec<(Ident, hir::ItemId, ast::TypeId, Span)>,
   implemented_types: Vec<(Ident, hir::TypeId, Span)>,
-) -> Result<hir::ItemRng, Message>
+) -> Status<hir::ItemRng>
 {
-  let (trait_methods, trait_types) = match ctx.get(trait_ty).kind {
-    hir::TypeKind::Iface(trait_methods) => (trait_methods, None),
-    hir::TypeKind::Trait(trait_methods, types) => (trait_methods, Some(types)),
-    hir::TypeKind::GenericRaw { .. } => {
-      return Err(Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span)));
-    }
-    _ => {
-      let found = ctx.type_name(trait_ty);
-      return Err(Message::error(EXPECTED_BUT_FOUND.args(&["trait", &found]), Label::new_pos(trait_span)));
-    }
+  let (trait_methods, trait_types, trait_reqs) = match ctx.get(trait_ty).kind {
+    hir::TypeKind::Iface(methods) => (methods, None, None),
+    hir::TypeKind::Trait{methods, types, reqs} => (methods, Some(types), Some(reqs)),
+    
+    hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span))),
+
+    hir::TypeKind::Error => return Status::Fail,
+
+    _ => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["trait", &ctx.type_name(sum, trait_ty)]), Label::new_pos(trait_span))),
   };
 
   let krate = ctx.get_krate(trait_ty.cid());
+
+  if let Some(reqs) = trait_reqs {
+    for req in ctx.extra_get(reqs) {
+      match ctx.get(req).kind {
+        hir::TypeKind::Iface(..) => {},
+        hir::TypeKind::Trait{..} => {},
+        
+        hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span))),
+
+        _ => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["trait", &ctx.type_name(sum, trait_ty)]), Label::new_pos(trait_span))),
+      };
+
+      ctx.type_impls.get(&type_ty).map(|tms| tms.traits.get(&req).map(|_| ())).flatten().status().map_err(||
+        send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE.args(&["trait", &ctx.type_name(sum, req), &ctx.type_name(sum, type_ty)]), Label::new_pos(impl_span)))
+      )?;
+    }
+  };
 
 
   // Expected List
@@ -153,7 +170,7 @@ fn low_impl_validate(
     for (ident, method_id, _, pos) in &implemented_methods {
 
       if let Some((.., first_pos)) = map.get(&ident.sid()) {
-        return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
+        ret_err!(sum, Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
           .add(Label::new(*first_pos, FIRST_DEFINITION_HERE)));
       }
       
@@ -169,7 +186,7 @@ fn low_impl_validate(
     for (ident, type_id, pos) in &implemented_types {
 
       if let Some((.., first_pos)) = map.get(&ident.sid()) {
-        return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
+        ret_err!(sum, Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
           .add(Label::new(*first_pos, FIRST_DEFINITION_HERE)));
       }
       
@@ -185,14 +202,14 @@ fn low_impl_validate(
   // Extra Check
   for (sid, (ident, _, pos)) in &impl_method_map {
     if !expected_methods.iter().any(|(exp_sid, _)| exp_sid == sid) {
-      return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
+      ret_err!(sum, Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
     }
   }
 
   for (sid, (ident, _, pos)) in &impl_types_map {
     if let Some(expected_types) = &expected_types {
       if !expected_types.iter().any(|(exp_sid, _)| exp_sid == sid) {
-        return Err(Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
+        ret_err!(sum, Message::error(METHOD_NOT_A_MEMBER_OF_IFACE.args(&[ident.str(ctx.far), &trait_name]), Label::new(*pos, NOT_A_MEMBER_OF_IFACE.args(&[&trait_name]))));
       }
     }
   }
@@ -208,7 +225,7 @@ fn low_impl_validate(
     
     if !missing.is_empty() {
       let missing_str = missing.join(", ");
-      return Err(Message::error(NOT_ALL_IFACE_ITEMS_IMPLEMENTED.args(&[&missing_str]), Label::new(impl_span, MISSING_IN_IMPLEMENTATION.args(&[&missing_str]))));
+      ret_err!(sum, Message::error(NOT_ALL_IFACE_ITEMS_IMPLEMENTED.args(&[&missing_str]), Label::new(impl_span, MISSING_IN_IMPLEMENTATION.args(&[&missing_str]))));
     };
   };
 
@@ -221,7 +238,7 @@ fn low_impl_validate(
     
     if !missing.is_empty() {
       let missing_str = missing.join(", ");
-      return Err(Message::error(NOT_ALL_IFACE_ITEMS_IMPLEMENTED.args(&[&missing_str]), Label::new(impl_span, MISSING_IN_IMPLEMENTATION.args(&[&missing_str]))));
+      ret_err!(sum, Message::error(NOT_ALL_IFACE_ITEMS_IMPLEMENTED.args(&[&missing_str]), Label::new(impl_span, MISSING_IN_IMPLEMENTATION.args(&[&missing_str]))));
     };
   };
 
@@ -241,7 +258,7 @@ fn low_impl_validate(
     
     let hir::ItemKind::Function{kind: act_fun, ..} = ctx.cre.get(*method_id).kind else { unreachable!() };
 
-    TypeMatch::match_fun(ctx, *exp_fun, act_fun, *fun2_ast, Some(type_ty), Some(&assoc_by_idx))?;
+    TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *fun2_ast, Some(type_ty), Some(&assoc_by_idx))?;
   }
 
 
@@ -252,5 +269,6 @@ fn low_impl_validate(
     ordered_ids.push(*method_id);
   }
 
-  Ok(ctx.cre.extra(&ordered_ids))
+  Status::Success(ctx.cre.extra(&ordered_ids))
 }
+

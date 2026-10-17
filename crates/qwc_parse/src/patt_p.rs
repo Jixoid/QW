@@ -10,8 +10,8 @@
 */
 
 
-use qwc_ast::{IdentSave, Patt, PattId};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{IdentSave, Patt, PattId, PushOkApi};
+use qwc_diagnostic::{Label, Message, Status, msg::*, ret_err};
 use qwc_lexer::WK;
 
 use crate::{parse::Ctx, ctx};
@@ -21,9 +21,9 @@ pub struct PattParser;
 
 impl PattParser {
 
-  pub fn read_patt(ctx: &mut Ctx) -> Result<PattId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let it = match lex.get_k()? {
-      (WK::Word, c) => Patt::One(c.ident(sin, far)?),
+  pub fn read_patt(ctx: &mut Ctx) -> Status<PattId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let it = match lex.get_k(sum)? {
+      (WK::Word, c) => Patt::One(c.ident(sum, sin, far)?),
 
       (WK::Underscore, _) => Patt::Under,
       (WK::Dot2, _) => Patt::Rest,
@@ -33,15 +33,15 @@ impl PattParser {
           let mut subs = vec![];
           
           loop {
-            if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
+            if lex.peek(sum)?.kind() == WK::ParenR { lex.bump(sum)?; break }
             
             subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum, side))?);
             
-            match lex.get_k()? {
+            match lex.get_k(sum)? {
               (WK::ParenR, _) => break,
               (WK::Comma, _) => continue,
               
-              (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+              (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
             }
           }
           
@@ -56,15 +56,15 @@ impl PattParser {
           let mut subs = vec![];
           
           loop {
-            if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
+            if lex.peek(sum)?.kind() == WK::BracketR { lex.bump(sum)?; break }
             
             subs.push(Self::read_patt(ctx!(cre, sin, far, lex, sum, side))?);
             
-            match lex.get_k()? {
+            match lex.get_k(sum)? {
               (WK::BracketR, _) => break,
               (WK::Comma, _) => continue,
               
-              (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
+              (_, c) => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER_AFTER, Label::new_pos(c))),
             }
           }
           
@@ -74,10 +74,10 @@ impl PattParser {
         Patt::Array(rng)
       }
 
-      (_, c) => return Err(Message::error(UNKNOWN_PATTERN, Label::new_pos(c))),
+      (_, c) => ret_err!(sum, Message::error(UNKNOWN_PATTERN, Label::new_pos(c))),
     };
 
-    Ok(cre.push(it))
+    it.push_ok(cre)
   }
 
 }

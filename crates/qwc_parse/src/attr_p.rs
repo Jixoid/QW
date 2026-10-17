@@ -11,7 +11,7 @@
 
 
 use qwc_ast::{AttrKind, Attribute, IdentSave};
-use qwc_diagnostic::Message;
+use qwc_diagnostic::Status::{self, Success};
 use qwc_lexer::WK;
 use thin_vec::ThinVec;
 
@@ -22,23 +22,23 @@ pub struct AttrParser;
 
 impl AttrParser {
 
-  pub fn read_attr(ctx: &mut Ctx) -> Result<Option<Vec<Attribute>>, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  pub fn read_attr(ctx: &mut Ctx) -> Status<Option<Vec<Attribute>>> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let mut attrs = vec![];
 
     loop {
-      if lex.peek()?.kind() == WK::BangAttr {
-        lex.bump()?;
+      if lex.peek(sum)?.kind() == WK::BangAttr {
+        lex.bump(sum)?;
 
         loop {
-          if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
+          if lex.peek(sum)?.kind() == WK::BracketR { lex.bump(sum)?; break }
           
           attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum, side))?);
 
-          match lex.get_k()? {
+          match lex.get_k(sum)? {
             (WK::Comma, _) => continue,
             (WK::BracketR, _) => break,
           
-            (_, c) => c.panic_kind2(WK::Comma, WK::BracketR)?
+            (_, c) => c.panic_kind2(sum, WK::Comma, WK::BracketR)?
           }
         }
       } else {
@@ -46,52 +46,52 @@ impl AttrParser {
       }
     }
 
-    Ok(if attrs.is_empty() { None } else { Some(attrs) })
+    Success(if attrs.is_empty() { None } else { Some(attrs) })
   }
 
 
-  fn read_attr_sub(ctx: &mut Ctx) -> Result<Attribute, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let key = lex.get()?;
+  fn read_attr_sub(ctx: &mut Ctx) -> Status<Attribute> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let key = lex.get(sum)?;
     
-    let attr = match lex.peek()?.kind() {
+    let attr = match lex.peek(sum)?.kind() {
       WK::Colon => { // A:B
-        lex.bump()?;
-        let val = lex.get()?;
+        lex.bump(sum)?;
+        let val = lex.get(sum)?;
 
-        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Bin(val.ident(sin, far)?)}
+        Attribute{ident: key.ident(sum, sin, far)?, kind: AttrKind::Bin(val.ident(sum, sin, far)?)}
       }
 
       WK::ParenL => { // A(B,C)
-        lex.bump()?;
+        lex.bump(sum)?;
         let mut attrs = ThinVec::new();
 
         loop {
-          if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
+          if lex.peek(sum)?.kind() == WK::ParenR { lex.bump(sum)?; break }
           
           attrs.push(Self::read_attr_sub(ctx!(cre, sin, far, lex, sum, side))?);
 
-          match lex.get_k()? {
+          match lex.get_k(sum)? {
             (WK::Comma, _) => continue,
             (WK::ParenR, _) => break,
             
-            (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
+            (_, c) => c.panic_kind2(sum, WK::Comma, WK::ParenR)?
           }
         }
 
-        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::List(attrs)}
+        Attribute{ident: key.ident(sum, sin, far)?, kind: AttrKind::List(attrs)}
       }
 
       WK::Eq => { // A = $expr
-        lex.bump()?;
+        lex.bump(sum)?;
         let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
-        Attribute{ident: key.ident(sin, far)?, kind: AttrKind::Set(expr)}
+        Attribute{ident: key.ident(sum, sin, far)?, kind: AttrKind::Set(expr)}
       }
 
-      _ => Attribute{ident: key.ident(sin, far)?, kind: AttrKind::One()}
+      _ => Attribute{ident: key.ident(sum, sin, far)?, kind: AttrKind::One()}
     };
 
-    Ok(attr)
+    Success(attr)
   }
 
 }

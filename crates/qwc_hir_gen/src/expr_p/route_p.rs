@@ -10,44 +10,43 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, msg::*};
-use qwc_hir::{self as hir, ExprCategory};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_ast as ast;
 
 use crate::{ExprLow, FunCtx, expr_p::const_p, hgen::Ctx, TypeMatch};
 
 
 // Route
-pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
-  let ret_ty = fctx.ret_ty.ok_or_else(|| Message::error(RETURN_OUTSIDE_OF_FUNCTION, Label::new_pos(it.pos)))?;
+pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, val: Option<ast::ExprId>) -> Status<hir::ExprId> {
+  let ret_ty = fctx.ret_ty.status().map_err(||
+    send_err!(sum, Message::error(RETURN_OUTSIDE_OF_FUNCTION, Label::new_pos(it.pos)))
+  )?;
 
-  let val_hir = val.map(|id| ExprLow::low(ctx, fctx, id)).unwrap_or_else(|| const_p::low_unit(ctx))?;
+  let val_hir = val.map(|id| ExprLow::low(ctx, fctx, sum, id)).unwrap_or_else(|| const_p::low_unit(ctx))?;
   let val_ty = ctx.cre.get(val_hir).ety;
 
   let ret_pos = val.map(|id| ctx.src.get(id).pos).unwrap_or(it.pos);
 
-  TypeMatch::matches_pos(ctx, ret_ty, val_ty, ret_pos).map_err(|err| err
-    .add(Label::new(fctx.sign_pos, DEFINED_HERE))
-  )?;
+  TypeMatch::matches_pos(ctx, sum, ret_ty, val_ty, ret_pos)?;
+    //.add(Label::new(fctx.sign_pos, DEFINED_HERE))
 
 
   // Post
-  let item = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::Return(val_hir),
     category: ExprCategory::RValue,
     ety: ctx.prims.ty_never,
-  };
-
-  Ok(ctx.cre.push(item))
+  }.push_ok(ctx.cre)
 }
 
-pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::ExprId>) -> Result<hir::ExprId, Message> {
-  let val = val.map(|id| ExprLow::low(ctx, fctx, id)).transpose()?;
+pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, val: Option<ast::ExprId>) -> Status<hir::ExprId> {
+  let val = val.map(|id| ExprLow::low(ctx, fctx, sum, id)).transpose()?;
   
   let mut lloop = fctx.loops.borrow_mut();
   
-  let lloop = lloop.last_mut().ok_or_else(||
-    Message::error(BREAK_OUTSIDE_OF_LOOP, Label::new_pos(it.pos))
+  let lloop = lloop.last_mut().status().map_err(||
+    send_err!(sum, Message::error(BREAK_OUTSIDE_OF_LOOP, Label::new_pos(it.pos)))
   )?;
 
   match val {
@@ -56,10 +55,10 @@ pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::
       let ety = ctx.cre.get(val).ety;
 
       if let Some(lty) = lloop.ret_ty {
-        return Err(Message::error(MISMATCHED_TYPES
+        ret_err!(sum, Message::error(MISMATCHED_TYPES
           .args(&[
-            &ctx.type_name(lty),
-            &ctx.type_name(ety),
+            &ctx.type_name(sum, lty),
+            &ctx.type_name(sum, ety),
           ]),
           Label::new_pos(it.pos)
         ))
@@ -77,12 +76,12 @@ pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, it: &ast::Expr, val: Option<ast::
     ety: ctx.prims.ty_never,
   };
 
-  Ok(ctx.cre.push(item))
+  Success(ctx.cre.push(item))
 }
 
-pub fn low_continue(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx) -> Result<hir::ExprId, Message> {
-  fctx.loops.borrow().last().ok_or_else(||
-    Message::error(CONTINUE_OUTSIDE_OF_LOOP, Label::new_pos(it.pos))
+pub fn low_continue(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr) -> Status<hir::ExprId> {
+  fctx.loops.borrow().last().status().map_err(||
+    send_err!(sum, Message::error(CONTINUE_OUTSIDE_OF_LOOP, Label::new_pos(it.pos)))
   )?;
 
 
@@ -93,5 +92,5 @@ pub fn low_continue(ctx: &mut Ctx, it: &ast::Expr, fctx: &FunCtx) -> Result<hir:
     ety: ctx.prims.ty_never,
   };
 
-  Ok(ctx.cre.push(item))
+  Success(ctx.cre.push(item))
 }

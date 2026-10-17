@@ -10,12 +10,13 @@
 */
 
 
-use qwc_ast::{AnyRng, IdentSave, Rng, Thing, ThingKind, ThingRng, Type, TypeId, TypeKind, TypeRng};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{AnyRng, IdentSave, PushOkApi, Type, TypeId, TypeKind};
+use qwc_diagnostic::Status::{self, Success};
 use qwc_lexer::WK;
 
 use crate::{AttrParser, ExprParser, WordCheck, ctx, Ctx};
 
+mod helper;
 mod big_p;
 
 
@@ -25,10 +26,10 @@ pub struct TypeParser;
 impl TypeParser {
 
   // Public
-  pub fn read_type(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  pub fn read_type(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let attrs = AttrParser::read_attr(ctx!(cre, sin, far, lex, sum, side))?;
     
-    let mut lhs = match lex.peek()?.kind() {
+    let mut lhs = match lex.peek(sum)?.kind() {
       WK::Question => Self::pre_option(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Bang     => Self::pre_fail(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Dot2     => Self::pre_range(ctx!(cre, sin, far, lex, sum, side))?,
@@ -51,7 +52,7 @@ impl TypeParser {
     };
 
     loop {
-      lhs = match lex.peek()?.kind() {
+      lhs = match lex.peek(sum)?.kind() {
         WK::Colon2 => Self::post_scope(ctx!(cre, sin, far, lex, sum, side), lhs)?,
         
         WK::Lt => Self::post_specialize(ctx!(cre, sin, far, lex, sum, side), lhs)?,
@@ -62,16 +63,16 @@ impl TypeParser {
 
     if let Some(a) = attrs { cre.attach(lhs, a); }
 
-    Ok(lhs)
+    Success(lhs)
   }
 
-  pub fn read_fun(ctx: &mut Ctx) -> Result<TypeId, Message> { Self::pre_fun(ctx, false) }
-  pub fn read_task(ctx: &mut Ctx) -> Result<TypeId, Message> { Self::pre_task(ctx, false) }
+  pub fn read_fun(ctx: &mut Ctx) -> Status<TypeId> { Self::pre_fun(ctx, false) }
+  pub fn read_task(ctx: &mut Ctx) -> Status<TypeId> { Self::pre_task(ctx, false) }
 
 
   // Ex
-  fn post_scope(ctx: &mut Ctx, lhs: TypeId) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn post_scope(ctx: &mut Ctx, lhs: TypeId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let rng = {
       let sub = Self::pre_nick(ctx!(cre, sin, far, lex, sum, side))?;
@@ -79,8 +80,8 @@ impl TypeParser {
       let mut ctn = vec![lhs, sub];
 
       loop {
-        if lex.peek()?.kind() == WK::Colon2 {
-          lex.bump()?;
+        if lex.peek(sum)?.kind() == WK::Colon2 {
+          lex.bump(sum)?;
 
           ctn.push(Self::pre_nick(ctx!(cre, sin, far, lex, sum, side))?);
         } else {
@@ -93,25 +94,23 @@ impl TypeParser {
       
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Path(rng)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn post_specialize(ctx: &mut Ctx, lhs: TypeId) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn post_specialize(ctx: &mut Ctx, lhs: TypeId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
-    let args = if lex.peek()?.kind() == WK::Gt {
-      lex.bump()?;
+    let args = if lex.peek(sum)?.kind() == WK::Gt {
+      lex.bump(sum)?;
       AnyRng::empty()
     } else {
       let mut args = vec![];
 
       loop {
-        let arg = match lex.peek_k()? {
+        let arg = match lex.peek_k(sum)? {
           (WK::String | WK::Number | WK::BraceL, _) => ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?.to_any(),
           
           _ => TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?.to_any(),
@@ -119,12 +118,12 @@ impl TypeParser {
         
         args.push(arg);
 
-        match lex.get_k()? {
-          (WK::Comma, _) => if lex.peek()?.kind() == WK::Gt { lex.bump()?; break },
+        match lex.get_k(sum)? {
+          (WK::Comma, _) => if lex.peek(sum)?.kind() == WK::Gt { lex.bump(sum)?; break },
           
           (WK::Gt, _) => break,
 
-          (_, c) => c.panic_kind2(WK::Comma, WK::Gt)?,
+          (_, c) => c.panic_kind2(sum, WK::Comma, WK::Gt)?,
         }
       }
 
@@ -133,144 +132,126 @@ impl TypeParser {
 
     
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Spec{ base: lhs, args }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
 
   // Sub
-  fn pre_self(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_self(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::SelfT,
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_type(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_type(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Type,
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
   
 
-  fn pre_option(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_option(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Option(sub)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_fail(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_fail(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Fail(sub)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_range(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_range(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Range(sub)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_ref(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_ref(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
-    let ism = if lex.peek()?.kind() == WK::Mut { lex.bump()?; true } else { false };
+    let ism = if lex.peek(sum)?.kind() == WK::Mut { lex.bump(sum)?; true } else { false };
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Ref(sub, ism)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_ref2(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.parse_token()?;
+  fn pre_ref2(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.parse_token(sum)?;
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Ref(sub, false)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_ptr(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_ptr(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
-    let ism = if lex.peek()?.kind() == WK::Mut { lex.bump()?; true } else { false };
+    let ism = if lex.peek(sum)?.kind() == WK::Mut { lex.bump(sum)?; true } else { false };
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Ptr(sub, ism)
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
-  fn pre_fun(ctx: &mut Ctx, is_sub: bool) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = if is_sub { lex.get()? } else { lex.peek()? };
+  fn pre_fun(ctx: &mut Ctx, is_sub: bool) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = if is_sub { lex.get(sum)? } else { lex.peek(sum)? };
 
-    let (self_kind, args) = Self::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;
+    let (self_kind, args) = helper::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let ret = if lex.peek()?.kind() == WK::ArrowRight {
-      lex.bump()?;
+    let ret = if lex.peek(sum)?.kind() == WK::ArrowRight {
+      lex.bump(sum)?;
       Some(Self::read_type(ctx!(cre, sin, far, lex, sum, side))?)
     } else {
       None
@@ -278,21 +259,19 @@ impl TypeParser {
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Fun{ self_kind, args, ret, attr: 0 }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_task(ctx: &mut Ctx, is_sub: bool) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = if is_sub { lex.get()? } else { lex.peek()? };
+  fn pre_task(ctx: &mut Ctx, is_sub: bool) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = if is_sub { lex.get(sum)? } else { lex.peek(sum)? };
 
-    let (self_kind, args) = Self::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;
+    let (self_kind, args) = helper::read_fun_args(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let ret = if lex.peek()?.kind() == WK::ArrowRight {
-      lex.bump()?;
+    let ret = if lex.peek(sum)?.kind() == WK::ArrowRight {
+      lex.bump(sum)?;
       Some(Self::read_type(ctx!(cre, sin, far, lex, sum, side))?)
     } else {
       None
@@ -300,35 +279,33 @@ impl TypeParser {
 
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Fun{ self_kind, args, ret, attr: 0 }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
-  fn pre_slice_array_vector(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_slice_array_vector(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let kind = match lex.get_k()? {
+    let kind = match lex.get_k(sum)? {
       (WK::BracketR, _) => TypeKind::Slice(sub),
 
       (WK::Semicolon, _) => {
         let ext = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
-        lex.get()?.expect_kind(WK::BracketR)?;
+        lex.get(sum)?.expect_kind(sum, WK::BracketR)?;
 
         TypeKind::Array(sub, ext)
       }
 
       (WK::Mul, _) => {
-        let ext = if lex.peek()?.kind() == WK::BracketR { None } else { Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?) };
+        let ext = if lex.peek(sum)?.kind() == WK::BracketR { None } else { Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?) };
 
-        lex.get()?.expect_kind(WK::BracketR)?;
+        lex.get(sum)?.expect_kind(sum, WK::BracketR)?;
 
         if let Some(ext) = ext {
           TypeKind::Vector(sub, ext)
@@ -337,210 +314,79 @@ impl TypeParser {
         }
       }
 
-      (_, c) => c.panic_kind3(WK::BracketR, WK::Semicolon, WK::Mul)?
+      (_, c) => c.panic_kind3(sum, WK::BracketR, WK::Semicolon, WK::Mul)?
     };
     
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn pre_tuple(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn pre_tuple(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
     // Unit
-    if lex.peek()?.kind() == WK::ParenR {
-      lex.bump()?;
+    if lex.peek(sum)?.kind() == WK::ParenR {
+      lex.bump(sum)?;
 
       // Post
-      let this = Type{
+      return Type{
         pos: lex.pos_extend(start),
         kind: TypeKind::Unit,
-      };
-
-      return Ok(cre.push(this))
+      }.push_ok(cre)
     }
 
     let kind = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
-    match lex.get_k()? {
-      (WK::ParenR, _) => Ok(kind), // (X)
+    match lex.get_k(sum)? {
+      (WK::ParenR, _) => Success(kind), // (X)
 
       (WK::Comma, _) => { // (X, ...)
         let mut vals = vec![ kind ];
         let mut is_tuple = false;
         
         loop {
-          if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
+          if lex.peek(sum)?.kind() == WK::ParenR { lex.bump(sum)?; break }
           
           vals.push(Self::read_type(ctx!(cre, sin, far, lex, sum, side))?);
           
-          match lex.get_k()? {
+          match lex.get_k(sum)? {
             (WK::ParenR, _) => break,
             (WK::Comma, _) => { is_tuple = true; continue; }
             
-            (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
+            (_, c) => c.panic_kind2(sum, WK::Comma, WK::ParenR)?
           }
         }
         
         if is_tuple || vals.len() != 1 {
           let rng = cre.extra(&vals);
 
-          let this = Type{
+          Type{
             pos: lex.pos_extend(start),
-            kind: TypeKind::Tuple(rng)
-          };
-          
-          Ok(cre.push(this))
+            kind: TypeKind::TupleAnon(rng)
+          }.push_ok(cre)
         } else {
-          Ok(vals[0])
+          Success(vals[0])
         }
       }
 
-      (_, c) => c.panic_kind2(WK::ParenR, WK::Comma)?
+      (_, c) => c.panic_kind2(sum, WK::ParenR, WK::Comma)?
     }
   }
 
 
-  fn pre_nick(ctx: &mut Ctx) -> Result<TypeId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
-    let name = start.ident(sin, far)?;
+  fn pre_nick(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
+    let name = start.ident(sum, sin, far)?;
 
     // Post
-    let this = Type{
+    Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Nick(name)
-    };
-
-    Ok(cre.push(this))
-  }
-
-
-  // Tool
-  fn read_bases(ctx: &mut Ctx) -> Result<TypeRng, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    if lex.peek()?.kind() == WK::Colon {
-      lex.bump()?;
-
-      let mut arr = vec![];
-      
-      loop {
-        arr.push( Self::read_type(ctx!(cre, sin, far, lex, sum, side))? );
-
-        if lex.peek()?.kind() == WK::Comma { lex.bump()?; continue } else { break }
-      }
-
-      Ok(cre.extra(&arr))
-    }
-    else {
-      Ok(Rng::empty())
-    }
-  }
-
-  fn read_fun_args(ctx: &mut Ctx) -> Result<(Option<TypeId>, ThingRng), Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    lex.get()?.expect_kind(WK::ParenL)?;
-    
-    let mut args = vec![];
-    let mut self_kind = None;
-
-    if lex.peek()?.kind() != WK::ParenR {
-      if lex.peek()?.kind() == WK::Amp {
-        let amp_word = lex.get()?;
-        let ism = if lex.peek()?.kind() == WK::Mut {
-          lex.bump()?;
-          true
-        } else {
-          false
-        };
-        let self_word = lex.get()?;
-        if self_word.kind() != WK::SelfS {
-          return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(self_word)));
-        }
-        let self_t = cre.push(Type {
-          pos: lex.pos_extend(self_word),
-          kind: TypeKind::SelfT,
-        });
-        let ref_t = cre.push(Type {
-          pos: lex.pos_extend(amp_word),
-          kind: TypeKind::Ref(self_t, ism),
-        });
-        self_kind = Some(ref_t);
-      } else if lex.peek()?.kind() == WK::Mut {
-        let mut_word = lex.get()?;
-        if lex.peek()?.kind() == WK::SelfS {
-          let self_word = lex.get()?;
-          let self_t = cre.push(Type {
-            pos: lex.pos_extend(self_word),
-            kind: TypeKind::SelfT,
-          });
-          self_kind = Some(self_t);
-        } else {
-          return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(mut_word)));
-        }
-      } else if lex.peek()?.kind() == WK::SelfS {
-        let self_word = lex.get()?;
-        let self_t = cre.push(Type {
-          pos: lex.pos_extend(self_word),
-          kind: TypeKind::SelfT,
-        });
-        self_kind = Some(self_t);
-      }
-
-      if self_kind.is_some() {
-        match lex.peek_k()? {
-          (WK::Comma, _) => { lex.bump()?; }
-          (WK::ParenR, _) => {
-            lex.bump()?;
-            return Ok((self_kind, cre.extra(&args)));
-          }
-          (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
-        }
-      }
-    }
-
-    loop {
-      if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break; }
-      
-      let mut names = vec![];
-      loop {
-        let name = match lex.get_k()? {
-          (WK::Word, c) => c.ident(sin, far)?,
-          (_, c) => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(c)))
-        };
-        names.push(name);
-
-        match lex.get_k()? {
-          (WK::Comma, _) => continue,
-          (WK::Colon, _) => break,
-
-          (_, c) => c.panic_kind2(WK::Colon, WK::Comma)?
-        }
-      }
-
-      let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
-      
-      for x in names {
-        let thing = Thing {
-          kind: ThingKind::NamedType(x, kind),
-          pos: x.into(),
-        };
-
-        args.push(cre.push(thing));
-      }
-
-      match lex.get_k()? {
-        (WK::ParenR, _) => break,
-        (WK::Comma, _) => continue,
-
-        (_, c) => c.panic_kind2(WK::Comma, WK::ParenL)?
-      }
-    }
-
-    Ok((self_kind, cre.extra(&args)))
+    }.push_ok(cre)
   }
 
 }

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_mir::{self as mir, SSA, TypeId, Value};
+use qwc_mir::{self as mir, PushOkApi, SSA, TypeId, Value};
 use rustc_hash::FxHashMap;
 
 
@@ -150,18 +150,17 @@ impl FunBuilder {
 
     let mut block_ids: Vec<mir::BlokId> = Vec::with_capacity(count);
     for _ in 0..count {
-      let id = cre.push(mir::Block {
+      let id = mir::Block {
         insts: mir::Rng::empty(),
         term: mir::Terminator::Unreachable,
-      });
+      }.push(cre);
       block_ids.push(id);
     }
 
     for (i, block_data) in self.blocks.into_iter().enumerate() {
       let mut inst_ids = Vec::with_capacity(block_data.pre_insts.len() + block_data.insts.len());
       for inst in block_data.pre_insts.into_iter().chain(block_data.insts.into_iter()) {
-        let id = cre.push(inst);
-        inst_ids.push(id);
+        inst_ids.push(inst.push(cre));
       }
       let insts = if inst_ids.is_empty() {
         mir::Rng::empty()

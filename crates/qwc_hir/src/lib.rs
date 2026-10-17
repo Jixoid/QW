@@ -10,11 +10,12 @@
 */
 
 
+mod poit;
 mod krate;
-pub mod id;
 mod items;
 mod types;
 mod exprs;
+pub mod id;
 mod things;
 mod layout;
 mod defpath;
@@ -25,4 +26,5 @@ pub use krate::{Krate, Deps, CID, PushApi, GetApi, PathApi};
 pub use id::{HirId, HirKind, AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng, ThingRng, DefPathId, DefPathRng};
 pub use {items::*, types::*, exprs::*, things::* };
 pub use layout::*;
+pub use poit::HPoit;
 pub use dump::{Dump, DumpHandler, DumpCtx};

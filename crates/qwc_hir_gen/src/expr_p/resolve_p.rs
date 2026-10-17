@@ -11,7 +11,7 @@
 
 
 use qwc_ast::{self as ast, Ident};
-use qwc_diagnostic::{Label, Message, Span, msg::*};
+use qwc_diagnostic::{Label, Message, Span, Status::{self, Success}, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi, TypeAttr};
 use qwc_resolve::{self as resolve, Resolver};
 
@@ -19,16 +19,16 @@ use crate::{ItemLow, TypeLow, ctx, Ctx};
 
 
 // Resolve
-pub fn low_nick(ctx: &mut Ctx, pos: Span, ident: Ident) -> Result<hir::ExprId, Message> {
-  let (kind, lscp, _) = Resolver::with_locals(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods, Some(ctx.loc)).lookup(ident)?.get_k();
-  low_resolved(ctx, kind, lscp, pos)
+pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, pos: Span, ident: Ident) -> Status<hir::ExprId> {
+  let (kind, lscp, _) = Resolver::with_locals(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods, Some(ctx.loc)).lookup(sum, ident)?.get_k();
+  low_resolved(ctx, sum, kind, lscp, pos)
 }
 
-pub fn low_self(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
+pub fn low_self(ctx: &mut Ctx, sum: &mut Summary, pos: Span) -> Status<hir::ExprId> {
   let self_sid = ctx.sin.sid_self();
 
   let Some(id) = ctx.loc.lookup(&self_sid) else {
-    return Err(Message::error(CANNOT_FIND_X_IN_SCOPE.args(&["self"]), Label::new_pos(pos)))
+    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&["self"]), Label::new_pos(pos)))
   };
 
   
@@ -41,14 +41,14 @@ pub fn low_self(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
     ety: local.ty,
   };
 
-  Ok(ctx.cre.push(this))
+  Success(ctx.cre.push(this))
 }
 
-pub fn low_self_big(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
+pub fn low_self_big(ctx: &mut Ctx, sum: &mut Summary, pos: Span) -> Status<hir::ExprId> {
   use qwc_diagnostic::msg::SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT;
   let kind = match ctx.cmap.self_ty.last() {
     Some(&v) => v,
-    None => return Err(Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(pos)))
+    None => ret_err!(sum, Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(pos)))
   };
 
   let this = hir::Expr {
@@ -57,10 +57,10 @@ pub fn low_self_big(ctx: &mut Ctx, pos: Span) -> Result<hir::ExprId, Message> {
     ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
   };
 
-  Ok(ctx.cre.push(this))
+  Success(ctx.cre.push(this))
 }
 
-pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::ExprId, Message> {
+pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, pos: Span, rng: ast::ExprRng) -> Status<hir::ExprId> {
   let mut segment = vec![];
 
   for id in ctx.src.extra_get(rng) {
@@ -69,18 +69,18 @@ pub fn low_path(ctx: &mut Ctx, pos: Span, rng: ast::ExprRng) -> Result<hir::Expr
     if let ast::ExprKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
   }
 
-  let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&segment)?.get_k();
-  low_resolved(ctx, kind, lscp, pos)
+  let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
+  low_resolved(ctx, sum, kind, lscp, pos)
 }
 
-pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Result<hir::ExprId, Message> {
+pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Status<hir::ExprId> {
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::ExprParam(generic, idx, thing) => {
         let ast::ThingKind::NamedType(_, ty) = ctx.src.get(thing).kind else { unreachable!() };
         
-        let ty = TypeLow::low(ctx!(lscp -> ctx), ty)?;
-        let generic_hir = ItemLow::low(ctx, generic)?.unwrap();
+        let ty = TypeLow::low(ctx!(lscp -> ctx), sum, ty)?;
+        let generic_hir = ItemLow::low(ctx, sum, generic)?.unwrap();
 
         // Post
         let this = hir::Expr{
@@ -93,7 +93,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindAst::Expr(id) => {
-        let id = ItemLow::low(ctx!(lscp -> ctx), id)?.unwrap();
+        let id = ItemLow::low(ctx!(lscp -> ctx), sum, id)?.unwrap();
         let it = ctx.cre.get(id);
 
         let kind = it.symbol_kind().unwrap();
@@ -110,7 +110,7 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindAst::Type(item) => {
-        let item = ItemLow::low(ctx!(lscp -> ctx), item)?.unwrap();
+        let item = ItemLow::low(ctx!(lscp -> ctx), sum, item)?.unwrap();
         let hir::ItemKind::Using { kind } = ctx.get(item).kind else { unreachable!() };
 
         // Post
@@ -124,19 +124,19 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindAst::TypeParam(..) | resolve::ScopeKindAst::AssocType(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
       }
 
       resolve::ScopeKindAst::Module(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
       }
 
       resolve::ScopeKindAst::GenericType(generic, kind) => {
-        let generic_item = ItemLow::low(ctx, generic)?.unwrap();
+        let generic_item = ItemLow::low(ctx, sum, generic)?.unwrap();
         let path = ctx.get(generic_item).path;
         let kind = match ctx.cmap.cache_type.get(&kind) {
           Some(&cached) => cached,
-          None => TypeLow::low(ctx, kind)?,
+          None => TypeLow::low(ctx, sum, kind)?,
         };
         let kind = hir::Type {
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
@@ -155,8 +155,8 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindAst::GenericExpr(generic, expr) => {
-        let generic = ItemLow::low(ctx, generic)?.unwrap();
-        let id = ItemLow::low(ctx!(lscp -> ctx), expr)?.unwrap();
+        let generic = ItemLow::low(ctx, sum, generic)?.unwrap();
+        let id = ItemLow::low(ctx!(lscp -> ctx), sum, expr)?.unwrap();
         let it = ctx.cre.get(id);
 
         let kind = it.symbol_kind().unwrap();
@@ -219,10 +219,10 @@ pub fn low_resolved(ctx: &mut Ctx, kind: resolve::ScopeKind, lscp: &resolve::Sco
       }
 
       resolve::ScopeKindHir::Module(..) => {
-        return Err(Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
       }
     }
   };
 
-  Ok(expr)
+  Success(expr)
 }

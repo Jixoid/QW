@@ -11,21 +11,21 @@
 
 
 use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status, StatusApi, Summary, msg::*, ret_err};
 use qwc_ast as ast;
 
 use crate::{Ctx, TypeLow};
 
 
 // Function
-pub fn low_fun(ctx: &mut Ctx, path: DefPathId, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Result<hir::TypeId, Message> {
+pub fn low_fun(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Status<hir::TypeId> {
   let args = {
     let mut ctn = vec![];
 
     for id in ctx.src.extra_get(rng) {
       let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { panic!() };
 
-      let id = hir::Thing::NamedType(name.sid(), TypeLow::low(ctx, kind)?).push(ctx.cre);
+      let id = hir::Thing::NamedType(name.sid(), TypeLow::low(ctx, sum, kind)?).push(ctx.cre);
       
       ctn.push(id);
     }
@@ -36,24 +36,22 @@ pub fn low_fun(ctx: &mut Ctx, path: DefPathId, self_kind: Option<ast::TypeId>, r
   if let Some(self_kind) = self_kind && ctx.cmap.self_ty.last().is_none() {
     let self_kind = ctx.src.get(self_kind);
     
-    return Err(Message::error(SELF_PARAMETER_IS_ONLY_ALLOWED_IN_ASSOCIATED_FUN, Label::new_pos(self_kind.pos)))
+    ret_err!(sum, Message::error(SELF_PARAMETER_IS_ONLY_ALLOWED_IN_ASSOCIATED_FUN, Label::new_pos(self_kind.pos)));
   }
 
-  let self_kind = self_kind.map(|id| TypeLow::low(ctx, id)).transpose()?;
+  let self_kind = self_kind.map(|id| TypeLow::low(ctx, sum, id)).transpose()?;
 
   let ret = match ret {
     None => ctx.prims.ty_unit,
-    Some(kind) => TypeLow::low(ctx, kind)?,
+    Some(kind) => TypeLow::low(ctx, sum, kind)?,
   };
 
 
   // Post
-  let this = hir::Type {
+  hir::Type {
     kind: hir::TypeKind::Fun{self_kind, args, ret},
     layout: hir::Layout::new_dst(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
-  };
-  
-  Ok(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }

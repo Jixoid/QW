@@ -14,7 +14,7 @@ use core::fmt;
 use std::{collections::HashMap, fs};
 
 use qwc_arena::File;
-use qwc_diagnostic::{CodedMsg, FmtMsg, Label, Message};
+use qwc_diagnostic::{CodedMsg, FmtMsg, Label, Message, Status::{self, Success}, StatusApi2, Summary, ret_err, send_err};
 use qwc_lexer::{Lexer, WK, Word};
 
 
@@ -98,8 +98,8 @@ impl Value {
 
 impl Value {
 
-  pub fn load_file(fi: &File) -> Result<Value, Message> {
-    Parser::parse_root(&mut Lexer::new(fi))
+  pub fn load_file(fi: &File, sum: &mut Summary) -> Status<Value> {
+    Parser::parse_root(&mut Lexer::new(fi), sum)
   }
 
   pub fn save_file(&self, fpath: String) -> Result<(), String> {
@@ -180,102 +180,102 @@ impl Parser {
     }
   }
 
-  fn parse_root(lex: &mut Lexer) -> Result<Value, Message> {
-    match lex.peek()?.kind() {
-      WK::Word => Self::parse_struct(lex, true),
+  fn parse_root(lex: &mut Lexer, sum: &mut Summary,) -> Status<Value> {
+    match lex.peek(sum)?.kind() {
+      WK::Word => Self::parse_struct(lex, sum, true),
 
-      _ => Self::parse_value(lex),
+      _ => Self::parse_value(lex, sum),
     }
   }
 
-  fn parse_struct(lex: &mut Lexer, is_root: bool) -> Result<Value, Message> {
+  fn parse_struct(lex: &mut Lexer, sum: &mut Summary, is_root: bool) -> Status<Value> {
     let mut ctn = HashMap::new();
     
     if !is_root {
-      lex.get()?.expected_kind(WK::BraceL)?;
+      lex.get(sum)?.expected_kind(WK::BraceL, sum)?;
     }
 
     loop {
       if is_root {
         if let None = lex.peek_safe() { break }
       } else {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
       }
 
-      let name = lex.get()?.expected_word()?;
+      let name = lex.get(sum)?.expected_word(sum)?;
       let name = lex.str(name).to_string();
 
-      lex.get()?.expected_kind(WK::Colon)?;
+      lex.get(sum)?.expected_kind(WK::Colon, sum)?;
 
-      let it = Self::parse_value(lex)?;
+      let it = Self::parse_value(lex, sum)?;
 
       ctn.insert(name, it);
 
       if is_root { if let None = lex.peek_safe() { break } }
 
       if let Some(w) = lex.peek_safe() {
-        if w.kind() == WK::Comma { lex.bump()? }
+        if w.kind() == WK::Comma { lex.bump(sum)? }
       }
     }
 
-    Ok(Value::Stc(ctn))
+    Success(Value::Stc(ctn))
   }
 
-  fn parse_array(lex: &mut Lexer) -> Result<Value, Message> {
+  fn parse_array(lex: &mut Lexer, sum: &mut Summary) -> Status<Value> {
     let mut ctn = vec![];
-    lex.get()?.expected_kind(WK::BracketL)?;
+    lex.get(sum)?.expected_kind(WK::BracketL, sum)?;
 
 
     loop {
-      if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
+      if lex.peek(sum)?.kind() == WK::BracketR { lex.bump(sum)?; break }
 
-      let it = Self::parse_value(lex)?;
+      let it = Self::parse_value(lex, sum)?;
 
       ctn.push(it);
 
       if let Some(w) = lex.peek_safe() {
-        if w.kind() == WK::Comma { lex.bump()? }
+        if w.kind() == WK::Comma { lex.bump(sum)? }
       }
     }
 
-    Ok(Value::Arr(ctn))
+    Success(Value::Arr(ctn))
   }
 
-  fn parse_value(lex: &mut Lexer) -> Result<Value, Message> {
+  fn parse_value(lex: &mut Lexer, sum: &mut Summary) -> Status<Value> {
     let mut temp_tuple = vec![];
     let mut mask: u8 = 0;
 
     loop {
-      let (c, ma, val) = match lex.peek_k()? {
-        (WK::True | WK::False, _) => { let c = lex.get()?; (c, 1, Value::Bool(c.kind() == WK::True))}
+      let (c, ma, val) = match lex.peek_k(sum)? {
+        (WK::True | WK::False, _) => { let c = lex.get(sum)?; (c, 1, Value::Bool(c.kind() == WK::True))}
 
-        (WK::String, _) => { let c = lex.get()?; (c, 2, Value::Str(Self::unquote(lex.str(c))))}
+        (WK::String, _) => { let c = lex.get(sum)?; (c, 2, Value::Str(Self::unquote(lex.str(c))))}
 
         (WK::Number | WK::Sub, _) => {
-          let c = lex.get()?;
+          let c = lex.get(sum)?;
           
-          let (c, sig) = if c.kind() == WK::Sub { (lex.get()?.expected_kind(WK::Number)?, false) } else { (c, true) };
+          let (c, sig) = if c.kind() == WK::Sub { (lex.get(sum)?.expected_kind(WK::Number, sum)?, false) } else { (c, true) };
 
           let str = lex.str(c);
           
           let it = match str.contains('.') {
-            true  => Value::Float(str.parse::<f64>().map_err(|_| Message::error(CANNOT_CONVERT_FLOAT, Label::new_pos(c)))? * (if sig {1.} else {-1.})),
-            false => Value::Int(str.parse::<i64>().map_err(|_| Message::error(CANNOT_CONVERT_INTEGER, Label::new_pos(c)))? * (if sig {1} else {-1})),
+            true  => Value::Float(str.parse::<f64>().map_err(|_| send_err!(sum, Message::error(CANNOT_CONVERT_FLOAT, Label::new_pos(c)))).status()? * (if sig {1.} else {-1.})),
+            false => Value::Int(str.parse::<i64>().map_err(|_| send_err!(sum, Message::error(CANNOT_CONVERT_INTEGER, Label::new_pos(c)))).status()? * (if sig {1} else {-1})),
           };
 
           (c, 4, it)
         }
         
-        (WK::BraceL, c) => (c, 8, Self::parse_struct(lex, false)?),
+        (WK::BraceL, c) => (c, 8, Self::parse_struct(lex, sum, false)?),
         
-        (WK::BracketL, c) => (c, 16, Self::parse_array(lex)?),
+        (WK::BracketL, c) => (c, 16, Self::parse_array(lex, sum)?),
 
-        (_, c) => return Err(Message::error(INVALID_VALUE.args(&[lex.str(c)]), Label::new(c, VALUE_IS_HERE)))
+        (_, c) => ret_err!(sum, Message::error(INVALID_VALUE.args(&[lex.str(c)]), Label::new(c, VALUE_IS_HERE)))
       };
 
       temp_tuple.push(val);
 
-      if (mask & ma) != 0 { return Err(Message::error(DUPLICATED_VALUE, Label::new_pos(c))) } else { mask |= ma }
+      if (mask & ma) != 0 { ret_err!(sum, Message::error(DUPLICATED_VALUE, Label::new_pos(c))) } else { mask |= ma }
       
       match lex.peek_safe().map(|w| w.kind()) {
         Some(WK::True | WK::False | WK::String | WK::BraceL | WK::BracketL | WK::Number) => {}
@@ -284,9 +284,9 @@ impl Parser {
     }
 
     if temp_tuple.len() == 1 {
-      Ok(temp_tuple.pop().unwrap())
+      Success(temp_tuple.pop().unwrap())
     } else {
-      Ok(Value::Tup(temp_tuple))
+      Success(Value::Tup(temp_tuple))
     }
   }
 
@@ -294,21 +294,21 @@ impl Parser {
 
 
 trait A {
-  fn expected_word(self) -> Result<Word, Message>;
-  fn expected_kind(self, kind: WK) -> Result<Word, Message>;
+  fn expected_word(self, sum: &mut Summary) -> Status<Word>;
+  fn expected_kind(self, kind: WK, sum: &mut Summary) -> Status<Word>;
 }
 
 impl A for Word {
 
-  fn expected_word(self) -> Result<Self, Message> {
-    if self.kind() == WK::Word { Ok(self) }
-    else { Err(Message::error(EXPECTED_WORD, Label::new_pos(self))) }
+  fn expected_word(self, sum: &mut Summary) -> Status<Self> {
+    if self.kind() == WK::Word { Success(self) }
+    else { ret_err!(sum, Message::error(EXPECTED_WORD, Label::new_pos(self))) }
   }
 
-  fn expected_kind(self, kind: WK) -> Result<Self, Message> {
-    if self.kind() == kind { Ok(self) }
+  fn expected_kind(self, kind: WK, sum: &mut Summary) -> Status<Self> {
+    if self.kind() == kind { Success(self) }
     else {
-      Err(Message::error(EXPECTED_KIND2
+      ret_err!(sum, Message::error(EXPECTED_KIND2
         .args(&[
           &format!("{:?}", kind),
           &format!("{:?}", self.kind()),

@@ -16,6 +16,7 @@
 use std::{path::Path, sync::mpsc, thread, time::Duration};
 
 use qwc_arena::Files;
+use qwc_diagnostic::Summary;
 use qwc_lexer::{Lexer, WK};
 
 
@@ -156,25 +157,26 @@ fn peek_get_bump_and_parse_token() {
   let mut files = Files::new();
   let fid = files.add_buffer(Path::new("t.qw"), b"a && b".to_vec());
   let mut lx = Lexer::new(files.get(fid));
+  let mut sum = Summary::new();
 
   // peek does not advance
-  assert_eq!(lx.peek().unwrap().kind(), WK::Word);
-  assert_eq!(lx.peek().unwrap().kind(), WK::Word);
+  assert_eq!(lx.peek(&mut sum).unwrap().kind(), WK::Word);
+  assert_eq!(lx.peek(&mut sum).unwrap().kind(), WK::Word);
 
-  let a = lx.get().unwrap();
+  let a = lx.get(&mut sum).unwrap();
   assert_eq!(lx.str(a), "a");
 
   // `&&` is split into two `&`
-  let amp1 = lx.parse_token().unwrap();
+  let amp1 = lx.parse_token(&mut sum).unwrap();
   assert_eq!((amp1.kind(), lx.str(amp1)), (WK::Amp, "&"));
 
-  let amp2 = lx.get().unwrap();
+  let amp2 = lx.get(&mut sum).unwrap();
   assert_eq!((amp2.kind(), lx.str(amp2)), (WK::Amp, "&"));
 
-  lx.bump().unwrap();
+  lx.bump(&mut sum).unwrap();
 
-  assert!(lx.get().is_err());
-  assert!(lx.peek().is_err());
+  assert!(lx.get(&mut sum).is_fail());
+  assert!(lx.peek(&mut sum).is_fail());
   assert!(lx.get_safe().is_none());
 }
 

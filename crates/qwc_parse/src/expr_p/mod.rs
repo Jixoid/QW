@@ -11,8 +11,8 @@
 
 
 use bitflags::bitflags;
-use qwc_ast::{Expr, ExprId, ExprKind};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{Expr, ExprId, ExprKind, PushOkApi};
+use qwc_diagnostic::{ret_err, Label, Message, Status::{self, Success}, msg::*};
 use qwc_lexer::WK;
 
 use crate::{expr_p::helper::BinOp, parse::Ctx};
@@ -39,22 +39,22 @@ pub struct ExprParser;
 
 impl ExprParser {
 
-  pub fn read_expr(ctx: &mut Ctx) -> Result<ExprId, Message> {
+  pub fn read_expr(ctx: &mut Ctx) -> Status<ExprId> {
     Self::read_expr_sub(ctx, 0)
   }
 
-  pub fn rest_read_expr(ctx: &mut Ctx, rest: ExprRestriction) -> Result<ExprId, Message> {
+  pub fn rest_read_expr(ctx: &mut Ctx, rest: ExprRestriction) -> Status<ExprId> {
     Self::rest_read_expr_sub(ctx, rest, 0)
   }
 
 
-  fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Result<ExprId, Message> {
+  fn read_expr_sub(ctx: &mut Ctx, min_bp: u8) -> Status<ExprId> {
     Self::rest_read_expr_sub(ctx, ExprRestriction::empty(), min_bp)
   }
 
-  fn rest_read_expr_sub(ctx: &mut Ctx, rest: ExprRestriction, min_bp: u8) -> Result<ExprId, Message> {
+  fn rest_read_expr_sub(ctx: &mut Ctx, rest: ExprRestriction, min_bp: u8) -> Status<ExprId> {
     // Starter / Pre Unary
-    let mut lhs = match ctx.lex.peek()?.kind() {
+    let mut lhs = match ctx.lex.peek(ctx.sum)?.kind() {
       // Literal
       WK::SelfB => literal_p::pre_self_big(ctx)?,
       WK::SelfS => literal_p::pre_self_small(ctx)?,
@@ -94,14 +94,14 @@ impl ExprParser {
       // Operator
       WK::Sub | WK::Add | WK::Bang => operator_p::pre_unary(ctx)?,
       
-      _ => return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(ctx.lex.get()?))),
+      _ => ret_err!(ctx.sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(ctx.lex.get(ctx.sum)?))),
     };
 
     // Post Unary
     loop {
       let start = ctx.cre.get(lhs).pos;
 
-      lhs = match ctx.lex.peek()?.kind() {
+      lhs = match ctx.lex.peek(ctx.sum)?.kind() {
         // Access
         WK::Dot => postfix_p::post_member(ctx, start, lhs)?,
 
@@ -125,10 +125,10 @@ impl ExprParser {
     loop {
       let start = ctx.cre.get(lhs).pos;
 
-      let op_tok = ctx.lex.peek()?;
+      let op_tok = ctx.lex.peek(ctx.sum)?;
       
       let (_, r_bp) = match helper::get_infix_bp(op_tok.kind()) {
-        Some((l, r)) if l >= min_bp => { ctx.lex.bump()?; (l, r) },
+        Some((l, r)) if l >= min_bp => { ctx.lex.bump(ctx.sum)?; (l, r) },
         _ => break,
       };
 
@@ -142,15 +142,13 @@ impl ExprParser {
         BinOp::Exchange => ExprKind::Exchange{lhs, rhs},
       };
 
-      let this = Expr{
+      lhs = Expr{
         pos: ctx.lex.pos_extend(start),
         kind 
-      };
-
-      lhs = ctx.cre.push(this);
+      }.push(ctx.cre);
     }
 
-    Ok(lhs)
+    Success(lhs)
   }
 
 }

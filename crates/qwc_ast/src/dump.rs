@@ -339,10 +339,10 @@ impl DumpHandler for Type {
         write!(f, "{}", ")".bright_black())?;
       }
 
-      TypeKind::Variant(rng) => {
+      TypeKind::Variant {fields, path: _} => {
         write!(f, "{} {{ ", "variant".blue().bold())?;
         let mut first = true;
-        for thing_id in cre.extra_get(rng) {
+        for thing_id in cre.extra_get(fields) {
           if !first {
             write!(f, ", ")?;
           }
@@ -354,10 +354,10 @@ impl DumpHandler for Type {
 
 
       // Enum
-      TypeKind::Enum(rng) => {
+      TypeKind::Enum {fields, path: _} => {
         write!(f, "{} {{ ", "enum".blue().bold())?;
         let mut first = true;
-        for thing_id in cre.extra_get(rng) {
+        for thing_id in cre.extra_get(fields) {
           if !first {
             write!(f, ", ")?;
           }
@@ -367,10 +367,10 @@ impl DumpHandler for Type {
         write!(f, " }}")?;
       }
 
-      TypeKind::Flags(rng) => {
+      TypeKind::Flags {fields, path: _} => {
         write!(f, "{} {{ ", "flags".blue().bold())?;
         let mut first = true;
-        for thing_id in cre.extra_get(rng) {
+        for thing_id in cre.extra_get(fields) {
           if !first { write!(f, ", ")?; }
           first = false;
           thing_id.dump(cre, sin, far, f, indent)?;
@@ -380,10 +380,10 @@ impl DumpHandler for Type {
 
 
       // Combinated
-      TypeKind::Struct(rng) => {
+      TypeKind::Struct{vars, path: _} => {
         write!(f, "{} {}", kw("struct"), punct("{"))?;
         let mut first = true;
-        for field_id in cre.extra_get(rng) {
+        for field_id in cre.extra_get(vars) {
           if !first { write!(f, ", ")?; }
           first = false;
           field_id.dump(cre, sin, far, f, indent)?;
@@ -391,9 +391,18 @@ impl DumpHandler for Type {
         write!(f, "{}", punct("}"))?;
       }
 
-      TypeKind::Tuple(rng) => {
+      TypeKind::Tuple{vars, path: _} => {
         write!(f, "{}", "(".bright_black())?;
-        for field_id in cre.extra_get(rng) {
+        for field_id in cre.extra_get(vars) {
+          field_id.dump(cre, sin, far, f, indent)?;
+          write!(f, ", ")?;
+        }
+        write!(f, "{}", ")".bright_black())?;
+      }
+      
+      TypeKind::TupleAnon(vars) => {
+        write!(f, "{}", "(".bright_black())?;
+        for field_id in cre.extra_get(vars) {
           field_id.dump(cre, sin, far, f, indent)?;
           write!(f, ", ")?;
         }
@@ -402,19 +411,29 @@ impl DumpHandler for Type {
 
 
       // Impl
-      TypeKind::Iface(rng) => {
+      TypeKind::Iface {fields, path: _} => {
         writeln!(f, "{} {{", kw("iface"))?;
-        for field_id in cre.extra_get(rng) {
+        for field_id in cre.extra_get(fields) {
           field_id.dump(cre, sin, far, f, indent + 1)?;
         }
         write_indent(f, indent)?;
         write!(f, "}}")?;
       }
 
-      TypeKind::Trait(rng) => {
-        writeln!(f, "{} {{", kw("trait"))?;
-        for field_id in cre.extra_get(rng) {
-          field_id.dump(cre, sin, far, f, indent + 1)?;
+      TypeKind::Trait {fields, reqs, path: _} => {
+        write!(f, "{}", kw("trait"))?;
+        
+        if !reqs.is_empty() { write!(f, "{} ", punct(":"))? }
+        let mut first = true;
+        for id in cre.extra_get(reqs) {
+          if !first { write!(f, "{} ", punct(","))? }
+          first = false;
+          id.dump(cre, sin, far, f, indent + 1)?;
+        }
+
+        writeln!(f, " {{")?;
+        for id in cre.extra_get(fields) {
+          id.dump(cre, sin, far, f, indent + 1)?;
         }
         write_indent(f, indent)?;
         write!(f, "}}")?;

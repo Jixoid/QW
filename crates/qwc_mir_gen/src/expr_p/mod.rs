@@ -10,15 +10,16 @@
 */
 
 
-use qwc_diagnostic::Message;
+use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
-use qwc_mir::{self as mir, Value};
+use qwc_mir::{self as mir, PushOkApi, Value};
 use qwc_string_interner::Sid;
 
 use crate::{FunBuilder, Ctx, SymbLow, builder::{ExprEmit, LoopFrame, RawTerminator}, type_p::TypeLow};
 
 mod integer_p;
 mod route_p;
+mod float_p;
 mod cast_p;
 
 
@@ -27,84 +28,78 @@ pub struct ExprLow;
 
 impl ExprLow {
 
-  pub fn low(ctx: &mut Ctx, bbld: &mut FunBuilder, id: hir::ExprId) -> Result<Option<Value>, Message> {
+  pub fn low(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, id: hir::ExprId) -> Status<Option<Value>> {
     let it = ctx.src.get(id);
 
     use hir::ExprKind::*;
 
     let it = match it.kind {
       // Const
-      Const(val) => Some(Self::low_const(ctx, bbld, val)?),
+      Const(val) => Some(Self::low_const(ctx, sum, bbld, val)?),
 
       // MemRef
-      GlobalRef(item) => Some(Self::low_global_ref(ctx, item)?),
-      LocalRef(local) => Some(Self::low_local_ref(ctx, bbld, it, local)?),
+      GlobalRef(item) => Some(Self::low_global_ref(ctx, sum, item)?),
+      LocalRef(local) => Some(Self::low_local_ref(ctx, sum, bbld, it, local)?),
 
       // Ref & Deref
-      Ref(expr, _) => Some(Self::low_ref(ctx, bbld, expr)?),
-      Deref(expr) => Some(Self::low_deref(ctx, bbld, it, expr)?),
+      Ref(expr, _) => Some(Self::low_ref(ctx, sum, bbld, expr)?),
+      Deref(expr) => Some(Self::low_deref(ctx, sum, bbld, it, expr)?),
 
       // Variable
-      Let{local, init} => {Self::low_let(ctx, bbld, local, init)?; Some(Value::Const(mir::Const::Unit))}
+      Let{local, init} => {Self::low_let(ctx, sum, bbld, local, init)?; Some(Value::Const(mir::Const::Unit))}
       
       // Block
-      Block{stmt, expr} => Self::low_block(ctx, bbld, stmt, expr)?,
+      Block{stmt, expr} => Self::low_block(ctx, sum, bbld, stmt, expr)?,
 
       // Assign
-      Assign{lhs, rhs} => {Self::low_assign(ctx, bbld, lhs, rhs)?; None},
+      Assign{lhs, rhs} => {Self::low_assign(ctx, sum, bbld, lhs, rhs)?; None},
 
       // Loop
-      Loop{blok, elsb} => Self::low_loop(ctx, bbld, it, blok, elsb)?,
+      Loop{blok, elsb} => Self::low_loop(ctx, sum, bbld, it, blok, elsb)?,
 
       // Route
-      Return(val) => {route_p::low_return(ctx, bbld, val)?; None},
-      Break(val) => {route_p::low_break(ctx, bbld, val)?; None},
-      Continue => {route_p::low_continue(ctx, bbld)?; None},
+      Return(val) => {route_p::low_return(ctx, sum, bbld, val)?; None},
+      Break(val) => {route_p::low_break(ctx, sum, bbld, val)?; None},
+      Continue => {route_p::low_continue(ctx, sum, bbld)?; None},
 
       // Branch
-      If{cond, then, elsb} => Self::low_if(ctx, bbld, it, cond, then, elsb)?,
+      If{cond, then, elsb} => Self::low_if(ctx, sum, bbld, it, cond, then, elsb)?,
 
       // Call
-      Call{callee, args} => Some(Self::low_call(ctx, bbld, callee, args)?),
+      Call{callee, args} => Some(Self::low_call(ctx, sum, bbld, callee, args)?),
 
       // Field
-      Field{target, idx} => Some(Self::low_field(ctx, bbld, it, target, idx)?),
-      CombinatedInit{kind, fields} => Some(Self::low_combinated_init(ctx, bbld, kind, fields)?),
+      Field{target, idx} => Some(Self::low_field(ctx, sum, bbld, it, target, idx)?),
+      CombinatedInit{kind, fields} => Some(Self::low_combinated_init(ctx, sum, bbld, kind, fields)?),
 
       // Integer
-      IntArithmetic{op, flg, lhs, rhs} => Some(integer_p::low_int_arithmetic(ctx, bbld, op, flg, lhs, rhs)?),
-      AssignIntArithmetic{op, flg, lhs, rhs} => {integer_p::low_int_arithmetic_op(ctx, bbld, op, flg, lhs, rhs)?; None},
+      IntArithmetic{op, flg, lhs, rhs} => Some(integer_p::low_int_arithmetic(ctx, sum, bbld, op, flg, lhs, rhs)?),
+      AssignIntArithmetic{op, flg, lhs, rhs} => {integer_p::low_int_arithmetic_op(ctx, sum, bbld, op, flg, lhs, rhs)?; None},
 
-      IntCondition{op, lhs, rhs} => Some(integer_p::low_int_condition(ctx, bbld, op, lhs, rhs)?),
+      IntCondition{op, lhs, rhs} => Some(integer_p::low_int_condition(ctx, sum, bbld, op, lhs, rhs)?),
+
+      // Float
+      FloatArithmetic{op, lhs, rhs} => Some(float_p::low_float_arithmetic(ctx, sum, bbld, op, lhs, rhs)?),
 
       // Logic
-      BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, bbld, op, lhs, rhs)?),
-      BoolNot(val) => Some(Self::low_bool_not(ctx, bbld, val)?),
+      BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, sum, bbld, op, lhs, rhs)?),
+      BoolNot(val) => Some(Self::low_bool_not(ctx, sum, bbld, val)?),
 
       // Cast
-      IntCast(expr) => {
-        let val = Self::low(ctx, bbld, expr)?.unwrap();
-        let target_ty = TypeLow::low(ctx, it.ety)?;
-        let src_ty = ctx.src.get(expr).ety;
-        let is_signed = match ctx.get_type(src_ty).kind {
-          hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
-          _ => false,
-        };
-        let res = bbld.emit(mir::Expr::IntCast { kind: target_ty, val, signed: is_signed });
-        Some(res.unwrap().into())
-      }
-      CastToIfaceRef{ref_of_expr, ref_of_type, target_iface} => Some(cast_p::low_cast_to_iface_ref(ctx, bbld, ref_of_expr, ref_of_type, target_iface)?),
-      CastToTrait{expr, target_trait} => cast_p::low_cast_to_trait(ctx, bbld, expr, target_trait)?,
+      IntCast(expr) => Some(cast_p::low_cast_int(ctx, sum, bbld, it, expr)?),
+
+      CastToIfaceRef{ref_of_expr, ref_of_type, target_iface} => Some(cast_p::low_cast_to_iface_ref(ctx, sum, bbld, ref_of_expr, ref_of_type, target_iface)?),
+      CastToTrait{expr, target_trait} => cast_p::low_cast_to_trait(ctx, sum, bbld, expr, target_trait)?,
 
       c @_ => todo!("{c:#?}")
     };
 
-    Ok(it)
+    Success(it)
   }
 
 
   // Const
-  fn low_const(ctx: &mut Ctx, bbld: &mut FunBuilder, val: hir::Const) -> Result<Value, Message> {
+  fn low_const(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: hir::Const) -> Status<Value> {
     use hir::Const::*;
     
     let this = match val {
@@ -130,15 +125,15 @@ impl ExprLow {
       F64(fp) => mir::Const::F64(fp).into(),
       F128(fp) => mir::Const::F128(fp).into(),
 
-      Array(kind, rng) => Self::low_const_array(ctx, bbld, kind, rng)?,
+      Array(kind, rng) => Self::low_const_array(ctx, sum, bbld, kind, rng)?,
       
-      Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
+      Str(sid) => Self::low_const_str(ctx, sum, bbld, sid)?,
     };
 
-    Ok(this)
+    Success(this)
   }
 
-  fn low_const_str(ctx: &mut Ctx, bbld: &mut FunBuilder, sid: Sid) -> Result<Value, Message> {
+  fn low_const_str(ctx: &mut Ctx, _sum: &mut Summary, bbld: &mut FunBuilder, sid: Sid) -> Status<Value> {
     let fatptr = ctx.tin.ty_fatptrint();
     let ptr = ctx.tin.ty_ptr();
     let aint = ctx.tin.ty_arch_int();
@@ -152,19 +147,18 @@ impl ExprLow {
 
     let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
     
-    Ok(fat_val.into())
+    Success(fat_val.into())
   }
 
-  fn low_const_array(ctx: &mut Ctx, bbld: &mut FunBuilder, kind: hir::TypeId, rng: hir::ExprRng) -> Result<Value, Message> {
-    let kind = TypeLow::low(ctx, kind)?;
+  fn low_const_array(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, kind: hir::TypeId, rng: hir::ExprRng) -> Status<Value> {
+    let kind = TypeLow::low(ctx, sum, kind)?;
 
     let rng = {
       let mut vec = vec![];
 
       for id in ctx.src.extra_get(rng) {
-        let it = ExprLow::low(ctx, bbld, id)?.unwrap();
-        let id = ctx.cre.push(it) as mir::ValueId;
-        vec.push(id);
+        let it = ExprLow::low(ctx, sum, bbld, id)?.unwrap();
+        vec.push(it.push(ctx.cre) as mir::ValueId);
       }
 
       ctx.cre.extra(&vec)
@@ -175,24 +169,24 @@ impl ExprLow {
       rng
     }.into();
 
-    Ok(id)
+    Success(id)
   }
 
 
   // MemRef
-  fn low_global_ref(ctx: &mut Ctx, item: hir::ItemId) -> Result<Value, Message> {
-    let item = SymbLow::low(ctx, item)?.unwrap();
+  fn low_global_ref(ctx: &mut Ctx, sum: &mut Summary, item: hir::ItemId) -> Status<Value> {
+    let item = SymbLow::low(ctx, sum, item)?.unwrap();
 
 
     // Post
     let this = Value::GlobalRef(item);
     
-    Ok(this)
+    Success(this)
   }
 
-  fn low_local_ref(ctx: &mut Ctx, bbld: &mut FunBuilder, it: &hir::Expr, local: u32) -> Result<Value, Message> {
+  fn low_local_ref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, local: u32) -> Status<Value> {
     let target = *bbld.local_to_alloca.get(&local).expect("local variable alloca not found");
-    let ty = TypeLow::low(ctx, it.ety)?;
+    let ty = TypeLow::low(ctx, sum, it.ety)?;
     
     
     // Post
@@ -201,40 +195,40 @@ impl ExprLow {
       kind: ty,
     };
 
-    Ok(bbld.emit(this).unwrap().into())
+    Success(bbld.emit(this).unwrap().into())
   }
 
 
   // Ref & Deref
-  fn low_ref(ctx: &mut Ctx, bbld: &mut FunBuilder, expr: hir::ExprId) -> Result<Value, Message> {
-    let target = Self::low_lval(ctx, bbld, expr)?;
+  fn low_ref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, expr: hir::ExprId) -> Status<Value> {
+    let target = Self::low_lval(ctx, sum, bbld, expr)?;
 
     // Post
-    Ok(target)
+    Success(target)
   }
 
-  fn low_deref(ctx: &mut Ctx, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Result<Value, Message> {
-    let ptr_val = ExprLow::low(ctx, bbld, expr)?.unwrap();
-    let target_ty = TypeLow::low(ctx, it.ety)?;
+  fn low_deref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
+    let ptr_val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
+    let target_ty = TypeLow::low(ctx, sum, it.ety)?;
     let val = bbld.emit(mir::Expr::Load { target: ptr_val, kind: target_ty }).unwrap();
     
-    Ok(val.into())
+    Success(val.into())
   }
 
 
   // Variable
-  fn low_let(ctx: &mut Ctx, bbld: &mut FunBuilder, local: u32, init: hir::ExprId) -> Result<(), Message> {
+  fn low_let(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, local: u32, init: hir::ExprId) -> Status<()> {
     let init_hir = ctx.src.get(init);
-    let ty = TypeLow::low(ctx, init_hir.ety)?;
+    let ty = TypeLow::low(ctx, sum, init_hir.ety)?;
 
     let slot = bbld.build_alloca(ty);
     bbld.local_to_alloca.insert(local, slot);
 
     if let hir::ExprKind::CombinatedInit { kind, fields } = init_hir.kind {
-      let kind = TypeLow::low(ctx, kind)?;
-      Self::low_combinated_init_into(ctx, bbld, slot, kind, fields)?;
+      let kind = TypeLow::low(ctx, sum, kind)?;
+      Self::low_combinated_init_into(ctx, sum, bbld, slot, kind, fields)?;
     } else {
-      let val = ExprLow::low(ctx, bbld, init)?.unwrap();
+      let val = ExprLow::low(ctx, sum, bbld, init)?.unwrap();
       let this = mir::Expr::Store {
         target: slot,
         kind: ty,
@@ -243,31 +237,36 @@ impl ExprLow {
       bbld.emit(this);
     }
 
-    Ok(())
+    Success(())
   }
 
 
   // Block
-  fn low_block(ctx: &mut Ctx, bbld: &mut FunBuilder, stmt: hir::ExprRng, expr: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
+  fn low_block(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, stmt: hir::ExprRng, expr: Option<hir::ExprId>) -> Status<Option<Value>> {
     for id in ctx.src.extra_get(stmt) {
-      ExprLow::low(ctx, bbld, id)?;
+      ExprLow::low(ctx, sum, bbld, id)?;
     }
 
-    Ok(Some(expr.map(|id| ExprLow::low(ctx, bbld, id)).transpose()?.flatten().unwrap_or(mir::Const::Unit.into())))
+    let ret = match expr {
+      Some(id) => ExprLow::low(ctx, sum, bbld, id)?,
+      None => None,
+    };
+
+    Success(Some(ret.unwrap_or_else(|| mir::Const::Unit.into())))
   }
 
 
   // Assign
-  fn low_assign(ctx: &mut Ctx, bbld: &mut FunBuilder, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<(), Message> {
-    let target = Self::low_lval(ctx, bbld, lhs)?;
+  fn low_assign(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<()> {
+    let target = Self::low_lval(ctx, sum, bbld, lhs)?;
     let rhs_hir = ctx.src.get(rhs);
 
     if let hir::ExprKind::CombinatedInit { kind, fields } = rhs_hir.kind {
-      let kind = TypeLow::low(ctx, kind)?;
-      Self::low_combinated_init_into(ctx, bbld, target, kind, fields)?;
+      let kind = TypeLow::low(ctx, sum, kind)?;
+      Self::low_combinated_init_into(ctx, sum, bbld, target, kind, fields)?;
     } else {
-      let kind = TypeLow::low(ctx, ctx.src.get(lhs).ety)?;
-      let value = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+      let kind = TypeLow::low(ctx, sum, ctx.src.get(lhs).ety)?;
+      let value = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
 
       mir::Expr::Store {
         target, 
@@ -276,13 +275,13 @@ impl ExprLow {
       }.emit(bbld);
     }
     
-    Ok(())
+    Success(())
   }
 
 
   // Loop
-  fn low_loop(ctx: &mut Ctx, bbld: &mut FunBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
-    let loop_ty = TypeLow::low(ctx, it.ety)?;
+  fn low_loop(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Option<Value>> {
+    let loop_ty = TypeLow::low(ctx, sum, it.ety)?;
     
     let is_unit_or_never = matches!(ctx.cre.get(loop_ty).kind, mir::TypeKind::Unit);
 
@@ -304,7 +303,7 @@ impl ExprLow {
 
     // Lower body
     bbld.switch_to(body_bb);
-    let body_val = ExprLow::low(ctx, bbld, blok)?;
+    let body_val = ExprLow::low(ctx, sum, bbld, blok)?;
     if let (Some(slot), Some(val)) = (result_slot, body_val) {
       bbld.emit(mir::Expr::Store {
         target: slot,
@@ -324,7 +323,7 @@ impl ExprLow {
       let else_bb = bbld.create_block();
       bbld.switch_to(else_bb);
 
-      let else_val = ExprLow::low(ctx, bbld, elsb)?;
+      let else_val = ExprLow::low(ctx, sum, bbld, elsb)?;
       if let (Some(slot), Some(val)) = (result_slot, else_val) {
         bbld.emit(mir::Expr::Store {
           target: slot,
@@ -345,13 +344,13 @@ impl ExprLow {
         target: slot,
         kind: loop_ty,
       });
-      Ok(dest.map(Value::SSA))
+      Success(dest.map(Value::SSA))
     } else {
-      Ok(Some(Value::Const(mir::Const::Unit)))
+      Success(Some(Value::Const(mir::Const::Unit)))
     }
   }
 
-  fn low_lval(ctx: &mut Ctx, bbld: &mut FunBuilder, id: hir::ExprId) -> Result<Value, Message> {
+  pub fn low_lval(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, id: hir::ExprId) -> Status<Value> {
     let it = ctx.src.get(id);
 
     use hir::ExprKind::*;
@@ -359,23 +358,23 @@ impl ExprLow {
     match it.kind {
       LocalRef(local) => {
         let target = *bbld.local_to_alloca.get(&local).expect("local variable alloca not found");
-        Ok(target)
+        Success(target)
       }
       
       GlobalRef(item) => {
-        Self::low_global_ref(ctx, item)
+        Self::low_global_ref(ctx, sum, item)
       }
       
       Field { target, idx } => {
-        let target_ptr = Self::low_lval(ctx, bbld, target)?;
-        let struct_ty = TypeLow::low(ctx, ctx.src.get(target).ety)?;
+        let target_ptr = Self::low_lval(ctx, sum, bbld, target)?;
+        let struct_ty = TypeLow::low(ctx, sum, ctx.src.get(target).ety)?;
         let field_ptr = bbld.emit(mir::Expr::Gep { target: target_ptr, kind: struct_ty, idx }).unwrap();
-        Ok(field_ptr.into())
+        Success(field_ptr.into())
       }
       
       Deref(inner) => {
-        let ptr_val = ExprLow::low(ctx, bbld, inner)?.unwrap();
-        Ok(ptr_val)
+        let ptr_val = ExprLow::low(ctx, sum, bbld, inner)?.unwrap();
+        Success(ptr_val)
       }
 
       _ => panic!("unexpected lvalue expression: {:?}", it.kind)
@@ -384,14 +383,14 @@ impl ExprLow {
 
 
   // Branch
-  fn low_if(ctx: &mut Ctx, bbld: &mut FunBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Result<Option<Value>, Message> {
-    let if_ty = TypeLow::low(ctx, it.ety)?;
+  fn low_if(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Option<Value>> {
+    let if_ty = TypeLow::low(ctx, sum, it.ety)?;
 
     let is_unit_or_never = matches!(ctx.cre.get(if_ty).kind, mir::TypeKind::Unit);
 
     let result_slot = (!is_unit_or_never).then(|| bbld.build_alloca(if_ty));
 
-    let cond_val = ExprLow::low(ctx, bbld, cond)?.expect("condition must produce a value");
+    let cond_val = ExprLow::low(ctx, sum, bbld, cond)?.expect("condition must produce a value");
 
     let then_bb = bbld.create_block();
     let merge_bb = bbld.create_block();
@@ -409,7 +408,7 @@ impl ExprLow {
 
     // Lower then
     bbld.switch_to(then_bb);
-    let then_val = ExprLow::low(ctx, bbld, then)?;
+    let then_val = ExprLow::low(ctx, sum, bbld, then)?;
     if let (Some(slot), Some(val)) = (result_slot, then_val) {
       bbld.emit(mir::Expr::Store {
         target: slot,
@@ -424,7 +423,7 @@ impl ExprLow {
     // Lower else if present
     if let Some(elsb_id) = elsb {
       bbld.switch_to(else_bb);
-      let else_val = ExprLow::low(ctx, bbld, elsb_id)?;
+      let else_val = ExprLow::low(ctx, sum, bbld, elsb_id)?;
       if let (Some(slot), Some(val)) = (result_slot, else_val) {
         bbld.emit(mir::Expr::Store {
           target: slot,
@@ -445,24 +444,23 @@ impl ExprLow {
         target: slot,
         kind: if_ty,
       });
-      Ok(dest.map(Value::SSA))
+      Success(dest.map(Value::SSA))
     } else {
-      Ok(Some(Value::Const(mir::Const::Unit)))
+      Success(Some(Value::Const(mir::Const::Unit)))
     }
   }
 
 
   // Call
-  fn low_call(ctx: &mut Ctx, bbld: &mut FunBuilder, callee: hir::ExprId, args: hir::ExprRng) -> Result<Value, Message> {
-    let callee = ExprLow::low(ctx, bbld, callee)?.unwrap();
+  fn low_call(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, callee: hir::ExprId, args: hir::ExprRng) -> Status<Value> {
+    let callee = ExprLow::low(ctx, sum, bbld, callee)?.unwrap();
 
     let args = {
       let mut vec = vec![];
 
       for id in ctx.src.extra_get(args) {
-        let it = ExprLow::low(ctx, bbld, id)?.unwrap();
-        let id = ctx.cre.push(it);
-        vec.push(id);
+        let it = ExprLow::low(ctx, sum, bbld, id)?.unwrap();
+        vec.push(it.push(ctx.cre));
       }
 
       ctx.cre.extra(&vec)
@@ -475,16 +473,16 @@ impl ExprLow {
       args,
     }.emit(bbld).unwrap();
 
-    Ok(this.into())
+    Success(this.into())
   }
 
 
   // Field Create
-  fn low_combinated_init_into(ctx: &mut Ctx, bbld: &mut FunBuilder, target_ptr: Value, kind: mir::TypeId, fields: hir::ExprRng) -> Result<(), Message> {
+  fn low_combinated_init_into(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, target_ptr: Value, kind: mir::TypeId, fields: hir::ExprRng) -> Status<()> {
     for (idx, field_id) in ctx.src.extra_get(fields).enumerate() {
-      let field_val = ExprLow::low(ctx, bbld, field_id)?.unwrap();
+      let field_val = ExprLow::low(ctx, sum, bbld, field_id)?.unwrap();
       let field_hir = ctx.src.get(field_id);
-      let field_ty = TypeLow::low(ctx, field_hir.ety)?;
+      let field_ty = TypeLow::low(ctx, sum, field_hir.ety)?;
 
       let field_ptr = bbld.emit(mir::Expr::Gep {
         target: target_ptr,
@@ -499,33 +497,33 @@ impl ExprLow {
       });
     }
 
-    Ok(())
+    Success(())
   }
 
-  fn low_combinated_init(ctx: &mut Ctx, bbld: &mut FunBuilder, kind: hir::TypeId, fields: hir::ExprRng) -> Result<Value, Message> {
-    let kind = TypeLow::low(ctx, kind)?;
+  fn low_combinated_init(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, kind: hir::TypeId, fields: hir::ExprRng) -> Status<Value> {
+    let kind = TypeLow::low(ctx, sum, kind)?;
     let slot = bbld.build_alloca(kind);
-    Self::low_combinated_init_into(ctx, bbld, slot, kind, fields)?;
+    Self::low_combinated_init_into(ctx, sum, bbld, slot, kind, fields)?;
 
     let val = bbld.emit(mir::Expr::Load {
       target: slot,
       kind,
     }).unwrap();
 
-    Ok(val.into())
+    Success(val.into())
   }
 
 
   // Field Access
-  fn low_field(ctx: &mut Ctx, bbld: &mut FunBuilder, it: &hir::Expr, target: hir::ExprId, idx: u32) -> Result<Value, Message> {
+  fn low_field(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, target: hir::ExprId, idx: u32) -> Status<Value> {
     let target_expr = ctx.src.get(target);
-    let struct_ty = TypeLow::low(ctx, target_expr.ety)?;
-    let field_ty = TypeLow::low(ctx, it.ety)?;
+    let struct_ty = TypeLow::low(ctx, sum, target_expr.ety)?;
+    let field_ty = TypeLow::low(ctx, sum, it.ety)?;
 
     let target_ptr = if target_expr.category.is_lvalue() {
-      Self::low_lval(ctx, bbld, target)?
+      Self::low_lval(ctx, sum, bbld, target)?
     } else {
-      let target_val = ExprLow::low(ctx, bbld, target)?.unwrap();
+      let target_val = ExprLow::low(ctx, sum, bbld, target)?.unwrap();
       let slot = bbld.build_alloca(struct_ty);
       bbld.emit(mir::Expr::Store { target: slot, kind: struct_ty, value: target_val });
       slot
@@ -533,15 +531,15 @@ impl ExprLow {
 
     let field_ptr = bbld.emit(mir::Expr::Gep { target: target_ptr, kind: struct_ty, idx }).unwrap();
     let val = bbld.emit(mir::Expr::Load { target: field_ptr.into(), kind: field_ty }).unwrap();
-    Ok(val.into())
+    Success(val.into())
   }
 
 
   // Logic
-  fn low_bool_logic(ctx: &mut Ctx, bbld: &mut FunBuilder, op: hir::BoolLogicOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Result<Value, Message> {
-    let kind = TypeLow::low(ctx, (ctx.src.get(lhs) as &hir::Expr).ety)?;
-    let lhs = ExprLow::low(ctx, bbld, lhs)?.unwrap();
-    let rhs = ExprLow::low(ctx, bbld, rhs)?.unwrap();
+  fn low_bool_logic(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, op: hir::BoolLogicOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<Value> {
+    let kind = TypeLow::low(ctx, sum, (ctx.src.get(lhs) as &hir::Expr).ety)?;
+    let lhs = ExprLow::low(ctx, sum, bbld, lhs)?.unwrap();
+    let rhs = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
 
     let op = match op {
       hir::BoolLogicOp::And => mir::IntLogicOp::And,
@@ -558,12 +556,12 @@ impl ExprLow {
       rhs
     }.emit(bbld).unwrap();
 
-    Ok(this.into())
+    Success(this.into())
   }
 
-  fn low_bool_not(ctx: &mut Ctx, bbld: &mut FunBuilder, val: hir::ExprId) -> Result<Value, Message> {
-    let kind = TypeLow::low(ctx, (ctx.src.get(val) as &hir::Expr).ety)?;
-    let val = ExprLow::low(ctx, bbld, val)?.unwrap();
+  fn low_bool_not(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: hir::ExprId) -> Status<Value> {
+    let kind = TypeLow::low(ctx, sum, (ctx.src.get(val) as &hir::Expr).ety)?;
+    let val = ExprLow::low(ctx, sum, bbld, val)?.unwrap();
 
     // Post
     let this = mir::Expr::IntUnary {
@@ -572,7 +570,7 @@ impl ExprLow {
       val,
     }.emit(bbld).unwrap();
 
-    Ok(this.into())
+    Success(this.into())
   }
 
 }

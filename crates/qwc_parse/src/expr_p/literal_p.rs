@@ -10,107 +10,97 @@
 */
 
 
-use qwc_ast::{Expr, ExprId, ExprKind, IdentSave, id::PushOkApi};
-use qwc_diagnostic::Message;
+use qwc_ast::{Expr, ExprId, ExprKind, IdentSave, PushOkApi};
+use qwc_diagnostic::Status::{self, Success};
 use qwc_lexer::WK;
 
 use crate::{ExprParser, ctx, expr_p::postfix_p, meta_p::WordCheck, parse::Ctx};
 
 
 // Nick
-pub fn pre_nick(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
-  let name = start.ident(sin, far)?;
+pub fn pre_nick(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
+  let name = start.ident(sum, sin, far)?;
 
   // Post
   let this = Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Nick(name)
-  };
-  let this = cre.push(this);
+  }.push(cre);
 
-  if lex.peek()?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Ok(this) }
+  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Success(this) }
 }
 
-pub fn pre_nick_no_field_init(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
-  let name = start.ident(sin, far)?;
+pub fn pre_nick_no_field_init(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
+  let name = start.ident(sum, sin, far)?;
 
   // Post
   Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::Nick(name)
-  }.push_ok(ctx.cre)
+  }.push_ok(cre)
 }
 
 
 // Self
-pub fn pre_self_big(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_self_big(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Post
   let this = Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::SelfB()
-  };
-  let this = cre.push(this);
+  }.push(cre);
 
-  if lex.peek()?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Ok(this) }
+  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Success(this) }
 }
 
-pub fn pre_self_small(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_self_small(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: ExprKind::SelfS()
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
 
 // Const
-pub fn pre_bool(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_bool(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::Bool(start.into(), start.kind() == WK::True)
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_number(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_number(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::Number(start.into())
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_number_point(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_number_point(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind: ExprKind::Float(start.into()),
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
-pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
-  let sid = start.string_sid(sin, far)?;
+pub fn pre_string(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
+  let sid = start.string_sid(sum, sin, far)?;
 
   let kind = if lex.str(start).as_bytes()[0] == b'\'' {
     ExprKind::Char(start.into(), sid)
@@ -120,50 +110,46 @@ pub fn pre_string(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, s
 
 
   // Post
-  let this = Expr {
+  Expr {
     pos: lex.pos_extend(start),
     kind,
-  };
-
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }
 
 
 // Primary
-pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_tuple(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
 
   // Unit
-  if lex.peek()?.kind() == WK::ParenR {
-    lex.bump()?;
+  if lex.peek(sum)?.kind() == WK::ParenR {
+    lex.bump(sum)?;
 
     // Post
-    let this = Expr{
+    return Expr{
       pos: lex.pos_extend(start),
       kind: ExprKind::Unit,
-    };
-
-    return Ok(cre.push(this))
+    }.push_ok(cre)
   }
   
   let expr = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
       
-  match lex.get_k()? {
-    (WK::ParenR, _) => Ok(expr), // (X)
+  match lex.get_k(sum)? {
+    (WK::ParenR, _) => Success(expr), // (X)
 
     (WK::Comma, _) => { // (X, ...)
       let mut vals = vec![ expr ];
       
       loop {
-        if lex.peek()?.kind() == WK::ParenR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::ParenR { lex.bump(sum)?; break }
         
         vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
         
-        match lex.get_k()? {
+        match lex.get_k(sum)? {
           (WK::ParenR, _) => break,
           (WK::Comma, _) => continue,
           
-          (_, c) => c.panic_kind2(WK::Comma, WK::ParenR)?
+          (_, c) => c.panic_kind2(sum, WK::Comma, WK::ParenR)?
         }
       }
       
@@ -171,41 +157,39 @@ pub fn pre_tuple(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, si
 
 
       // Post
-      let this = Expr{
+      Expr{
         pos: lex.pos_extend(start),
         kind: ExprKind::Tuple(rng)
-      };
-      
-      Ok(cre.push(this))
+      }.push_ok(cre)
     }
 
-    (_, c) => c.panic_kind2(WK::ParenR, WK::Comma)?
+    (_, c) => c.panic_kind2(sum, WK::ParenR, WK::Comma)?
   }
 }
 
-pub fn pre_propagate(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-  let start = lex.get()?;
+pub fn pre_propagate(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+  let start = lex.get(sum)?;
   
   let (rng, prpg) = {
     let mut vals = vec![];
     let mut prpg = None;
     
     loop {
-      if lex.peek()?.kind() == WK::BracketR { lex.bump()?; break }
+      if lex.peek(sum)?.kind() == WK::BracketR { lex.bump(sum)?; break }
       
       vals.push(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
       
-      match lex.get_k()? {
+      match lex.get_k(sum)? {
         (WK::BracketR, _) => break,
         (WK::Comma, _) => continue,
 
         (WK::Semicolon, _) => {
           prpg = Some(ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?);
-          lex.get()?.expect_kind(WK::BracketR)?;
+          lex.get(sum)?.expect_kind(sum, WK::BracketR)?;
           break
         }
         
-        (_, c) => c.panic_kind2(WK::Comma, WK::BracketR)?
+        (_, c) => c.panic_kind2(sum, WK::Comma, WK::BracketR)?
       }
     }
     
@@ -214,13 +198,11 @@ pub fn pre_propagate(ctx: &mut Ctx) -> Result<ExprId, Message> { ctx!(ctx => cre
 
 
   // Post
-  let this = Expr{
+  Expr{
     pos: lex.pos_extend(start),
     kind: match prpg {
       None => ExprKind::Array(rng),
       Some(v) => ExprKind::Propagate(rng, v)
     }
-  };
-  
-  Ok(cre.push(this))
+  }.push_ok(cre)
 }

@@ -10,8 +10,8 @@
 */
 
 
-use qwc_ast::{Field, FieldId, FieldKind, IdentSave, Rng, Thing, ThingKind, Visibility};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_ast::{Field, FieldId, FieldKind, IdentSave, PushOkApi, Rng, Thing, ThingKind, Visibility};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, msg::*, ret_err};
 use qwc_lexer::WK;
 
 use crate::{ctx, ExprParser, MetaParser, WordCheck, Ctx, TypeParser};
@@ -22,10 +22,10 @@ pub struct FieldParser;
 impl FieldParser {
 
   // Public
-  pub fn read_field(ctx: &mut Ctx, defvis: &mut Visibility) -> Result<FieldId, Message> {
+  pub fn read_field(ctx: &mut Ctx, defvis: &mut Visibility) -> Status<FieldId> {
     let (vis, attr) = MetaParser::read_start(ctx, defvis)?;
 
-    let id = match ctx.lex.peek_k()? {
+    let id = match ctx.lex.peek_k(ctx.sum)? {
       (WK::Word, _)    => Self::sub_member (ctx, vis)?,
       (WK::Type, _)    => Self::sub_type   (ctx, vis)?,
       (WK::Fun, _)     => Self::sub_fun    (ctx, vis)?,
@@ -34,126 +34,119 @@ impl FieldParser {
       (WK::Impl, _)    => Self::sub_impl   (ctx, vis)?,
 
 
-      (_, c) => return Err(Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
+      (_, c) => ret_err!(ctx.sum, Message::error(UNKNOWN_KEYWORD, Label::new_pos(c))),
     };
 
     if let Some(a) = attr { ctx.cre.attach(id, a); }
     
-    Ok(id)
+    Success(id)
   }
 
 
   // Sub
-  fn sub_member(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.peek()?;
-    let name = lex.get()?.ident(sin, far)?;
+  fn sub_member(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
+    let name = lex.get(sum)?.ident(sum, sin, far)?;
 
-    lex.get()?.expect_kind(WK::Colon)?;
+    lex.get(sum)?.expect_kind(sum, WK::Colon)?;
 
     let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
-    lex.get()?.expect_kind(WK::Semicolon)?;
+    lex.get(sum)?.expect_kind(sum, WK::Semicolon)?;
 
 
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
       kind: FieldKind::MemberVar {kind}
-    };
-    
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
-  fn sub_type(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
+  fn sub_type(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
+    let name = lex.get(sum)?.ident(sum, sin, far)?;
     
-    let kind = match lex.peek_k()? {
+    let kind = match lex.peek_k(sum)? {
       (WK::Eq, _) => {
-        lex.get()?.expect_kind(WK::Eq)?;
+        lex.get(sum)?.expect_kind(sum, WK::Eq)?;
         let kind = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
-        lex.get()?.expect_kind(WK::Semicolon)?;
+        lex.get(sum)?.expect_kind(sum, WK::Semicolon)?;
         Some(kind)
       }
       
       (WK::Semicolon, _) => {
-        lex.get()?.expect_kind(WK::Semicolon)?;
+        lex.get(sum)?.expect_kind(sum, WK::Semicolon)?;
         None
       }
 
-      (_, c) => c.panic_kind2(WK::Eq, WK::Semicolon)?,
+      (_, c) => c.panic_kind2(sum, WK::Eq, WK::Semicolon)?,
     };
 
     
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
       kind: FieldKind::Type(kind),
-    }; 
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
-  pub fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
+  pub fn sub_fun(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
+    let name = lex.get(sum)?.ident(sum, sin, far)?;
 
     let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let blok = match lex.peek_k()? {
+    let blok = match lex.peek_k(sum)? {
       (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?),
-      (WK::Semicolon, _) => { lex.bump()?; None },
+      (WK::Semicolon, _) => { lex.bump(sum)?; None },
 
-      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
+      (_, c) => c.panic_kind2(sum, WK::BraceL, WK::Semicolon)?
     };
 
 
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
       kind: FieldKind::Fun{ kind, blok },
-    };
-    
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
-  fn sub_init(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
+  fn sub_init(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
+    let name = lex.get(sum)?.ident(sum, sin, far)?;
 
     let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let ils = if lex.peek()?.kind() == WK::Colon {
-      lex.bump()?;
+    let ils = if lex.peek(sum)?.kind() == WK::Colon {
+      lex.bump(sum)?;
       let mut ils = vec![];
       
       loop {
-        let start = lex.peek()?;
+        let start = lex.peek(sum)?;
 
-        let name = if let (WK::Word, c) = lex.peek_k()? { lex.bump()?; c.ident(sin, far)? } else { break };
+        let name = if let (WK::Word, c) = lex.peek_k(sum)? { lex.bump(sum)?; c.ident(sum, sin, far)? } else { break };
         
-        lex.get()?.expect_kind(WK::ParenL)?;
+        lex.get(sum)?.expect_kind(sum, WK::ParenL)?;
         
         let v = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
 
-        lex.get()?.expect_kind(WK::ParenR)?;
+        lex.get(sum)?.expect_kind(sum, WK::ParenR)?;
 
         
-        let it = Thing {
+        ils.push(Thing {
           kind: ThingKind::NamedExpr(name, v),
           pos: lex.pos_extend(start),
-        };
-        ils.push(cre.push(it));
+        }.push(cre));
         
-        if lex.peek()?.kind() == WK::Comma { lex.bump()? } else { break }
+        if lex.peek(sum)?.kind() == WK::Comma { lex.bump(sum)? } else { break }
       }
       
       cre.extra(&ils)
@@ -161,66 +154,62 @@ impl FieldParser {
       Rng::empty()
     };
 
-    let blok = match lex.peek_k()? {
+    let blok = match lex.peek_k(sum)? {
       (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?),
-      (WK::Semicolon, _) => { lex.bump()?; None },
+      (WK::Semicolon, _) => { lex.bump(sum)?; None },
 
-      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
+      (_, c) => c.panic_kind2(sum, WK::BraceL, WK::Semicolon)?
     };
 
 
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
       kind: FieldKind::Init{ kind, blok, ils }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
   
-  fn sub_fini(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
-    let name = lex.get()?.ident(sin, far)?;
+  fn sub_fini(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
+    let name = lex.get(sum)?.ident(sum, sin, far)?;
 
     let kind = TypeParser::read_fun(ctx!(cre, sin, far, lex, sum, side))?;
 
-    let blok = match lex.peek_k()? {
+    let blok = match lex.peek_k(sum)? {
       (WK::BraceL | WK::Backtick, _) => Some(ExprParser::pre_block(ctx!(cre, sin, far, lex, sum, side))?),
-      (WK::Semicolon, _) => { lex.bump()?; None },
+      (WK::Semicolon, _) => { lex.bump(sum)?; None },
 
-      (_, c) => c.panic_kind2(WK::BraceL, WK::Semicolon)?
+      (_, c) => c.panic_kind2(sum, WK::BraceL, WK::Semicolon)?
     };
 
 
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: Some(name),
       kind: FieldKind::Fini{ kind, blok }
-    };
-
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
 
 
-  fn sub_impl(ctx: &mut Ctx, vis: Visibility) -> Result<FieldId, Message> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.get()?;
+  fn sub_impl(ctx: &mut Ctx, vis: Visibility) -> Status<FieldId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.get(sum)?;
 
-    lex.get()?.expect_kind(WK::Colon)?;
+    lex.get(sum)?.expect_kind(sum, WK::Colon)?;
 
     let trait_ty = TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
-    lex.get()?.expect_kind(WK::BraceL)?;
+    lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let ctn = {
       let mut ctn = vec![];
       let defvis = &mut Visibility::Inherited;
 
       loop {
-        if lex.peek()?.kind() == WK::BraceR { lex.bump()?; break }
+        if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
         
         ctn.push( FieldParser::read_field(ctx!(cre, sin, far, lex, sum, side), defvis)? );
       }
@@ -230,14 +219,13 @@ impl FieldParser {
 
 
     // Post
-    let this = Field {
+    Field {
       pos: lex.pos_extend(start),
       vis,
       name: None,
       kind: FieldKind::ImplIn{ trait_ty, ctn },
-    };
-    
-    Ok(cre.push(this))
+    }.push_ok(cre)
   }
   
 }
+

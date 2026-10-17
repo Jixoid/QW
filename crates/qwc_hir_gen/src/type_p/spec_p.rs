@@ -13,13 +13,13 @@
 use itertools::Itertools;
 use qwc_ast as ast;
 use qwc_hir as hir;
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
 
 use crate::{Ctx, Specialization, TypeLow};
 
 
-pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: ast::AnyRng) -> Result<hir::TypeId, Message> {
-  let base = TypeLow::low(ctx, base)?;
+pub fn low_specialize(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, base: ast::TypeId, args: ast::AnyRng) -> Status<hir::TypeId> {
+  let base = TypeLow::low(ctx, sum, base)?;
 
   let hir::TypeKind::GenericRaw { generic, kind } = ctx.get(base).kind else { panic!() };
 
@@ -30,13 +30,13 @@ pub fn low_specialize(ctx: &mut Ctx, it: &ast::Type, base: ast::TypeId, args: as
   let received = ctx.src.extra_any_get(args).collect_vec();
 
   if expected.len() != received.len() {
-    return Err(Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[
+    ret_err!(sum, Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED.args(&[
       &expected.len().to_string(),
       &received.len().to_string(),
     ]), Label::new_pos(it.pos)))
   }
 
-  let spec = Specialization::spec_type(ctx, &expected, &received, generic, kind)?;
+  let spec = Specialization::spec_type(ctx, sum, &expected, &received, generic, kind)?;
 
-  Ok(spec)
+  Status::Success(spec)
 }

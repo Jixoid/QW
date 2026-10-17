@@ -55,7 +55,13 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     far.get(fid)
   };
 
-  let sid = sin.sid(&fpath.iter().last().unwrap().to_string_lossy());
+  let stem = match fpath.file_stem().and_then(|s| s.to_str()) {
+    Some("mod") => fpath.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("mod"),
+    Some(stem) => stem,
+    None => "main",
+  };
+
+  let sid = sin.sid(stem);
 
   let (start, rng, mut sum) = Parse::parse(cre, sid, sin, far, fi);
 

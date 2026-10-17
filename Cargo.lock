@@ -827,7 +827,6 @@ dependencies = [
  "lsp-types",
  "owo-colors",
  "qwc_arena",
- "qwc_hir",
  "qwc_string_interner",
  "serde_json",
  "thin-vec",
@@ -856,6 +855,7 @@ dependencies = [
  "bitflags 2.13.2",
  "owo-colors",
  "qwc_arena",
+ "qwc_diagnostic",
  "qwc_dump",
  "qwc_string_interner",
  "rustc_apfloat",
@@ -930,6 +930,7 @@ version = "0.1.0"
 dependencies = [
  "owo-colors",
  "qwc_arena",
+ "qwc_diagnostic",
  "qwc_dump",
  "qwc_string_interner",
  "rustc_apfloat",

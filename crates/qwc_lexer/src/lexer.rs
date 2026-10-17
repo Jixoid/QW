@@ -13,7 +13,7 @@
 use std::num::{NonZero, NonZeroU16};
 
 use qwc_arena::File;
-use qwc_diagnostic::{Message, Span, msg::*};
+use qwc_diagnostic::{Message, Span, Status, Summary, msg::*, ret_err};
 
 use crate::{WK, Word, wkind::{CHAR_LUT, CharKind}};
 
@@ -32,7 +32,7 @@ impl<'a> Lexer<'a> {
   }
 
 
-  pub fn peek(&mut self) -> Result<Word, Message> {
+  pub fn peek(&mut self, sum: &mut Summary) -> Status<Word> {
     let t = match self.cache {
       Some((w, ..)) => w,
       None => {
@@ -40,7 +40,7 @@ impl<'a> Lexer<'a> {
 
         let w = match w {
           Some(v) => v,
-          None => return Err(Message::fatal(FILE_FINISHED)),
+          None => ret_err!(sum, Message::fatal(FILE_FINISHED)),
         };
 
         self.cache = Some((w,o));
@@ -48,7 +48,7 @@ impl<'a> Lexer<'a> {
       }
     };
 
-    Ok(t)
+    Status::Success(t)
   }
 
   pub fn peek_safe(&mut self) -> Option<Word> {
@@ -70,13 +70,13 @@ impl<'a> Lexer<'a> {
     Some(t)
   }
 
-  pub fn peek_k(&mut self) -> Result<(WK, Word), Message> {
-    let a = self.peek()?;
-    Ok((a.kind(), a))
+  pub fn peek_k(&mut self, sum: &mut Summary) -> Status<(WK, Word)> {
+    let a = self.peek(sum)?;
+    Status::Success((a.kind(), a))
   }
 
 
-  pub fn get(&mut self) -> Result<Word, Message> {
+  pub fn get(&mut self, sum: &mut Summary) -> Status<Word> {
     let t = match self.cache {
       None => {
         let (w, o) = self.lex(self.off);
@@ -91,8 +91,8 @@ impl<'a> Lexer<'a> {
     };
 
     match t {
-      Some(r) => Ok(r),
-      None => Err(Message::fatal(FILE_FINISHED)),
+      Some(r) => Status::Success(r),
+      None => ret_err!(sum, Message::fatal(FILE_FINISHED)),
     }
   }
 
@@ -111,14 +111,14 @@ impl<'a> Lexer<'a> {
     }
   }
 
-  pub fn get_k(&mut self) -> Result<(WK, Word), Message> {
-    let a = self.get()?;
-    Ok((a.kind(), a))
+  pub fn get_k(&mut self, sum: &mut Summary) -> Status<(WK, Word)> {
+    let a = self.get(sum)?;
+    Status::Success((a.kind(), a))
   }
 
 
-  pub fn parse_token(&mut self) -> Result<Word, Message> {
-    let (it, bak) = match self.get_k()? {
+  pub fn parse_token(&mut self, sum: &mut Summary) -> Status<Word> {
+    let (it, bak) = match self.get_k(sum)? {
       (WK::Amp2, w) => (
         Word{
           fid: w.fid,
@@ -141,27 +141,27 @@ impl<'a> Lexer<'a> {
 
     self.cache = Some((bak, self.off));
 
-    Ok(it)
+    Status::Success(it)
   }
 
 
-  pub fn bump(&mut self) -> Result<(), Message> {
+  pub fn bump(&mut self, sum: &mut Summary) -> Status<()> {
     match self.cache {
       None => {
         let (w, o) = self.lex(self.off);
         self.off = o;
         
         if w.is_none() {
-          Err(Message::fatal(FILE_FINISHED))
+          ret_err!(sum, Message::fatal(FILE_FINISHED))
         } else {
-          Ok(())
+          Status::Success(())
         }
       },
       Some((.., o)) => {
         self.off = o;
         self.cache = None;
 
-        Ok(())
+        Status::Success(())
       },
     }
   }

@@ -60,7 +60,7 @@ pub enum TypeKind {
   Range(TypeId),
   
   // Trait
-  Trait(ThingRng /* NamedType => fun name: type */, ThingRng /* Name | NamedType => using (= type)?; */),
+  Trait{methods: ThingRng /* NamedType => fun name: type */, types: ThingRng /* Name | NamedType => using (= type)?; */, reqs: TypeRng},
   Iface(ThingRng /* NamedType => fun name: type */),
   
   TraitFrom{trait_ty: TypeId, hidden: TypeId},

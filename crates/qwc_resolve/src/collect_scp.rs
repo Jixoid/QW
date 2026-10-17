@@ -181,7 +181,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
         }
 
         ItemKind::ItemTy(kind) => {
-          if let TypeKind::Trait(rng) | TypeKind::Iface(rng) = self.cre.get(kind).kind  {
+          if let TypeKind::Trait{fields: rng, ..} | TypeKind::Iface{fields: rng, ..} = self.cre.get(kind).kind {
             self.process_trait(id, rng, container_id);
           }
         }

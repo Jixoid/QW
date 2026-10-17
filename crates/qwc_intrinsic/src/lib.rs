@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutInfo, PrimOps, PrimTypes, SymVis, Thing, Type, TypeAttr, TypeKind};
+use qwc_hir::{Rng, CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutInfo, PrimOps, PrimTypes, SymVis, Thing, Type, TypeAttr, TypeKind};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
@@ -211,7 +211,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				let types = cre.extra(&[thing_type_output]);
 
 				*cre.get_mut(trait_ty) = Type {
-					kind: TypeKind::Trait(methods, types),
+					kind: TypeKind::Trait{methods, types, reqs: Rng::empty(cid)},
 					layout: Layout::new_dsat(LayoutBy::QW),
 					attr: TypeAttr::empty(),
 					path: path_trait,

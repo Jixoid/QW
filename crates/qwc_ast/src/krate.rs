@@ -14,7 +14,7 @@ use core::slice;
 use rustc_hash::FxHashMap;
 
 use qwc_arena::{Arena, Files};
-use qwc_diagnostic::{Label, Message, msg::*};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, Summary, msg::*, ret_err};
 use qwc_lexer::{WK, Word};
 use qwc_string_interner::{Sid, StrInterner};
 
@@ -150,25 +150,25 @@ impl Krate {
 
 // Ident save
 pub trait IdentSave {
-  fn ident(self, sin: &mut StrInterner, far: &Files) -> Result<Ident, Message>;
-  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message>;
-  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message>;
+  fn ident(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Ident>;
+  fn string_sid(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
+  fn raw_sid(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
 }
 
 impl IdentSave for Word {
-  fn ident(self, sin: &mut StrInterner, far: &Files) -> Result<Ident, Message> {
+  fn ident(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Ident> {
     let (off, len, fid, kind) = self.to();
     
     let str = str::from_utf8(&far.get(fid).map()[(off as usize)..((off as usize)+(len.get() as usize))]).unwrap();
 
-    if kind != WK::Word { return Err(Message::error(EXPECTED_IDENTIFIER, Label::new_pos(self))) }
+    if kind != WK::Word { ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(self))); }
   
     let sid = sin.sid(str);
 
-    Ok(Ident::new(off, len, fid, sid))
+    Success(Ident::new(off, len, fid, sid))
   }
 
-  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message> {
+  fn string_sid(self, _sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
     let (off, len, fid, _) = self.to();
     
     let str = {
@@ -181,17 +181,17 @@ impl IdentSave for Word {
 
     let sid = sin.sid(&str);
 
-    Ok(sid)
+    Success(sid)
   }
 
-  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Result<Sid, Message> {
+  fn raw_sid(self, _sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
     let (off, len, fid, _) = self.to();
     
     let str = str::from_utf8(&far.get(fid).map()[(off as usize)..((off as usize)+(len.get() as usize))]).unwrap();
 
     let sid = sin.sid(str);
 
-    Ok(sid)
+    Success(sid)
   }
 }
 

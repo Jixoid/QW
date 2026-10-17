@@ -12,7 +12,7 @@
 
 use qwc_diagnostic::Span;
 
-use crate::{ExprId, FieldRng, Ident, ThingRng, TypeId, TypeRng, AnyRng};
+use crate::{AnyRng, DefPathId, ExprId, FieldRng, Ident, ThingRng, TypeId, TypeRng};
 
 
 
@@ -51,19 +51,20 @@ pub enum TypeKind {
   Fail    (TypeId),
   Option  (TypeId),
   Result  {sub: TypeId, err: TypeId},
-  Variant (ThingRng /* Name | NamedType */),
+  Variant {fields: ThingRng /* Name | NamedType */, path: DefPathId},
 
   // Enum
-  Enum  (ThingRng /* Name | NamedExpr */),
-  Flags (ThingRng /* Name | NamedExpr */),
+  Enum  {fields: ThingRng /* Name | NamedExpr */, path: DefPathId},
+  Flags {fields: ThingRng /* Name | NamedExpr */, path: DefPathId},
 
   // Combinated
-  Struct (ThingRng /* NamedType => name: type */),
-  Tuple  (TypeRng),
+  Struct   {vars: ThingRng /* NamedType => name: type */, path: DefPathId},
+  Tuple    {vars: TypeRng, path: DefPathId},
+  TupleAnon(TypeRng),
 
   // Impl
-  Iface (FieldRng),
-  Trait (FieldRng),
+  Iface {fields: FieldRng, path: DefPathId},
+  Trait {fields: FieldRng, reqs: TypeRng, path: DefPathId},
 
   // Function
   Fun {self_kind: Option<TypeId>, args: ThingRng /* NamedType */, ret: Option<TypeId>, attr: u8 /* FunAttrs */},
