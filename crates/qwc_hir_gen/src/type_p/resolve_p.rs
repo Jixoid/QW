@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
 use qwc_resolve::Resolver;
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
@@ -41,6 +41,10 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, rng: ast::Type
 
 
 fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::TypeId> {
+  low_resolved_kind(ctx, sum, it.pos.into(), kind, lscp)
+}
+
+pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::TypeId> {
   let ty = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::Type(item) => {
@@ -120,7 +124,7 @@ fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: resolve:
       }
 
       resolve::ScopeKindAst::GenericExpr(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(it.pos)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(pos)))
       }
 
       resolve::ScopeKindAst::Local(..) => panic!("value in type position"),
@@ -130,7 +134,7 @@ fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: resolve:
       resolve::ScopeKindHir::Type(ty) => ty,
 
       resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(it.pos)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(pos)))
       }
     }
   };

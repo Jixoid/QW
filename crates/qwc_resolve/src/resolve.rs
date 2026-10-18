@@ -40,7 +40,7 @@ pub struct Resolver<'ast, 'loc, 'imod> {
   loc: Option<&'loc LocalScopeManager>,
 
   ideps: &'imod Deps,
-  _imods: &'imod [CID],
+  imods: &'imod [CID],
 }
 
 
@@ -59,11 +59,11 @@ fn find_did_you_mean<'a, S: Copy>(input: &str, candidates: &[(&'a str, S)]) -> O
 impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
 
   pub fn new(scp: &'ast ScopeMap, sin: &'ast StrInterner, current: &'ast Scope, ideps: &'imod Deps, imods: &'imod [CID]) -> Self {
-    Self { scp, sin, current, loc: None, _imods: imods, ideps }
+    Self { scp, sin, current, loc: None, imods, ideps }
   }
 
   pub fn with_locals(scp: &'ast ScopeMap, sin: &'ast StrInterner, current: &'ast Scope, ideps: &'imod Deps, imods: &'imod [CID], loc: Option<&'loc LocalScopeManager>) -> Self {
-    Self { scp, sin, current, loc, _imods: imods, ideps }
+    Self { scp, sin, current, loc, imods, ideps }
   }
 
 
@@ -166,7 +166,9 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
           };
         }
 
-        _ => panic!("This object does not have a scope"),
+        _ => {
+          ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE.args(&[self.sin.str(seg.sid()), self.sin.str(segments[i].sid())]), Label::new_pos(seg)));
+        }
       }
     }
 
@@ -201,6 +203,25 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
       return self.lookup_in_scope(sum, ident, parent);
     }
 
+    // Dış Bağımlılıklar Fallback
+    for &cid in self.imods {
+      let krate = self.ideps.get(cid);
+      if let Some(root_id) = krate.root() {
+        let root_item = krate.get(root_id);
+        let crate_sid = match krate.get(root_item.path) {
+          hir::DefPath::Root(crate_sid) => Some(*crate_sid),
+          _ => root_item.name,
+        };
+        if crate_sid == Some(ident.sid()) {
+          return Success(LookupResult {
+            kind: ScopeKind::Hir(ScopeKindHir::Module(root_id)),
+            in_scope: scope,
+            span: ident.into(),
+          });
+        }
+      }
+    }
+
     // Suggestion
     let sugg = {
       let mut pool = vec![];
@@ -213,6 +234,20 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
       
       for (&id, &(_, s)) in &scope.map {
         pool.push((self.sin.str(id), s));
+      }
+
+      for &cid in self.imods {
+        let krate = self.ideps.get(cid);
+        if let Some(root_id) = krate.root() {
+          let root_item = krate.get(root_id);
+          let crate_sid = match krate.get(root_item.path) {
+            hir::DefPath::Root(crate_sid) => Some(*crate_sid),
+            _ => root_item.name,
+          };
+          if let Some(crate_sid) = crate_sid {
+            pool.push((self.sin.str(crate_sid), ident.into()));
+          }
+        }
       }
       
       find_did_you_mean(self.sin.str(ident.sid()), &pool).map(|(str, span)| {

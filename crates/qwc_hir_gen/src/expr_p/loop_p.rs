@@ -34,7 +34,7 @@ pub fn low_loop(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
       let expr_hir = ExprLow::low(ctx, fctx, sum, expr)?;
       let expr_ty = ctx.cre.get(expr_hir).ety;
 
-      TypeMatch::matches(ctx, sum, ctx.prims.ty_unit, expr_ty, ctx.get(expr_hir).pos, None, None)
+      TypeMatch::matches(ctx, sum, ctx.prims.ty_unit, expr_ty, ctx.get(expr_hir).pos, None)
         //.add(Suggestion::new(YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP, Applicability::MaybeIncorrect, format!("{} {}{}", "break", expr_pos.str(ctx.far), ";"), Label::new_pos(expr_pos)))
     })();
     let lctx = fctx.loops.borrow_mut().pop().unwrap();

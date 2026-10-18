@@ -63,12 +63,65 @@ pub fn low_self_big(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr,) -> Status
 }
 
 pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, rng: ast::ExprRng) -> Status<hir::ExprId> {
+  let ids = ctx.src.extra_get(rng).collect::<Vec<_>>();
+  if ids.is_empty() {
+    unreachable!();
+  }
+
+  // First element is SelfB() -> e.g. Self::new
+  if let ast::ExprKind::SelfB() = ctx.src.get(ids[0]).kind {
+    let self_ty = match ctx.cmap.self_ty.last() {
+      Some(&v) => v,
+      None => ret_err!(sum, Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(it.pos))),
+    };
+
+    if ids.len() < 2 {
+      let this = hir::Expr {
+        kind: hir::ExprKind::TypeOf { kind: self_ty },
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, self_ty),
+      };
+      return Success(ctx.cre.push(this));
+    }
+
+    let ast::ExprKind::Nick(method_ident) = ctx.src.get(ids[1]).kind else {
+      ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(it.pos)));
+    };
+
+    return crate::infer_p::Infer::lookup_static_method(ctx, sum, self_ty, method_ident.sid(), it.pos);
+  }
+
+  // Extract identifiers
   let mut segment = vec![];
+  for &id in &ids {
+    let item = ctx.src.get(id);
+    if let ast::ExprKind::Nick(ident) = item.kind {
+      segment.push(ident);
+    } else {
+      ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(item.pos)));
+    }
+  }
 
-  for id in ctx.src.extra_get(rng) {
-    let it = ctx.src.get(id);
+  // Check if prefix resolves to a type (e.g. Vec2::new or math::Vec2::new)
+  if segment.len() >= 2 {
+    let prefix = &segment[..segment.len() - 1];
+    let method_ident = segment[segment.len() - 1];
 
-    if let ast::ExprKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
+    let mut test_sum = Summary::new();
+    if let Success(target) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(&mut test_sum, prefix) {
+      let (kind, lscp, _) = target.get_k();
+      let is_type = matches!(
+        kind,
+        resolve::ScopeKind::Ast(resolve::ScopeKindAst::Type(..) | resolve::ScopeKindAst::GenericType(..) | resolve::ScopeKindAst::TypeParam(..))
+          | resolve::ScopeKind::Hir(resolve::ScopeKindHir::Type(..))
+      );
+
+      if is_type {
+        let target_ty = crate::type_p::resolve_p::low_resolved_kind(ctx, sum, it.pos, kind, lscp)?;
+        return crate::infer_p::Infer::lookup_static_method(ctx, sum, target_ty, method_ident.sid(), it.pos);
+      }
+    }
   }
 
   let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();

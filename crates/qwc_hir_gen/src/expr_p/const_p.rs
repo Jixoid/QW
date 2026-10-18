@@ -244,7 +244,7 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, it: &ast::Expr
       let ty = ctx.cre.get(id).ety;
       
       if let Some(expected_ty) = rety {
-        TypeMatch::matches(ctx, sum, expected_ty, ty, ctx.get(id).pos, None, None)?;
+        TypeMatch::matches(ctx, sum, expected_ty, ty, ctx.get(id).pos, None)?;
       } else {
         rety = Some(ty);
       }

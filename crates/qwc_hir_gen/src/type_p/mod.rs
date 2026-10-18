@@ -24,7 +24,7 @@ mod spec_p;
 mod enum_p;
 mod helper;
 mod trait_p;
-mod resolve_p;
+pub(crate) mod resolve_p;
 mod variant_p;
 mod combinated_p;
 
@@ -209,11 +209,13 @@ pub struct TypeMatch;
 
 impl TypeMatch {
 
-  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: Span, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
     if ty1 == ty2 { return Status::Success(()) }
 
     let ty1_ty = ctx.get(ty1).kind;
     let ty2_ty = ctx.get(ty2).kind;
+
+    let self_ty = ctx.cmap.self_ty.last().map(|id| *id);
 
     if let Some(self_ty) = self_ty {
       if ty1_ty == hir::TypeKind::GenericSelfType {
@@ -231,7 +233,7 @@ impl TypeMatch {
           if expected == ty2 {
             return Status::Success(());
           } else {
-            return Self::matches(ctx, sum, expected, ty2, pos, self_ty, Some(assoc_types));
+            return Self::matches(ctx, sum, expected, ty2, pos, Some(assoc_types));
           }
         }
       }
@@ -240,7 +242,7 @@ impl TypeMatch {
           if ty1 == expected {
             return Status::Success(());
           } else {
-            return Self::matches(ctx, sum, ty1, expected, pos, self_ty, Some(assoc_types));
+            return Self::matches(ctx, sum, ty1, expected, pos, Some(assoc_types));
           }
         }
       }
@@ -251,15 +253,15 @@ impl TypeMatch {
       (_, hir::TypeKind::Never) => Status::Success(()),
 
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
+        Self::matches(ctx, sum, t1, t2, pos, assoc_types)
       }
 
       (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
+        Self::matches(ctx, sum, t1, t2, pos, assoc_types)
       }
 
       (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
-        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
+        Self::matches(ctx, sum, t1, t2, pos, assoc_types)
       }
 
       (hir::TypeKind::Array(t1, l1), hir::TypeKind::Array(t2, l2)) => {
@@ -269,7 +271,7 @@ impl TypeMatch {
         let len2 = eval.eval(sum, l2)?.get_u64(sum)?;
 
         if l1 == l2 || len1 == len2 {
-          Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
+          Self::matches(ctx, sum, t1, t2, pos, assoc_types)
         } else {
           ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
         }
@@ -280,7 +282,7 @@ impl TypeMatch {
   }
 
 
-  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, pos: Span, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
     let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { unreachable!() };
     let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { unreachable!() };
 
@@ -303,7 +305,7 @@ impl TypeMatch {
         match (self_1_ty, self_2_ty) {
           (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
           
-          _ => TypeMatch::matches(ctx, sum, self_1, self_2, pos, self_ty, assoc_types)?,
+          _ => TypeMatch::matches(ctx, sum, self_1, self_2, pos, assoc_types)?,
         }
       }
     }
@@ -329,12 +331,12 @@ impl TypeMatch {
       let hir::Thing::NamedType(_, id_1) = *krate_1.get(id_1) else { unreachable!() };
       let hir::Thing::NamedType(_, id_2) = *krate_2.get(id_2) else { unreachable!() };
 
-      TypeMatch::matches(ctx, sum, id_1, id_2, pos, self_ty, assoc_types)?;
+      TypeMatch::matches(ctx, sum, id_1, id_2, pos, assoc_types)?;
     }
 
 
     // Ret Match
-    TypeMatch::matches(ctx, sum, ret_1, ret_2, pos, self_ty, assoc_types)?;
+    TypeMatch::matches(ctx, sum, ret_1, ret_2, pos, assoc_types)?;
     
     Status::Success(())
   }

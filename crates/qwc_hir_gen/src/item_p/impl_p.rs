@@ -31,53 +31,63 @@ pub fn low_impl(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Ite
     ctx.get(type_ty).path
   };
 
-  let (method_ids, type_ids) = {
-    let mut methods = vec![];
-    let mut types = vec![];
-    
-    let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
+  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+
+  let empty_items: &[hir::ItemId] = &[];
+  let impl_item = hir::Item {
+    name: None,
+    kind: hir::ItemKind::Impl {
+      type_ty,
+      trait_ty,
+      methods: ctx.cre.extra(empty_items),
+    },
+    path: impl_path,
+    vis,
+    attr,
+  }.push(ctx.cre);
+
+  ctx.cmap.cache_item.insert(id, Some(impl_item));
+
+  let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
+
+  let mut prep_methods = vec![];
+  let mut method_ids = vec![];
+  let mut type_ids = vec![];
+
+  {
     let ctx = ctx!(lscp, impl_path -> ctx);
 
-    for id in ctx.src.extra_get(ctn) {
-      let it = ctx.src.get(id);
-      
-      match it.kind {
-        ast::FieldKind::Fun {kind, blok} => {
+    for fid in ctx.src.extra_get(ctn) {
+      let fit = ctx.src.get(fid);
+
+      match fit.kind {
+        ast::FieldKind::Fun { kind, blok } | ast::FieldKind::Init { kind, blok, .. } => {
           ctx.cmap.self_ty.push(type_ty);
-          let item = ItemLow::low_fun_field(ctx, sum, id, it, kind, blok);
+          let res = ItemLow::prep_fun_field(ctx, sum, fid, fit, kind, blok);
           ctx.cmap.self_ty.pop();
-          
-          methods.push((it.name.unwrap(), item?, kind, it.pos));
+          let (method_item, hir_kind, loc, fctx) = res?;
+
+          method_ids.push((fit.name.unwrap(), method_item, kind, fit.pos));
+          prep_methods.push((fit, blok.unwrap(), method_item, hir_kind, loc, fctx));
         }
-        
-        ast::FieldKind::Init {kind, blok, ils: _} => {
-          ctx.cmap.self_ty.push(type_ty);
-          let item = ItemLow::low_fun_field(ctx, sum, id, it, kind, blok);
-          ctx.cmap.self_ty.pop();
-          
-          methods.push((it.name.unwrap(), item?, kind, it.pos));
-        }
-        
-        ast::FieldKind::Type (kind) => {
+
+        ast::FieldKind::Type(kind) => {
           let Some(kind) = kind else {
-            ret_err!(sum, Message::error(TYPE_NOT_SPECIFIED, Label::new_pos(it.pos)))
+            ret_err!(sum, Message::error(TYPE_NOT_SPECIFIED, Label::new_pos(fit.pos)))
           };
 
           ctx.cmap.self_ty.push(type_ty);
           let kind = TypeLow::low(ctx, sum, kind)?;
           ctx.cmap.self_ty.pop();
 
-          types.push((it.name.unwrap(), kind, it.pos));
+          type_ids.push((fit.name.unwrap(), kind, fit.pos));
         }
-        
+
         _ => panic!()
       }
     }
+  }
 
-    (methods, types)
-  };
-  
-  
   let methods = if let Some(trait_ty) = trait_ty {
     low_impl_validate(ctx, sum, type_ty, trait_ty, it.pos, trait_pos.unwrap(), method_ids, type_ids)?
   } else {
@@ -85,20 +95,22 @@ pub fn low_impl(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Ite
     ctx.cre.extra(&ids)
   };
 
-  let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+  if let hir::ItemKind::Impl { methods: ref mut m, .. } = ctx.cre.get_mut(impl_item).kind {
+    *m = methods;
+  }
 
+  // Phase 2: Lower method bodies
+  {
+    let ctx = ctx!(lscp, impl_path -> ctx);
+    for (fit, expr, method_item, hir_kind, loc, fctx) in prep_methods {
+      ctx.cmap.self_ty.push(type_ty);
+      let res = ItemLow::finish_fun_field(ctx, sum, fit, expr, method_item, hir_kind, loc, &fctx);
+      ctx.cmap.self_ty.pop();
+      res?;
+    }
+  }
 
-  // Post
-  hir::Item {
-    name: None,
-    kind: hir::ItemKind::Impl {
-      type_ty,
-      trait_ty,
-      methods,
-    },
-    path: impl_path,
-    vis, attr
-  }.push_ok(ctx.cre)
+  Status::Success(impl_item)
 }
 
 fn low_impl_validate(
@@ -258,7 +270,9 @@ fn low_impl_validate(
     
     let hir::ItemKind::Function{kind: act_fun, ..} = ctx.cre.get(*method_id).kind else { unreachable!() };
 
-    TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *pos, Some(type_ty), Some(&assoc_by_idx))?;
+    ctx.cmap.self_ty.push(type_ty);
+    TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *pos, Some(&assoc_by_idx))?;
+    ctx.cmap.self_ty.pop();
   }
 
 

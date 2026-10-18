@@ -219,7 +219,7 @@ pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
   let lhs_ty = ctx.cre.get(lhs_hir).ety;
   let rhs_ty = ctx.cre.get(rhs_hir).ety;
 
-  TypeMatch::matches(ctx, sum, lhs_ty, rhs_ty, op_span, None, None)?;
+  TypeMatch::matches(ctx, sum, lhs_ty, rhs_ty, op_span, None)?;
 
   // Post
   let this = hir::Expr{
@@ -313,7 +313,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     (Some(kind), Some(this)) => {
       let this_ty = ctx.cre.get(this).ety;
 
-      TypeMatch::matches(ctx, sum, kind, this_ty, ctx.cre.get(this).pos, None, None)?;
+      TypeMatch::matches(ctx, sum, kind, this_ty, ctx.cre.get(this).pos, None)?;
       false
     }
 
@@ -364,14 +364,14 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
   if explicit_self {
     let self_arg = user_args[0];
     let self_ty = ctx.cre.get(self_arg).ety;
-    TypeMatch::matches(ctx, sum, self_kind.unwrap(), self_ty, ctx.cre.get(self_arg).pos, None, None)?;
+    TypeMatch::matches(ctx, sum, self_kind.unwrap(), self_ty, ctx.cre.get(self_arg).pos, None)?;
 
     for (&supp_hir, trt) in izip!(&user_args[1..], ctx.extra_get(trait_args)) {
       let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { unreachable!() };
       
       let supp_ty = ctx.cre.get(supp_hir).ety;
 
-      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None, None)?;
+      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None)?;
     }
   } else {
     for (&supp_hir, trt) in izip!(&user_args, ctx.extra_get(trait_args)) {
@@ -379,7 +379,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
       
       let supp_ty = ctx.cre.get(supp_hir).ety;
 
-      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None, None)?;
+      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None)?;
     }
   }
 
@@ -440,7 +440,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &as
 
       if let Some(&kind) = keys.get(&name.sid()) {
         if kind != expr_ty {
-          TypeMatch::matches(ctx, sum, kind, expr_ty, ctx.cre.get(expr).pos, None, None)?;
+          TypeMatch::matches(ctx, sum, kind, expr_ty, ctx.cre.get(expr).pos, None)?;
         }
       } else {
         ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[name.str(ctx.far)]), Label::new_pos(name)))

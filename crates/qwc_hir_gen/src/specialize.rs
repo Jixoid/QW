@@ -73,7 +73,7 @@ impl<'a> Specialization<'a> {
           let fctx = FunCtx::new_const(pos);
           let expr = ExprLow::low(ctx, &fctx, sum, id)?;
           let expr_ty = ctx.cre.get(expr).ety;
-          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None, None)?;
+          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None)?;
           args.push(expr.to_any());
         }
         
@@ -123,7 +123,7 @@ impl<'a> Specialization<'a> {
           let id = ast::ExprId::from_any(rec_id);
           let expr = ExprLow::low(ctx, fctx, sum, id)?;
           let expr_ty = ctx.cre.get(expr).ety;
-          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None, None)?;
+          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None)?;
           args.push(expr.to_any());
         }
 

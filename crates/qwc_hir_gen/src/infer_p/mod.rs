@@ -14,6 +14,7 @@ use qwc_diagnostic::{Label, Message, Span, Status::{self, Fail, Success}, Status
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_string_interner::Sid;
 
+use qwc_ast as ast;
 use crate::{Ctx, ItemLow, TypeMatch};
 
 
@@ -49,7 +50,7 @@ impl Infer {
         let hir::TypeKind::Fun { self_kind: cand_self, args: cand_params, .. } = ctx.get(cand_fn_ty).kind else { continue; };
 
         if let Some(cand_self_ty) = cand_self {
-          if TypeMatch::matches(ctx, sum, cand_self_ty, this_ty, ctx.get(this).pos, None, None).is_fail() {
+          if TypeMatch::matches(ctx, sum, cand_self_ty, this_ty, ctx.get(this).pos, None).is_fail() {
             continue;
           }
         }
@@ -62,7 +63,7 @@ impl Infer {
         for (&user_arg, cand_param) in user_args.iter().zip(ctx.extra_get(cand_params)) {
           let hir::Thing::NamedType(_, cand_param_ty) = *ctx.get(cand_param) else { unreachable!() };
           let user_ty = ctx.cre.get(user_arg).ety;
-          if TypeMatch::matches(ctx, sum, cand_param_ty, user_ty, ctx.get(user_arg).pos, None, None).is_fail() {
+          if TypeMatch::matches(ctx, sum, cand_param_ty, user_ty, ctx.get(user_arg).pos, None).is_fail() {
             all_match = false;
             break;
           }
@@ -127,6 +128,72 @@ impl Infer {
     }.push_ok(ctx.cre)
   }
 
+  pub fn lookup_static_method(ctx: &mut Ctx, sum: &mut Summary, target_ty: hir::TypeId, sid: Sid, pos: Span) -> Status<hir::ExprId> {
+    let methods = if let Some(m) = ctx.type_impls.get(&target_ty) {
+      Some(m)
+    } else if let hir::TypeKind::GenericRaw { generic: g1, kind: k1 } = ctx.get(target_ty).kind {
+      if let Some(m) = ctx.type_impls.get(&k1) {
+        Some(m)
+      } else {
+        ctx.type_impls.iter().find_map(|(&impl_ty, m)| {
+          if let hir::TypeKind::GenericRaw { generic: g2, kind: k2 } = ctx.get(impl_ty).kind {
+            if g1 == g2 && k1 == k2 {
+              return Some(m);
+            }
+          }
+          None
+        })
+      }
+    } else if let Some((_, base_ty, _)) = ctx.cmap.cache_generic_type_rev.get(&target_ty) {
+      ctx.type_impls.get(base_ty)
+    } else {
+      ctx.type_impls.iter().find_map(|(&impl_ty, m)| {
+        if let hir::TypeKind::GenericRaw { kind, .. } = ctx.get(impl_ty).kind {
+          if kind == target_ty {
+            return Some(m);
+          }
+        }
+        None
+      })
+    };
+
+    let Some(methods) = methods else {
+      ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[ctx.sin.str(sid)]), Label::new_pos(pos)));
+    };
+
+    let Some(items) = methods.methods.get(&sid) else {
+      ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[ctx.sin.str(sid)]), Label::new_pos(pos)));
+    };
+
+    let mut ordered_items: Vec<ast::ItemId> = items.clone();
+    if methods.inherent_methods.contains(&sid) {
+      ordered_items.sort_by_key(|&item| {
+        if let ast::ItemKind::Impl { trait_ty: None, .. } = ctx.src.get(item).kind {
+          0
+        } else {
+          1
+        }
+      });
+    }
+
+    for item in ordered_items {
+      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+        let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
+        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
+        let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
+
+        return hir::Expr {
+          kind: hir::ExprKind::GlobalRef(method),
+          category: ExprCategory::RValue,
+          ety: kind,
+          pos,
+        }.push_ok(ctx.cre);
+      }
+    }
+
+    ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[ctx.sin.str(sid)]), Label::new_pos(pos)))
+  }
+
   pub fn lookup_method_with_trait(ctx: &mut Ctx, sum: &mut Summary, target_trait: hir::TypeId, current_id: hir::ExprId, rhs_id: hir::ExprId, sid: Sid, pos: impl Into<Span>) -> Status<(hir::ExprId, hir::TypeId)> {
     let this_ty = ctx.cre.get(current_id).ety;
     let rhs_ty = ctx.cre.get(rhs_id).ety;
@@ -160,7 +227,7 @@ impl Infer {
         let arg_thing = ctx.extra_get(args).next().unwrap();
 
         let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
-        if TypeMatch::matches(ctx, sum, param_ty, rhs_ty, ctx.get(rhs_id).pos, None, None).is_fail() {
+        if TypeMatch::matches(ctx, sum, param_ty, rhs_ty, ctx.get(rhs_id).pos, None).is_fail() {
           continue;
         }
 

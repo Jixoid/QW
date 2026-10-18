@@ -26,7 +26,7 @@ pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
   let val_hir = val.map(|id| ExprLow::low(ctx, fctx, sum, id)).unwrap_or_else(|| const_p::low_unit(ctx, it))?;
   let val_ty = ctx.cre.get(val_hir).ety;
 
-  TypeMatch::matches(ctx, sum, ret_ty, val_ty, ctx.get(val_hir).pos, None, None)?;
+  TypeMatch::matches(ctx, sum, ret_ty, val_ty, ctx.get(val_hir).pos, None)?;
     //.add(Label::new(fctx.sign_pos, DEFINED_HERE))
 
 

@@ -106,7 +106,7 @@ pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, 
     let kind_ty = TypeLow::low(ctx, sum, kind)?;
 
     if init_ty != kind_ty {
-      TypeMatch::matches(ctx, sum, kind_ty, init_ty, ctx.get(init_hir).pos, None, None)?;
+      TypeMatch::matches(ctx, sum, kind_ty, init_ty, ctx.get(init_hir).pos, None)?;
     }
 
     (kind_ty, kind_pos)

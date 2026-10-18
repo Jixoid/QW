@@ -120,7 +120,7 @@ impl ItemLow {
 
 
     let kind = if let Some(kind) = kind {
-      TypeMatch::matches(ctx, sum, kind, expr_ty, it.pos, None, None)?;
+      TypeMatch::matches(ctx, sum, kind, expr_ty, it.pos, None)?;
       kind
     } else {
       expr_ty
@@ -183,7 +183,7 @@ impl ItemLow {
       expr_ty
     } else { ret };
 
-    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None, None)?;
+    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None)?;
 
     let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
@@ -204,8 +204,8 @@ impl ItemLow {
     todo!()
   }
 
-  pub(crate) fn low_fun_field(ctx: &mut Ctx, sum: &mut Summary, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Status<hir::ItemId> {
-    if let None = expr {
+  pub(crate) fn prep_fun_field(ctx: &mut Ctx, sum: &mut Summary, id: ast::FieldId, it: &ast::Field, kind: ast::TypeId, expr: Option<ast::ExprId>) -> Status<(hir::ItemId, hir::TypeId, qwc_resolve::LocalScopeManager, FunCtx)> {
+    if expr.is_none() {
       ret_err!(sum, Message::error(ASSOCIATED_FUNCTION_IN_X_WITHOUT_BODY.args(&["impl"]), Label::new_pos(it.pos)))
     }
 
@@ -234,10 +234,33 @@ impl ItemLow {
     }
 
     let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
-    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
-    
+    let dummy_expr = hir::Expr {
+      kind: hir::ExprKind::Const(hir::Const::Unit),
+      category: hir::ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_unit,
+    }.push(ctx.cre);
+
+    let method_item = hir::Item {
+      name: Some(name),
+      kind: hir::ItemKind::Function {
+        expr: dummy_expr,
+        kind: hir_kind,
+      },
+      path,
+      vis, attr
+    }.push(ctx.cre);
+
+    Status::Success((method_item, hir_kind, loc, fctx))
+  }
+
+  pub(crate) fn finish_fun_field(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Field, expr: ast::ExprId, method_item: hir::ItemId, hir_kind: hir::TypeId, mut loc: qwc_resolve::LocalScopeManager, fctx: &FunCtx) -> Status<()> {
+    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), fctx, sum, expr)?;
     let expr_ty = ctx.cre.get(expr_hir).ety;
+
+    let hir::TypeKind::Fun{ret, ..} = ctx.cre.get(hir_kind).kind else { unreachable!() };
 
     // Trait Patch
     let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
@@ -250,20 +273,13 @@ impl ItemLow {
       expr_ty
     } else { ret };
 
-    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None, None)?;
- 
-    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None)?;
 
-    // Post
-    hir::Item {
-      name: Some(name),
-      kind: hir::ItemKind::Function {
-        expr: expr_hir,
-        kind: hir_kind,
-      },
-      path,
-      vis, attr
-    }.push_ok(ctx.cre)
+    if let hir::ItemKind::Function { expr: ref mut e, .. } = ctx.cre.get_mut(method_item).kind {
+      *e = expr_hir;
+    }
+
+    Status::Success(())
   }
 
 }
