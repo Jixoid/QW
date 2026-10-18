@@ -57,7 +57,8 @@ impl TypeInterner {
     match self.ty_meta.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::Meta(id),
           layout: Layout::new_meta(LayoutBy::QW),
@@ -79,7 +80,8 @@ impl TypeInterner {
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::Ref(id, ism),
           layout: Layout::new_static(LayoutBy::QW),
@@ -101,7 +103,8 @@ impl TypeInterner {
     match self.ty_trait_from.entry((id, trait_ty)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, trait_ty).path;
+        let it = Self::get(cre, ideps, trait_ty);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::TraitFrom{hidden: id, trait_ty},
           layout: Layout::new_static(LayoutBy::QW),
@@ -123,7 +126,8 @@ impl TypeInterner {
     match self.ty_slice.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::Slice(id),
           layout: Layout::new_static(LayoutBy::QW),
@@ -145,7 +149,8 @@ impl TypeInterner {
     match self.ty_vscale.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::VScale(id),
           layout: Layout::new_static(LayoutBy::QW),
@@ -167,7 +172,8 @@ impl TypeInterner {
     match self.ty_range.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let path = Self::get(cre, ideps, id).path;
+        let it = Self::get(cre, ideps, id);
+        let path = it.path;
         let this = Type{
           kind: TypeKind::Range(id),
           layout: Layout::new_static(LayoutBy::QW),

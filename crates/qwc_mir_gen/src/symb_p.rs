@@ -10,6 +10,8 @@
 */
 
 
+use std::assert_matches;
+
 use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir::{self as hir, ItemAttr};
 use qwc_mir::{self as mir, PushOkApi};
@@ -73,7 +75,9 @@ impl SymbLow {
 
     let ety = TypeLow::low(ctx, sum, kind)?;
 
-    let _value = ExprLow::low(ctx, sum, &mut FunBuilder::new(), expr)?;
+    let value = ExprLow::low(ctx, sum, &mut FunBuilder::new(), expr)?.unwrap();
+
+    assert_matches!(value, mir::Value::Const(..) | mir::Value::GlobalRef(..));
 
 
     // Post
@@ -81,7 +85,7 @@ impl SymbLow {
       name: ctx.cre.sym(&sym),
       stat: convert_vis(it),
       ety,
-      kind: mir::SymbolKind::Variable{ ism }
+      kind: mir::SymbolKind::Variable{ value, ism }
     }.push_ok(ctx.cre)
   }
 

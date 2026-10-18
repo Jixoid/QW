@@ -12,9 +12,9 @@
 
 use itertools::{Itertools, izip};
 use qwc_comptime::{Evaluator, GetConst};
-use qwc_diagnostic::{Label, Message, Span, Status, StatusApi, Summary, msg::*, ret_err};
-use qwc_ast::{self as ast, Attribute};
-use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_ast as ast;
+use qwc_hir::{self as hir, PushOkApi, Span, TypeAttr};
 
 use rustc_hash::FxHashMap;
 use crate::{Ctx, ExprLow, FunCtx};
@@ -22,6 +22,7 @@ use crate::{Ctx, ExprLow, FunCtx};
 mod fun_p;
 mod spec_p;
 mod enum_p;
+mod helper;
 mod trait_p;
 mod resolve_p;
 mod variant_p;
@@ -41,8 +42,8 @@ impl TypeLow {
     use ast::TypeKind::*;
     let it = match it.kind {
       // Resolve
-      Nick(ident)   => resolve_p::low_nick(ctx, sum, ident)?,
-      Path(rng) => resolve_p::low_path(ctx, sum, rng)?,
+      Nick(ident)   => resolve_p::low_nick(ctx, sum, it, ident)?,
+      Path(rng) => resolve_p::low_path(ctx, sum, it, rng)?,
       
       // Basic
       Unit => ctx.prims.ty_unit,
@@ -59,38 +60,20 @@ impl TypeLow {
       Slice(kind) => Self::low_slice(ctx, sum, kind)?,
       
       // Combinated
-      Struct {vars, path} => {
-        let path = low_defpath(ctx, path);
-        combinated_p::low_struct(ctx, sum, path, id, vars)?
-      }
-      Tuple {vars, path}   => {
-        let path = low_defpath(ctx, path);
-        combinated_p::low_tuple(ctx, sum, path, vars)?
-      }
+      Struct {vars, path} => combinated_p::low_struct(ctx, sum, id,  path, vars)?,
+      Tuple {vars, path}   => combinated_p::low_tuple(ctx, sum, path, vars)?,
       
       TupleAnon(rng) => combinated_p::low_tuple_anon(ctx, sum, rng)?,
       
       Range(kind) => Self::low_range(ctx, sum, kind)?,
 
       // Trait
-      Trait {fields, reqs, path} => {
-        let path = low_defpath(ctx, path);
-        trait_p::low_trait(ctx, sum, path, fields, reqs)?
-      }
-      Iface {fields, path}       => {
-        let path = low_defpath(ctx, path);
-        trait_p::low_iface(ctx, sum, path, fields)?
-      }
+      Trait {fields, reqs, path} => trait_p::low_trait(ctx, sum, path, fields, reqs)?,
+      Iface {fields, reqs, path} => trait_p::low_iface(ctx, sum, path, fields, reqs)?,
 
       // Enum
-      Enum  {fields, path} => {
-        let path = low_defpath(ctx, path);
-        enum_p::low_enum(ctx, sum, path, fields)?
-      }
-      Flags {fields, path} => {
-        let path = low_defpath(ctx, path);
-        enum_p::low_flags(ctx, sum, path, fields)?
-      }
+      Enum  {fields, path} => enum_p::low_enum(ctx, sum, path, fields)?,
+      Flags {fields, path} => enum_p::low_flags(ctx, sum, path, fields)?,
 
       // Variant
       Option(kind) => variant_p::low_option(ctx, sum, kind)?,
@@ -102,30 +85,12 @@ impl TypeLow {
       }
 
       // Function
-      Fun{..} => panic!("use itemty!"),
+      Fun{self_kind, args, ret, ..} => fun_p::low_fun(ctx, sum, ctx.path, self_kind, args, ret)?,
 
       // Specialize
       Spec{base, args} => spec_p::low_specialize(ctx, sum, it, base, args)?,
       
       _ => todo!("{:#?}", it)
-    };
-
-    ctx.cmap.cache_type.insert(id, it);
-
-    Status::Success(it)
-  }
-
-  pub fn low_itemty(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, id: ast::TypeId) -> Status<hir::TypeId> {
-    if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Status::Success(id) }
-    
-    let it = ctx.src.get(id);
-
-    use ast::TypeKind::*;
-    let it = match it.kind {
-      // Function
-      Fun{self_kind, args, ret, ..} => fun_p::low_fun(ctx, sum, path, self_kind, args, ret)?,
-
-      _ => Self::low(ctx, sum, id)?,
     };
 
     ctx.cmap.cache_type.insert(id, it);
@@ -240,52 +205,22 @@ impl TypeLow {
 }
 
 
-fn read_attrs(ctx: &mut Ctx, sum: &mut Summary, attrs: Option<&Vec<Attribute>>) -> Status<TypeAttr> {
-  let mut attr = TypeAttr::empty();
-
-  if let Some(attrs) = attrs {
-    for key in attrs {
-      let key = key.ident;
-      
-      match () {
-        // C
-        _ if key.sid() == ctx.sin.sid_c() => {
-          if attr.contains(TypeAttr::C) {
-            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
-              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
-            );
-          };
-          attr |= TypeAttr::C;
-        }
-
-        _ => ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)))
-      }
-    }
-  }
-
-  Status::Success(attr)
-}
-
-
 pub struct TypeMatch;
 
 impl TypeMatch {
 
-  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, ty2_ast: ast::TypeId, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: Span, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
     if ty1 == ty2 { return Status::Success(()) }
 
     let ty1_ty = ctx.get(ty1).kind;
     let ty2_ty = ctx.get(ty2).kind;
-    let ty2_ast_ty = ctx.src.get(ty2_ast).kind;
 
     if let Some(self_ty) = self_ty {
       if ty1_ty == hir::TypeKind::GenericSelfType {
         if self_ty == ty2 {
           return Status::Success(());
         } else {
-          let ty_pos = ctx.src.get(ty2_ast).pos;
-          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(ty_pos)));
+          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
         }
       }
     }
@@ -296,7 +231,7 @@ impl TypeMatch {
           if expected == ty2 {
             return Status::Success(());
           } else {
-            return Self::matches(ctx, sum, expected, ty2, ty2_ast, self_ty, Some(assoc_types));
+            return Self::matches(ctx, sum, expected, ty2, pos, self_ty, Some(assoc_types));
           }
         }
       }
@@ -305,7 +240,7 @@ impl TypeMatch {
           if ty1 == expected {
             return Status::Success(());
           } else {
-            return Self::matches(ctx, sum, ty1, expected, ty2_ast, self_ty, Some(assoc_types));
+            return Self::matches(ctx, sum, ty1, expected, pos, self_ty, Some(assoc_types));
           }
         }
       }
@@ -316,23 +251,15 @@ impl TypeMatch {
       (_, hir::TypeKind::Never) => Status::Success(()),
 
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
-        let ast::TypeKind::Ref(t2_ast, _) = ty2_ast_ty else { unreachable!() };
-
-        Self::matches(ctx, sum, t1, t2, t2_ast, self_ty, assoc_types)
+        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
       }
 
       (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
-        let ast::TypeKind::Ptr(t2_ast, _) = ty2_ast_ty else { unreachable!() };
-
-        Self::matches(ctx, sum, t1, t2, t2_ast, self_ty, assoc_types)
+        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
       }
 
       (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
-        if let ast::TypeKind::Slice(t2_ast) = ty2_ast_ty {
-          Self::matches(ctx, sum, t1, t2, t2_ast, self_ty, assoc_types)
-        } else {
-          Self::matches_pos(ctx, sum, t1, t2, ctx.src.get(ty2_ast).pos)
-        }
+        Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
       }
 
       (hir::TypeKind::Array(t1, l1), hir::TypeKind::Array(t2, l2)) => {
@@ -342,85 +269,31 @@ impl TypeMatch {
         let len2 = eval.eval(sum, l2)?.get_u64(sum)?;
 
         if l1 == l2 || len1 == len2 {
-          if let ast::TypeKind::Array(t2_ast, _) = ty2_ast_ty {
-            Self::matches(ctx, sum, t1, t2, t2_ast, self_ty, assoc_types)
-          } else {
-            Self::matches_pos(ctx, sum, t1, t2, ctx.src.get(ty2_ast).pos)
-          }
-        } else {
-          let ty_pos = ctx.src.get(ty2_ast).pos;
-          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(ty_pos)));
-        }
-      }
-
-      _ => {
-        let ty_pos = ctx.src.get(ty2_ast).pos;
-        ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(ty_pos)));
-      }
-    }
-  }
-
-  pub fn matches_pos(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: impl Into<Span>) -> Status<()> {
-    if ty1 == ty2 { return Status::Success(()) }
-
-    let ty1_ty = ctx.get(ty1).kind;
-    let ty2_ty = ctx.get(ty2).kind;
-
-    match (ty1_ty, ty2_ty) {
-      (hir::TypeKind::Error, _) | (_, hir::TypeKind::Error) => Status::Success(()),
-      (_, hir::TypeKind::Never) => Status::Success(()),
-
-      (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches_pos(ctx, sum, t1, t2, pos)
-      }
-
-      (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches_pos(ctx, sum, t1, t2, pos)
-      }
-
-      (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
-        Self::matches_pos(ctx, sum, t1, t2, pos)
-      }
-
-      (hir::TypeKind::Array(t1, l1), hir::TypeKind::Array(t2, l2)) => {
-        let eval = Evaluator::new(ctx.cre);
-        
-        let len1 = eval.eval(sum, l1)?.get_u64(sum)?;
-        let len2 = eval.eval(sum, l2)?.get_u64(sum)?;
-
-        if l1 == l2 || len1 == len2 {
-          Self::matches_pos(ctx, sum, t1, t2, pos)
+          Self::matches(ctx, sum, t1, t2, pos, self_ty, assoc_types)
         } else {
           ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
         }
       }
 
-      _ => {
-        ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
-      }
+      _ => ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos))),
     }
   }
 
 
-  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, fun2_ast: ast::TypeId, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, pos: Span, self_ty: Option<hir::TypeId>, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
     let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { unreachable!() };
     let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { unreachable!() };
-
-    let fun2_ast = ctx.src.get(fun2_ast);
-    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ret: ret_ast, attr: _} = fun2_ast.kind else { unreachable!() };
-
 
     // Self Match
     match (self_1, self_2) {
       (None, None) => {},
 
       (None, Some(..)) => {
-        let self_pos = ctx.src.get(self_ast.unwrap()).pos;
-        ret_err!(sum, Message::error(INCOMPATIBLE_METHOD, Label::new(self_pos, UNEXPECTED_PARAMETER)))
+        ret_err!(sum, Message::error(INCOMPATIBLE_METHOD, Label::new(pos, UNEXPECTED_PARAMETER)))
       }
 
       (Some(..), None) => {
-        ret_err!(sum, Message::error(INCOMPATIBLE_METHOD, Label::new(fun2_ast.pos, ARGUMENT_X_IS_MISSING.args(&["self"]))))
+        ret_err!(sum, Message::error(INCOMPATIBLE_METHOD, Label::new(pos, ARGUMENT_X_IS_MISSING.args(&["self"]))))
       }
 
       (Some(self_1), Some(self_2)) => {
@@ -430,7 +303,7 @@ impl TypeMatch {
         match (self_1_ty, self_2_ty) {
           (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
           
-          _ => TypeMatch::matches(ctx, sum, self_1, self_2, self_ast.unwrap(), self_ty, assoc_types)?,
+          _ => TypeMatch::matches(ctx, sum, self_1, self_2, pos, self_ty, assoc_types)?,
         }
       }
     }
@@ -441,7 +314,6 @@ impl TypeMatch {
     let krate_2 = ctx.get_krate(fun2.cid());
     let args_1 = krate_1.extra_get(args_1).collect_vec();
     let args_2 = krate_2.extra_get(args_2).collect_vec();
-    let args_ast = ctx.src.extra_get(args_ast).collect_vec();
     
     if args_1.len() != args_2.len() {
       ret_err!(sum, Message::error(FUNCTION_TAKES_X_ARGUMENTS_BUT_X_WERE_SUPPLIED
@@ -449,37 +321,22 @@ impl TypeMatch {
           &args_1.len().to_string(),
           &args_2.len().to_string(),
         ]),
-        Label::new_pos(fun2_ast.pos),
+        Label::new_pos(pos),
       ));
     }
 
-    for (id_1, id_2, id_ast) in izip!(args_1, args_2, args_ast) {
+    for (id_1, id_2) in izip!(args_1, args_2) {
       let hir::Thing::NamedType(_, id_1) = *krate_1.get(id_1) else { unreachable!() };
       let hir::Thing::NamedType(_, id_2) = *krate_2.get(id_2) else { unreachable!() };
-      let ast::ThingKind::NamedType(_, id_ast) = ctx.src.get(id_ast).kind else { unreachable!() };
 
-      TypeMatch::matches(ctx, sum, id_1, id_2, id_ast, self_ty, assoc_types)?;
+      TypeMatch::matches(ctx, sum, id_1, id_2, pos, self_ty, assoc_types)?;
     }
 
 
     // Ret Match
-    ret_ast.map(|ret_ast| TypeMatch::matches(ctx, sum, ret_1, ret_2, ret_ast, self_ty, assoc_types)).transpose()?;
+    TypeMatch::matches(ctx, sum, ret_1, ret_2, pos, self_ty, assoc_types)?;
     
     Status::Success(())
   }
 
-}
-
-
-fn low_defpath(ctx: &mut Ctx, path: ast::DefPathId) -> hir::DefPathId {
-  match *ctx.src.get(path) {
-    ast::DefPath::Root(name) => ctx.cre.push(hir::DefPath::Root(name)),
-    ast::DefPath::Path { base, name } => {
-      let base = low_defpath(ctx, base);
-      ctx.cre.push(hir::DefPath::Path { base, name })
-    }
-    ast::DefPath::Impl(base) => low_defpath(ctx, base),
-    ast::DefPath::Generic(base) => low_defpath(ctx, base),
-    ast::DefPath::Use(base) => low_defpath(ctx, base),
-  }
 }

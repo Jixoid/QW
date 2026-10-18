@@ -12,7 +12,7 @@
 
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
-use qwc_hir::{self as hir, ExprCategory};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 
 use super::helper;
 use crate::{ExprLow, Ctx, FunCtx};
@@ -44,11 +44,10 @@ pub fn low_if(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, c
 
 
   // Post
-  let this = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::If { cond, then, elsb },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
-  };
-
-  Status::Success(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }

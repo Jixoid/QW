@@ -12,17 +12,17 @@
 
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
-use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
-use crate::{Ctx, TypeLow, type_p::read_attrs};
+use crate::{Ctx, TypeLow, type_p::helper};
 
 
 // Combinated
-pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, id: ast::TypeId, rng: ast::ThingRng) -> Status<hir::TypeId> {
-  let fields_rng = {
+pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: ast::TypeId, path: ast::DefPathId, vars: ast::ThingRng) -> Status<hir::TypeId> {
+  let vars = {
     let mut ctn = vec![];
     
-    for id in ctx.src.extra_get(rng) {
+    for id in ctx.src.extra_get(vars) {
       let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { unreachable!() };
 
       // Check
@@ -40,25 +40,26 @@ pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, id: ast::Ty
     ctx.cre.extra(&ctn)
   };
 
-  let attr = read_attrs(ctx, sum, ctx.src.get_attached(id))?;
+  let path = helper::low_defpath(ctx, path);
+  let attr = helper::read_attrs(ctx, sum, ctx.src.get_attached(id))?;
 
-  let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::QW} else {hir::LayoutBy::C});
+  let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::C} else {hir::LayoutBy::QW});
 
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Struct(fields_rng),
+    kind: hir::TypeKind::Struct(vars),
     layout,
     attr,
     path,
   }.push_ok(ctx.cre)
 }
 
-pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::TypeRng) -> Status<hir::TypeId> {
-  let rng = {
+pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, vars: ast::TypeRng) -> Status<hir::TypeId> {
+  let vars = {
     let mut ctn = vec![];
     
-    for id in ctx.src.extra_get(rng) {
+    for id in ctx.src.extra_get(vars) {
       // Check
       let pos = ctx.src.get(id).pos;
       let id = TypeLow::low(ctx, sum, id)?;
@@ -74,15 +75,18 @@ pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Ty
     ctx.cre.extra(&ctn)
   };
 
+  let path = helper::low_defpath(ctx, path);
+
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Tuple(rng),
+    kind: hir::TypeKind::Tuple(vars),
     layout: hir::Layout::new_static(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)
 }
+
 
 pub fn low_tuple_anon(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<hir::TypeId> {
   let mut path_ids = vec![];

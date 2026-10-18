@@ -398,7 +398,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
     }
   }
 
-  fn report_unresolved_imod_import(&self, imod: &Imod<'_>, segments: &[ImportSegment], glob: bool, _span: Span, sum: &mut Summary) {
+  fn report_unresolved_imod_import(&self, imod: &Imod<'_>, segments: &[ImportSegment], glob: bool, sum: &mut Summary) {
     let mut current_item = match imod.expmap.root() {
       Some(r) => r,
       None => return,
@@ -523,7 +523,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
       }
       ImportSegment::Name(first_ident) => {
         if let Some(imod) = self.imods.iter().find(|im| im.name == first_ident.sid()) {
-          self.report_unresolved_imod_import(imod, &import.segments[1..], import.glob, import.span, sum);
+          self.report_unresolved_imod_import(imod, &import.segments[1..], import.glob, sum);
           return;
         }
 

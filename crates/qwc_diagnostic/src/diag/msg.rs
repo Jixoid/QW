@@ -10,9 +10,10 @@
 */
 
 
+use backtrace::Backtrace;
 use thin_vec::ThinVec;
 
-use crate::{CodedString, FmtMsg, FmtString, Label, Suggestion};
+use crate::{CodedString, FmtMsg, FmtString, ICE, Label, Suggestion};
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,7 +31,10 @@ pub struct Message {
 
 impl Message {
   pub fn fatal(msg: impl Into<CodedString>) -> Self {
-    Message { level: Level::Fatal, message: msg.into(), labels: ThinVec::new(), notes: ThinVec::new(), suggestions: ThinVec::new() }
+    let bt = Backtrace::new();
+    let str = format!("\n{}", ICE::bt(bt));
+
+    Message { level: Level::Fatal, message: msg.into(), labels: ThinVec::new(), notes: ThinVec::from([str]), suggestions: ThinVec::new() }
   }
 
   pub fn error(msg: impl Into<CodedString>, label: Label) -> Self {

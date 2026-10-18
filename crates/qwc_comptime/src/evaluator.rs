@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Message, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, Const};
 
 
@@ -81,7 +81,9 @@ impl<'a> Evaluator<'a> {
           Const::U64(a)
         }
 
-        _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE))
+        hir::ExprKind::GenericExpr {..} => ret_err!(sum, Message::error(FIXED_VALUE_CANNOT_BE_EVALUATED, Label::new_pos(it.pos))),
+
+        _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE).add(ICE_MESSAGE.args(&[&format!("evaluator kind: {it:#?}")])))
       };
       
       return Status::Success(val);

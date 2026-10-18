@@ -38,11 +38,12 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
     let mut file_groups: BTreeMap<u16, Vec<(usize, &crate::Label)>> = BTreeMap::new();
 
     for (idx, label) in msg.labels.iter().enumerate() {
+      if label.span.is_builtin() { continue }
       let hr = label.span.interval(far);
       let s = hr.start[0].get() as u32;
       let e = hr.end[0].get() as u32;
       max_line = max_line.max(s).max(e);
-      file_groups.entry(label.span.fid).or_default().push((idx, label));
+      file_groups.entry(label.span.fid()).or_default().push((idx, label));
     }
 
     for sugg in &msg.suggestions {
@@ -88,7 +89,7 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
       // Group labels of this suggestion by file
       let mut file_groups: BTreeMap<u16, Vec<(usize, &crate::Label)>> = BTreeMap::new();
       for (idx, label) in sugg.labels.iter().enumerate() {
-        file_groups.entry(label.span.fid).or_default().push((idx, label));
+        file_groups.entry(label.span.fid()).or_default().push((idx, label));
       }
 
       for (fid, labels) in file_groups {
@@ -98,7 +99,7 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
           Err(_) => continue,
         };
 
-        let is_different_file = msg.labels.first().map(|l| l.span.fid != fid).unwrap_or(true);
+        let is_different_file = msg.labels.first().map(|l| l.span.fid() != fid).unwrap_or(true);
         if is_different_file {
           let first_hr = labels[0].1.span.interval(far);
           let display_path = normalize_path(file_ref.fpath());

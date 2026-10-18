@@ -22,11 +22,12 @@ use crate::{Ctx, ExprLow, FunCtx, TypeMatch};
 
 
 // ZST
-pub fn low_unit(ctx: &mut Ctx) -> Status<hir::ExprId> {
+pub fn low_unit(ctx: &mut Ctx, it: &ast::Expr) -> Status<hir::ExprId> {
   // Post
-  let this = hir::Expr{
+  let this = hir::Expr {
     kind: hir::ExprKind::Const(Const::Unit),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_unit,
   };
 
@@ -35,11 +36,12 @@ pub fn low_unit(ctx: &mut Ctx) -> Status<hir::ExprId> {
 
 
 // Primitive
-pub fn low_bool(ctx: &mut Ctx, val: bool) -> Status<hir::ExprId> {
+pub fn low_bool(ctx: &mut Ctx, it: &ast::Expr, val: bool) -> Status<hir::ExprId> {
   // Post
-  let this = hir::Expr{
+  let this = hir::Expr {
     kind: hir::ExprKind::Const(Const::Bool(val)),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_bool,
   };
 
@@ -58,7 +60,7 @@ fn extract_suffix(s: &str) -> Option<(&str, &str)> {
   }
 }
 
-pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, span: Span) -> Status<hir::ExprId> {
+pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) -> Status<hir::ExprId> {
   let str = span.str(ctx.far);
 
   enum FP {
@@ -135,16 +137,17 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, span: Span) -> Status<hir::E
 
 
   // Post
-  let this = hir::Expr{
+  let this = hir::Expr {
     kind: hir::ExprKind::Const(cons),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
   };
 
   Status::Success(ctx.cre.push(this))
 }
 
-pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, span: Span) -> Status<hir::ExprId> {
+pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) -> Status<hir::ExprId> {
   let str = span.str(ctx.far);
 
   enum FP { F16, F32, F64, F128 }
@@ -187,24 +190,28 @@ pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, span: Span) -> Status<hir::Ex
   let this = hir::Expr{
     kind: hir::ExprKind::Const(cons),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
   };
 
   Status::Success(ctx.cre.push(this))
 }
 
-pub fn low_string(ctx: &mut Ctx, sid: Sid) -> Status<hir::ExprId> {
+pub fn low_string(ctx: &mut Ctx, it: &ast::Expr, sid: Sid) -> Status<hir::ExprId> {
+  let ety = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ctx.prims.ty_str, false);
+  
   // Post
   let this = hir::Expr{
     kind: hir::ExprKind::Const(Const::Str(sid)),
     category: ExprCategory::RValue,
-    ety: ctx.tin.ty_ref(ctx.cre, ctx.ideps, ctx.prims.ty_str, false),
+    pos: it.pos,
+    ety,
   };
 
   Status::Success(ctx.cre.push(this))
 }
 
-pub fn low_char(ctx: &mut Ctx, sum: &mut Summary, span: Span, sid: Sid) -> Status<hir::ExprId> {
+pub fn low_char(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span, sid: Sid) -> Status<hir::ExprId> {
   let str = ctx.sin.str(sid);
   let str = &str[..str.len() - 1];
 
@@ -215,9 +222,10 @@ pub fn low_char(ctx: &mut Ctx, sum: &mut Summary, span: Span, sid: Sid) -> Statu
 
 
   // Post
-  let this = hir::Expr{
+  let this = hir::Expr {
     kind: hir::ExprKind::Const(Const::Char(c)),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_char,
   };
 
@@ -226,7 +234,7 @@ pub fn low_char(ctx: &mut Ctx, sum: &mut Summary, span: Span, sid: Sid) -> Statu
 
 
 // Array
-pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, args: ast::ExprRng) -> Status<hir::ExprId> {
+pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, it: &ast::Expr, args: ast::ExprRng) -> Status<hir::ExprId> {
   let (items_rng, kind) = {
     let mut items = vec![];
     let mut rety: Option<hir::TypeId> = None;
@@ -236,7 +244,7 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, args: ast::Exp
       let ty = ctx.cre.get(id).ety;
       
       if let Some(expected_ty) = rety {
-        TypeMatch::matches_pos(ctx, sum, expected_ty, ty, ctx.src.get(rid).pos)?;
+        TypeMatch::matches(ctx, sum, expected_ty, ty, ctx.get(id).pos, None, None)?;
       } else {
         rety = Some(ty);
       }
@@ -250,6 +258,7 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, args: ast::Exp
   let len = hir::Expr {
     kind: hir::ExprKind::Const(Const::U32(items_rng.count())),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_usize,
   }.push(ctx.cre);
 
@@ -264,7 +273,7 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, args: ast::Exp
   hir::Expr {
     kind: hir::ExprKind::Const(Const::Array(kind, items_rng)),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
   }.push_ok(ctx.cre)
 }
-

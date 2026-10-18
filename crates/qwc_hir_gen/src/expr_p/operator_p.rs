@@ -22,21 +22,21 @@ use crate::{Ctx, ExprLow, TypeMatch, expr_p::const_p, FunCtx, Infer};
 
 
 // Binary
-pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, pos: Span, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId) -> Status<hir::ExprId> {
+pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId) -> Status<hir::ExprId> {
   let lhs = ExprLow::low(ctx, fctx, sum, lhs)?;
   let rhs = ExprLow::low(ctx, fctx, sum, rhs)?;
   
-  err_bypass!(ctx, lhs, rhs);
+  err_bypass!(ctx, it.pos, lhs, rhs);
 
   use ast::BinaryOp::*;
   
   let ex = match op {
     // Arithmetic
-    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, pos, op, lhs, rhs)?,
+    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, it, op, lhs, rhs)?,
 
-    Gt | Lt | GtEq | LtEq | Eq | Ne => low_binary_condition(ctx, op, lhs, rhs)?,
+    Gt | Lt | GtEq | LtEq | Eq | Ne => low_binary_condition(ctx, it, op, lhs, rhs)?,
 
-    And | Or | Xor => low_binary_logic(ctx, op, lhs, rhs)?,
+    And | Or | Xor => low_binary_logic(ctx, it, op, lhs, rhs)?,
 
     _ => todo!("{op:#?}")
   };
@@ -44,7 +44,7 @@ pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, pos: Span, op
   Success(ex)
 }
 
-fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
+fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
@@ -66,6 +66,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::B
       return hir::Expr {
         kind: hir::ExprKind::IntArithmetic { op: aop, flg, lhs, rhs },
         category: ExprCategory::RValue,
+        pos: it.pos,
         ety: lhs_ex.ety,
       }.push_ok(ctx.cre);
     }
@@ -84,6 +85,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::B
       return hir::Expr {
         kind: hir::ExprKind::FloatArithmetic { op: aop, lhs, rhs },
         category: ExprCategory::RValue,
+        pos: it.pos,
         ety: lhs_ex.ety,
       }.push_ok(ctx.cre);
     }
@@ -100,7 +102,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::B
   };
   
   // Find Impl
-  let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, pos)
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, it.pos)
     .map_err(||
       send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
         .args(&[
@@ -108,7 +110,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::B
           &format!("{}<{}>", ctx.type_name(sum, op_trt), ctx.type_name(sum, ctx.cre.get(rhs).ety)),
           &ctx.type_name(sum, ctx.cre.get(lhs).ety),
         ]),
-        Label::new_pos(pos)
+        Label::new_pos(it.pos)
       ))
     )?;
   
@@ -118,13 +120,14 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, pos: Span, op: ast::B
   let it = hir::Expr {
     kind: hir::ExprKind::Call { callee: op_fun, args },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: op_ret,
   }.push(ctx.cre);
 
   Success(it)
 }
 
-fn low_binary_condition(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
+fn low_binary_condition(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
@@ -151,13 +154,14 @@ fn low_binary_condition(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs:
   let this = hir::Expr {
     kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_bool,
   };
   
   Success(ctx.cre.push(this))
 }
 
-fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
+fn low_binary_logic(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
   let lhs_ex = ctx.cre.get(lhs);
   let rhs_ex = ctx.cre.get(rhs);
 
@@ -173,12 +177,12 @@ fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir
     And => hir::ExprKind::If {
       cond: lhs,
       then: rhs,
-      elsb: Some(const_p::low_bool(ctx, false)?),
+      elsb: Some(const_p::low_bool(ctx, it, false)?),
     },
 
     Or => hir::ExprKind::If {
       cond: lhs,
-      then: const_p::low_bool(ctx, true)?,
+      then: const_p::low_bool(ctx, it, true)?,
       elsb: Some(rhs),
     },
 
@@ -196,6 +200,7 @@ fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir
   let this = hir::Expr {
     kind,
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_bool,
   };
 
@@ -204,24 +209,23 @@ fn low_binary_logic(ctx: &mut Ctx, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir
 
 
 // Assign
-pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Status<hir::ExprId> {
+pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Status<hir::ExprId> {
   let lhs_hir = ExprLow::low(ctx, fctx, sum, lhs)?;
   let rhs_hir = ExprLow::low(ctx, fctx, sum, rhs)?;
-  err_bypass!(ctx, lhs_hir, rhs_hir);
+  err_bypass!(ctx, it.pos, lhs_hir, rhs_hir);
 
   helper::verify_assignable(ctx, sum, lhs, lhs_hir, op_span)?;
 
   let lhs_ty = ctx.cre.get(lhs_hir).ety;
   let rhs_ty = ctx.cre.get(rhs_hir).ety;
 
-  if lhs_ty != rhs_ty {
-    todo!("{:#?} != {:#?}", ctx.get(lhs_ty), ctx.get(rhs_ty))
-  }
+  TypeMatch::matches(ctx, sum, lhs_ty, rhs_ty, op_span, None, None)?;
 
   // Post
   let this = hir::Expr{
     kind: hir::ExprKind::Assign {lhs: lhs_hir, rhs: rhs_hir},
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_unit,
   };
   
@@ -233,7 +237,7 @@ pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: ast::Exp
 pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Status<hir::ExprId> {
   let lhs_hir = ExprLow::low(ctx, fctx, sum, lhs)?;
   let rhs_hir = ExprLow::low(ctx, fctx, sum, rhs)?;
-  err_bypass!(ctx, lhs_hir, rhs_hir);
+  err_bypass!(ctx, it.pos, lhs_hir, rhs_hir);
 
   helper::verify_assignable(ctx, sum, lhs, lhs_hir, op_span)?;
 
@@ -250,7 +254,7 @@ pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::
   
   let id = match op {
     // Arithmetic
-    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, it.pos, op, lhs_hir, rhs_hir)?,
+    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, it, op, lhs_hir, rhs_hir)?,
 
     _ => todo!("{op:#?}")
   };
@@ -276,16 +280,16 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     Some(this)
   } else { None };
   
-  err_bypass!(ctx, callee);
+  err_bypass!(ctx, it.pos, callee);
 
   if let Some(this) = this {
-    err_bypass!(ctx, this);
+    err_bypass!(ctx, it.pos, this);
   }
 
   let mut user_args = Vec::with_capacity(args.count() as usize);
   for id in ctx.src.extra_get(args) {
     let id = ExprLow::low(ctx, fctx, sum, id)?;
-    err_bypass!(ctx, id);
+    err_bypass!(ctx, it.pos, id);
     user_args.push(id);
   }
 
@@ -309,7 +313,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     (Some(kind), Some(this)) => {
       let this_ty = ctx.cre.get(this).ety;
 
-      TypeMatch::matches_pos(ctx, sum, kind, this_ty, it.pos)?;
+      TypeMatch::matches(ctx, sum, kind, this_ty, ctx.cre.get(this).pos, None, None)?;
       false
     }
 
@@ -359,26 +363,23 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
 
   if explicit_self {
     let self_arg = user_args[0];
-    let self_pos = ctx.src.get(ctx.src.extra_get(args).next().unwrap()).pos;
     let self_ty = ctx.cre.get(self_arg).ety;
-    TypeMatch::matches_pos(ctx, sum, self_kind.unwrap(), self_ty, self_pos)?;
+    TypeMatch::matches(ctx, sum, self_kind.unwrap(), self_ty, ctx.cre.get(self_arg).pos, None, None)?;
 
-    for (&supp_hir, supp_ast, trt) in izip!(&user_args[1..], ctx.src.extra_get(args).skip(1), ctx.extra_get(trait_args)) {
+    for (&supp_hir, trt) in izip!(&user_args[1..], ctx.extra_get(trait_args)) {
       let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { unreachable!() };
       
-      let supp_pos = ctx.src.get(supp_ast).pos;
       let supp_ty = ctx.cre.get(supp_hir).ety;
 
-      TypeMatch::matches_pos(ctx, sum, trt_ty, supp_ty, supp_pos)?;
+      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None, None)?;
     }
   } else {
-    for (&supp_hir, supp_ast, trt) in izip!(&user_args, ctx.src.extra_get(args), ctx.extra_get(trait_args)) {
+    for (&supp_hir, trt) in izip!(&user_args, ctx.extra_get(trait_args)) {
       let hir::Thing::NamedType(_, trt_ty) = *ctx.get(trt) else { unreachable!() };
       
-      let supp_pos = ctx.src.get(supp_ast).pos;
       let supp_ty = ctx.cre.get(supp_hir).ety;
 
-      TypeMatch::matches_pos(ctx, sum, trt_ty, supp_ty, supp_pos)?;
+      TypeMatch::matches(ctx, sum, trt_ty, supp_ty, ctx.cre.get(supp_hir).pos, None, None)?;
     }
   }
 
@@ -387,6 +388,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
   let this = hir::Expr {
     kind: hir::ExprKind::Call { callee, args: args_hir },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: trait_ret,
   };
 
@@ -395,7 +397,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
 
 
 // Field Create
-pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: ast::ExprId, fields: ast::ThingRng, brace_span: Span) -> Status<hir::ExprId> {
+pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, lhs: ast::ExprId, fields: ast::ThingRng, brace_span: Span) -> Status<hir::ExprId> {
   let lhs = ExprLow::low(ctx, fctx, sum, lhs)?;
   
   let hir::ExprKind::TypeOf{kind} = ctx.cre.get(lhs).kind else {
@@ -433,13 +435,12 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: as
     for id in ctx.src.extra_get(fields) {
       let ast::ThingKind::NamedExpr(name, expr) = ctx.src.get(id).kind else { unreachable!() };
       
-      let expr_pos = ctx.src.get(expr).pos;
       let expr = ExprLow::low(ctx, fctx, sum, expr)?;
       let expr_ty = ctx.cre.get(expr).ety;
 
       if let Some(&kind) = keys.get(&name.sid()) {
         if kind != expr_ty {
-          TypeMatch::matches_pos(ctx, sum, kind, expr_ty, expr_pos)?;
+          TypeMatch::matches(ctx, sum, kind, expr_ty, ctx.cre.get(expr).pos, None, None)?;
         }
       } else {
         ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[name.str(ctx.far)]), Label::new_pos(name)))
@@ -489,6 +490,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: as
   let this = hir::Expr {
     kind: hir::ExprKind::CombinatedInit { kind, fields },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: kind,
   };
 
@@ -497,19 +499,19 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, lhs: as
 
 
 // Member
-pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, rng: ast::ExprRng) -> Status<hir::ExprId> {
+pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, rng: ast::ExprRng) -> Status<hir::ExprId> {
   let ids = ctx.src.extra_get(rng).collect_vec();
   let mut current_id = ExprLow::low(ctx, fctx, sum, ids[0])?;
 
   for &id in &ids[1..] {
-    err_bypass!(ctx, current_id);
+    err_bypass!(ctx, it.pos, current_id);
 
     let ast::ExprKind::Nick(ident) = ctx.src.get(id).kind else { panic!("expected field identifier"); };
 
     
     // Basic Search
     let bsearch = match ctx.get(ctx.cre.get(current_id).ety).kind {
-      hir::TypeKind::Struct(fields) => Some(low_member_struct(ctx, current_id, ident, fields)?),
+      hir::TypeKind::Struct(fields) => Some(low_member_struct(ctx, it, current_id, ident, fields)?),
 
       _ => None,
     }.flatten();
@@ -533,7 +535,7 @@ pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, rng: ast::Exp
   Success(current_id)
 }
 
-pub fn low_member_struct(ctx: &mut Ctx, chain: hir::ExprId, ident: Ident, fields: hir::ThingRng) -> Status<Option<hir::ExprId>> {
+pub fn low_member_struct(ctx: &mut Ctx, it: &ast::Expr, chain: hir::ExprId, ident: Ident, fields: hir::ThingRng) -> Status<Option<hir::ExprId>> {
   let krate = ctx.get_krate(ctx.cre.get(chain).ety.cid());
 
   let mut found = None;
@@ -558,6 +560,7 @@ pub fn low_member_struct(ctx: &mut Ctx, chain: hir::ExprId, ident: Ident, fields
       idx: found.0,
     },
     category: current.category,
+    pos: it.pos,
     ety: found.1,
   };
 

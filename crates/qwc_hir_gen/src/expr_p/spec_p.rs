@@ -57,6 +57,7 @@ pub fn low_specialize(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast:
       hir::Expr {
         kind: hir::ExprKind::TypeOf { kind: spec },
         category: hir::ExprCategory::RValue,
+        pos: it.pos,
         ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, spec),
       }.push(ctx.cre)
     }

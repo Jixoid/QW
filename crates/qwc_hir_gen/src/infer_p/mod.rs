@@ -49,7 +49,7 @@ impl Infer {
         let hir::TypeKind::Fun { self_kind: cand_self, args: cand_params, .. } = ctx.get(cand_fn_ty).kind else { continue; };
 
         if let Some(cand_self_ty) = cand_self {
-          if TypeMatch::matches_pos(ctx, sum, cand_self_ty, this_ty, pos_span).is_fail() {
+          if TypeMatch::matches(ctx, sum, cand_self_ty, this_ty, ctx.get(this).pos, None, None).is_fail() {
             continue;
           }
         }
@@ -62,7 +62,7 @@ impl Infer {
         for (&user_arg, cand_param) in user_args.iter().zip(ctx.extra_get(cand_params)) {
           let hir::Thing::NamedType(_, cand_param_ty) = *ctx.get(cand_param) else { unreachable!() };
           let user_ty = ctx.cre.get(user_arg).ety;
-          if TypeMatch::matches_pos(ctx, sum, cand_param_ty, user_ty, pos_span).is_fail() {
+          if TypeMatch::matches(ctx, sum, cand_param_ty, user_ty, ctx.get(user_arg).pos, None, None).is_fail() {
             all_match = false;
             break;
           }
@@ -79,6 +79,7 @@ impl Infer {
       Status::Success(hir::Expr {
         kind: hir::ExprKind::GlobalRef(matched_method),
         category: ExprCategory::RValue,
+        pos: pos_span,
         ety: matched_fn_ty,
       }.push(ctx.cre))
     } else if matched.len() > 1 {
@@ -103,6 +104,7 @@ impl Infer {
           kind: hir::ExprKind::GlobalRef(method),
           category: ExprCategory::RValue,
           ety: kind,
+          pos: ctx.cre.get(current_id).pos,
         }.push(ctx.cre);
 
         return hir::Expr {
@@ -112,6 +114,7 @@ impl Infer {
           },
           category: ExprCategory::RValue,
           ety: ctx.prims.ty_unit,
+          pos: ctx.cre.get(current_id).pos,
         }.push_ok(ctx.cre);
       }
     }
@@ -120,6 +123,7 @@ impl Infer {
       kind: hir::ExprKind::Error,
       category: ExprCategory::RValue,
       ety: ctx.prims.ty_error,
+      pos: ctx.cre.get(current_id).pos,
     }.push_ok(ctx.cre)
   }
 
@@ -156,7 +160,7 @@ impl Infer {
         let arg_thing = ctx.extra_get(args).next().unwrap();
 
         let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
-        if TypeMatch::matches_pos(ctx, sum, param_ty, rhs_ty, pos_span).is_fail() {
+        if TypeMatch::matches(ctx, sum, param_ty, rhs_ty, ctx.get(rhs_id).pos, None, None).is_fail() {
           continue;
         }
 
@@ -165,6 +169,7 @@ impl Infer {
             kind: hir::ExprKind::GlobalRef(method),
             category: ExprCategory::RValue,
             ety: fn_ty,
+            pos: pos_span,
           }.push(ctx.cre),
           ret,
         ));

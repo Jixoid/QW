@@ -253,12 +253,12 @@ fn low_impl_validate(
   };
 
   // Signature Matching
-  for ((exp_sid, exp_fun), (_, _, fun2_ast, _)) in izip!(&expected_methods, &implemented_methods) {
+  for ((exp_sid, exp_fun), (.., pos)) in izip!(&expected_methods, &implemented_methods) {
     let (_, method_id, _) = impl_method_map.get(exp_sid).unwrap();
     
     let hir::ItemKind::Function{kind: act_fun, ..} = ctx.cre.get(*method_id).kind else { unreachable!() };
 
-    TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *fun2_ast, Some(type_ty), Some(&assoc_by_idx))?;
+    TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *pos, Some(type_ty), Some(&assoc_by_idx))?;
   }
 
 

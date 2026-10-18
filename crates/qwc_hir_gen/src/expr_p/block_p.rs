@@ -10,15 +10,15 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
-use qwc_hir::{self as hir, ExprCategory};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_ast as ast;
 
 use crate::{Ctx, ExprLow, TypeLow, TypeMatch, FunCtx};
 
 
 // Block
-pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Status<hir::ExprId> {
+pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, rng: ast::ExprRng, expr: Option<ast::ExprId>) -> Status<hir::ExprId> {
   ctx.loc.push_scope();
 
   let mut stmt = vec![];
@@ -77,18 +77,17 @@ pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, rng: ast::Expr
 
 
   // Post
-  let this = hir::Expr{
+  hir::Expr{
     kind: hir::ExprKind::Block { stmt: stmt_rng, expr: expr_hir },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
-  };
-
-  Status::Success(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }
 
 
 // Variable
-pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool, pos: Span) -> Status<hir::ExprId> {
+pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool) -> Status<hir::ExprId> {
   let (name, span) = match *ctx.src.get(item) {
     ast::Patt::One(ident) => (ident.sid(), ident),
 
@@ -96,19 +95,18 @@ pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, item: ast::PattI
   };
 
   let Some(init) = init else {
-    ret_err!(sum, Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(pos)));
+    ret_err!(sum, Message::error(VARIABLE_REQUIRES_INITIALIZER.args(&[ctx.sin.str(name)]), Label::new_pos(it.pos)));
   };
   let init_hir = ExprLow::low(ctx, fctx, sum, init)?;
   let init_ty = ctx.cre.get(init_hir).ety;
 
   let (kind, pos) = if let Some(kind) = kind {
-    let init_pos = ctx.src.get(init).pos;
     let kind_pos = ctx.src.get(kind).pos;
 
     let kind_ty = TypeLow::low(ctx, sum, kind)?;
 
     if init_ty != kind_ty {
-      TypeMatch::matches_pos(ctx, sum, kind_ty, init_ty, init_pos)?;
+      TypeMatch::matches(ctx, sum, kind_ty, init_ty, ctx.get(init_hir).pos, None, None)?;
     }
 
     (kind_ty, kind_pos)
@@ -133,11 +131,10 @@ pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, item: ast::PattI
 
 
   // Post
-  let this = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::Let { local: local_id, init: init_hir},
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_unit,
-  };
-
-  Status::Success(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }

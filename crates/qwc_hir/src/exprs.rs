@@ -10,6 +10,7 @@
 */
 
 
+use qwc_diagnostic::Span;
 use qwc_string_interner::Sid;
 use rustc_apfloat::ieee;
 
@@ -178,8 +179,8 @@ impl ExprCategory {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Expr {
   pub kind: ExprKind,
-  
   pub category: ExprCategory,
+  pub pos: Span,
 
   /// Evaluated Type
   pub ety: TypeId

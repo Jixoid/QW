@@ -247,6 +247,8 @@ impl TypeParser {
   pub fn sub_iface(ctx: &mut Ctx, path: DefPathId) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.peek(sum)?;
 
+    let reqs = helper::read_bases(ctx!(cre, sin, far, lex, sum, side))?;
+
     lex.get(sum)?.expect_kind(sum, WK::BraceL)?;
 
     let rng = {
@@ -266,7 +268,7 @@ impl TypeParser {
     // Post
     Type {
       pos: lex.pos_extend(start),
-      kind: TypeKind::Iface { fields: rng, path },
+      kind: TypeKind::Iface { fields: rng, reqs, path },
     }.push_ok(cre)
   }
 

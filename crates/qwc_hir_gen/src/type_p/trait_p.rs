@@ -10,72 +10,61 @@
 */
 
 
-use crate::{hgen::Ctx, TypeLow};
+use crate::{TypeLow, Ctx, type_p::helper};
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, Status::{self, Fail, Success}, StatusApi, Summary, msg::*, ret_err, send_err};
-use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
+use qwc_diagnostic::{CollectOrErrors, Label, Message, Status::{self, Success}, StatusApi, Summary, msg::*, ret_err};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
 
 // Static Interface
-pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::FieldRng, reqs: ast::TypeRng) -> Status<hir::TypeId> {
-  let trait_ty = hir::Type {
-    kind: hir::TypeKind::Error,
-    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
-    attr: TypeAttr::empty(),
-    path,
-  }.push(ctx.cre);
-
-  let mut has_error = false;
-  let mut req_vec = vec![];
-
-  for id in ctx.src.extra_get(reqs) {
-    let id_hir = match TypeLow::low(ctx, sum, id) {
-      Success(id_hir) => id_hir,
-      Fail => {
-        has_error = true;
-        continue;
-      }
+pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields: ast::FieldRng, reqs: ast::TypeRng) -> Status<hir::TypeId> {
+  // Reqs
+  let reqs = ctx.src.extra_get(reqs).map(|id| {
+    let id_hir = TypeLow::low(ctx, sum, id)?;
+    
+    match ctx.get(id_hir).kind {
+      hir::TypeKind::Iface(..) | hir::TypeKind::Trait{..} => {}
+      hir::TypeKind::Error => {}
+      
+      hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(ctx.src.get(id).pos))),
+      
+      _ => ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["trait", &ctx.type_name(sum, id_hir)]), Label::new_pos(ctx.src.get(id).pos))),
     };
 
-    match ctx.get(id_hir).kind {
-      hir::TypeKind::Iface(..) | hir::TypeKind::Trait{..} => {
-        req_vec.push(id_hir);
-      }
-      hir::TypeKind::GenericRaw{..} => {
-        has_error = true;
-        send_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(ctx.src.get(id).pos)));
-      }
-      hir::TypeKind::Error => {
-        has_error = true;
-      }
-      _ => {
-        has_error = true;
-        send_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["trait", &ctx.type_name(sum, trait_ty)]), Label::new_pos(ctx.src.get(id).pos)));
-      }
-    }
-  }
+    Success(id_hir)
+  })
+    .collect_or_errors()?;
+  
+  let reqs = ctx.cre.extra(&reqs);
 
-  if has_error {
-    return Status::Success(trait_ty);
-  }
 
-  let reqs = ctx.cre.extra(&req_vec);
+  // Dummy
+  let path = helper::low_defpath(ctx, path);
 
-  ctx.cmap.current_trait.push(trait_ty);
+  let dummy_me = hir::Type {
+    kind: hir::TypeKind::Error,
+    attr: TypeAttr::empty(),
+    path,
+    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+  }.push(ctx.cre);
+
+
+  ctx.cmap.current_trait.push(dummy_me);
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
-  let (methods, types) = {
+
+  // fields
+  let fields = (|| {
     let mut methods = vec![];
     let mut types = vec![];
 
-    for id in ctx.src.extra_get(rng) {
+    for id in ctx.src.extra_get(fields) {
       let it = ctx.src.get(id);
 
       match it.kind {
         ast::FieldKind::Fun{kind, ..} => {
           let name = it.name.unwrap().sid();
-          let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
-          let fun_ty = TypeLow::low_itemty(ctx, sum, fun_path, kind)?;
+          let fun_ty = TypeLow::low(ctx, sum, kind)?;
 
           // Post
           let id = hir::Thing::NamedType(
@@ -103,11 +92,14 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Fi
       }
     }
 
-    (ctx.cre.extra(&methods), ctx.cre.extra(&types))
-  };
+    Success((ctx.cre.extra(&methods), ctx.cre.extra(&types)))
+  })();
 
   ctx.cmap.self_ty.pop();
   ctx.cmap.current_trait.pop();
+
+
+  let (methods, types) = fields?;
 
   let this = hir::Type {
     kind: hir::TypeKind::Trait{methods, types, reqs},
@@ -115,17 +107,29 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Fi
     attr: TypeAttr::empty(),
     path,
   };
-  *ctx.cre.get_mut(trait_ty) = this;
+  *ctx.cre.get_mut(dummy_me) = this;
 
-  Status::Success(trait_ty)
+  Status::Success(dummy_me)
 }
 
 
 // Dynamic Inteface
-pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::FieldRng) -> Status<hir::TypeId> {
+pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast::FieldRng, reqs: ast::TypeRng) -> Status<hir::TypeId> {
+  // Dummy
+  let path = helper::low_defpath(ctx, path);
+  
+  let dummy_me = hir::Type {
+    kind: hir::TypeKind::Error,
+    attr: TypeAttr::empty(),
+    path,
+    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+  }.push(ctx.cre);
+
+  ctx.cmap.current_trait.push(dummy_me);
   ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
 
-  let methods = {
+
+  let methods = (|| {
     let mut ctn = vec![];
 
     for id in ctx.src.extra_get(rng) {
@@ -133,8 +137,7 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Fi
 
       let ast::FieldKind::Fun{kind, ..} = it.kind else { unreachable!() };
       let name = it.name.unwrap().sid();
-      let fun_path = ctx.cre.push(hir::DefPath::Path { base: path, name });
-      let fun_ty = TypeLow::low_itemty(ctx, sum, fun_path, kind)?;
+      let fun_ty = TypeLow::low(ctx, sum, kind)?;
       
       // Check (self != DST)
       let hir::TypeKind::Fun{self_kind: Some(self_kind), ..} = ctx.get(fun_ty).kind else { unreachable!() };
@@ -158,16 +161,20 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Fi
       ctn.push(id);
     }
 
-    ctx.cre.extra(&ctn)
-  };
+    Success(ctx.cre.extra(&ctn))
+  })();
 
   ctx.cmap.self_ty.pop();
 
-
-  hir::Type {
-    kind: hir::TypeKind::Iface(methods),
+  
+  // Post
+  let this = hir::Type {
+    kind: hir::TypeKind::Iface(methods?),
     layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
     attr: TypeAttr::empty(),
     path,
-  }.push_ok(ctx.cre)
+  };
+  *ctx.cre.get_mut(dummy_me) = this;
+
+  Success(dummy_me)
 }

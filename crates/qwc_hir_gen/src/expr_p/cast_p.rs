@@ -38,6 +38,7 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     return hir::Expr {
       kind: hir::ExprKind::IntCast(expr),
       category: ExprCategory::RValue,
+      pos: it.pos,
       ety: target,
     }.push_ok(ctx.cre);
   }
@@ -69,7 +70,6 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     ))
   }
 }
-
 
 
 fn cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, target_unwrap: hir::TypeId) -> Status<hir::ExprId> {
@@ -117,6 +117,7 @@ fn cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir
       target_iface: target_unwrap,
     },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: target,
   }.push_ok(ctx.cre)
 }
@@ -160,6 +161,7 @@ fn cast_to_trait(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::Ex
       target_trait: target,
     },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: hidden,
   }.push_ok(ctx.cre)
 }

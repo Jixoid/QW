@@ -11,9 +11,9 @@
 
 
 use inkwell::{GlobalVisibility, module::Linkage};
-use qwc_mir::{AnyId, SymbId, Symbol, SymbolKind, SymbolStat, Type, id::NodeKind};
+use qwc_mir::{AnyId, SymbId, Symbol, SymbolKind, SymbolStat, Type, Value, id::NodeKind};
 
-use crate::{CtxI, CtxM, BlokLow, cgen::SymbolVal, TypeLow};
+use crate::{BlokLow, CtxI, CtxM, TypeLow, cgen::SymbolVal, ValueLow};
 
 
 pub struct SymbLow;
@@ -23,13 +23,14 @@ impl SymbLow {
   pub fn declare_symbols<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>) {
     for idx in 0..ictx.cre.symbols_len() {
       let symb_id = SymbId::from_any(AnyId::new(idx as u32, NodeKind::Symb));
-      let it: &Symbol = ictx.cre.get(symb_id);
+      let it = ictx.cre.get(symb_id);
       let name = ictx.cre.sym_str(it.name);
 
       match it.kind {
-        SymbolKind::Variable { ism } => {
+        SymbolKind::Variable { ism, .. } => {
           let ty = TypeLow::low_basic_cached(uctx, ictx, it.ety);
           let gv = ictx.mol.add_global(ty, None, name);
+          gv.set_initializer(&ty.const_zero());
           gv.set_constant(!ism);
 
           match it.stat {
@@ -96,16 +97,19 @@ impl SymbLow {
       let it: &Symbol = ictx.cre.get(symb_id);
 
       match it.kind {
-        SymbolKind::Variable{..} => {
+        SymbolKind::Variable { value, .. } => {
           if it.stat != SymbolStat::Import {
             if let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
-              let ty = TypeLow::low_basic_cached(uctx, ictx, it.ety);
-              gv.set_initializer(&ty.const_zero());
+              gv.set_initializer(&match value {
+                Value::Const(cons) => ValueLow::low_const(ictx, &cons),
+                Value::GlobalRef(symb) => ValueLow::low_global_ref(uctx, symb),
+                _ => unreachable!()
+              });
             }
           }
         }
 
-        SymbolKind::Function{entry, blocks} => {
+        SymbolKind::Function { entry, blocks } => {
           if it.stat != SymbolStat::Import {
             if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&symb_id).copied() {
               let ty: &Type = ictx.cre.get(it.ety);

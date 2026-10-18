@@ -20,23 +20,23 @@ use crate::{Ctx, FunCtx, ExprLow};
 
 
 // Unary
-pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, op: ast::UnaryOp, id: ast::ExprId) -> Status<hir::ExprId> {
+pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, op: ast::UnaryOp, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
   use ast::UnaryOp::*;
   
   match op {
-    Deref => low_unary_deref(ctx, fctx, sum, id),
+    Deref => low_unary_deref(ctx, fctx, sum, it, id),
     
-    Ref{ism} => low_unary_ref(ctx, fctx, sum, id, ism),
+    Ref{ism} => low_unary_ref(ctx, fctx, sum, it, id, ism),
 
-    Not => low_unary_not(ctx, fctx, sum, id),
+    Not => low_unary_not(ctx, fctx, sum, it, id),
     
     _ => todo!("{op:#?}")
   }
 }
 
-fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId) -> Status<hir::ExprId> {
+fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
   let id = ExprLow::low(ctx, fctx, sum, id)?;
-  err_bypass!(ctx, id);
+  err_bypass!(ctx, it.pos, id);
   let it = ctx.cre.get(id);
   let ty = ctx.get(it.ety);
 
@@ -53,32 +53,34 @@ fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::Exp
   let this = hir::Expr {
     kind: hir::ExprKind::Deref(id),
     category: ExprCategory::lvalue(ism),
+    pos: it.pos,
     ety: ty,
   };
 
   Success(ctx.cre.push(this))
 }
 
-fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId, ism: bool) -> Status<hir::ExprId> {
+fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId, ism: bool) -> Status<hir::ExprId> {
   let id = ExprLow::low(ctx, fctx, sum, id)?;
-  err_bypass!(ctx, id);
-  let it = ctx.cre.get(id);
-
-  let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, it.ety, ism);
+  err_bypass!(ctx, ctx.cre.get(id).pos, id);
+  
+  let ty = ctx.cre.get(id).ety;
+  let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, ism);
 
   // Post
   let this = hir::Expr {
     kind: hir::ExprKind::Ref(id, ism),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ty,
   };
 
   Success(ctx.cre.push(this))
 }
 
-fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprId) -> Status<hir::ExprId> {
+fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
   let id = ExprLow::low(ctx, fctx, sum, id)?;
-  err_bypass!(ctx, id);
+  err_bypass!(ctx, it.pos, id);
   let it = ctx.cre.get(id);
   let ty = ctx.get(it.ety);
 
@@ -91,6 +93,7 @@ fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, id: ast::ExprI
   let this = hir::Expr {
     kind: hir::ExprKind::BoolNot(id),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: it.ety,
   };
 

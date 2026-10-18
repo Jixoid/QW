@@ -11,7 +11,7 @@
 
 
 use qwc_ast::{self as ast, Ident};
-use qwc_diagnostic::{Label, Message, Span, Status::{self, Success}, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi, TypeAttr};
 use qwc_resolve::{self as resolve, Resolver};
 
@@ -19,16 +19,16 @@ use crate::{ItemLow, TypeLow, ctx, Ctx};
 
 
 // Resolve
-pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, pos: Span, ident: Ident) -> Status<hir::ExprId> {
+pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, ident: Ident) -> Status<hir::ExprId> {
   let (kind, lscp, _) = Resolver::with_locals(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods, Some(ctx.loc)).lookup(sum, ident)?.get_k();
-  low_resolved(ctx, sum, kind, lscp, pos)
+  low_resolved(ctx, sum, it, kind, lscp)
 }
 
-pub fn low_self(ctx: &mut Ctx, sum: &mut Summary, pos: Span) -> Status<hir::ExprId> {
+pub fn low_self(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr) -> Status<hir::ExprId> {
   let self_sid = ctx.sin.sid_self();
 
   let Some(id) = ctx.loc.lookup(&self_sid) else {
-    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&["self"]), Label::new_pos(pos)))
+    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&["self"]), Label::new_pos(it.pos)))
   };
 
   
@@ -38,29 +38,31 @@ pub fn low_self(ctx: &mut Ctx, sum: &mut Summary, pos: Span) -> Status<hir::Expr
   let this = hir::Expr {
     kind: hir::ExprKind::LocalRef(id),
     category: ExprCategory::lvalue(local.ism),
+    pos: it.pos,
     ety: local.ty,
   };
 
   Success(ctx.cre.push(this))
 }
 
-pub fn low_self_big(ctx: &mut Ctx, sum: &mut Summary, pos: Span) -> Status<hir::ExprId> {
+pub fn low_self_big(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr,) -> Status<hir::ExprId> {
   use qwc_diagnostic::msg::SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT;
   let kind = match ctx.cmap.self_ty.last() {
     Some(&v) => v,
-    None => ret_err!(sum, Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(pos)))
+    None => ret_err!(sum, Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(it.pos)))
   };
 
   let this = hir::Expr {
     kind: hir::ExprKind::TypeOf { kind },
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
   };
 
   Success(ctx.cre.push(this))
 }
 
-pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, pos: Span, rng: ast::ExprRng) -> Status<hir::ExprId> {
+pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, rng: ast::ExprRng) -> Status<hir::ExprId> {
   let mut segment = vec![];
 
   for id in ctx.src.extra_get(rng) {
@@ -70,10 +72,11 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, pos: Span, rng: ast::ExprRng) 
   }
 
   let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
-  low_resolved(ctx, sum, kind, lscp, pos)
+  low_resolved(ctx, sum, it, kind, lscp)
 }
 
-pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp: &resolve::Scope, pos: Span) -> Status<hir::ExprId> {
+
+pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::ExprId> {
   let expr = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::ExprParam(generic, idx, thing) => {
@@ -83,9 +86,10 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         let generic_hir = ItemLow::low(ctx, sum, generic)?.unwrap();
 
         // Post
-        let this = hir::Expr{
+        let this = hir::Expr {
           kind: hir::ExprKind::GenericExpr { generic: generic_hir, idx },
           category: ExprCategory::RValue,
+          pos: it.pos,
           ety: ty,
         };
 
@@ -94,17 +98,18 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
 
       resolve::ScopeKindAst::Expr(id) => {
         let id = ItemLow::low(ctx!(lscp -> ctx), sum, id)?.unwrap();
-        let it = ctx.cre.get(id);
+        let item = ctx.cre.get(id);
 
-        let kind = it.symbol_kind().unwrap();
+        let kind = item.symbol_kind().unwrap();
         
-        let ism = it.assignable().unwrap();
+        let ism = item.assignable().unwrap();
 
 
         // Post
-        hir::Expr{
+        hir::Expr {
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::lvalue(ism),
+          pos: it.pos,
           ety: kind,
         }.push(ctx.cre)
       }
@@ -117,6 +122,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
+          pos: it.pos,
           ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
         };
 
@@ -124,11 +130,11 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
       }
 
       resolve::ScopeKindAst::TypeParam(..) | resolve::ScopeKindAst::AssocType(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "type"]), Label::new_pos(it.pos)));
       }
 
       resolve::ScopeKindAst::Module(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(it.pos)));
       }
 
       resolve::ScopeKindAst::GenericType(generic, kind) => {
@@ -148,6 +154,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
+          pos: it.pos,
           ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
         };
 
@@ -157,15 +164,16 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
       resolve::ScopeKindAst::GenericExpr(generic, expr) => {
         let generic = ItemLow::low(ctx, sum, generic)?.unwrap();
         let id = ItemLow::low(ctx!(lscp -> ctx), sum, expr)?.unwrap();
-        let it = ctx.cre.get(id);
+        let item = ctx.cre.get(id);
 
-        let kind = it.symbol_kind().unwrap();
+        let kind = item.symbol_kind().unwrap();
         
-        let ism = it.assignable().unwrap();
+        let ism = item.assignable().unwrap();
 
         let expr = hir::Expr{
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::lvalue(ism),
+          pos: it.pos,
           ety: kind,
         }.push(ctx.cre);
 
@@ -182,6 +190,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         hir::Expr {
           kind: hir::ExprKind::GenericRaw { generic, kind: expr },
           category: ExprCategory::RValue,
+          pos: it.pos,
           ety: kind,
         }.push(ctx.cre)
       }
@@ -191,6 +200,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         let this = hir::Expr {
           kind: hir::ExprKind::LocalRef(id),
           category: ExprCategory::lvalue(local.ism),
+          pos: it.pos,
           ety: local.ty,
         };
         ctx.cre.push(this)
@@ -204,6 +214,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
         hir::Expr {
           kind: hir::ExprKind::GlobalRef(id),
           category: ExprCategory::RValue,
+          pos: it.pos,
           ety: kind,
         }.push(ctx.cre)
       }
@@ -213,13 +224,14 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, 
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
           ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
+          pos: it.pos,
         };
 
         ctx.cre.push(this)
       }
 
       resolve::ScopeKindHir::Module(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(pos)));
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(it.pos)));
       }
     }
   };

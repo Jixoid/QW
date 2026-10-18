@@ -34,13 +34,13 @@ impl Message {
 
     // Check if message belongs to target_fid
     if let Some(lbl) = primary_label {
-      if lbl.span.fid != target_fid {
+      if lbl.span.fid() != target_fid {
         return None;
       }
     }
 
     let range = match primary_label {
-      Some(lbl) => {
+      Some(lbl) if !lbl.span.is_builtin() => {
         let interval = lbl.span.interval(far);
         Range {
           start: Position {
@@ -53,7 +53,7 @@ impl Message {
           },
         }
       }
-      None => Range::default(),
+      Some(..) | None => Range::default(),
     };
 
     let mut message_text = self.message.msg.clone();
@@ -86,7 +86,7 @@ impl Message {
     let related_information = if self.labels.len() > 1 || !self.suggestions.is_empty() {
       let mut rel = Vec::new();
       for sec in self.labels.iter().skip(1) {
-        let file = far.get(sec.span.fid);
+        let file = far.get(sec.span.fid());
         if let Ok(uri) = Url::from_file_path(file.fpath()) {
           let sec_int = sec.span.interval(far);
           let sec_range = Range {
@@ -110,7 +110,7 @@ impl Message {
       }
       for sugg in &self.suggestions {
         for sec in sugg.labels.iter().skip(1) {
-          let file = far.get(sec.span.fid);
+          let file = far.get(sec.span.fid());
           if let Ok(uri) = Url::from_file_path(file.fpath()) {
             let sec_int = sec.span.interval(far);
             let sec_range = Range {
@@ -147,7 +147,7 @@ impl Message {
       for sugg in &self.suggestions {
         let target_label = sugg.labels.first().or(primary_label);
         if let Some(target_lbl) = target_label {
-          if target_lbl.span.fid == target_fid {
+          if target_lbl.span.fid() == target_fid {
             let interval = target_lbl.span.interval(far);
             let range = Range {
               start: Position {

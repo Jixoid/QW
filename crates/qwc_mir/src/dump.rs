@@ -54,7 +54,7 @@ impl DumpHandler for Symbol {
     self.stat.dump(cre, sin, f, indent)?;
 
     match self.kind {
-      SymbolKind::Function{ entry, blocks } => {
+      SymbolKind::Function { entry, blocks } => {
         write!(f, "{} {}{} ", kw("fun"), name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, sin, f, indent)?;
         writeln!(f, " {{")?;
@@ -71,11 +71,13 @@ impl DumpHandler for Symbol {
         write!(f, "}}")?;
       }
       
-      SymbolKind::Variable{ism} => {
+      SymbolKind::Variable { value, ism } => {
         let kw_sym = if ism { kw("var") } else { kw("let") };
         write!(f, "{} {}{} ", kw_sym, name(cre.sym_str(self.name)), punct(":"))?;
         self.ety.dump(cre, sin, f, indent)?;
         write!(f, " {} ", op("="))?;
+        value.dump(cre, sin, f, indent)?;
+        write!(f, "{}", op(";"))?;
       }
 
       SymbolKind::Vmt { size, align, table } => {

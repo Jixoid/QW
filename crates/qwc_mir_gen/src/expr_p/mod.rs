@@ -127,13 +127,13 @@ impl ExprLow {
 
       Array(kind, rng) => Self::low_const_array(ctx, sum, bbld, kind, rng)?,
       
-      Str(sid) => Self::low_const_str(ctx, sum, bbld, sid)?,
+      Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
     };
 
     Success(this)
   }
 
-  fn low_const_str(ctx: &mut Ctx, _sum: &mut Summary, bbld: &mut FunBuilder, sid: Sid) -> Status<Value> {
+  fn low_const_str(ctx: &mut Ctx, bbld: &mut FunBuilder, sid: Sid) -> Status<Value> {
     let fatptr = ctx.tin.ty_fatptrint();
     let ptr = ctx.tin.ty_ptr();
     let aint = ctx.tin.ty_arch_int();

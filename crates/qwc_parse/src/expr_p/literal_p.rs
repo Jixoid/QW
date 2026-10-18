@@ -100,7 +100,7 @@ pub fn pre_number_point(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin,
 
 pub fn pre_string(ctx: &mut Ctx) -> Status<ExprId> { ctx!(ctx => cre, sin, far, lex, sum, side);
   let start = lex.get(sum)?;
-  let sid = start.string_sid(sum, sin, far)?;
+  let sid = start.string_sid(sin, far)?;
 
   let kind = if lex.str(start).as_bytes()[0] == b'\'' {
     ExprKind::Char(start.into(), sid)

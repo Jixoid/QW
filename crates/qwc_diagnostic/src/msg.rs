@@ -53,6 +53,8 @@ pub const CANNOT_CONVERT_TO_CHAR:                           CodedMsg = CodedMsg:
 pub const RETURN_OUTSIDE_OF_FUNCTION:                       CodedMsg = CodedMsg::new(0x0024, "`return` outside of function");
 pub const CONTINUE_OUTSIDE_OF_LOOP:                         CodedMsg = CodedMsg::new(0x0025, "`continue` outside of loop");
 pub const BREAK_OUTSIDE_OF_LOOP:                            CodedMsg = CodedMsg::new(0x0026, "`break` outside of loop");
+pub const FIXED_VALUE_CANNOT_BE_EVALUATED:                  CodedMsg = CodedMsg::new(0x0027, "the fixed value cannot be evaluated");
+pub const GLOBAL_VARIABLES_CAN_ONLY_BE_CONSTANT:            CodedMsg = CodedMsg::new(0x0028, "global variables can only be constant");
 
 
 // Non Coded Messages
@@ -92,3 +94,4 @@ pub const NOT_A_MEMBER_OF_IFACE:            FmtMsg = FmtMsg::new("not a member o
 pub const CANNOT_CAST:                      FmtMsg = FmtMsg::new("cannot cast");
 pub const UNEXPECTED_PARAMETER:             FmtMsg = FmtMsg::new("unexpected parameter:  `{}`");
 pub const ARGUMENT_X_IS_MISSING:            FmtMsg = FmtMsg::new("argument `{}` is missing");
+pub const ICE_MESSAGE:                      FmtMsg = FmtMsg::new("ICE: {}");

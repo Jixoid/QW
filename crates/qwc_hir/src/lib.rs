@@ -28,3 +28,4 @@ pub use {items::*, types::*, exprs::*, things::* };
 pub use layout::*;
 pub use poit::HPoit;
 pub use dump::{Dump, DumpHandler, DumpCtx};
+pub use qwc_diagnostic::Span;

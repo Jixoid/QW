@@ -10,21 +10,14 @@
 */
 
 
-use crate::{BlokId, BlokRng, SymbRng, TypeId};
+use crate::{BlokId, BlokRng, SymbRng, TypeId, Value};
 
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SymbolKind {
-  Variable{ism: bool},
-  Function{
-    entry: BlokId,
-    blocks: BlokRng,
-  },
-  Vmt {
-    size: u64,
-    align: u64,
-    table: SymbRng,
-  },
+  Variable {value: Value /* Const | GlobalRef */, ism: bool},
+  Function {entry: BlokId, blocks: BlokRng},
+  Vmt {size: u64, align: u64, table: SymbRng},
 }
 
 

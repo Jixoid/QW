@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
 use qwc_resolve::Resolver;
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
@@ -21,12 +21,12 @@ use crate::{Ctx, ctx, ItemLow, TypeLow};
 
 
 // Resolve
-pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, ident: Ident) -> Status<hir::TypeId> {
-  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).lookup(sum, ident)?.get_k();
-  low_resolved(ctx, sum, kind, lscp, span)
+pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, ident: Ident) -> Status<hir::TypeId> {
+  let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).lookup(sum, ident)?.get_k();
+  low_resolved(ctx, sum, it, kind, lscp)
 }
 
-pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<hir::TypeId> {
+pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, rng: ast::TypeRng) -> Status<hir::TypeId> {
   let mut segment = vec![];
 
   for id in ctx.src.extra_get(rng) {
@@ -35,12 +35,12 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<h
     if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
   }
 
-  let (kind, lscp, span) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
-  low_resolved(ctx, sum, kind, lscp, span)
+  let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
+  low_resolved(ctx, sum, it, kind, lscp)
 }
 
 
-fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp: &resolve::Scope, span: Span) -> Status<hir::TypeId> {
+fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::TypeId> {
   let ty = match kind {
     resolve::ScopeKind::Ast(ast_kind) => match ast_kind {
       resolve::ScopeKindAst::Type(item) => {
@@ -120,7 +120,7 @@ fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp
       }
 
       resolve::ScopeKindAst::GenericExpr(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(it.pos)))
       }
 
       resolve::ScopeKindAst::Local(..) => panic!("value in type position"),
@@ -130,7 +130,7 @@ fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, kind: resolve::ScopeKind, lscp
       resolve::ScopeKindHir::Type(ty) => ty,
 
       resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
-        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(span)))
+        ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(it.pos)))
       }
     }
   };

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Status::{self, Success}, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
+use qwc_diagnostic::{Label, Message, Status, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_ast as ast;
 
@@ -23,12 +23,10 @@ pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
     send_err!(sum, Message::error(RETURN_OUTSIDE_OF_FUNCTION, Label::new_pos(it.pos)))
   )?;
 
-  let val_hir = val.map(|id| ExprLow::low(ctx, fctx, sum, id)).unwrap_or_else(|| const_p::low_unit(ctx))?;
+  let val_hir = val.map(|id| ExprLow::low(ctx, fctx, sum, id)).unwrap_or_else(|| const_p::low_unit(ctx, it))?;
   let val_ty = ctx.cre.get(val_hir).ety;
 
-  let ret_pos = val.map(|id| ctx.src.get(id).pos).unwrap_or(it.pos);
-
-  TypeMatch::matches_pos(ctx, sum, ret_ty, val_ty, ret_pos)?;
+  TypeMatch::matches(ctx, sum, ret_ty, val_ty, ctx.get(val_hir).pos, None, None)?;
     //.add(Label::new(fctx.sign_pos, DEFINED_HERE))
 
 
@@ -36,6 +34,7 @@ pub fn low_return(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
   hir::Expr {
     kind: hir::ExprKind::Return(val_hir),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_never,
   }.push_ok(ctx.cre)
 }
@@ -70,13 +69,12 @@ pub fn low_break(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
 
 
   // Post
-  let item = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::Break(val),
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_never,
-  };
-
-  Success(ctx.cre.push(item))
+  }.push_ok(ctx.cre)
 }
 
 pub fn low_continue(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr) -> Status<hir::ExprId> {
@@ -86,11 +84,10 @@ pub fn low_continue(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::E
 
 
   // Post
-  let item = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::Continue,
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_never,
-  };
-
-  Success(ctx.cre.push(item))
+  }.push_ok(ctx.cre)
 }

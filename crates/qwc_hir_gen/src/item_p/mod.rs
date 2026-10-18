@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Status, StatusApi, Summary, msg::*, ret_err};
 use qwc_ast::{self as ast, Attribute};
 use qwc_hir::{self as hir, ItemAttr, PushOkApi};
 
@@ -89,7 +89,7 @@ impl ItemLow {
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
     
     let lscp = ctx.scp.get(&id.to_any()).unwrap_or(ctx.lscp);
-    let kind = TypeLow::low_itemty(ctx!(lscp -> ctx), sum, path, kind)?;
+    let kind = TypeLow::low(ctx!(lscp, path -> ctx), sum, kind)?;
     
     let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
     
@@ -103,8 +103,40 @@ impl ItemLow {
   }
 
 
-  fn low_let(_ctx: &mut Ctx, _sum: &mut Summary, _id: ast::ItemId, _it: &ast::Item, _kind: Option<ast::TypeId>, _expr: ast::ExprId, _ism: bool) -> Status<hir::ItemId> {
-    todo!()
+  fn low_let(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, kind: Option<ast::TypeId>, expr: ast::ExprId, ism: bool) -> Status<hir::ItemId> {
+    let name = it.name.unwrap().sid();
+    let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
+
+    let kind = kind.map(|id| TypeLow::low(ctx, sum, id)).transpose()?;
+
+    let fctx = FunCtx::new_const(ctx.src.get(expr).pos);
+    let expr = ExprLow::low(ctx, &fctx, sum, expr)?;
+
+    let (hir::ExprKind::Const(..) | hir::ExprKind::GlobalRef(..)) = ctx.cre.get(expr).kind else {
+      ret_err!(sum, Message::error(GLOBAL_VARIABLES_CAN_ONLY_BE_CONSTANT, Label::new_pos(it.pos)))
+    };
+
+    let expr_ty = ctx.cre.get(expr).ety;
+
+
+    let kind = if let Some(kind) = kind {
+      TypeMatch::matches(ctx, sum, kind, expr_ty, it.pos, None, None)?;
+      kind
+    } else {
+      expr_ty
+    };
+
+
+    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+
+
+    // Post
+    hir::Item {
+      name: Some(name),
+        kind: hir::ItemKind::Variable { kind, expr, ism },
+      path,
+      vis, attr
+    }.push_ok(ctx.cre)
   }
 
 
@@ -113,7 +145,7 @@ impl ItemLow {
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
 
-    let hir_kind = TypeLow::low_itemty(ctx, sum, path, kind)?;
+    let hir_kind = TypeLow::low(ctx!(path path -> ctx), sum, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -138,20 +170,20 @@ impl ItemLow {
 
     let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
     
-    let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
     // Trait Patch
     let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
-      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
+      if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
+        fun_sign.kind = hir::TypeKind::Fun { self_kind, args, ret: expr_ty };
+      }
 
-      *sign_ret = expr_ty;
       expr_ty
     } else { ret };
 
-    TypeMatch::matches_pos(ctx, sum, ret, expr_ty, expr_pos)?;
+    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None, None)?;
 
     let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
@@ -180,7 +212,7 @@ impl ItemLow {
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
-    let hir_kind = TypeLow::low_itemty(ctx, sum, path, kind)?;
+    let hir_kind = TypeLow::low(ctx!(path path -> ctx), sum, kind)?;
     
     let mut loc = qwc_resolve::LocalScopeManager::new();
 
@@ -205,21 +237,21 @@ impl ItemLow {
 
     let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
     
-    let expr_pos = ctx.src.get(expr.unwrap()).pos;
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
     // Trait Patch
     let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
-      let hir::TypeKind::Fun {ret: sign_ret, ..} = &mut fun_sign.kind else { unreachable!() };
+      if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
+        fun_sign.kind = hir::TypeKind::Fun { self_kind, args, ret: expr_ty };
+      }
 
-      *sign_ret = expr_ty;
       expr_ty
     } else { ret };
 
-    TypeMatch::matches_pos(ctx, sum, ret, expr_ty, expr_pos)?;
-
+    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None, None)?;
+ 
     let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
     // Post

@@ -151,8 +151,8 @@ impl Krate {
 // Ident save
 pub trait IdentSave {
   fn ident(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Ident>;
-  fn string_sid(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
-  fn raw_sid(self, sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
+  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
+  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Status<Sid>;
 }
 
 impl IdentSave for Word {
@@ -168,7 +168,7 @@ impl IdentSave for Word {
     Success(Ident::new(off, len, fid, sid))
   }
 
-  fn string_sid(self, _sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
+  fn string_sid(self, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
     let (off, len, fid, _) = self.to();
     
     let str = {
@@ -184,7 +184,7 @@ impl IdentSave for Word {
     Success(sid)
   }
 
-  fn raw_sid(self, _sum: &mut Summary, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
+  fn raw_sid(self, sin: &mut StrInterner, far: &Files) -> Status<Sid> {
     let (off, len, fid, _) = self.to();
     
     let str = str::from_utf8(&far.get(fid).map()[(off as usize)..((off as usize)+(len.get() as usize))]).unwrap();

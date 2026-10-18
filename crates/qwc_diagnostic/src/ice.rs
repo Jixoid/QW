@@ -29,10 +29,7 @@ pub struct ICE;
 
 impl ICE {
 
-  pub fn new(
-    bt: Backtrace,
-    msg: &str,
-  ) -> ! {
+  pub fn new(bt: Backtrace, msg: &str) -> ! {
     eprintln!("{}{} {}{} {msg}", "internal compiler error".yellow().bold(), ":".bright_black(), "qw panicked!".red().bold(), ":".bright_black());
 
     eprintln!();
@@ -57,7 +54,14 @@ impl ICE {
 
     eprintln!();
     eprintln!("[BACKTRACE]");
-    //eprintln!("{bt:?}");
+    eprintln!("{}", Self::bt(bt));
+
+    exit(1)
+  }
+
+
+  pub(super) fn bt(bt: Backtrace) -> String {
+    let mut ret = String::new();
 
     for (i, frame) in bt.frames().iter().enumerate() {
       for symbol in frame.symbols() {
@@ -98,11 +102,11 @@ impl ICE {
           }
         };
 
-        if ness { eprintln!("{str}") } else { eprintln!("{}", str.bright_black()) }
+        if ness { ret += &format!("{}\n", str); } else { ret += &format!("{}\n", str.bright_black().to_string()); }
       }
     }
 
-    exit(1)
+    ret
   }
 
 

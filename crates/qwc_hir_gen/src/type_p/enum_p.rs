@@ -13,18 +13,18 @@
 use itertools::Itertools;
 use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*};
 use qwc_ast as ast;
-use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 use rustc_hash::FxHashMap;
 
-use crate::Ctx;
+use crate::{Ctx, type_p::helper};
 
 
-pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
+pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
   let mut names = FxHashMap::default();
   let mut enum_val: i128 = 0;
 
   let rng = ctx.src.extra_get(rng).map(|id| {
-    let (name, _expr) = match ctx.src.get(id).kind {
+    let (name, _) = match ctx.src.get(id).kind {
       ast::ThingKind::Name(name) => (name, None),
       ast::ThingKind::NamedExpr(name, expr) => (name, Some(expr)),
       _ => unreachable!()
@@ -53,6 +53,8 @@ pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Thi
     id
   }).collect_vec();
 
+  let path = helper::low_defpath(ctx, path);
+
   let rng = ctx.cre.extra(&rng);
   
 
@@ -65,12 +67,12 @@ pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Thi
   }.push_ok(ctx.cre)
 }
 
-pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
+pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast::ThingRng) -> Status<hir::TypeId> {
   let mut names = FxHashMap::default();
   let mut flag_val: i128 = 0;
 
   let rng = ctx.src.extra_get(rng).map(|id| {
-    let (name, _expr) = match ctx.src.get(id).kind {
+    let (name, _) = match ctx.src.get(id).kind {
       ast::ThingKind::Name(name) => (name, None),
       ast::ThingKind::NamedExpr(name, expr) => (name, Some(expr)),
       _ => unreachable!()
@@ -98,6 +100,8 @@ pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, rng: ast::Th
 
     id
   }).collect_vec();
+
+  let path = helper::low_defpath(ctx, path);
 
   let rng = ctx.cre.extra(&rng);
   

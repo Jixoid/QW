@@ -73,7 +73,7 @@ impl<'a> Specialization<'a> {
           let fctx = FunCtx::new_const(pos);
           let expr = ExprLow::low(ctx, &fctx, sum, id)?;
           let expr_ty = ctx.cre.get(expr).ety;
-          TypeMatch::matches_pos(ctx, sum, expected_ty, expr_ty, pos)?;
+          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None, None)?;
           args.push(expr.to_any());
         }
         
@@ -121,10 +121,9 @@ impl<'a> Specialization<'a> {
         (false, ast::id::NodeKind::Expr) => {
           let hir::Thing::NamedType(_, expected_ty) = expected_thing else { unreachable!() };
           let id = ast::ExprId::from_any(rec_id);
-          let pos = ctx.src.get(id).pos;
           let expr = ExprLow::low(ctx, fctx, sum, id)?;
           let expr_ty = ctx.cre.get(expr).ety;
-          TypeMatch::matches_pos(ctx, sum, expected_ty, expr_ty, pos)?;
+          TypeMatch::matches(ctx, sum, expected_ty, expr_ty, ctx.cre.get(expr).pos, None, None)?;
           args.push(expr.to_any());
         }
 
@@ -384,6 +383,7 @@ impl<'a> Specialization<'a> {
           kind: hir::ExprKind::GlobalRef(self.sub_spec_item(ctx, sum, item)),
           category: hir::ExprCategory::RValue,
           ety: self.sub_spec_type(ctx, sum, it.ety),
+          pos: it.pos,
         }.push(ctx.cre)
       }
       
@@ -396,6 +396,7 @@ impl<'a> Specialization<'a> {
           kind: hir::ExprKind::Block {stmt, expr},
           category: hir::ExprCategory::RValue,
           ety: self.sub_spec_type(ctx, sum, it.ety),
+          pos: it.pos,
         }.push(ctx.cre)
       }
       hir::ExprKind::IntCast(expr) => {
@@ -403,6 +404,7 @@ impl<'a> Specialization<'a> {
           kind: hir::ExprKind::IntCast(self.sub_spec_expr(ctx, sum, expr)),
           category: hir::ExprCategory::RValue,
           ety: self.sub_spec_type(ctx, sum, it.ety),
+          pos: it.pos,
         }.push(ctx.cre)
       }
 

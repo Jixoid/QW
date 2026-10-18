@@ -411,8 +411,18 @@ impl DumpHandler for Type {
 
 
       // Impl
-      TypeKind::Iface {fields, path: _} => {
-        writeln!(f, "{} {{", kw("iface"))?;
+      TypeKind::Iface {fields, reqs, path: _} => {
+        write!(f, "{}", kw("iface"))?;
+        
+        if !reqs.is_empty() { write!(f, "{} ", punct(":"))? }
+        let mut first = true;
+        for id in cre.extra_get(reqs) {
+          if !first { write!(f, "{} ", punct(","))? }
+          first = false;
+          id.dump(cre, sin, far, f, indent + 1)?;
+        }
+
+        writeln!(f, " {{")?;
         for field_id in cre.extra_get(fields) {
           field_id.dump(cre, sin, far, f, indent + 1)?;
         }

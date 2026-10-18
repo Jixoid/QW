@@ -63,7 +63,7 @@ pub enum TypeKind {
   TupleAnon(TypeRng),
 
   // Impl
-  Iface {fields: FieldRng, path: DefPathId},
+  Iface {fields: FieldRng, reqs: TypeRng, path: DefPathId},
   Trait {fields: FieldRng, reqs: TypeRng, path: DefPathId},
 
   // Function

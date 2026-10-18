@@ -30,12 +30,11 @@ pub fn low_loop(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
       let ast::ExprKind::Block { expr, .. } = ctx.src.get(blok).kind else { unreachable!() };
   
       let Some(expr) = expr else { return Success(()) };
-      let expr_pos = ctx.src.get(expr).pos;
   
       let expr_hir = ExprLow::low(ctx, fctx, sum, expr)?;
       let expr_ty = ctx.cre.get(expr_hir).ety;
 
-      TypeMatch::matches_pos(ctx, sum, ctx.prims.ty_unit, expr_ty, expr_pos)
+      TypeMatch::matches(ctx, sum, ctx.prims.ty_unit, expr_ty, ctx.get(expr_hir).pos, None, None)
         //.add(Suggestion::new(YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP, Applicability::MaybeIncorrect, format!("{} {}{}", "break", expr_pos.str(ctx.far), ";"), Label::new_pos(expr_pos)))
     })();
     let lctx = fctx.loops.borrow_mut().pop().unwrap();
@@ -61,6 +60,7 @@ pub fn low_loop(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
   let this = hir::Expr {
     kind: hir::ExprKind::Loop {blok, elsb},
     category: ExprCategory::RValue,
+    pos: it.pos,
     ety,
   };
   
@@ -90,6 +90,7 @@ pub fn low_while(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   let brk = hir::Expr {
     kind: hir::ExprKind::Break(None),
     category: hir::ExprCategory::RValue,
+    pos: it.pos,
     ety: ctx.prims.ty_never,
   };
   let brk = ctx.cre.push(brk);
@@ -97,6 +98,7 @@ pub fn low_while(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   let if_expr = hir::Expr {
     kind: hir::ExprKind::If { cond, then: blok, elsb: Some(brk) },
     category: hir::ExprCategory::RValue,
+    pos: it.pos,
     ety, 
   };
   let if_expr = ctx.cre.push(if_expr);
@@ -106,6 +108,7 @@ pub fn low_while(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   let this = hir::Expr {
     kind: hir::ExprKind::Loop { blok: if_expr, elsb },
     category: hir::ExprCategory::RValue,
+    pos: it.pos,
     ety,
   };
   
