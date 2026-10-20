@@ -35,6 +35,7 @@ mod condition_p;
 mod op_unary_p;
 mod operator_p;
 mod resolve_p;
+mod scope_p;
 mod route_p;
 mod const_p;
 mod block_p;
@@ -104,6 +105,10 @@ impl ExprLow {
       Cast{expr, kind} => cast_p::low_cast(ctx, fctx, sum, it, expr, kind)?,
 
       Spec{callee, args} => spec_p::low_specialize(ctx, fctx, sum, it, callee, args)?,
+
+      // Scope
+      Unsafe(blok) => scope_p::low_unsafe(ctx, fctx, sum, blok)?,
+      Relaxed(blok) => scope_p::low_relaxed(ctx, fctx, sum, blok)?,
       
       _ => todo!("{:#?}", it)
     };

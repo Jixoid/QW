@@ -93,6 +93,9 @@ pub struct CacheMap {
 
   pub(crate) self_ty: Vec<hir::TypeId>,
   pub(crate) current_trait: Vec<hir::TypeId>,
+
+  pub(crate) unsafe_level: usize,
+  pub(crate) relaxed_level: usize,
 }
 
 impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
@@ -258,6 +261,8 @@ impl<'ast, 'hir, 'imod> HGen {
       cache_generic_expr: FxHashMap::default(),
       self_ty: vec![],
       current_trait: vec![],
+      unsafe_level: 0,
+      relaxed_level: 0,
     };
     let mut loc = LocalScopeManager::new();
     

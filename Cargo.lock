@@ -848,6 +848,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwc_explain"
+version = "0.1.0"
+dependencies = [
+ "owo-colors",
+ "qwc_arena",
+ "qwc_ast",
+ "qwc_diagnostic",
+ "qwc_hir",
+ "qwc_hir_gen",
+ "qwc_intrinsic",
+ "qwc_parse",
+ "qwc_resolve",
+ "qwc_string_interner",
+]
+
+[[package]]
 name = "qwc_hir"
 version = "0.1.0"
 dependencies = [
@@ -988,6 +1004,7 @@ dependencies = [
  "qwc_cgen_llvm",
  "qwc_diagnostic",
  "qwc_ds",
+ "qwc_explain",
  "qwc_hir",
  "qwc_hir_gen",
  "qwc_intrinsic",

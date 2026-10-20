@@ -33,6 +33,10 @@ impl CodedMsg {
   }
 
 
+  pub const fn code(self) -> Option<u16> {
+    self.code
+  }
+
   pub fn args(self, args: &[&str]) -> CodedString {
     CodedString { code: self.code, msg: format_from_vector(self.msg, args) }
   }

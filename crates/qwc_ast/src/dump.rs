@@ -127,7 +127,7 @@ impl DumpHandler for Item {
 
       // Krate
       ItemKind::Krate(rng) => {
-        writeln!(f, "{} {{", "crate".blue().bold())?;
+        writeln!(f, "{} {{\n", "crate".blue().bold())?;
 
         for item_id in cre.extra_get(rng) {
           item_id.dump(cre, sin, far, f, indent + 1)?;
@@ -1291,12 +1291,14 @@ fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files,
   if let Some(attrs) = cre.get_attached::<Vec<Attribute>>(id) {
     if !attrs.is_empty() {
       write_indent(f, indent)?;
-      write!(f, "{}", "![".bright_magenta())?;
+      write!(f, "{}", punct("!["))?;
+      let mut first = true;
       for attr in attrs {
+        if !first { write!(f, "{} ", punct(","))?; }
+        first = false;
         attr.dump(cre, sin, far, f, indent)?;
-        write!(f, ", ")?;
       }
-      writeln!(f, "{}", "]".bright_magenta())?;
+      writeln!(f, "{}", punct("]"))?;
     }
   }
   Ok(())
@@ -1307,26 +1309,26 @@ impl DumpHandler for Attribute {
     let key = self.ident;
     
     match &self.kind {
-      AttrKind::One() => write!(f, "{}", key.str(far).yellow())?,
+      AttrKind::One() => write!(f, "{}", ident(key.str(far)))?,
 
-      AttrKind::Bin(val) => write!(f, "{}: {}", key.str(far).yellow(), val.str(far).yellow())?,
+      AttrKind::Bin(val) => write!(f, "{}: {}", ident(key.str(far)), ident(val.str(far)))?,
       
       AttrKind::Set(expr) => {
-        write!(f, "{} = ", key.str(far).yellow())?;
+        write!(f, "{} {} ", ident(key.str(far)), punct("="))?;
         expr.dump(cre, sin, far, f, indent)?;
       }
 
       AttrKind::List(list) => {
-        write!(f, "{}(", key.str(far).yellow())?;
+        write!(f, "{}{}", ident(key.str(far)), punct("("))?;
         let mut first = true;
         for attr in list {
           if !first {
-            write!(f, ", ")?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           attr.dump(cre, sin, far, f, indent)?;
         }
-        write!(f, ")")?;
+        write!(f, "{}", punct(")"))?;
       }
     }
     Ok(())

@@ -160,6 +160,13 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
+  #[command(alias = "e")]
+  /// Explain error code with example
+  Explain {
+    /// Error code
+    code: String,
+  },
+
   #[cfg(feature = "lsp")]
   /// Start the language server
   Lsp,
@@ -273,6 +280,10 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
     
+    MainCommands::Explain{code} => {
+      qwc_explain::explain(code);
+    }
+
     #[cfg(feature = "lsp")]
     MainCommands::Lsp => {
       match qwc_lsp::start() {

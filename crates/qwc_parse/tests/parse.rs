@@ -18,13 +18,13 @@ use qwc_parse::Parse;
 use qwc_string_interner::StrInterner;
 
 
-fn prepare_parser(file: String) -> ast::ItemRng {
+fn prepare_parser(file: &str) -> ast::ItemRng {
   let cre = &mut ast::Krate::new();
   let sin = &mut StrInterner::new();
   let sid = sin.sid("test");
   let far = &mut Files::new();
   let fi = {
-    let fid = far.add_buffer(Path::new("test.qw"), file.into_bytes());
+    let fid = far.add_buffer(Path::new("test.qw"), file.to_string().into_bytes());
     far.get(fid)
   };
 
@@ -45,19 +45,19 @@ fn prepare_parser(file: String) -> ast::ItemRng {
 
 #[test]
 fn nested_generic() {
-  prepare_parser(String::from("
+  prepare_parser(r#"
     impl Vec3<T>: core::ops::Add<Vec3<T>> {}
     impl Vec3<T>: core::ops::AddAssign<Vec3<T>> {}
-  "));
+  "#);
 }
 
 
 #[test]
 fn two_ref() {
-  prepare_parser(String::from("
+  prepare_parser(r#"
     struct A {
       a: &&();
       b: ^^();
     }
-  "));
+  "#);
 }

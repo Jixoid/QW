@@ -18,6 +18,7 @@ qwc_intrinsic = { path = "../qwc_intrinsic" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_parse = { path = "../qwc_parse" }
+qwc_explain = { path = "../qwc_explain" }
 qwc_resolve = { path = "../qwc_resolve" }
 qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
