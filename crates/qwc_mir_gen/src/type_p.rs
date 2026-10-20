@@ -25,7 +25,7 @@ impl TypeLow {
   pub fn low(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
     if let Some(&id) = ctx.cmap.cache_type.get(&id) { return Success(id) }
 
-    let it = ctx.get_type(id);
+    let it = ctx.get(id);
 
     use hir::TypeKind::*;
     let ty = match it.kind {
@@ -44,6 +44,8 @@ impl TypeLow {
       Struct(rng) => Self::low_struct(ctx, sum, id, rng, id.cid())?,
       Iface(rng) => Self::low_iface(ctx, sum, rng)?,
       TraitFrom{hidden, ..} => Self::low_trait_from(ctx, sum, hidden)?,
+      Enum(..) => ctx.tin.ty_i32(),
+      Option(inner) => Self::low(ctx, sum, inner)?,
       
       // Sequential
       Array(kind, ext) => Self::low_array(ctx, sum, id, kind, ext)?,
@@ -92,7 +94,7 @@ impl TypeLow {
   fn low_ref(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
     use hir::TypeKind::*;
 
-    let it = match ctx.get_type(id).kind {
+    let it = match ctx.get(id).kind {
       Str | Slice(..) => ctx.tin.ty_fatptrint(),
       
       Iface(..) => ctx.tin.ty_fatptr(),
@@ -112,7 +114,7 @@ impl TypeLow {
     let kind = mir::TypeKind::Array(elem_ty, count);
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.get_type(id).layout.by()),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.get(id).layout.by()),
     }.push_ok(ctx.cre)
   }
 

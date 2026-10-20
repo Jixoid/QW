@@ -140,4 +140,18 @@ pub struct PrimOps {
   pub op_mul: TypeId,
   pub op_div: TypeId,
   pub op_rem: TypeId,
+
+  pub op_add_assign: TypeId,
+  pub op_sub_assign: TypeId,
+  pub op_mul_assign: TypeId,
+  pub op_div_assign: TypeId,
+  pub op_rem_assign: TypeId,
+
+  pub op_neg: TypeId,
+  pub op_partial_eq: TypeId,
+  pub op_eq: TypeId,
+
+  pub op_partial_ord: TypeId,
+  pub op_ord: TypeId,
+  pub ty_ordering: TypeId,
 }

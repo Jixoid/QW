@@ -41,3 +41,16 @@ pub fn low_float_arithmetic(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuil
 
   Success(this.into())
 }
+
+pub fn low_float_neg(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: hir::ExprId) -> Status<Value> {
+  let kind = TypeLow::low(ctx, sum, (ctx.src.get(val) as &hir::Expr).ety)?;
+  let val = ExprLow::low(ctx, sum, bbld, val)?.unwrap();
+
+  let this = mir::Expr::FloatUnary {
+    op: mir::FloatUnaryOp::Neg,
+    kind,
+    val,
+  }.emit(bbld).unwrap();
+
+  Success(this.into())
+}

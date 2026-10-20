@@ -128,21 +128,13 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     match it.kind {
       // Generic
       hir::TypeKind::GenericType{generic, idx} => {
-        if let hir::ItemKind::GenericNS { args, .. } = self.cre.get(generic).kind {
-          if let Some(thing) = self.cre.extra_get(args).nth(idx) {
-            if let hir::Thing::Name(name) | hir::Thing::NamedType(name, _) = *self.cre.get(thing) {
-              self.sin.str(name).to_string()
-            } else {
-              format!("<{}>", idx)
-            }
-          } else {
-            format!("<{}>", idx)
-          }
-        } else {
-          format!("<{}>", idx)
-        }
+        let hir::ItemKind::GenericNS { args, .. } = self.cre.get(generic).kind else { unreachable!() };
+        let Some(thing) = self.cre.extra_get(args).nth(idx) else { unreachable!() };
+
+        let (hir::Thing::Name(name) | hir::Thing::NamedType(name, _)) = *self.cre.get(thing) else { unreachable!() };
+        self.sin.str(name).to_string()
       }
-      hir::TypeKind::GenericRaw{..} => "<raw generic>".to_string(),
+      hir::TypeKind::GenericRaw{generic, kind} => format!("<raw <{}>::{}>", self.poit(generic).to_string(), self.type_name(sum, kind)),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
       hir::TypeKind::AssociatedType{trait_ty, idx} => format!("{}::<{}>", self.type_name(sum, trait_ty), idx),
       hir::TypeKind::Error => "{error}".to_string(),

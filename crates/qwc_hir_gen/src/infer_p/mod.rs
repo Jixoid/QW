@@ -129,6 +129,35 @@ impl Infer {
   }
 
   pub fn lookup_static_method(ctx: &mut Ctx, sum: &mut Summary, target_ty: hir::TypeId, sid: Sid, pos: Span) -> Status<hir::ExprId> {
+    let target_unraw_ty = match ctx.get(target_ty).kind {
+      hir::TypeKind::GenericRaw { kind, .. } => kind,
+      _ => target_ty,
+    };
+    let found_const = {
+      let krate = ctx.get_krate(target_unraw_ty.cid());
+      if let hir::TypeKind::Enum(fields) = krate.get(target_unraw_ty).kind {
+        krate.extra_get(fields).find_map(|field_id| {
+          if let hir::Thing::NamedConst(name, cons) = *krate.get(field_id) {
+            if name == sid {
+              return Some(cons);
+            }
+          }
+          None
+        })
+      } else {
+        None
+      }
+    };
+
+    if let Some(cons) = found_const {
+      return hir::Expr {
+        kind: hir::ExprKind::Const(cons),
+        category: ExprCategory::RValue,
+        pos,
+        ety: target_unraw_ty,
+      }.push_ok(ctx.cre);
+    }
+
     let methods = if let Some(m) = ctx.type_impls.get(&target_ty) {
       Some(m)
     } else if let hir::TypeKind::GenericRaw { generic: g1, kind: k1 } = ctx.get(target_ty).kind {
@@ -227,9 +256,63 @@ impl Infer {
         let arg_thing = ctx.extra_get(args).next().unwrap();
 
         let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
-        if TypeMatch::matches(ctx, sum, param_ty, rhs_ty, ctx.get(rhs_id).pos, None).is_fail() {
+        let param_unref_ty = match ctx.get(param_ty).kind {
+          hir::TypeKind::Ref(inner, _) => inner,
+          _ => param_ty,
+        };
+        let rhs_unref_ty = match ctx.get(rhs_ty).kind {
+          hir::TypeKind::Ref(inner, _) => inner,
+          _ => rhs_ty,
+        };
+
+        if param_ty != rhs_ty && param_unref_ty != rhs_unref_ty {
           continue;
         }
+
+        return Success((
+          hir::Expr {
+            kind: hir::ExprKind::GlobalRef(method),
+            category: ExprCategory::RValue,
+            ety: fn_ty,
+            pos: pos_span,
+          }.push(ctx.cre),
+          ret,
+        ));
+      }
+    }
+
+    Fail
+  }
+
+  pub fn lookup_method_with_trait_unary(ctx: &mut Ctx, sum: &mut Summary, target_trait: hir::TypeId, current_id: hir::ExprId, sid: Sid, pos: impl Into<Span>) -> Status<(hir::ExprId, hir::TypeId)> {
+    let this_ty = ctx.cre.get(current_id).ety;
+    let pos_span = pos.into();
+
+    let methods = ctx.type_impls.get(&this_ty).status()?;
+    let items = methods.methods.get(&sid).status()?;
+
+    let target_path = ctx.get(target_trait).path;
+
+    for &item in items {
+      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+        let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
+
+        let Some(trait_ty) = trait_ty else { continue; };
+
+        let mut impl_path = ctx.get(trait_ty).path;
+        while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
+          impl_path = base;
+        }
+
+        if impl_path != target_path {
+          continue;
+        }
+
+        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
+        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+        let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
+
+        if args.count() != 0 { continue; }
 
         return Success((
           hir::Expr {

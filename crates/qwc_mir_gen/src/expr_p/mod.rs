@@ -75,11 +75,13 @@ impl ExprLow {
       // Integer
       IntArithmetic{op, flg, lhs, rhs} => Some(integer_p::low_int_arithmetic(ctx, sum, bbld, op, flg, lhs, rhs)?),
       AssignIntArithmetic{op, flg, lhs, rhs} => {integer_p::low_int_arithmetic_op(ctx, sum, bbld, op, flg, lhs, rhs)?; None},
+      IntNeg(val) => Some(integer_p::low_int_neg(ctx, sum, bbld, val)?),
 
       IntCondition{op, lhs, rhs} => Some(integer_p::low_int_condition(ctx, sum, bbld, op, lhs, rhs)?),
 
       // Float
       FloatArithmetic{op, lhs, rhs} => Some(float_p::low_float_arithmetic(ctx, sum, bbld, op, lhs, rhs)?),
+      FloatNeg(val) => Some(float_p::low_float_neg(ctx, sum, bbld, val)?),
 
       // Logic
       BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, sum, bbld, op, lhs, rhs)?),

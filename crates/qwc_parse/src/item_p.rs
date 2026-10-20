@@ -242,7 +242,7 @@ impl ItemParser {
       cre.extra(&args)
     };
 
-    let reqs = if { let p = lex.peek(sum)?; p.kind() == WK::Word && lex.str(p) == "requires" } {
+    let reqs = if lex.peek(sum)?.kind() == WK::Reqs {
       lex.bump(sum)?;
       let mut reqs = vec![];
       
@@ -257,10 +257,10 @@ impl ItemParser {
           tys.push(TypeParser::read_type(ctx!(cre, sin, far, lex, sum, side))?);
           
           match lex.get_k(sum)? {
-            (WK::Pipe, _) => continue,
-            (WK::Semicolon, _) => break,
+            (WK::Add, _) => continue,
+            (WK::Comma, _) => break,
 
-            (_, c) => c.panic_kind2(sum, WK::Pipe, WK::Semicolon)?
+            (_, c) => c.panic_kind2(sum, WK::Add, WK::Comma)?
           }
         }
         

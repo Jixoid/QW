@@ -148,6 +148,9 @@ impl InstLow {
           mir::IntUnaryOp::Not => {
             fctx.ssa_map.insert(dest, ictx.builder.build_not(val, "").unwrap().into());
           }
+          mir::IntUnaryOp::Neg => {
+            fctx.ssa_map.insert(dest, ictx.builder.build_int_neg(val, "").unwrap().into());
+          }
         };
       }
 
@@ -169,6 +172,16 @@ impl InstLow {
           mir::FloatArithmeticOp::Mul => fctx.ssa_map.insert(dest, ictx.builder.build_float_mul(lhs, rhs, "").unwrap().into()),
           mir::FloatArithmeticOp::Div => fctx.ssa_map.insert(dest, ictx.builder.build_float_div(lhs, rhs, "").unwrap().into()),
           mir::FloatArithmeticOp::Rem => fctx.ssa_map.insert(dest, ictx.builder.build_float_rem(lhs, rhs, "").unwrap().into()),
+        };
+      }
+
+      Expr::FloatUnary{op, kind: _, val} => {
+        let val = ValueLow::low(uctx, ictx, fctx, &val).into_float_value();
+
+        match op {
+          mir::FloatUnaryOp::Neg => {
+            fctx.ssa_map.insert(dest, ictx.builder.build_float_neg(val, "").unwrap().into());
+          }
         };
       }
     
@@ -224,7 +237,8 @@ impl InstLow {
       Expr::IntUnary{..} |
       Expr::IntCast{..} => panic!(),
 
-      Expr::FloatArithmetic{..} => panic!(),
+      Expr::FloatArithmetic{..} |
+      Expr::FloatUnary{..} => panic!(),
     }
   }
 

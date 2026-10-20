@@ -192,7 +192,7 @@ pub enum WK {
   // Keyword
   If, Ef, Else, Match, Loop, While, For, In, Let, Var,
   Using, Struct, Iface, Trait, Enum, Flags, Variant, Fun, Task, Init, Fini, Generic, Mod, Use, Impl,
-  Pub, Priv, Prot, Crate, Super, Mut,
+  Pub, Priv, Prot, Crate, Super, Mut, Reqs,
   Ret, Break, Continue, Die, Unsafe, Relaxed,
   True, False, Undef, Unreachable, As,
   

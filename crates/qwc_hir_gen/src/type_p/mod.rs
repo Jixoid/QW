@@ -252,6 +252,9 @@ impl TypeMatch {
       (hir::TypeKind::Error, _) | (_, hir::TypeKind::Error) => Status::Success(()),
       (_, hir::TypeKind::Never) => Status::Success(()),
 
+      (hir::TypeKind::Option(..), hir::TypeKind::Unit) => Status::Success(()),
+      (hir::TypeKind::Option(t1), hir::TypeKind::Option(t2)) => Self::matches(ctx, sum, t1, t2, pos, assoc_types),
+      
       (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
         Self::matches(ctx, sum, t1, t2, pos, assoc_types)
       }

@@ -189,11 +189,15 @@ impl DumpHandler for Item {
         write!(f, "{}", ">".bright_black())?;
 
         if !reqs.is_empty() {
-          write!(f, " {} ", "requires".blue())?;
+          writeln!(f)?;
+          write_indent(f, indent)?;
+          writeln!(f, "{}", kw("reqs"))?;
           for type_id in cre.extra_get(reqs) {
+            write_indent(f, indent+1)?;
             type_id.dump(cre, sin, far, f, indent)?;
-            write!(f, "{} ", ";".bright_black())?;
+            writeln!(f, "{} ", punct(","))?;
           }
+          write_indent(f, indent)?;
         }
 
         writeln!(f, " {{")?;
@@ -559,16 +563,16 @@ impl DumpHandler for Type {
       // Specialize
       TypeKind::Spec { base, args } => {
         base.dump(cre, sin, far, f, indent)?;
-        write!(f, "<")?;
+        write!(f, "{}", punct("<"))?;
         let mut first = true;
         for id in cre.extra_any_get(args) {
           if !first {
-            write!(f, ", ")?;
+            write!(f, "{} ", punct(","))?;
           }
           first = false;
           id.dump(cre, sin, far, f, indent)?;
         }
-        write!(f, ">")?;
+        write!(f, "{}", punct(">"))?;
       }
     }
 
@@ -1220,7 +1224,7 @@ impl DumpHandler for Thing {
         let mut first = true;
         
         for id in cre.extra_get(rng) {
-          if !first { write!(f, " | ")?; }
+          if !first { write!(f, " {} ", punct("+"))?; }
           first = false;
           
           id.dump(cre, sin, far, f, indent)?;

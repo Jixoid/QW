@@ -97,7 +97,7 @@ mod int_s {
   
   
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-  pub enum IntUnaryOp { Not }
+  pub enum IntUnaryOp { Not, Neg }
 }
 pub use int_s::*;
 
@@ -105,6 +105,9 @@ pub use int_s::*;
 mod float_s {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
   pub enum FloatArithmeticOp { Add, Sub, Mul, Div, Rem }
+
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum FloatUnaryOp { Neg }
 }
 pub use float_s::*;
 
@@ -128,6 +131,7 @@ pub enum Expr {
   IntCast {kind: TypeId, val: Value, signed: bool},
 
   FloatArithmetic {op: FloatArithmeticOp, kind: TypeId, lhs: Value, rhs: Value},
+  FloatUnary {op: FloatUnaryOp, kind: TypeId, val: Value},
 }
 
 impl Expr {
@@ -149,6 +153,7 @@ impl Expr {
       Expr::IntCast{..} => true,
 
       Expr::FloatArithmetic{..} => true,
+      Expr::FloatUnary{..} => true,
     }
   }
 }

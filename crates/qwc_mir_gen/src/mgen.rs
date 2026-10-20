@@ -38,7 +38,7 @@ impl<'ast, 'hir, 'mir, 'a> Ctx<'ast, 'hir, 'mir, 'a> {
     }
   }
 
-  pub fn get_type(&self, id: hir::TypeId) -> &hir::Type {
+  pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T {
     self.get_krate(id.cid()).get(id)
   }
 }

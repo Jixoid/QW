@@ -22,7 +22,7 @@ pub fn low_cast_int(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it:
   
   let target_ty = TypeLow::low(ctx, sum, it.ety)?;
   let src_ty = ctx.src.get(expr).ety;
-  let is_signed = match ctx.get_type(src_ty).kind {
+  let is_signed = match ctx.get(src_ty).kind {
     hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
     _ => false,
   };

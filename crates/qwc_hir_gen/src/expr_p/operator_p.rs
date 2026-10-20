@@ -34,7 +34,7 @@ pub fn low_binary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
     // Arithmetic
     Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, it, op, lhs, rhs)?,
 
-    Gt | Lt | GtEq | LtEq | Eq | Ne => low_binary_condition(ctx, it, op, lhs, rhs)?,
+    Gt | Lt | GtEq | LtEq | Eq | Ne => low_binary_condition(ctx, sum, it, op, lhs, rhs)?,
 
     And | Or | Xor => low_binary_logic(ctx, it, op, lhs, rhs)?,
 
@@ -127,38 +127,121 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
   Success(it)
 }
 
-fn low_binary_condition(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
-  let lhs_ex = ctx.cre.get(lhs);
-  let rhs_ex = ctx.cre.get(rhs);
+fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
+  let lhs_ety = ctx.cre.get(lhs).ety;
+  let rhs_ety = ctx.cre.get(rhs).ety;
 
-  let lhs_ty = ctx.get(lhs_ex.ety);
+  let lhs_ty = ctx.get(lhs_ety);
 
-  if lhs_ex.ety != rhs_ex.ety { panic!() }
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
+    use ast::BinaryOp::*;
+    
+    let aop = match op {
+      Gt   => hir::IntConditionOp::Gt,
+      Lt   => hir::IntConditionOp::Lt,
+      GtEq => hir::IntConditionOp::GtEq,
+      LtEq => hir::IntConditionOp::LtEq,
+      Eq   => hir::IntConditionOp::Eq,
+      Ne   => hir::IntConditionOp::Ne,
+      _ => panic!()
+    };
 
-  if !matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | qwc_hir::TypeKind::Int(..) ) { panic!() }
+    let this = hir::Expr {
+      kind: hir::ExprKind::IntCondition{ op: aop, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_bool,
+    };
+    
+    return Success(ctx.cre.push(this));
+  }
 
   use ast::BinaryOp::*;
-  
-  let op = match op {
-    Gt   => hir::IntConditionOp::Gt,
-    Lt   => hir::IntConditionOp::Lt,
-    GtEq => hir::IntConditionOp::GtEq,
-    LtEq => hir::IntConditionOp::LtEq,
-    Eq   => hir::IntConditionOp::Eq,
-    Ne   => hir::IntConditionOp::Ne,
-    _ => panic!()
+  let (op_trt, op_sid) = match op {
+    Eq => (ctx.ideps.prim_op().unwrap().op_partial_eq, ctx.sin.sid_eq()),
+    Ne => (ctx.ideps.prim_op().unwrap().op_partial_eq, ctx.sin.sid_ne()),
+    Lt => (ctx.ideps.prim_op().unwrap().op_partial_ord, ctx.sin.sid_lt()),
+    LtEq => (ctx.ideps.prim_op().unwrap().op_partial_ord, ctx.sin.sid_le()),
+    Gt => (ctx.ideps.prim_op().unwrap().op_partial_ord, ctx.sin.sid_gt()),
+    GtEq => (ctx.ideps.prim_op().unwrap().op_partial_ord, ctx.sin.sid_ge()),
+    _ => panic!("unsupported condition operator: {:?}", op),
   };
 
+    let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, it.pos)
+      .map_err(||
+        send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+          .args(&[
+            "trait",
+            &format!("{}<{}>", ctx.type_name(sum, op_trt), ctx.type_name(sum, rhs_ety)),
+            &ctx.type_name(sum, lhs_ety),
+          ]),
+          Label::new_pos(it.pos)
+        ))
+      )?;
 
-  // Post
-  let this = hir::Expr {
-    kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
-    category: ExprCategory::RValue,
-    pos: it.pos,
-    ety: ctx.prims.ty_bool,
-  };
-  
-  Success(ctx.cre.push(this))
+    let op_fun_ty = ctx.cre.get(op_fun).ety;
+    let (self_kind, param_ty) = if let hir::TypeKind::Fun { self_kind, args, .. } = ctx.get(op_fun_ty).kind {
+      let param_ty = ctx.extra_get(args).next().map(|id| {
+        let hir::Thing::NamedType(_, ty) = *ctx.get(id) else { unreachable!() };
+        ty
+      });
+      (self_kind, param_ty)
+    } else { (None, None) };
+
+    let lhs_arg = match self_kind {
+      Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
+        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, true);
+        hir::Expr {
+          kind: hir::ExprKind::Ref(lhs, true),
+          category: ExprCategory::RValue,
+          pos: it.pos,
+          ety: ty,
+        }.push(ctx.cre)
+      }
+      Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
+        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, false);
+        hir::Expr {
+          kind: hir::ExprKind::Ref(lhs, false),
+          category: ExprCategory::RValue,
+          pos: it.pos,
+          ety: ty,
+        }.push(ctx.cre)
+      }
+      _ => lhs,
+    };
+
+    let rhs_arg = match param_ty {
+      Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., true)) => {
+        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, rhs_ety, true);
+        hir::Expr {
+          kind: hir::ExprKind::Ref(rhs, true),
+          category: ExprCategory::RValue,
+          pos: it.pos,
+          ety: ty,
+        }.push(ctx.cre)
+      }
+      Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., false)) => {
+        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, rhs_ety, false);
+        hir::Expr {
+          kind: hir::ExprKind::Ref(rhs, false),
+          category: ExprCategory::RValue,
+          pos: it.pos,
+          ety: ty,
+        }.push(ctx.cre)
+      }
+      _ => rhs,
+    };
+
+    let args = ctx.cre.extra(&[lhs_arg, rhs_arg]);
+
+    let this = hir::Expr {
+      kind: hir::ExprKind::Call { callee: op_fun, args },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: op_ret,
+    }.push(ctx.cre);
+
+    Success(this)
 }
 
 fn low_binary_logic(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
@@ -241,33 +324,97 @@ pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::
 
   helper::verify_assignable(ctx, sum, lhs, lhs_hir, op_span)?;
 
-  let lhs_ty = ctx.cre.get(lhs_hir).ety;
-  let rhs_ty = ctx.cre.get(rhs_hir).ety;
-
-  if lhs_ty != rhs_ty {
-    todo!("{:#?} != {:#?}", ctx.get(lhs_ty), ctx.get(rhs_ty))
-  }
-
-
   // Op
   use ast::BinaryOp::*;
   
-  let id = match op {
+  let ex = match op {
     // Arithmetic
-    Add | Sub | Mul | Div | Rem => low_binary_arithmetic(ctx, sum, it, op, lhs_hir, rhs_hir)?,
+    Add | Sub | Mul | Div | Rem => low_assign_arithmetic(ctx, sum, it, op, lhs_hir, rhs_hir)?,
 
     _ => todo!("{op:#?}")
   };
 
-  let ex = ctx.cre.get_mut(id);
+  Success(ex)
+}
 
-  ex.kind = match ex.kind {
-    hir::ExprKind::IntArithmetic{op, flg, lhs, rhs} => hir::ExprKind::AssignIntArithmetic{op, flg, lhs, rhs},
-    
+fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
+  let lhs_ety = ctx.cre.get(lhs).ety;
+  let rhs_ety = ctx.cre.get(rhs).ety;
+
+  let lhs_ty = ctx.get(lhs_ety);
+
+  if lhs_ety == rhs_ety {
+    if matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
+      use ast::BinaryOp::*;
+      let aop = match op {
+        Add => hir::IntArithmeticOp::Add,
+        Sub => hir::IntArithmeticOp::Sub,
+        Mul => hir::IntArithmeticOp::Mul,
+        Div => hir::IntArithmeticOp::Div,
+        Rem => hir::IntArithmeticOp::Rem,
+        _ => unreachable!(),
+      };
+      let flg = hir::IntArithmeticFlg::Overflow;
+      
+      return hir::Expr {
+        kind: hir::ExprKind::AssignIntArithmetic { op: aop, flg, lhs, rhs },
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ctx.prims.ty_unit,
+      }.push_ok(ctx.cre);
+    }
+  }
+
+  use ast::BinaryOp::*;
+  let (op_trt, op_sid) = match op {
+    Add => (ctx.ideps.prim_op().unwrap().op_add_assign, ctx.sin.sid_add_assign()),
+    Sub => (ctx.ideps.prim_op().unwrap().op_sub_assign, ctx.sin.sid_sub_assign()),
+    Mul => (ctx.ideps.prim_op().unwrap().op_mul_assign, ctx.sin.sid_mul_assign()),
+    Div => (ctx.ideps.prim_op().unwrap().op_div_assign, ctx.sin.sid_div_assign()),
+    Rem => (ctx.ideps.prim_op().unwrap().op_rem_assign, ctx.sin.sid_rem_assign()),
     _ => unreachable!()
   };
+  
+  // Find Impl
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, it.pos)
+    .map_err(||
+      send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &format!("{}<{}>", ctx.type_name(sum, op_trt), ctx.type_name(sum, ctx.cre.get(rhs).ety)),
+          &ctx.type_name(sum, ctx.cre.get(lhs).ety),
+        ]),
+        Label::new_pos(it.pos)
+      ))
+    )?;
 
-  Success(id)
+  let op_fun_ty = ctx.cre.get(op_fun).ety;
+  let self_kind = if let hir::TypeKind::Fun { self_kind, .. } = ctx.get(op_fun_ty).kind { self_kind } else { None };
+
+  let lhs_arg = match self_kind {
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, true);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(lhs, true),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+
+    _ => lhs,
+  };
+  
+  let args = ctx.cre.extra(&[lhs_arg, rhs]);
+
+  let it = hir::Expr {
+    kind: hir::ExprKind::Call { callee: op_fun, args },
+    category: ExprCategory::RValue,
+    pos: it.pos,
+    ety: op_ret,
+  }.push(ctx.cre);
+
+  Success(it)
 }
 
 

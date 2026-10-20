@@ -137,8 +137,12 @@ pub enum ExprKind {
 
   IntCondition{op: IntConditionOp, lhs: ExprId, rhs: ExprId},
 
+  IntNeg(ExprId),
+
   // Floating
   FloatArithmetic{op: FloatArithmeticOp, lhs: ExprId, rhs: ExprId},
+
+  FloatNeg(ExprId),
 
   // Bool
   BoolLogic{op: BoolLogicOp, lhs: ExprId, rhs: ExprId},

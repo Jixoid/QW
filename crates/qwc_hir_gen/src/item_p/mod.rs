@@ -36,7 +36,7 @@ impl ItemLow {
 
       ast::ItemKind::Module(rng) | ast::ItemKind::ModuleFile(rng, ..) => Some(ns_p::low_module(ctx, sum, id, it, rng)?),
       
-      ast::ItemKind::Generic{ctn: rng, params: args, ..} => Some(ns_p::low_generic(ctx, sum, id, it, rng, args)?),
+      ast::ItemKind::Generic{ctn: rng, params: args, reqs} => Some(ns_p::low_generic(ctx, sum, id, it, rng, args, reqs)?),
 
 
       // Symbols

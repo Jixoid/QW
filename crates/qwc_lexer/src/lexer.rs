@@ -13,7 +13,7 @@
 use std::num::{NonZero, NonZeroU16};
 
 use qwc_arena::File;
-use qwc_diagnostic::{Message, Span, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Message, Span, Status::{self, Success}, Summary, msg::*, ret_err};
 
 use crate::{WK, Word, wkind::{CHAR_LUT, CharKind}};
 
@@ -117,31 +117,22 @@ impl<'a> Lexer<'a> {
   }
 
 
-  pub fn parse_token(&mut self, sum: &mut Summary) -> Status<Word> {
-    let (it, bak) = match self.get_k(sum)? {
-      (WK::Amp2, w) => (
-        Word{
-          fid: w.fid,
-          kind: WK::Amp,
-          len: unsafe {NonZero::<u16>::new_unchecked(1)},
-          off: w.off
-        },
-        Word{
-          fid: w.fid,
-          kind: WK::Amp,
-          len: unsafe {NonZero::<u16>::new_unchecked(1)},
-          off: w.off+1  
-        }
-      ),
+  pub fn split_token(&mut self, sum: &mut Summary) -> Status<()> {
+    let fk = match self.peek(sum)?.kind {
+      WK::Caret2 => WK::Caret,
+      WK::Amp2 => WK::Amp,
+      WK::Gt2 => WK::Gt,
 
-      _ => panic!(),
+      _ => return Success(())
     };
 
-    if let Some(..) = self.cache { unreachable!() }
+    let Some(cache) = &mut self.cache else { unreachable!() }; // because self.peek() cached word
 
-    self.cache = Some((bak, self.off));
+    (*cache).0.kind = fk;
+    (*cache).0.len = unsafe {NonZero::<u16>::new_unchecked(1)};
+    (*cache).1 -= 1;
 
-    Status::Success(it)
+    Status::Success(())
   }
 
 
@@ -538,6 +529,7 @@ impl<'a> Lexer<'a> {
               b"crate" => WK::Crate,
               b"super" => WK::Super,
               b"mut"   => WK::Mut,
+              b"reqs"  => WK::Reqs,
 
               b"ret"      => WK::Ret,
               b"break"    => WK::Break,

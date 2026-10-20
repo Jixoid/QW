@@ -321,7 +321,7 @@ impl DumpHandler for Expr {
       Expr::IntUnary{op, kind, val} => {
         use crate::IntUnaryOp::*;
 
-        let op = match op { Not => "not" };
+        let op = match op { Not => "not", Neg => "neg" };
         write!(f, "{} ", kw(op))?;
         kind.dump(cre, sin, f, indent)?;
         write!(f, " ")?;
@@ -350,6 +350,16 @@ impl DumpHandler for Expr {
         rhs.dump(cre, sin, f, indent)?;
       }
     
+      Expr::FloatUnary{op, kind, val} => {
+        use crate::FloatUnaryOp::*;
+
+        let op = match op { Neg => "neg" };
+        write!(f, "{}{} ", kw(op), kw(".f"))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+
+        val.dump(cre, sin, f, indent)?;
+      }
     }
     
     Ok(())

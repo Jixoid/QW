@@ -159,7 +159,7 @@ impl SymbLow {
   }
 
   fn low_impl(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, struct_ty: hir::TypeId, trait_ty: Option<hir::TypeId>, methods: hir::ItemRng) -> Status<()> {
-    let is_iface = trait_ty.map(|id| if let hir::TypeKind::Iface(..) = ctx.src.get(id).kind { true } else { false }).unwrap_or(false);
+    let is_iface = trait_ty.map(|id| if let hir::TypeKind::Iface(..) = ctx.get(id).kind { true } else { false }).unwrap_or(false);
 
 
     let mut method_symbs = vec![];

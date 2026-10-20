@@ -29,13 +29,14 @@ impl TypeParser {
   pub fn read_type(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let attrs = AttrParser::read_attr(ctx!(cre, sin, far, lex, sum, side))?;
     
+    lex.split_token(sum)?;
+
     let mut lhs = match lex.peek(sum)?.kind() {
       WK::Question => Self::pre_option(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Bang     => Self::pre_fail(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Dot2     => Self::pre_range(ctx!(cre, sin, far, lex, sum, side))?,
 
       WK::Amp   => Self::pre_ref(ctx!(cre, sin, far, lex, sum, side))?,
-      WK::Amp2  => Self::pre_ref2(ctx!(cre, sin, far, lex, sum, side))?,
       WK::Caret => Self::pre_ptr(ctx!(cre, sin, far, lex, sum, side))?,
       
       WK::BracketL => Self::pre_slice_array_vector(ctx!(cre, sin, far, lex, sum, side))?,
@@ -117,6 +118,8 @@ impl TypeParser {
         };
         
         args.push(arg);
+
+        lex.split_token(sum)?;
 
         match lex.get_k(sum)? {
           (WK::Comma, _) => if lex.peek(sum)?.kind() == WK::Gt { lex.bump(sum)?; break },
@@ -213,19 +216,6 @@ impl TypeParser {
     Type{
       pos: lex.pos_extend(start),
       kind: TypeKind::Ref(sub, ism)
-    }.push_ok(cre)
-  }
-
-  fn pre_ref2(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
-    let start = lex.parse_token(sum)?;
-
-    let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
-
-
-    // Post
-    Type{
-      pos: lex.pos_extend(start),
-      kind: TypeKind::Ref(sub, false)
     }.push_ok(cre)
   }
 

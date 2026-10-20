@@ -832,6 +832,11 @@ impl DumpHandler for Expr {
         write!(f, "{}", punct(")"))?;
       }
 
+      ExprKind::IntNeg(val) => {
+        write!(f, "{}", punct("-"))?;
+        val.dump(ctx, f, indent)?;
+      }
+
 
       // Floating
       ExprKind::FloatArithmetic { op: fop, lhs, rhs } => {
@@ -846,6 +851,11 @@ impl DumpHandler for Expr {
         
         rhs.dump(ctx, f, indent)?;
         write!(f, "{}", punct(")"))?;
+      }
+
+      ExprKind::FloatNeg(val) => {
+        write!(f, "{}", punct("-"))?;
+        val.dump(ctx, f, indent)?;
       }
 
 

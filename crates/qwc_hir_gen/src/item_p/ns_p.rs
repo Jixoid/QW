@@ -11,7 +11,7 @@
 
 
 use itertools::Itertools;
-use qwc_diagnostic::{CollectOrErrors, Status, Summary};
+use qwc_diagnostic::{CollectOrErrors, Status::{self, Success}, Summary};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, PushOkApi};
 
@@ -62,30 +62,23 @@ pub fn low_module(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::I
   }.push_ok(ctx.cre)
 }
 
-pub fn low_generic(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng) -> Status<hir::ItemId> {
+pub fn low_generic(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, rng: ast::ItemRng, args: ast::ThingRng, reqs: ast::ThingRng) -> Status<hir::ItemId> {
   let lscp = ctx.scp.get(&id.to_any()).unwrap();
 
   let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
 
-  let empty_items: &[hir::ItemId] = &[];
-  let empty_things: &[hir::ThingId] = &[];
-  let generic_item = hir::Item {
+  let dummy_me = hir::Item {
     name: None,
-    kind: hir::ItemKind::GenericNS { rng: ctx.cre.extra(empty_items), args: ctx.cre.extra(empty_things) },
+    kind: hir::ItemKind::GenericNS { rng: hir::Rng::empty(ctx.cre.cid()), args: hir::Rng::empty(ctx.cre.cid()) },
     path: ctx.path,
     vis,
     attr,
   }.push(ctx.cre);
 
-  ctx.cmap.cache_item.insert(id, Some(generic_item));
+  ctx.cmap.cache_item.insert(id, Some(dummy_me));
 
-  let ids = ctx.src.extra_get(rng)
-    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
-    .collect_or_errors()?;
 
-  let rng = ctx.cre.extra(&ids);
-  
-  
+  // Args
   let args = &ctx.src.extra_get(args)
     .filter_map(|id| {
       match ctx.src.get(id).kind {
@@ -100,13 +93,38 @@ pub fn low_generic(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::
       }
     }).collect_vec();
   let args = ctx.cre.extra(args);
+  
+  if let hir::ItemKind::GenericNS { args: args_me, .. } = &mut ctx.cre.get_mut(dummy_me).kind {
+    *args_me = args;
+  } else {
+    unreachable!()
+  }
 
-  *ctx.cre.get_mut(generic_item) = hir::Item {
+  // Reqs
+  let reqs = ctx.src.extra_get(reqs).map(|id| {
+    let ast::ThingKind::NamedTypeList(name, traits) = ctx.src.get(id).kind else { unreachable!() };
+
+    let traits = ctx.src.extra_get(traits).map(|id| TypeLow::low(ctx, sum, id)).collect_or_errors()?;
+    
+    Success(())
+  }).collect_or_errors()?;
+
+
+  // Rng
+  let ids = ctx.src.extra_get(rng)
+    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
+    .collect_or_errors()?;
+
+  let rng = ctx.cre.extra(&ids);
+
+
+  // Push
+  *ctx.cre.get_mut(dummy_me) = hir::Item {
     name: None,
     kind: hir::ItemKind::GenericNS { rng, args },
     path: ctx.path,
     vis, attr
   };
 
-  Status::Success(generic_item)
+  Status::Success(dummy_me)
 }

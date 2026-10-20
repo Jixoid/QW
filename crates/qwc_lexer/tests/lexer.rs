@@ -167,7 +167,9 @@ fn peek_get_bump_and_parse_token() {
   assert_eq!(lx.str(a), "a");
 
   // `&&` is split into two `&`
-  let amp1 = lx.parse_token(&mut sum).unwrap();
+  lx.split_token(&mut sum).unwrap();
+
+  let amp1 = lx.get(&mut sum).unwrap();
   assert_eq!((amp1.kind(), lx.str(amp1)), (WK::Amp, "&"));
 
   let amp2 = lx.get(&mut sum).unwrap();
@@ -178,6 +180,45 @@ fn peek_get_bump_and_parse_token() {
   assert!(lx.get(&mut sum).is_fail());
   assert!(lx.peek(&mut sum).is_fail());
   assert!(lx.get_safe().is_none());
+}
+
+
+// peek / get / bump
+#[test]
+fn parse_nested_generic() {
+  let mut files = Files::new();
+  let fid = files.add_buffer(Path::new("t.qw"), b"Add<Vec2<i32>>".to_vec());
+  let mut lx = Lexer::new(files.get(fid));
+  let mut sum = &mut Summary::new();
+
+  // test
+  let out_s = lx.get(sum).unwrap();
+  assert_eq!(out_s.kind(), WK::Word);
+  assert_eq!(lx.str(out_s), "Add");
+  
+  assert_eq!(lx.get(sum).unwrap().kind(), WK::Lt);
+  
+  let in_s = lx.get(sum).unwrap();
+  assert_eq!(in_s.kind(), WK::Word);
+  assert_eq!(lx.str(in_s), "Vec2");
+  
+  assert_eq!(lx.get(sum).unwrap().kind(), WK::Lt);
+  
+  let t_s = lx.get(sum).unwrap();
+  assert_eq!(t_s.kind(), WK::Word);
+  assert_eq!(lx.str(t_s), "i32");
+  
+  // normal return `>>`
+  assert_eq!(lx.peek(sum).unwrap().kind(), WK::Gt2);
+  
+  // split `>>` into two `>`
+  lx.split_token(&mut sum).unwrap();
+  
+  assert_eq!(lx.get(sum).unwrap().kind(), WK::Gt);
+  assert_eq!(lx.get(sum).unwrap().kind(), WK::Gt);
+
+  // EOF
+  assert!(lx.get(sum).is_fail());
 }
 
 

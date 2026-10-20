@@ -48,6 +48,30 @@ pub struct StrInterner {
   sid_mul: Sid,
   sid_div: Sid,
   sid_rem: Sid,
+
+  sid_add_assign: Sid,
+  sid_sub_assign: Sid,
+  sid_mul_assign: Sid,
+  sid_div_assign: Sid,
+  sid_rem_assign: Sid,
+
+  sid_neg: Sid,
+  sid_eq: Sid,
+  sid_ne: Sid,
+
+  sid_ordering: Sid,
+  sid_less: Sid,
+  sid_equal: Sid,
+  sid_greater: Sid,
+
+  sid_partial_ord: Sid,
+  sid_ord: Sid,
+  sid_partial_cmp: Sid,
+  sid_cmp: Sid,
+  sid_lt: Sid,
+  sid_le: Sid,
+  sid_gt: Sid,
+  sid_ge: Sid,
 }
 
 impl StrInterner {
@@ -76,6 +100,30 @@ impl StrInterner {
       sid_mul: Sid::from(rodeo.get_or_intern_static("mul").into_inner()),
       sid_div: Sid::from(rodeo.get_or_intern_static("div").into_inner()),
       sid_rem: Sid::from(rodeo.get_or_intern_static("rem").into_inner()),
+
+      sid_add_assign: Sid::from(rodeo.get_or_intern_static("add_assign").into_inner()),
+      sid_sub_assign: Sid::from(rodeo.get_or_intern_static("sub_assign").into_inner()),
+      sid_mul_assign: Sid::from(rodeo.get_or_intern_static("mul_assign").into_inner()),
+      sid_div_assign: Sid::from(rodeo.get_or_intern_static("div_assign").into_inner()),
+      sid_rem_assign: Sid::from(rodeo.get_or_intern_static("rem_assign").into_inner()),
+
+      sid_neg: Sid::from(rodeo.get_or_intern_static("neg").into_inner()),
+      sid_eq: Sid::from(rodeo.get_or_intern_static("eq").into_inner()),
+      sid_ne: Sid::from(rodeo.get_or_intern_static("ne").into_inner()),
+
+      sid_ordering: Sid::from(rodeo.get_or_intern_static("Ordering").into_inner()),
+      sid_less: Sid::from(rodeo.get_or_intern_static("Less").into_inner()),
+      sid_equal: Sid::from(rodeo.get_or_intern_static("Equal").into_inner()),
+      sid_greater: Sid::from(rodeo.get_or_intern_static("Greater").into_inner()),
+
+      sid_partial_ord: Sid::from(rodeo.get_or_intern_static("PartialOrd").into_inner()),
+      sid_ord: Sid::from(rodeo.get_or_intern_static("Ord").into_inner()),
+      sid_partial_cmp: Sid::from(rodeo.get_or_intern_static("partial_cmp").into_inner()),
+      sid_cmp: Sid::from(rodeo.get_or_intern_static("cmp").into_inner()),
+      sid_lt: Sid::from(rodeo.get_or_intern_static("lt").into_inner()),
+      sid_le: Sid::from(rodeo.get_or_intern_static("le").into_inner()),
+      sid_gt: Sid::from(rodeo.get_or_intern_static("gt").into_inner()),
+      sid_ge: Sid::from(rodeo.get_or_intern_static("ge").into_inner()),
       
       rodeo,
     }
@@ -119,4 +167,28 @@ impl StrInterner {
   pub fn sid_mul(&self) -> Sid { self.sid_mul }
   pub fn sid_div(&self) -> Sid { self.sid_div }
   pub fn sid_rem(&self) -> Sid { self.sid_rem }
+
+  pub fn sid_add_assign(&self) -> Sid { self.sid_add_assign }
+  pub fn sid_sub_assign(&self) -> Sid { self.sid_sub_assign }
+  pub fn sid_mul_assign(&self) -> Sid { self.sid_mul_assign }
+  pub fn sid_div_assign(&self) -> Sid { self.sid_div_assign }
+  pub fn sid_rem_assign(&self) -> Sid { self.sid_rem_assign }
+
+  pub fn sid_neg(&self) -> Sid { self.sid_neg }
+  pub fn sid_eq(&self) -> Sid { self.sid_eq }
+  pub fn sid_ne(&self) -> Sid { self.sid_ne }
+
+  pub fn sid_ordering(&self) -> Sid { self.sid_ordering }
+  pub fn sid_less(&self) -> Sid { self.sid_less }
+  pub fn sid_equal(&self) -> Sid { self.sid_equal }
+  pub fn sid_greater(&self) -> Sid { self.sid_greater }
+
+  pub fn sid_partial_ord(&self) -> Sid { self.sid_partial_ord }
+  pub fn sid_ord(&self) -> Sid { self.sid_ord }
+  pub fn sid_partial_cmp(&self) -> Sid { self.sid_partial_cmp }
+  pub fn sid_cmp(&self) -> Sid { self.sid_cmp }
+  pub fn sid_lt(&self) -> Sid { self.sid_lt }
+  pub fn sid_le(&self) -> Sid { self.sid_le }
+  pub fn sid_gt(&self) -> Sid { self.sid_gt }
+  pub fn sid_ge(&self) -> Sid { self.sid_ge }
 }
