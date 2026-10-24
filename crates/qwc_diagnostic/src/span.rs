@@ -60,13 +60,15 @@ impl Span {
       let mut line = 1;
       let mut last_newline_pos = 0;
 
-      for (i, _) in text.iter().enumerate().take(offset) {
-        line += 1;
-        last_newline_pos = i + 1;
+      for (i, &c) in text.iter().enumerate().take(offset) {
+        if c == b'\n' {
+          line += 1;
+          last_newline_pos = i + 1;
+        }
       }
 
       let mut column = 1;
-      for c in text.iter().take(offset).skip(last_newline_pos) {
+      for &c in text.iter().take(offset).skip(last_newline_pos) {
         if (c & 0xC0) != 0x80 {
           column += 1;
         }
@@ -90,3 +92,56 @@ impl Span {
   }
 
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::path::Path;
+
+  #[test]
+  fn test_span_interval() {
+    let mut files = Files::default();
+    let content = b"hello\nworld\nfoo bar";
+    let fid = files.add_buffer(Path::new("test.qw"), content.to_vec());
+
+    // "hello" on line 1, col 1..6
+    let span1 = Span { off: 0, len: 5, fid };
+    let int1 = span1.interval(&files);
+    assert_eq!(int1.start, [NonZero::new(1).unwrap(), NonZero::new(1).unwrap()]);
+    assert_eq!(int1.end, [NonZero::new(1).unwrap(), NonZero::new(6).unwrap()]);
+
+    // "world" on line 2, col 1..6 (offset 6..11)
+    let span2 = Span { off: 6, len: 5, fid };
+    let int2 = span2.interval(&files);
+    assert_eq!(int2.start, [NonZero::new(2).unwrap(), NonZero::new(1).unwrap()]);
+    assert_eq!(int2.end, [NonZero::new(2).unwrap(), NonZero::new(6).unwrap()]);
+
+    // "bar" on line 3, col 5..8 (offset 16..19)
+    let span3 = Span { off: 16, len: 3, fid };
+    let int3 = span3.interval(&files);
+    assert_eq!(int3.start, [NonZero::new(3).unwrap(), NonZero::new(5).unwrap()]);
+    assert_eq!(int3.end, [NonZero::new(3).unwrap(), NonZero::new(8).unwrap()]);
+  }
+
+  #[test]
+  fn test_span_interval_utf8() {
+    let mut files = Files::default();
+    let content = "ağaç\n🚀 roket".as_bytes();
+    let fid = files.add_buffer(Path::new("test.qw"), content.to_vec());
+
+    // "ağaç" has 4 chars, 6 bytes (a:1, ğ:2, a:1, ç:2)
+    let span1 = Span { off: 0, len: 6, fid };
+    let int1 = span1.interval(&files);
+    assert_eq!(int1.start, [NonZero::new(1).unwrap(), NonZero::new(1).unwrap()]);
+    assert_eq!(int1.end, [NonZero::new(1).unwrap(), NonZero::new(5).unwrap()]);
+
+    // Line 2: 🚀 (4 bytes), space (1 byte), roket (5 bytes)
+    // "roket" starts at offset 7+4+1 = 12
+    let span2 = Span { off: 12, len: 5, fid };
+    let int2 = span2.interval(&files);
+    // col 1: 🚀, col 2: ' ', col 3: 'r'
+    assert_eq!(int2.start, [NonZero::new(2).unwrap(), NonZero::new(3).unwrap()]);
+    assert_eq!(int2.end, [NonZero::new(2).unwrap(), NonZero::new(8).unwrap()]);
+  }
+}
+
