@@ -200,7 +200,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         let kind = hir::Type {
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
-          layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          layout: hir::Layout::META,
           path,
         }.push(ctx.cre);
 
@@ -234,7 +234,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         let kind = hir::Type {
           kind: hir::TypeKind::GenericRaw { generic, kind },
           attr: TypeAttr::empty(),
-          layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          layout: hir::Layout::META,
           path,
         }.push(ctx.cre);
         
@@ -262,7 +262,11 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
 
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
       resolve::ScopeKindHir::Expr(id, ty) => {
-        let kind = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, false); // TODO!
+        let kind = if let hir::TypeKind::Fun { .. } = ctx.get(ty).kind {
+          ty
+        } else {
+          ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, false)
+        };
 
         hir::Expr {
           kind: hir::ExprKind::GlobalRef(id),

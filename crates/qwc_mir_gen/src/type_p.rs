@@ -41,17 +41,17 @@ impl TypeLow {
       Ref(id, _) => Self::low_ref(ctx, sum, id)?,
 
       // Combinated
-      Struct(rng) => Self::low_struct(ctx, sum, id, rng, id.cid())?,
+      Struct(rng) => Self::low_struct(ctx, sum, rng, id.cid())?,
       Iface(rng) => Self::low_iface(ctx, sum, rng)?,
       TraitFrom{hidden, ..} => Self::low_trait_from(ctx, sum, hidden)?,
       Enum(..) => ctx.tin.ty_i32(),
       Option(inner) => Self::low(ctx, sum, inner)?,
       
       // Sequential
-      Array(kind, ext) => Self::low_array(ctx, sum, id, kind, ext)?,
+      Array(kind, ext) => Self::low_array(ctx, sum, kind, ext)?,
 
       // Callable
-      Fun{self_kind, args, ret} => Self::low_fun(ctx, sum, id, self_kind, args, ret, id.cid())?,
+      Fun{self_kind, args, ret} => Self::low_fun(ctx, sum, self_kind, args, ret, id.cid())?,
       
       // Logic Error
       Trait{..} | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
@@ -106,7 +106,7 @@ impl TypeLow {
   }
 
 
-  fn low_array(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, kind: hir::TypeId, ext: hir::ExprId) -> Status<mir::TypeId> {
+  fn low_array(ctx: &mut Ctx, sum: &mut Summary, kind: hir::TypeId, ext: hir::ExprId) -> Status<mir::TypeId> {
     let elem_ty = Self::low(ctx, sum, kind)?;
 
     let count = Evaluator::new(ctx.src).eval(sum, ext)?.get_u64(sum)?;
@@ -114,12 +114,12 @@ impl TypeLow {
     let kind = mir::TypeKind::Array(elem_ty, count);
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.get(id).layout.by()),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
     }.push_ok(ctx.cre)
   }
 
 
-  fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, rng: hir::ThingRng, cid: hir::CID) -> Status<mir::TypeId> {
+  fn low_struct(ctx: &mut Ctx, sum: &mut Summary, rng: hir::ThingRng, cid: hir::CID) -> Status<mir::TypeId> {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(rng).map(|id| {
@@ -139,7 +139,7 @@ impl TypeLow {
 
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
     }.push_ok(ctx.cre)
   }
 
@@ -151,7 +151,7 @@ impl TypeLow {
     TypeLow::low(ctx, sum, hidden)
   }
 
-  fn low_fun(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId, cid: hir::CID) -> Status<mir::TypeId> {
+  fn low_fun(ctx: &mut Ctx, sum: &mut Summary, self_kind: Option<hir::TypeId>, args: hir::ThingRng, ret: hir::TypeId, cid: hir::CID) -> Status<mir::TypeId> {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(args).map(|id| {
@@ -178,7 +178,7 @@ impl TypeLow {
 
     mir::Type{
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre, ctx.src.get(id).layout.by()),
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
     }.push_ok(ctx.cre)
   }
 

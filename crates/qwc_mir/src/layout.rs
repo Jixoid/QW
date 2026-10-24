@@ -35,7 +35,7 @@ pub struct LayoutInfo {
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum LayoutKind {
+pub enum Layout {
   SST{align: NonZeroU32, size: NonZeroU64},
   ZST,
   DST{align: NonZeroU32},
@@ -43,90 +43,67 @@ pub enum LayoutKind {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Layout {
-  kind: LayoutKind,
-  by: LayoutBy,
-}
-
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum LayoutBy { SYS, QW, C }
-
-
 
 impl Layout {
 
   // new_*
-  pub const fn new_sst(size: u64, align: u32, by: LayoutBy) -> Self {
+  pub const fn new_sst(size: u64, align: u32) -> Self {
     assert!(align.is_power_of_two());
     
     let size = NonZeroU64::new(size).unwrap();
     let align = NonZeroU32::new(align).unwrap();
 
-    Layout {
-      kind: LayoutKind::SST{ align, size },
-      by
-    }
+    Layout::SST{ align, size }
   }
 
-  pub const fn new_zst(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::ZST,
-      by
-    }
+  pub const fn new_zst() -> Self {
+    Layout::ZST
   }
 
-  pub const fn new_dst(align: u32, by: LayoutBy) -> Self {
+  pub const fn new_dst(align: u32) -> Self {
     assert!(align.is_power_of_two());
     
     let align = NonZeroU32::new(align).unwrap();
 
-    Layout {
-      kind: LayoutKind::DST{ align },
-      by
-    }
+    Layout::DST{ align }
   }
 
-  pub const fn new_dsat(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::DSAT,
-      by
-    }
+  pub const fn new_dsat() -> Self {
+    Layout::DSAT
   }
 
 
   // is_*
   pub const fn is_sst(&self) -> bool {
-    matches!(self.kind, LayoutKind::SST{..})
+    matches!(self, Layout::SST{..})
   }
   
   pub const fn is_zst(&self) -> bool {
-    matches!(self.kind, LayoutKind::ZST{..})
+    matches!(self, Layout::ZST{..})
   }
 
   pub const fn is_dst(&self) -> bool {
-    matches!(self.kind, LayoutKind::DST{..})
+    matches!(self, Layout::DST{..})
   }
 
   pub const fn is_dsat(&self) -> bool {
-    matches!(self.kind, LayoutKind::DSAT{..})
+    matches!(self, Layout::DSAT{..})
   }
 
 
   // get
   pub const fn size(&self) -> Option<u64> {
-    match self.kind {
-      LayoutKind::SST{size, ..} => Some(size.get()),
+    match self {
+      Layout::SST{size, ..} => Some(size.get()),
       _ => None
     }
   }
   
 
   pub const fn align(&self) -> Option<u32> {
-    match self.kind {
-      LayoutKind::SST{align, ..} => Some(align.get()),
-      LayoutKind::DST{align} => Some(align.get()),
+    match self {
+      Layout::SST{align, ..} => Some(align.get()),
+      Layout::DST{align} => Some(align.get()),
       _ => None
     }
   }
@@ -154,16 +131,6 @@ impl Layout {
     }
     
     None
-  }
-
-
-  // sub
-  pub const fn kind(&self) -> LayoutKind {
-    self.kind
-  }
-
-  pub const fn by(&self) -> LayoutBy {
-    self.by
   }
 
 }

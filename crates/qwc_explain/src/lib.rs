@@ -64,23 +64,23 @@ fn test_code(file: &str) {
 
 	// Layout
   let hir_layinfo = hir::LayoutInfo{
-    bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+    bool_lay: hir::Layout::STATIC,
     
-    str_lay: hir::Layout::new_dst(hir::LayoutBy::SYS),
+    str_lay: hir::Layout::DST,
 
-    i8_lay:   hir::Layout::new_static(hir::LayoutBy::SYS),
-    i16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    i32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    i64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    i128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+    i8_lay:   hir::Layout::STATIC,
+    i16_lay:  hir::Layout::STATIC,
+    i32_lay:  hir::Layout::STATIC,
+    i64_lay:  hir::Layout::STATIC,
+    i128_lay: hir::Layout::STATIC,
 
-    bf16_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
-    f16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    f32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    f64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-    f128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
+    bf16_lay: hir::Layout::STATIC,
+    f16_lay:  hir::Layout::STATIC,
+    f32_lay:  hir::Layout::STATIC,
+    f64_lay:  hir::Layout::STATIC,
+    f128_lay: hir::Layout::STATIC,
 
-    ptr_size: hir::Layout::new_static(hir::LayoutBy::SYS),
+    ptr_size: hir::Layout::STATIC,
   };
 
 

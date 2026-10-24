@@ -25,7 +25,7 @@ const MODULE_SCOPE_NOT_FOUND:   CodedMsg = CodedMsg::new_str("module scope not f
 
 
 
-pub fn resolve_imports(scp: &mut ScopeMap, cre: &Krate, sin: &StrInterner, imods: &[Imod<'_>], sum: &mut Summary) {
+pub fn resolve_imports(scp: &mut ScopeMap, cre: &Krate, sin: &mut StrInterner, imods: &[Imod<'_>], sum: &mut Summary) {
   let root_id = match cre.root() {
     Some(id) => id.to_any(),
     None => return,
@@ -41,7 +41,7 @@ pub fn resolve_imports(scp: &mut ScopeMap, cre: &Krate, sin: &StrInterner, imods
 
 
 struct ImportResolver<'a, 'imod> {
-  sin: &'a StrInterner,
+  sin: &'a mut StrInterner,
   root_id: AnyId,
   imods: &'a [Imod<'imod>],
 }
@@ -72,7 +72,7 @@ fn find_did_you_mean<'a, S: Copy>(input: &str, candidates: &[(&'a str, S)]) -> O
 
 impl<'a, 'imod> ImportResolver<'a, 'imod> {
 
-  fn resolve(&self, scp: &mut ScopeMap, sum: &mut Summary) {
+  fn resolve(&mut self, scp: &mut ScopeMap, sum: &mut Summary) {
     let scope_ids: Vec<AnyId> = scp.map.keys().copied().collect();
     let mut progress = true;
     let mut pass = 0;
@@ -182,7 +182,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
     None
   }
 
-  fn resolve_imod_import(&self, imod: &Imod<'_>, mut current_item: qwc_hir::ItemId, segments: &[ImportSegment], glob: bool, alias: Option<Ident>, span: Span) -> ResolveResult {
+  fn resolve_imod_import(&mut self, imod: &Imod<'_>, mut current_item: qwc_hir::ItemId, segments: &[ImportSegment], glob: bool, alias: Option<Ident>, span: Span) -> ResolveResult {
     for (idx, seg) in segments.iter().enumerate() {
       let seg_ident = match seg {
         ImportSegment::Name(ident) => *ident,
@@ -196,7 +196,8 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         None => return ResolveResult::Failed,
       };
 
-      let export_kind = match exports.get(&seg_ident.sid()) {
+      let seg_name = self.sin.str(seg_ident.sid());
+      let export_kind = match exports.get(seg_name) {
         Some(k) => *k,
         None => return ResolveResult::Failed,
       };
@@ -229,12 +230,13 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
       };
 
       let mut items = Vec::new();
-      for (&name_sid, &export_kind) in exports.iter() {
+      for (name_str, &export_kind) in exports.iter() {
         let hir_kind = match export_kind {
           ExportKind::Type(ty) => ScopeKindHir::Type(ty),
           ExportKind::Expr(item, ty) => ScopeKindHir::Expr(item, ty),
           ExportKind::NameSpace(item) => ScopeKindHir::Module(item),
         };
+        let name_sid = self.sin.sid(name_str);
         items.push((name_sid, ScopeKind::Hir(hir_kind), span));
       }
 
@@ -251,7 +253,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
     }
   }
 
-  fn try_resolve_import(&self, scp: &ScopeMap, importing_scope_id: AnyId, import: &ImportDef) -> ResolveResult {
+  fn try_resolve_import(&mut self, scp: &ScopeMap, importing_scope_id: AnyId, import: &ImportDef) -> ResolveResult {
     if import.segments.is_empty() {
       return ResolveResult::Failed;
     }
@@ -417,7 +419,8 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         None => return,
       };
 
-      match exports.get(&seg_ident.sid()) {
+      let seg_name = self.sin.str(seg_ident.sid());
+      match exports.get(seg_name) {
         Some(&export_kind) => {
           if is_last_segment {
             if glob {
@@ -449,8 +452,8 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         }
         None => {
           let mut pool = Vec::new();
-          for (&sid, _) in exports.iter() {
-            pool.push((self.sin.str(sid), ()));
+          for (name_str, _) in exports.iter() {
+            pool.push((name_str.as_str(), ()));
           }
           let input = self.sin.str(seg_ident.sid());
           let sugg = find_did_you_mean(input, &pool).map(|(matched, _)| {
@@ -566,7 +569,8 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
                     for seg in &import.segments[next_seg_idx..] {
                       if let ImportSegment::Name(id) = seg {
                         if let Some(exp) = imod.expmap.get(&cur.to_any()) {
-                          if let Some(&ExportKind::NameSpace(ns)) = exp.get(&id.sid()) {
+                          let seg_name = self.sin.str(id.sid());
+                          if let Some(&ExportKind::NameSpace(ns)) = exp.get(seg_name) {
                             cur = ns;
                             continue;
                           }

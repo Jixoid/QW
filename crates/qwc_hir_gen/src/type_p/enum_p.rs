@@ -61,7 +61,7 @@ pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast
   // Post
   hir::Type {
     kind: hir::TypeKind::Enum(rng),
-    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)
@@ -109,7 +109,7 @@ pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
   // Post
   hir::Type {
     kind: hir::TypeKind::Enum(rng),
-    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)

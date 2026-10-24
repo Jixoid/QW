@@ -74,6 +74,11 @@ pub const DID_YOU_MEAN:                              CodedMsg = CodedMsg::new_st
 pub const CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION: CodedMsg = CodedMsg::new_str("cannot use generic type without specialization");
 pub const YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP:    CodedMsg = CodedMsg::new_str("you might have meant to break the loop");
 pub const ICE_UNSUPPORTED_FEATURE:                   CodedMsg = CodedMsg::new_str("internal compiler error: unsupported feature");
+pub const FOLDER_X_NOT_FOUND:                        CodedMsg = CodedMsg::new_str("folder `{}` not found");
+pub const X_IS_NOT_A_FOLDER:                         CodedMsg = CodedMsg::new_str("`{}` is not a folder");
+pub const FOLDER_X_CAN_NOT_CREATED:                  CodedMsg = CodedMsg::new_str("folder `{}` can not created");
+pub const GIT_REPO_CAN_NOT_CLONED:                   CodedMsg = CodedMsg::new_str("git repo can not cloned");
+pub const TOOL_X_NOT_FOUND_IN_SYSTEM:                CodedMsg = CodedMsg::new_str("tool `{}` not found in system");
 
 
 // Label
@@ -94,3 +99,4 @@ pub const CANNOT_CAST:                      FmtMsg = FmtMsg::new("cannot cast");
 pub const UNEXPECTED_PARAMETER:             FmtMsg = FmtMsg::new("unexpected parameter:  `{}`");
 pub const ARGUMENT_X_IS_MISSING:            FmtMsg = FmtMsg::new("argument `{}` is missing");
 pub const ICE_MESSAGE:                      FmtMsg = FmtMsg::new("ICE: {}");
+pub const ERROR_X:                                FmtMsg = FmtMsg::new("error: {}");

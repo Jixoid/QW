@@ -12,7 +12,7 @@
 
 use std::num::NonZeroU32;
 
-use qwc_mir::{self as mir, Krate, Layout, LayoutBy, LayoutInfo, Type, TypeId, TypeKind, id::PushOkApi};
+use qwc_mir::{self as mir, Krate, Layout, LayoutInfo, Type, TypeId, TypeKind, id::PushOkApi};
 
 use crate::layout::Layouter;
 
@@ -67,14 +67,14 @@ impl<'a> TypeInterner<'a> {
 
     let ty_fatptr = {
       let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_ptr]));
-      let layout = Layouter::layout(&kind, layinfo, cre, qwc_hir::LayoutBy::SYS);
+      let layout = Layouter::layout(&kind, layinfo, cre);
 
       Type{kind, layout}.push(cre)
     };
 
     let ty_fatptrint = {
       let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_arch_int()]));
-      let layout = Layouter::layout(&kind, layinfo, cre, qwc_hir::LayoutBy::SYS);
+      let layout = Layouter::layout(&kind, layinfo, cre);
 
       Type{kind, layout}.push(cre)
     };
@@ -83,9 +83,9 @@ impl<'a> TypeInterner<'a> {
     Self {
       layinfo,
 
-      ty_unit: Type{kind: TypeKind::Unit, layout: Layout::new_zst(LayoutBy::QW)}.push(cre),
+      ty_unit: Type{kind: TypeKind::Unit, layout: Layout::new_zst()}.push(cre),
 
-      ty_bool: Type{kind: TypeKind::Bool, layout: Layout::new_sst(1, 1, LayoutBy::QW)}.push(cre),
+      ty_bool: Type{kind: TypeKind::Bool, layout: Layout::new_sst(1, 1)}.push(cre),
 
       ty_ptr,
       ty_fatptr,

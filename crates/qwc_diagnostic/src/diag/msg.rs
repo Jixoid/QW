@@ -40,6 +40,10 @@ impl Message {
   pub fn error(msg: impl Into<CodedString>, label: Label) -> Self {
     Message { level: Level::Error, message: msg.into(), labels: ThinVec::from([label]), notes: ThinVec::new(), suggestions: ThinVec::new() }
   }
+  
+  pub fn error_nopos(msg: impl Into<CodedString>) -> Self {
+    Message { level: Level::Error, message: msg.into(), labels: ThinVec::new(), notes: ThinVec::new(), suggestions: ThinVec::new() }
+  }
 
   pub fn warn(msg: impl Into<CodedString>, label: Label) -> Self {
     Message { level: Level::Warn, message: msg.into(), labels: ThinVec::from([label]), notes: ThinVec::new(), suggestions: ThinVec::new() }

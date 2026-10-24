@@ -59,10 +59,9 @@ impl<'a> fmt::Display for Dump<'a> {
 
 fn dump(dmp: &Dump, exp: &Export, indent: usize, f: &mut fmt::Formatter) -> fmt::Result {
   let mut entries: Vec<_> = exp.map.iter().collect();
-  entries.sort_by_key(|(name_sid, _)| dmp.sin.str(**name_sid));
+  entries.sort_by_key(|(name_str, _)| *name_str);
 
-  for (&name_sid, kind) in entries {
-    let name_str = dmp.sin.str(name_sid);
+  for (name_str, kind) in entries {
 
     match kind {
       ExportKind::NameSpace(id) => {

@@ -78,7 +78,7 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
             let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
             hir::Type {
               kind: hir::TypeKind::AssociatedType { trait_ty, idx },
-              layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+              layout: hir::Layout::DSAT,
               attr: TypeAttr::empty(),
               path,
             }.push(ctx.cre)
@@ -118,7 +118,7 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
         hir::Type {
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
-          layout: hir::Layout::new_meta(hir::LayoutBy::QW),
+          layout: hir::Layout::META,
           path,
         }.push(ctx.cre)
       }

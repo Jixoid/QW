@@ -120,7 +120,7 @@ impl TypeLow {
     // Post
     hir::Type {
       kind: hir::TypeKind::Vector(elem_ty, len_expr),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      layout: hir::Layout::STATIC,
       attr: TypeAttr::empty(),
       path,
     }.push_ok(ctx.cre)
@@ -164,7 +164,7 @@ impl TypeLow {
     // Post
     hir::Type {
       kind: hir::TypeKind::Array(elem_ty, len_expr),
-      layout: hir::Layout::new_static(hir::LayoutBy::QW),
+      layout: hir::Layout::STATIC,
       attr: TypeAttr::empty(),
       path,
     }.push_ok(ctx.cre)

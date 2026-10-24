@@ -11,16 +11,16 @@
 
 
 use qwc_hir::{AnyId, CID, ItemId, TypeId};
-use qwc_string_interner::Sid;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ExportMap {
   pub(crate) cid: CID,
   pub(crate) root: Option<ItemId>,
   pub(crate) map: FxHashMap<AnyId, Export>,
+  pub symbols: FxHashMap<ItemId, String>,
 }
 
 impl ExportMap {
@@ -30,6 +30,7 @@ impl ExportMap {
       cid,
       root,
       map: FxHashMap::default(),
+      symbols: FxHashMap::default(),
     }
   }
 
@@ -39,6 +40,14 @@ impl ExportMap {
 
   pub fn root(&self) -> Option<ItemId> {
     self.root
+  }
+
+  pub fn symbol(&self, id: &ItemId) -> Option<&str> {
+    self.symbols.get(id).map(|s| s.as_str())
+  }
+
+  pub fn add_symbol(&mut self, id: ItemId, name: String) {
+    self.symbols.insert(id, name);
   }
 
   pub fn get(&self, id: &AnyId) -> Option<&Export> {
@@ -70,22 +79,20 @@ impl ExportMap {
 }
 
 
-#[derive(Serialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum ExportKind {
   Type(TypeId),
-  //TypeParam(ThingId),
   
   Expr(ItemId, TypeId),
-  //ExprParam(ThingId),
 
   NameSpace(ItemId),
 }
 
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Export {
   pub parent: Option<AnyId>,
-  pub(crate) map: FxHashMap<Sid, ExportKind>,
+  pub(crate) map: FxHashMap<String, ExportKind>,
 }
 
 impl Export {
@@ -97,15 +104,15 @@ impl Export {
     }
   }
 
-  pub fn insert(&mut self, sid: Sid, kind: ExportKind) {
-    self.map.insert(sid, kind).inspect(|_| panic!());
+  pub fn insert(&mut self, name: String, kind: ExportKind) {
+    self.map.insert(name, kind).inspect(|_| panic!());
   }
 
-  pub fn get(&self, sid: &Sid) -> Option<&ExportKind> {
-    self.map.get(sid)
+  pub fn get(&self, name: &str) -> Option<&ExportKind> {
+    self.map.get(name)
   }
 
-  pub fn iter(&self) -> impl Iterator<Item = (&Sid, &ExportKind)> {
+  pub fn iter(&self) -> impl Iterator<Item = (&String, &ExportKind)> {
     self.map.iter()
   }
 

@@ -8,11 +8,16 @@ default = []
 lsp = ["dep:qwc_lsp", "qwc_diagnostic/lsp"]
 
 [dependencies]
+clap = { version = "4.5", features = ["derive"] }
+owo-colors = "4.4.0"
+rustc-hash = "2.1.3"
 qwc_ast = { path = "../qwc_ast" }
 qwc_hir = { path = "../qwc_hir" }
 qwc_mir = { path = "../qwc_mir" }
 qwc_ds = { path = "../qwc_ds" }
 qwc_unit = { path = "../qwc_unit" }
+qwc_deps = { path = "../qwc_deps" }
+qwc_config = { path = "../qwc_config" }
 qwc_arena = { path = "../qwc_arena" }
 qwc_intrinsic = { path = "../qwc_intrinsic" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
@@ -20,10 +25,9 @@ qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_parse = { path = "../qwc_parse" }
 qwc_explain = { path = "../qwc_explain" }
 qwc_resolve = { path = "../qwc_resolve" }
+qwc_mangling = { path = "../qwc_mangling" }
 qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
 qwc_cgen = { path = "../qwc_cgen" }
 qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
 qwc_lsp = { path = "../qwc_lsp", optional = true }
-clap = { version = "4.5", features = ["derive"] }
-owo-colors = "4.4.0"

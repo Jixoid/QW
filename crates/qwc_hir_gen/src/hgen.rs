@@ -205,7 +205,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         }
         
         for id in krate.extra_get(args) {
-          let hir::Thing::NamedType(name, kind) = *self.cre.get(id) else { unreachable!() };
+          let hir::Thing::NamedType(name, kind) = *krate.get(id) else { unreachable!() };
 
           args_str.push(format!("{}: {}", self.sin.str(name), self.type_name(sum, kind)));
         }

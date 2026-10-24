@@ -11,9 +11,9 @@
 
 
 use core::slice;
-use std::{mem, ops::Range};
+use std::{fmt, mem, ops::Range};
 
-use serde::ser::{Serialize, Serializer, SerializeStruct};
+use serde::{Deserialize, Deserializer, de::{self, MapAccess, SeqAccess, Visitor}, ser::{Serialize, SerializeStruct, Serializer}};
 
 const PAGE_SIZE: usize = 1 * 1024 * 1024; // 1 MB
 
@@ -63,6 +63,180 @@ impl<T: Copy> Serialize for Arena<T> {
     state.serialize_field("bytes", &RawBytesHelper(&self.data, self.len))?;
     state.end()
   }
+}
+
+impl<'de, T: Copy> Deserialize<'de> for Arena<T> {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    enum Field { Len, Bytes, Ignore }
+
+    struct FieldVisitor;
+    impl<'de> Visitor<'de> for FieldVisitor {
+      type Value = Field;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("`len` or `bytes`")
+      }
+
+      fn visit_str<E: de::Error>(self, value: &str) -> Result<Field, E> {
+        match value {
+          "len" => Ok(Field::Len),
+          "bytes" => Ok(Field::Bytes),
+          _ => Ok(Field::Ignore),
+        }
+      }
+
+      fn visit_bytes<E: de::Error>(self, value: &[u8]) -> Result<Field, E> {
+        match value {
+          b"len" => Ok(Field::Len),
+          b"bytes" => Ok(Field::Bytes),
+          _ => Ok(Field::Ignore),
+        }
+      }
+    }
+
+    impl<'de> Deserialize<'de> for Field {
+      #[inline]
+      fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+      where
+        D: Deserializer<'de>,
+      {
+        deserializer.deserialize_identifier(FieldVisitor)
+      }
+    }
+
+    struct DeserializeBytesHelper(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for DeserializeBytesHelper {
+      fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+      where
+        D: Deserializer<'de>,
+      {
+        struct RawBytesVisitor;
+        impl<'de> Visitor<'de> for RawBytesVisitor {
+          type Value = Vec<u8>;
+
+          fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("byte array")
+          }
+
+          fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            Ok(v.to_vec())
+          }
+
+          fn visit_byte_buf<E: de::Error>(self, v: Vec<u8>) -> Result<Self::Value, E> {
+            Ok(v)
+          }
+
+          fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut bytes = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+            while let Some(b) = seq.next_element()? {
+              bytes.push(b);
+            }
+            Ok(bytes)
+          }
+        }
+        deserializer.deserialize_byte_buf(RawBytesVisitor).map(DeserializeBytesHelper)
+      }
+    }
+
+    struct ArenaVisitor<T>(std::marker::PhantomData<T>);
+    
+    impl<'de, T: Copy> Visitor<'de> for ArenaVisitor<T> {
+      type Value = Arena<T>;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct Arena")
+      }
+
+      fn visit_seq<V>(self, mut seq: V) -> Result<Arena<T>, V::Error>
+      where
+        V: SeqAccess<'de>,
+      {
+        let len = seq.next_element()?
+          .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        
+        let bytes_helper: DeserializeBytesHelper = seq.next_element()?
+          .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+
+        reconstruct_arena(len, bytes_helper.0)
+      }
+
+      fn visit_map<V>(self, mut map: V) -> Result<Arena<T>, V::Error>
+      where
+        V: MapAccess<'de>,
+      {
+        let mut len = None;
+        let mut bytes = None;
+
+        while let Some(key) = map.next_key::<Field>()? {
+          match key {
+            Field::Len => {
+              if len.is_some() { return Err(de::Error::duplicate_field("len")); }
+              len = Some(map.next_value()?);
+            }
+            Field::Bytes => {
+              if bytes.is_some() { return Err(de::Error::duplicate_field("bytes")); }
+              let helper: DeserializeBytesHelper = map.next_value()?;
+              bytes = Some(helper.0);
+            }
+            Field::Ignore => {
+              let _ = map.next_value::<de::IgnoredAny>()?;
+            }
+          }
+        }
+
+        let len = len.ok_or_else(|| de::Error::missing_field("len"))?;
+        let bytes = bytes.ok_or_else(|| de::Error::missing_field("bytes"))?;
+
+        reconstruct_arena(len, bytes)
+      }
+    }
+
+    const FIELDS: &'static [&'static str] = &["len", "bytes"];
+    deserializer.deserialize_struct("Arena", FIELDS, ArenaVisitor(std::marker::PhantomData))
+  }
+}
+
+fn reconstruct_arena<T: Copy, E: de::Error>(len: usize, bytes: Vec<u8>) -> Result<Arena<T>, E> {
+  let expected_bytes = len * size_of::<T>();
+  
+  if bytes.len() != expected_bytes {
+    return Err(de::Error::invalid_length(
+      bytes.len(),
+      &format!("{} expected bytes", expected_bytes).as_str()
+    ));
+  }
+
+  let per_len = Arena::<T>::per_len();
+  let mut data = Vec::new();
+
+  if len == 0 {
+    data.push(Vec::with_capacity(per_len));
+  } else {
+    let mut offset = 0;
+    while offset < len {
+      let chunk_len = (len - offset).min(per_len);
+      let mut chunk = Vec::with_capacity(per_len);
+      unsafe {
+        std::ptr::copy_nonoverlapping(
+          bytes.as_ptr().add(offset * size_of::<T>()),
+          chunk.as_mut_ptr() as *mut u8,
+          chunk_len * size_of::<T>(),
+        );
+        chunk.set_len(chunk_len);
+      }
+      data.push(chunk);
+      offset += chunk_len;
+    }
+  }
+
+  Ok(Arena {
+    len,
+    data,
+  })
 }
 
 

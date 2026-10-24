@@ -45,12 +45,12 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields:
     kind: hir::TypeKind::Error,
     attr: TypeAttr::empty(),
     path,
-    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    layout: hir::Layout::DSAT,
   }.push(ctx.cre);
 
 
   ctx.cmap.current_trait.push(dummy_me);
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, path, attr: TypeAttr::empty()}.push(ctx.cre));
 
 
   // fields
@@ -103,7 +103,7 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields:
 
   let this = hir::Type {
     kind: hir::TypeKind::Trait{methods, types, reqs},
-    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    layout: hir::Layout::DSAT,
     attr: TypeAttr::empty(),
     path,
   };
@@ -122,11 +122,11 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
     kind: hir::TypeKind::Error,
     attr: TypeAttr::empty(),
     path,
-    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    layout: hir::Layout::DSAT,
   }.push(ctx.cre);
 
   ctx.cmap.current_trait.push(dummy_me);
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::new_dsat(qwc_hir::LayoutBy::QW), path, attr: TypeAttr::empty()}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, path, attr: TypeAttr::empty()}.push(ctx.cre));
 
 
   let methods = (|| {
@@ -170,7 +170,7 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
   // Post
   let this = hir::Type {
     kind: hir::TypeKind::Iface(methods?),
-    layout: hir::Layout::new_dsat(hir::LayoutBy::QW),
+    layout: hir::Layout::DSAT,
     attr: TypeAttr::empty(),
     path,
   };

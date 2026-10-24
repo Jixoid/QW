@@ -43,19 +43,19 @@ pub struct CoreUnit {
 impl CoreUnit {
   pub fn new() -> Self {
     let hir_layinfo = hir::LayoutInfo {
-      str_lay:  hir::Layout::new_dst(hir::LayoutBy::SYS),
-      bool_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
-      i8_lay:   hir::Layout::new_static(hir::LayoutBy::SYS),
-      i16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      i32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      i64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      i128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
-      bf16_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
-      f16_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      f32_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      f64_lay:  hir::Layout::new_static(hir::LayoutBy::SYS),
-      f128_lay: hir::Layout::new_static(hir::LayoutBy::SYS),
-      ptr_size: hir::Layout::new_static(hir::LayoutBy::SYS),
+      str_lay:  hir::Layout::DST,
+      bool_lay: hir::Layout::STATIC,
+      i8_lay:   hir::Layout::STATIC,
+      i16_lay:  hir::Layout::STATIC,
+      i32_lay:  hir::Layout::STATIC,
+      i64_lay:  hir::Layout::STATIC,
+      i128_lay: hir::Layout::STATIC,
+      bf16_lay: hir::Layout::STATIC,
+      f16_lay:  hir::Layout::STATIC,
+      f32_lay:  hir::Layout::STATIC,
+      f64_lay:  hir::Layout::STATIC,
+      f128_lay: hir::Layout::STATIC,
+      ptr_size: hir::Layout::STATIC,
     };
 
     let mut sin = StrInterner::new();
@@ -186,7 +186,7 @@ impl Backend {
 
     // Run ScopeCollector with pre-created core dependency
     let imods = [Imod::new(self.core.core_name_sid, &self.core.core_exp)];
-    let scope_res = (summary.sumerr() == 0).then(|| ScopeCollector::collect(&cre, &sin, &imods));
+    let scope_res = (summary.sumerr() == 0).then(|| ScopeCollector::collect(&cre, &mut sin, &imods));
 
     if let Some(Err(scope_sum)) = scope_res.as_ref() {
       summary += scope_sum.clone();
@@ -335,8 +335,7 @@ impl Backend {
 
     // Core library exports
     for (_id, export) in self.core.core_exp.iter() {
-      for (sid, kind) in export.iter() {
-        let name = self.core.base_interner.str(*sid).to_string();
+      for (name, kind) in export.iter() {
         if seen.insert(name.clone()) {
           let item_kind = match kind {
             qwc_resolve::ExportKind::Type(_) => CompletionItemKind::STRUCT,

@@ -17,7 +17,7 @@ use qwc_dump::{attr, ident, kw, kw2, lit_bool, lit_num, lit_str, name, op, punct
 use qwc_string_interner::StrInterner;
 
 use crate::{
-  AnyId, CID, Const, DefPath, DefPathId, Deps, Expr, ExprId, ExprKind, GetApi, Item, ItemAttr, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, HirKind, NodeKind, Rng, SpecAny},
+  AnyId, CID, Const, DefPath, DefPathId, Deps, Expr, ExprId, ExprKind, GetApi, Item, ItemAttr, ItemId, ItemKind, ItemVis, Krate, Layout, LayoutKind, SymVis, Thing, ThingId, Type, TypeId, TypeKind, id::{HirId, HirKind, NodeKind, Rng, SpecAny},
 };
 
 
@@ -1030,16 +1030,10 @@ impl DumpHandler for Layout {
     write!(f, "{}", punct("![layout("))?;
 
     match self.kind() {
-      LayoutKind::Static => write!(f, "{}", punct("static, "))?,
-      LayoutKind::Meta   => write!(f, "{}", punct("meta, "))?,
-      LayoutKind::DST    => write!(f, "{}", punct("dst, "))?,
-      LayoutKind::DSAT   => write!(f, "{}", punct("dsat, "))?,
-    }
-
-    match self.by() {
-      LayoutBy::SYS => write!(f, "{}", punct("sys"))?,
-      LayoutBy::QW  => write!(f, "{}", punct("qw"))?,
-      LayoutBy::C   => write!(f, "{}", punct("c"))?,
+      LayoutKind::Static => write!(f, "{}", punct("static"))?,
+      LayoutKind::Meta   => write!(f, "{}", punct("meta"))?,
+      LayoutKind::DST    => write!(f, "{}", punct("dst"))?,
+      LayoutKind::DSAT   => write!(f, "{}", punct("dsat"))?,
     }
 
     if self.is_inhabited() {

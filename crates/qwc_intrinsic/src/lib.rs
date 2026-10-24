@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{Rng, CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, Layout, LayoutBy, LayoutInfo, PrimOps, PrimTypes, SymVis, Thing, Type, TypeAttr, TypeKind};
+use qwc_hir::{Rng, CID, DefPath, Item, ItemAttr, ItemKind, ItemVis, Krate, Layout, LayoutInfo, PrimOps, PrimTypes, SymVis, Thing, Type, TypeAttr, TypeKind};
 use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
@@ -29,13 +29,13 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	let path_unit = cre.push(DefPath::Path{base: path_types, name: sin.sid("()")});
 	let path_never = cre.push(DefPath::Path{base: path_types, name: sin.sid("!")});
 
-	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_type});
-	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_self});
+	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty(), path: path_type});
+	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty(), path: path_self});
 	let ty_generic_ref_mut_self_type = cre.push(Type{kind: TypeKind::Ref(ty_generic_self_type, true), layout: layinfo.ptr_size, attr: TypeAttr::empty(), path: path_self});
 	let ty_generic_ref_self_type = cre.push(Type{kind: TypeKind::Ref(ty_generic_self_type, false), layout: layinfo.ptr_size, attr: TypeAttr::empty(), path: path_self});
-	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_error});
-	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::new_static(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_unit});
-	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(qwc_hir::LayoutBy::QW), attr: TypeAttr::empty(), path: path_never});
+	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty(), path: path_error});
+	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty(), path: path_unit});
+	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(), attr: TypeAttr::empty(), path: path_never});
 
 	// types
 	let (types, prim_ty) = {
@@ -170,7 +170,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -178,7 +178,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// GenericType for Rhs: generic_item, idx 0
 				let ty_rhs = cre.push(Type {
 					kind: TypeKind::GenericType { generic: generic_item, idx: 0 },
-					layout: Layout::new_static(LayoutBy::QW),
+					layout: Layout::STATIC,
 					attr: TypeAttr::empty(),
 					path: path_rhs,
 				});
@@ -186,7 +186,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// AssociatedType for Output: trait_ty, idx 0
 				let ty_output = cre.push(Type {
 					kind: TypeKind::AssociatedType { trait_ty, idx: 0 },
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_output,
 				});
@@ -201,7 +201,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args,
 						ret: ty_output,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn,
 				});
@@ -214,14 +214,14 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait{methods, types, reqs: Rng::empty(cid)},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -277,7 +277,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -285,7 +285,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// GenericType for Rhs: generic_item, idx 0
 				let ty_rhs = cre.push(Type {
 					kind: TypeKind::GenericType { generic: generic_item, idx: 0 },
-					layout: Layout::new_static(LayoutBy::QW),
+					layout: Layout::STATIC,
 					attr: TypeAttr::empty(),
 					path: path_rhs,
 				});
@@ -300,7 +300,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args,
 						ret: ty_unit,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn,
 				});
@@ -310,14 +310,14 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait{methods, types: Rng::empty(cid), reqs: Rng::empty(cid)},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -366,7 +366,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -374,7 +374,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// AssociatedType for Output: trait_ty, idx 0
 				let ty_output = cre.push(Type {
 					kind: TypeKind::AssociatedType { trait_ty, idx: 0 },
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_output,
 				});
@@ -389,7 +389,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args,
 						ret: ty_output,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn,
 				});
@@ -402,7 +402,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait{methods, types, reqs: Rng::empty(cid)},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
@@ -451,7 +451,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -459,7 +459,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// GenericType for Rhs: generic_item, idx 0
 				let ty_rhs = cre.push(Type {
 					kind: TypeKind::GenericType { generic: generic_item, idx: 0 },
-					layout: Layout::new_static(LayoutBy::QW),
+					layout: Layout::STATIC,
 					attr: TypeAttr::empty(),
 					path: path_rhs,
 				});
@@ -482,7 +482,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args,
 						ret: prim_ty.ty_bool,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn_eq,
 				});
@@ -497,7 +497,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args_ne,
 						ret: prim_ty.ty_bool,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn_ne,
 				});
@@ -508,14 +508,14 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait{methods, types: Rng::empty(cid), reqs: Rng::empty(cid)},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -567,21 +567,21 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait{methods: Rng::empty(cid), types: Rng::empty(cid), reqs: Rng::empty(cid)},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -684,7 +684,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -692,7 +692,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// GenericType for Rhs: generic_item, idx 0
 				let ty_rhs = cre.push(Type {
 					kind: TypeKind::GenericType { generic: generic_item, idx: 0 },
-					layout: Layout::new_static(LayoutBy::QW),
+					layout: Layout::STATIC,
 					attr: TypeAttr::empty(),
 					path: path_rhs,
 				});
@@ -715,7 +715,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 								args: fn_args,
 								ret: $ret_ty,
 							},
-							layout: Layout::new_dsat(LayoutBy::QW),
+							layout: Layout::DSAT,
 							attr: TypeAttr::empty(),
 							path: $p_fn,
 						})
@@ -739,14 +739,14 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait { methods, types: Rng::empty(cid), reqs },
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -801,7 +801,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				// Pre-allocate trait_ty
 				let trait_ty = cre.push(Type {
 					kind: TypeKind::Error,
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -816,7 +816,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 						args: fn_args,
 						ret: $ty_ord,
 					},
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_fn_cmp,
 				});
@@ -828,14 +828,14 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				*cre.get_mut(trait_ty) = Type {
 					kind: TypeKind::Trait { methods, types: Rng::empty(cid), reqs },
-					layout: Layout::new_dsat(LayoutBy::QW),
+					layout: Layout::DSAT,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				};
 
 				let ty_generic_raw = cre.push(Type {
 					kind: TypeKind::GenericRaw { generic: generic_item, kind: trait_ty },
-					layout: Layout::new_meta(LayoutBy::QW),
+					layout: Layout::META,
 					attr: TypeAttr::empty(),
 					path: path_trait,
 				});
@@ -924,7 +924,8 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 	cre.set_root(root);
 
 
-	let exp = ExportMap::visit(&cre).map_err(|_| ()).unwrap();
+	let deps = qwc_hir::Deps::new();
+	let exp = ExportMap::visit(&cre, &deps, sin).map_err(|_| ()).unwrap();
 
 	(cre, exp, prim_ty, prim_op)
 }

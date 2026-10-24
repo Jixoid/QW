@@ -227,7 +227,7 @@ impl<'a> Specialization<'a> {
 
         hir::Type {
           kind: hir::TypeKind::Struct(rng),
-          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         }.push(ctx.cre)
@@ -238,7 +238,7 @@ impl<'a> Specialization<'a> {
 
         hir::Type {
           kind: hir::TypeKind::Tuple(rng),
-          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         }.push(ctx.cre)
@@ -270,7 +270,7 @@ impl<'a> Specialization<'a> {
   
         hir::Type {
           kind: hir::TypeKind::Array(kind, ext),
-          layout: Layout::new_static(qwc_hir::LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         }.push(ctx.cre)
@@ -288,7 +288,7 @@ impl<'a> Specialization<'a> {
 
         hir::Type {
           kind: hir::TypeKind::Fun { self_kind, args, ret: self.sub_spec_type(ctx, sum, ret) },
-          layout: Layout::new_dsat(qwc_hir::LayoutBy::QW),
+          layout: Layout::DSAT,
           attr: TypeAttr::empty(),
           path,
         }.push(ctx.cre)
@@ -307,7 +307,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Trait {methods, types, reqs} => {
         let new_trait_ty = hir::Type {
           kind: hir::TypeKind::Error,
-          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         }.push(ctx.cre);
@@ -346,7 +346,7 @@ impl<'a> Specialization<'a> {
 
         let this = hir::Type {
           kind: hir::TypeKind::Trait{methods, types, reqs},
-          layout: hir::Layout::new_static(qwc_hir::LayoutBy::QW),
+          layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };

@@ -11,7 +11,7 @@
 
 
 use std::{num::NonZero, slice};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use qwc_arena::Arena;
 
@@ -19,7 +19,7 @@ use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimOps, Prim
 
 
 
-#[derive(Serialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CID (pub(crate) NonZero<u16>);
 
 
@@ -69,7 +69,7 @@ impl Deps {
 
 
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Krate {
   // Root
   root: Option<ItemId>,

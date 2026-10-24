@@ -32,61 +32,31 @@ pub struct LayoutInfo {
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum LayoutKind { Static, Meta, DST, DSAT }
+pub(crate) enum LayoutKind { Static, Meta, DST, DSAT }
 
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum LayoutBy { SYS, QW, C }
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Layout {
   kind: LayoutKind,
   inhabited: bool,
-  by: LayoutBy,
+}
+
+impl Layout {
+  pub const STATIC: Layout = Layout{kind: LayoutKind::Static, inhabited: false};
+  pub const META: Layout = Layout{kind: LayoutKind::Meta, inhabited: false};
+  pub const DST: Layout = Layout{kind: LayoutKind::DST, inhabited: false};
+  pub const DSAT: Layout = Layout{kind: LayoutKind::DSAT, inhabited: false};
 }
 
 
 impl Layout {
 
   // new_*
-  pub const fn new_inhabited(by: LayoutBy) -> Self {
+  pub const fn new_inhabited() -> Self {
     Layout {
       kind: LayoutKind::Static,
       inhabited: true,
-      by
-    }
-  }
-
-  pub const fn new_static(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::Static,
-      inhabited: false,
-      by
-    }
-  }
-
-  pub const fn new_meta(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::Meta,
-      inhabited: false,
-      by
-    }
-  }
-
-  pub const fn new_dst(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::DST,
-      inhabited: false,
-      by
-    }
-  }
-
-  pub const fn new_dsat(by: LayoutBy) -> Self {
-    Layout {
-      kind: LayoutKind::DSAT,
-      inhabited: false,
-      by
     }
   }
 
@@ -110,12 +80,8 @@ impl Layout {
   
 
   // sub
-  pub const fn kind(&self) -> LayoutKind {
+  pub(crate) const fn kind(&self) -> LayoutKind {
     self.kind
-  }
-
-  pub const fn by(&self) -> LayoutBy {
-    self.by
   }
 
 }

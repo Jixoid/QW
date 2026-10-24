@@ -11,29 +11,36 @@
 
 
 use qwc_diagnostic::Summary;
-use qwc_hir::{AnyId, Item, ItemId, ItemKind, Krate};
+use qwc_hir::{AnyId, Deps, Item, ItemAttr, ItemId, ItemKind, Krate};
+use qwc_mangling::{Mangler, ManglerQW};
+
+use qwc_string_interner::StrInterner;
 
 use crate::{Export, ExportKind, ExportMap};
 
 
 impl ExportMap {
-  pub fn visit(cre: &Krate) -> Result<Self, Summary> {
-    ExportCollector::collect(cre)
+  pub fn visit(cre: &Krate, deps: &Deps, sin: &StrInterner) -> Result<Self, Summary> {
+    ExportCollector::collect(cre, deps, sin)
   }
 }
 
 
 pub struct ExportCollector<'a> {
   cre: &'a Krate,
+  deps: &'a Deps,
+  sin: &'a StrInterner,
   scp: ExportMap,
   sum: Summary,
 }
 
 impl<'a> ExportCollector<'a> {
 
-  pub fn collect(cre: &'a Krate) -> Result<ExportMap, Summary> {
+  pub fn collect(cre: &'a Krate, deps: &'a Deps, sin: &'a StrInterner) -> Result<ExportMap, Summary> {
     let mut collector = Self {
       cre,
+      deps,
+      sin,
       scp: ExportMap::new(cre.cid(), cre.root()),
       sum: Summary::new(),
     };
@@ -62,20 +69,44 @@ impl<'a> ExportCollector<'a> {
 
       // if !item.is_public() { continue; }
 
-      let (name, kind) = match it.kind {
+      let (name_sid, kind) = match it.kind {
         // Modüller / İsim Alanları
         ItemKind::NameSpace{..} => (it.name.unwrap(), ExportKind::NameSpace(id)),
 
         ItemKind::Using{kind} => (it.name.unwrap(), ExportKind::Type(kind)),
 
-        ItemKind::Variable{kind, ..} | ItemKind::Function{kind, ..} => (it.name.unwrap(), ExportKind::Expr(id, kind)),
+        ItemKind::Variable{kind, ..} => {
+          let sym = ManglerQW::new(self.cre, self.deps, self.sin, it.path);
+          self.scp.add_symbol(id, sym);
+          (it.name.unwrap(), ExportKind::Expr(id, kind))
+        }
+
+        ItemKind::Function{kind, ..} => {
+          let sym = if it.attr.contains(ItemAttr::Entry) {
+            String::from("qw_entry")
+          } else {
+            ManglerQW::new(self.cre, self.deps, self.sin, it.path)
+          };
+          self.scp.add_symbol(id, sym);
+          (it.name.unwrap(), ExportKind::Expr(id, kind))
+        }
 
         ItemKind::GenericNS{..} => continue,
-        ItemKind::Impl{..} => continue,
+        ItemKind::Impl{methods, ..} => {
+          for method_id in self.cre.extra_get(methods) {
+            let m_it = self.cre.get(method_id);
+            if let ItemKind::Function { .. } = m_it.kind {
+              let sym = ManglerQW::new(self.cre, self.deps, self.sin, m_it.path);
+              self.scp.add_symbol(method_id, sym);
+            }
+          }
+          continue;
+        }
 
         _ => todo!("{it:#?}"),
       };
 
+      let name = self.sin.str(name_sid).to_string();
       current_exports.insert(name, kind);
     }
 

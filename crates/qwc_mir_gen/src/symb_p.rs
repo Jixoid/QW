@@ -27,6 +27,43 @@ impl SymbLow {
   pub fn low(ctx: &mut Ctx, sum: &mut Summary, id: hir::ItemId) -> Status<Option<mir::SymbId>> {
     if let Some(&id) = ctx.cmap.cache_item.get(&id) { return Success(id) }
 
+    if id.cid() != ctx.src.cid() {
+      let it = ctx.get(id);
+      let symb = match it.kind {
+        hir::ItemKind::Function { kind, .. } => {
+          let sym = ctx.get_symbol(id).unwrap().to_string();
+          let ety = TypeLow::low(ctx, sum, kind)?;
+          let symb = mir::Symbol {
+            name: ctx.cre.sym(&sym),
+            stat: mir::SymbolStat::Import,
+            ety,
+            kind: mir::SymbolKind::Function {
+              entry: mir::BlokId::from_any(mir::AnyId::new(0, mir::id::NodeKind::Blok)),
+              blocks: mir::BlokRng::empty(),
+            },
+          }.push(ctx.cre);
+          Some(symb)
+        }
+        hir::ItemKind::Variable { kind, ism, .. } => {
+          let sym = ctx.get_symbol(id).unwrap().to_string();
+          let ety = TypeLow::low(ctx, sum, kind)?;
+          let symb = mir::Symbol {
+            name: ctx.cre.sym(&sym),
+            stat: mir::SymbolStat::Import,
+            ety,
+            kind: mir::SymbolKind::Variable {
+              value: mir::Value::Const(mir::Const::Unit),
+              ism,
+            },
+          }.push(ctx.cre);
+          Some(symb)
+        }
+        _ => None,
+      };
+      ctx.cmap.cache_item.insert(id, symb);
+      return Success(symb);
+    }
+
     let it = ctx.src.get(id);
 
     use hir::ItemKind::*;
@@ -203,7 +240,7 @@ impl SymbLow {
       let struct_kind = mir::TypeKind::Struct(rng);
       let ety = mir::Type {
         kind: struct_kind,
-        layout: Layouter::layout(&struct_kind, ctx.tin.layinfo, ctx.cre, qwc_hir::LayoutBy::QW),
+        layout: Layouter::layout(&struct_kind, ctx.tin.layinfo, ctx.cre),
       }.push(ctx.cre);
 
       let vmt_id = mir::Symbol {

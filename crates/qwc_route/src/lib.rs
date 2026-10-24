@@ -16,14 +16,13 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 mod error;
 mod build;
-mod conf;
+mod compile;
 mod init;
 mod run;
 //mod deps;
 //mod pkg;
 
 use error::Error;
-use conf::parse_conf;
 
 
 pub fn route() {
@@ -82,6 +81,65 @@ enum MainCommands {
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 
+    #[arg(long, value_delimiter = ',', value_enum)]
+    dump: Vec<DumpStage>,
+  },
+
+  #[command(alias = "cp")]
+  /// Compile a single crate directly
+  Compile {
+    /// Directory or file to compile
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+
+    /// Output directory
+    #[arg(long)]
+    outdir: Option<PathBuf>,
+
+    /// External dependencies (format: NAME=PATH_TO_QWU or NAME=PATH_TO_QWU:PATH_TO_OBJ)
+    #[arg(long = "dep", value_name = "NAME=QWU[:OBJ]")]
+    deps: Vec<String>,
+
+    /// Optimization Level
+    #[arg(short = 'O', default_value = "O0", default_missing_value = "1", num_args = 0..=1)]
+    opt_level: OptLevel,
+
+    /// Target build destination
+    #[arg(long, default_value = "debug")]
+    variant: BuildVariant,
+
+    /// Select start routine (only executable)
+    #[arg(long, default_value = "cqrt")]
+    start_routine: BuildStartRoutine,
+
+    /// Target triple
+    #[arg(long)]
+    triple: Option<String>,
+    
+    /// RTL Source
+    #[arg(long)]
+    rtl: Option<String>,
+
+    /// PIC or Static
+    #[arg(long, default_value = "pic")]
+    reloc: RelocMode,
+
+    /// Code Model
+    #[arg(long, default_value = "small")]
+    mcmodel: CodeModel,
+
+    /// Display execution times for each compiler phase
+    #[arg(long)]
+    timings: bool,
+
+    /// Display memory storage for each compiler phase
+    #[arg(long)]
+    usages: bool,
+
+    /// Use verbose output
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
+    
     #[arg(long, value_delimiter = ',', value_enum)]
     dump: Vec<DumpStage>,
   },
@@ -218,6 +276,68 @@ fn main_cmd(cmd: MainCommands) {
       };
 
       match run::run(info) {
+        Ok(()) => (),
+        Err(e) => {
+          eprintln!("{}", e);
+          std::process::exit(1);
+        }
+      };
+    }
+
+    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, triple, rtl, reloc, mcmodel, verbose, timings, usages, dump} => {
+      let variant_dir = match variant {
+        BuildVariant::Debug => "debug",
+        BuildVariant::Release => "release",
+        BuildVariant::RelWithDebInfo => "relwithdebinfo",
+      };
+
+      let outdir = outdir.unwrap_or_else(|| {
+        let base = if path.is_file() {
+          path.parent().unwrap_or(std::path::Path::new(".")).to_path_buf()
+        } else {
+          path.clone()
+        };
+        base.join("build").join(variant_dir)
+      });
+
+      let mut dep_artifacts = Vec::new();
+      for dep_str in deps {
+        if let Some((name, paths)) = dep_str.split_once('=') {
+          let (qwu_str, obj_str) = if let Some((q, o)) = paths.split_once(':') {
+            (q, Some(o))
+          } else if let Some((q, o)) = paths.split_once(',') {
+            (q, Some(o))
+          } else {
+            (paths, None)
+          };
+          dep_artifacts.push(compile::DepArtifact {
+            name: name.to_string(),
+            qwu_path: PathBuf::from(qwu_str),
+            obj_path: obj_str.map(PathBuf::from),
+          });
+        }
+      }
+
+      let info = compile::CompileInfo {
+        path: &path,
+        outdir,
+        opt_level,
+        variant,
+        start_routine,
+        triple,
+        rtl,
+        reloc,
+        mcmodel,
+        verbose,
+        timings,
+        usages,
+        dump,
+        check_only: false,
+        execute: false,
+        deps: dep_artifacts,
+      };
+
+      match compile::compile(info) {
         Ok(()) => (),
         Err(e) => {
           eprintln!("{}", e);

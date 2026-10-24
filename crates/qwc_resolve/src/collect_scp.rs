@@ -10,21 +10,11 @@
 */
 
 
-use qwc_arena::Files;
-use qwc_ast::{AnyId, FieldKind, FieldRng, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind, Visitor};
+use qwc_ast::{AnyId, FieldKind, FieldRng, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind};
 use qwc_diagnostic::Summary;
 use qwc_string_interner::StrInterner;
 
 use crate::{Imod, Scope, ScopeKindAst, ScopeMap, import, scope::{ImportDef, ImportSegment}};
-
-
-impl Visitor for ScopeMap {
-  type Type = (Self, Vec<ImplFor>);
-
-  fn visit(cre: &Krate, sin: &StrInterner, _: &Files) -> Result<Self::Type, Summary> {
-    ScopeCollector::collect(cre, sin, &[])
-  }
-}
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -32,7 +22,7 @@ pub struct ImplFor {pub container: AnyId, pub item: ItemId}
 
 pub struct ScopeCollector<'a, 'imod> {
   cre: &'a Krate,
-  sin: &'a StrInterner,
+  sin: &'a mut StrInterner,
   imods: &'a [Imod<'imod>],
   scp: ScopeMap,
   sum: Summary,
@@ -41,7 +31,7 @@ pub struct ScopeCollector<'a, 'imod> {
 
 impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
-  pub fn collect(cre: &'a Krate, sin: &'a StrInterner, imods: &'a [Imod<'imod>]) -> Result<(ScopeMap, Vec<ImplFor>), Summary> {
+  pub fn collect(cre: &'a Krate, sin: &'a mut StrInterner, imods: &'a [Imod<'imod>]) -> Result<(ScopeMap, Vec<ImplFor>), Summary> {
     let mut collector = Self { cre, sin, imods, scp: ScopeMap::new(), sum: Summary::new(), impl_for: vec![] };
 
     let root = cre.root().unwrap();

@@ -50,7 +50,7 @@ pub fn low_fun(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, self_kind: Opt
   // Post
   hir::Type {
     kind: hir::TypeKind::Fun{self_kind, args, ret},
-    layout: hir::Layout::new_dst(hir::LayoutBy::QW),
+    layout: hir::Layout::DST,
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)

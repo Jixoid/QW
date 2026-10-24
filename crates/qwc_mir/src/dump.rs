@@ -16,7 +16,7 @@ use owo_colors::OwoColorize;
 use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
-use crate::{AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, LayoutKind, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny}};
+use crate::{AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny}};
 
 
 pub trait DumpHandler {
@@ -456,11 +456,11 @@ impl DumpHandler for Layout {
   fn dump(&self, _cre: &Krate, _sin: &StrInterner, f: &mut fmt::Formatter, _indent: usize) -> fmt::Result {
     write!(f, "{}", punct("![layout("))?;
     
-    match self.kind() {
-      LayoutKind::SST {align, size} => write!(f, "{}{}{}{}{}{}", punct("sst"), punct("("), punct(size), punct(":"), punct(align), punct(")"))?,
-      LayoutKind::ZST  => write!(f, "{}", punct("zst"))?,
-      LayoutKind::DST {align} => write!(f, "{}{}{}{}", punct("dst"), punct("("), align, punct(")"))?,
-      LayoutKind::DSAT => write!(f, "{}", punct("dsat"))?,
+    match self {
+      Layout::SST {align, size} => write!(f, "{}{}{}{}{}{}", punct("sst"), punct("("), punct(size), punct(":"), punct(align), punct(")"))?,
+      Layout::ZST  => write!(f, "{}", punct("zst"))?,
+      Layout::DST {align} => write!(f, "{}{}{}{}", punct("dst"), punct("("), align, punct(")"))?,
+      Layout::DSAT => write!(f, "{}", punct("dsat"))?,
     }
 
     write!(f, "{}", punct(")]"))?;

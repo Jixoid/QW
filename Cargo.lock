@@ -820,6 +820,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwc_config"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "qwc_arena",
+ "qwc_diagnostic",
+ "qwc_ds",
+ "rustc-hash",
+]
+
+[[package]]
+name = "qwc_deps"
+version = "0.1.0"
+dependencies = [
+ "qwc_config",
+ "qwc_diagnostic",
+ "rustc-hash",
+]
+
+[[package]]
 name = "qwc_diagnostic"
 version = "0.1.0"
 dependencies = [
@@ -959,6 +979,7 @@ dependencies = [
  "qwc_hir",
  "qwc_mangling",
  "qwc_mir",
+ "qwc_resolve",
  "qwc_string_interner",
  "rustc-hash",
 ]
@@ -986,6 +1007,7 @@ dependencies = [
  "qwc_diagnostic",
  "qwc_dump",
  "qwc_hir",
+ "qwc_mangling",
  "qwc_string_interner",
  "rustc-hash",
  "serde",
@@ -1002,6 +1024,8 @@ dependencies = [
  "qwc_ast",
  "qwc_cgen",
  "qwc_cgen_llvm",
+ "qwc_config",
+ "qwc_deps",
  "qwc_diagnostic",
  "qwc_ds",
  "qwc_explain",
@@ -1009,12 +1033,14 @@ dependencies = [
  "qwc_hir_gen",
  "qwc_intrinsic",
  "qwc_lsp",
+ "qwc_mangling",
  "qwc_mir",
  "qwc_mir_gen",
  "qwc_parse",
  "qwc_resolve",
  "qwc_string_interner",
  "qwc_unit",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -1029,6 +1055,7 @@ dependencies = [
 name = "qwc_unit"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "postcard",
  "qwc_hir",
  "qwc_resolve",

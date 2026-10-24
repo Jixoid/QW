@@ -266,7 +266,7 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, it: &ast::Expr
   let ety = hir::Type {
     kind: hir::TypeKind::Array(kind, len),
     attr: TypeAttr::empty(),
-    layout: Layout::new_static(qwc_hir::LayoutBy::QW),
+    layout: Layout::STATIC,
     path,
   }.push(ctx.cre);
 

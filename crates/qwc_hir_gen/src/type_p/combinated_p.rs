@@ -43,13 +43,11 @@ pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: ast::TypeId, path: ast::
   let path = helper::low_defpath(ctx, path);
   let attr = helper::read_attrs(ctx, sum, ctx.src.get_attached(id))?;
 
-  let layout = hir::Layout::new_static(if attr.contains(TypeAttr::C) {hir::LayoutBy::C} else {hir::LayoutBy::QW});
-
 
   // Post
   hir::Type {
     kind: hir::TypeKind::Struct(vars),
-    layout,
+    layout: hir::Layout::STATIC,
     attr,
     path,
   }.push_ok(ctx.cre)
@@ -81,7 +79,7 @@ pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, vars: a
   // Post
   hir::Type {
     kind: hir::TypeKind::Tuple(vars),
-    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)
@@ -110,7 +108,7 @@ pub fn low_tuple_anon(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> St
   // Post
   hir::Type {
     kind: hir::TypeKind::Tuple(elem_ids),
-    layout: hir::Layout::new_static(hir::LayoutBy::QW),
+    layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
     path,
   }.push_ok(ctx.cre)

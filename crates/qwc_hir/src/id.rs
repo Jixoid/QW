@@ -13,13 +13,13 @@
 use std::{marker::PhantomData, num::NonZero};
 
 use qwc_diagnostic::Status;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{Expr, Item, Krate, PushApi, Thing, Type, DefPath, krate::CID};
 
 
 // AstId
-#[derive(Serialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct HirId<T>
   where T: HirKind
 {
@@ -205,7 +205,7 @@ impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
 // AnyId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)] pub struct SpecAny;
 
-#[derive(Serialize, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AnyId {
   cid: CID,
   idx: NonZero<u32>,
@@ -244,7 +244,7 @@ impl AnyId {
 
 
 // Trait
-#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum NodeKind { Any, Type, Expr, Item, Thing, DefPath }
 
 

@@ -11,11 +11,13 @@
 
 
 use qwc_diagnostic::Summary;
-use qwc_hir as hir;
+use qwc_hir::{self as hir, CID};
 use qwc_mir::{self as mir, LayoutInfo};
 use qwc_string_interner::StrInterner;
 
 use rustc_hash::FxHashMap;
+
+use qwc_resolve::ExportMap;
 
 use crate::{SymbLow, ty_interner::TypeInterner};
 
@@ -27,6 +29,7 @@ pub struct Ctx<'ast, 'hir, 'mir, 'a> {
   pub cre: &'mir mut mir::Krate,
   pub tin: &'mir mut TypeInterner<'a>,
   pub cmap: &'mir mut CacheMap,
+  pub expmaps: FxHashMap<CID, &'hir ExportMap>,
 }
 
 impl<'ast, 'hir, 'mir, 'a> Ctx<'ast, 'hir, 'mir, 'a> {
@@ -41,6 +44,10 @@ impl<'ast, 'hir, 'mir, 'a> Ctx<'ast, 'hir, 'mir, 'a> {
   pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T {
     self.get_krate(id.cid()).get(id)
   }
+
+  pub fn get_symbol(&self, id: hir::ItemId) -> Option<&str> {
+    self.expmaps.get(&id.cid()).map(|exp| exp.symbol(&id)).flatten()
+  }
 }
 
 pub struct CacheMap {
@@ -54,7 +61,7 @@ pub struct MGen;
 
 impl<'ast, 'hir, 'mir, 'a> MGen {
 
-  pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo) -> (Option<mir::Krate>, Summary) {
+  pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo, expmaps: &'hir [ExportMap]) -> (Option<mir::Krate>, Summary) {
     let mut cre = mir::Krate::new();
     let mut sum = Summary::new();
     let mut tin = TypeInterner::new(&mut cre, layinfo);
@@ -66,6 +73,16 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
 
     let root = src.root().unwrap();
 
+    let expmaps = {
+      let mut map = FxHashMap::default();
+
+      for exp in expmaps {
+        map.insert(exp.cid(), exp);
+      }
+
+      map
+    };
+
     let mut ctx = Ctx {
       cre: &mut cre,
       tin: &mut tin,
@@ -73,6 +90,7 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
       src,
       deps,
       sin,
+      expmaps,
     };
 
     let _ = SymbLow::low(&mut ctx, &mut sum, root);

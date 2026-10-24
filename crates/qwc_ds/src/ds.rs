@@ -103,13 +103,13 @@ impl Value {
   }
 
   pub fn save_file(&self, fpath: String) -> Result<(), String> {
-    fs::write(fpath, format!("{}", RawWriter(self, 0))).map_err(|e| e.to_string())
+    fs::write(fpath, format!("{}", RawWriter(self, 0, true))).map_err(|e| e.to_string())
   }
 
 }
 
 
-struct RawWriter<'a> (&'a Value, usize);
+struct RawWriter<'a> (&'a Value, usize, bool /* is first */);
 
 impl<'a> fmt::Display for RawWriter<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -126,18 +126,22 @@ impl<'a> fmt::Display for RawWriter<'a> {
 
       Value::Arr(v) => {
         write!(f, "[\n")?;
-        for x in v { write!(f, "{}{},\n", "\t".repeat(idn+1), RawWriter(x, idn+1))? }
+        for x in v { write!(f, "{}{},\n", "\t".repeat(idn+1), RawWriter(x, idn+1, false))? }
         write!(f, "{}]", "\t".repeat(idn))?;
       }
 
       Value::Stc(v) => {
-        write!(f, "{{\n")?;
-        for (s, x) in v { write!(f, "{}{}: {},\n", "\t".repeat(idn+1), s, RawWriter(x, idn+1))? }
-        write!(f, "{}}}", "\t".repeat(idn))?;
+        if self.2 {
+          for (s, x) in v { write!(f, "{}{}: {},\n", "\t".repeat(idn), s, RawWriter(x, idn, false))? }
+        } else {
+          write!(f, "{{\n")?;
+          for (s, x) in v { write!(f, "{}{}: {},\n", "\t".repeat(idn+1), s, RawWriter(x, idn+1, false))? }
+          write!(f, "{}}}", "\t".repeat(idn))?;
+        }
       }
       
       Value::Tup(v) => {
-        for x in v { write!(f, "{}", RawWriter(x, idn+1))? }
+        for x in v { write!(f, "{}", RawWriter(x, idn+1, false))? }
       }
     }
 

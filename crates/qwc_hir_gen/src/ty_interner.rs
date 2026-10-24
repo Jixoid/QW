@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{DefPathId, Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, LayoutBy, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{DefPathId, Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -61,7 +61,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::Meta(id),
-          layout: Layout::new_meta(LayoutBy::QW),
+          layout: Layout::META,
           attr: TypeAttr::empty(),
           path,
         };
@@ -84,7 +84,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::Ref(id, ism),
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
@@ -107,7 +107,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::TraitFrom{hidden: id, trait_ty},
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
@@ -130,7 +130,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::Slice(id),
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
@@ -153,7 +153,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::VScale(id),
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
@@ -176,7 +176,7 @@ impl TypeInterner {
         let path = it.path;
         let this = Type{
           kind: TypeKind::Range(id),
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
@@ -219,7 +219,7 @@ impl TypeInterner {
       Entry::Vacant(entry) => {
         let this = Type{
           kind: TypeKind::GenericType{generic, idx},
-          layout: Layout::new_static(LayoutBy::QW),
+          layout: Layout::STATIC,
           attr: TypeAttr::empty(),
           path,
         };
