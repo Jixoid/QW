@@ -36,7 +36,7 @@ pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast
     match names.entry(name.sid()) {
       Occupied(entry) => {
         sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
-          .add(Label::new(*entry.get(), FIRST_DEFINITION_HERE))
+          + Label::new(*entry.get(), FIRST_DEFINITION_HERE)
         );
       }
 
@@ -60,10 +60,9 @@ pub fn low_enum(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: ast
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Enum(rng),
+    kind: hir::TypeKind::ItemEnum{values: rng, path},
     layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
-    path,
   }.push_ok(ctx.cre)
 }
 
@@ -84,7 +83,7 @@ pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
     match names.entry(name.sid()) {
       Occupied(entry) => {
         sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(name, CONFLICTING_DEFINITION))
-          .add(Label::new(*entry.get(), FIRST_DEFINITION_HERE))
+          + Label::new(*entry.get(), FIRST_DEFINITION_HERE)
         );
       }
 
@@ -108,9 +107,8 @@ pub fn low_flags(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Enum(rng),
+    kind: hir::TypeKind::ItemFlag{values: rng, path},
     layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
-    path,
   }.push_ok(ctx.cre)
 }

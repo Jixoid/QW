@@ -67,11 +67,9 @@ impl Vfs {
     let normalized = Self::normalize_path(path.as_ref());
     let file_id = *self.path_to_id.get(&normalized)?;
 
-    if normalized.exists() {
-      if let Ok(disk_content) = fs::read(&normalized) {
-        self.files[file_id.0 as usize] =
-          VfsFile::new(file_id, normalized, disk_content, 0, false);
-      }
+    if normalized.exists() && let Ok(disk_content) = fs::read(&normalized) {
+      self.files[file_id.0 as usize] =
+        VfsFile::new(file_id, normalized, disk_content, 0, false);
     }
 
     Some(file_id)

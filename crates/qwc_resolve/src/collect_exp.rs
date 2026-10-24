@@ -11,7 +11,7 @@
 
 
 use qwc_diagnostic::Summary;
-use qwc_hir::{AnyId, Deps, Item, ItemAttr, ItemId, ItemKind, Krate};
+use qwc_hir::{AnyId, Deps, ItemAttr, ItemId, ItemKind, Krate};
 use qwc_mangling::{Mangler, ManglerQW};
 
 use qwc_string_interner::StrInterner;
@@ -115,17 +115,17 @@ impl<'a> ExportCollector<'a> {
 
     // Yalnızca alt NameSpace'lerin içine gir
     for &id in &item_ids {
-      let item: &Item = self.cre.get(id);
-      match item.kind {
-        ItemKind::NameSpace{..} => self.process_container(id.to_any()),
-        _ => {}
+      let item = self.cre.get(id);
+      
+      if let ItemKind::NameSpace{..} = item.kind {
+        self.process_container(id.to_any())
       }
     }
   }
 
 
   fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
-    let item: &Item = self.cre.get(ItemId::from_any(id));
+    let item = self.cre.get(ItemId::from_any(id));
     match item.kind {
       ItemKind::RootNS{rng} | ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).collect(),
 

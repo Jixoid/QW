@@ -42,8 +42,8 @@ pub fn read_attrs(ctx: &mut Ctx, sum: &mut Summary, attrs: Option<&Vec<Attribute
         _ if key.sid() == ctx.sin.sid_c() => {
           if attr.contains(TypeAttr::C) {
             ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
-              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              //+ Label::new(pos, FIRST_DEFINITION_HERE)
+              + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           attr |= TypeAttr::C;

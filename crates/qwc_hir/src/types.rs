@@ -12,7 +12,7 @@
 
 use bitflags::bitflags;
 
-use crate::{DefPathId, ExprId, ItemId, Layout, PathApi, ThingRng, TypeId, TypeRng};
+use crate::{DefPathId, ExprId, ItemId, Layout, ThingRng, TypeId, TypeRng};
 
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -57,17 +57,21 @@ pub enum TypeKind {
   Struct(ThingRng /* NamedType => name: type */),
   Tuple(TypeRng),
   
+  ItemStruct{fields: ThingRng /* NamedType => name: type */, path: DefPathId},
+  ItemTuple{fields: TypeRng, path: DefPathId},
+  
   Range(TypeId),
   
   // Trait
-  Trait{methods: ThingRng /* NamedType => fun name: type */, types: ThingRng /* Name | NamedType => using (= type)?; */, reqs: TypeRng},
-  Iface(ThingRng /* NamedType => fun name: type */),
+  ItemTrait{methods: ThingRng /* NamedType => fun name: type */, types: ThingRng /* Name | NamedType => using (= type)?; */, reqs: TypeRng, path: DefPathId},
+  ItemIface{methods: ThingRng /* NamedType => fun name: type */, path: DefPathId},
   
   TraitFrom{trait_ty: TypeId, hidden: TypeId},
   
   // Enum
-  Enum(ThingRng /* NamedExpr => name = expr */),  
-
+  ItemEnum{values: ThingRng /* NamedExpr => name = expr */, path: DefPathId},
+  ItemFlag{values: ThingRng /* NamedExpr => name = expr */, path: DefPathId},
+  
   // Variant
   Option(TypeId),
   
@@ -75,6 +79,20 @@ pub enum TypeKind {
   Fun{self_kind: Option<TypeId>, args: ThingRng /* NamedType => name: type */, ret: TypeId},
 }
 
+
+impl TypeKind {
+  pub fn path(&self) -> Option<DefPathId> {
+    match *self {
+      TypeKind::ItemStruct { path, .. }
+      | TypeKind::ItemTuple { path, .. }
+      | TypeKind::ItemTrait { path, .. }
+      | TypeKind::ItemIface { path, .. }
+      | TypeKind::ItemEnum { path, .. }
+      | TypeKind::ItemFlag { path, .. } => Some(path),
+      _ => None,
+    }
+  }
+}
 
 bitflags! {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -90,12 +108,11 @@ pub struct Type {
   pub kind: TypeKind,
   pub layout: Layout,
   pub attr: TypeAttr,
-  pub path: DefPathId,
 }
 
-impl PathApi for Type {
-  fn path(&self) -> DefPathId {
-    self.path
+impl Type {
+  pub fn path(&self) -> Option<DefPathId> {
+    self.kind.path()
   }
 }
 

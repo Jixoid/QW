@@ -62,7 +62,7 @@ pub struct MGen;
 impl<'ast, 'hir, 'mir, 'a> MGen {
 
   pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo, expmaps: &'hir [ExportMap]) -> (Option<mir::Krate>, Summary) {
-    let mut cre = mir::Krate::new();
+    let mut cre = mir::Krate::default();
     let mut sum = Summary::new();
     let mut tin = TypeInterner::new(&mut cre, layinfo);
     let mut cmap = CacheMap {

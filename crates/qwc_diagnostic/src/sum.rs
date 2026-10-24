@@ -54,11 +54,11 @@ impl Summary {
     self.msgs.extend(msgs);
   }
 
-  pub fn is_empty(&self) -> bool { return (self.fatal + self.error + self.warn + self.hint) == 0; }
+  pub fn is_empty(&self) -> bool { (self.fatal + self.error + self.warn + self.hint) == 0 }
   
-  pub fn msgs(&self) -> &Vec<Message> { return &self.msgs; }
+  pub fn msgs(&self) -> &Vec<Message> { &self.msgs }
   
-  pub fn sumerr(&self) -> u32 { return self.fatal + self.error; }
+  pub fn sumerr(&self) -> u32 { self.fatal + self.error }
 }
 
 impl IntoIterator for Summary {
@@ -75,7 +75,7 @@ impl<'a> IntoIterator for &'a Summary {
   fn into_iter(self) -> Self::IntoIter { self.msgs.iter() }
 }
 
-impl<'a> fmt::Display for Summary {
+impl fmt::Display for Summary {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if !self.is_empty() {
       let mut parts = Vec::new();
@@ -86,9 +86,9 @@ impl<'a> fmt::Display for Summary {
       let str = parts.join(", ");
       
       if self.sumerr() == 0 {
-        write!(f, "{}{} {} {}", "hint".yellow().bold(), ":".bright_black(), "compilation was completed with these", str)?
+        write!(f, "{}{} compilation was completed with these {}", "hint".yellow().bold(), ":".bright_black(), str)?
       } else {
-        write!(f, "{}{} {} {}", "fatal".red().bold(), ":".bright_black(), "could not compile due to", str)?
+        write!(f, "{}{} could not compile due to {}", "fatal".red().bold(), ":".bright_black(), str)?
       }
     }
 

@@ -79,7 +79,7 @@ impl Layout {
   }
   
   pub const fn is_zst(&self) -> bool {
-    matches!(self, Layout::ZST{..})
+    matches!(self, Layout::ZST)
   }
 
   pub const fn is_dst(&self) -> bool {
@@ -87,7 +87,7 @@ impl Layout {
   }
 
   pub const fn is_dsat(&self) -> bool {
-    matches!(self, Layout::DSAT{..})
+    matches!(self, Layout::DSAT)
   }
 
 
@@ -110,12 +110,10 @@ impl Layout {
 
 
   pub const fn aligned_size(&self) -> Option<u64> {
-    if let Some(size) = self.size() {
-      if let Some(align) = self.align() {
-        let align = align as u64;
+    if let Some(size) = self.size() && let Some(align) = self.align() {
+      let align = align as u64;
 
-        return Some((size +align -1) & !(align -1))
-      }
+      return Some((size +align -1) & !(align -1))
     }
 
     None

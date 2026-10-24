@@ -3,6 +3,10 @@ name = "qwc_hir"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+unit-internal = []
+
 [dependencies]
 owo-colors = "4.4.0"
 qwc_arena = { path = "../qwc_arena" }

@@ -21,6 +21,7 @@ use qwc_string_interner::{Sid, StrInterner};
 use crate::{AnyId, AnyRng, Attribute, DefPath, DefPathId, Expr, ExprId, Field, FieldId, Ident, Item, ItemId, Patt, PattId, Thing, ThingId, Type, TypeId, id::{AstId, AstKind, NodeKind, Rng, SpecAny}};
 
 
+#[derive(Default)]
 pub struct Krate {
   // Root
   root: Option<ItemId>,
@@ -42,25 +43,6 @@ pub struct Krate {
 
 
 impl Krate {
-
-  pub fn new() -> Self {
-    Self{
-      root: None,
-      
-      list_type: Arena::new(),
-      list_expr: Arena::new(),
-      list_item: Arena::new(),
-      list_patt: Arena::new(),
-      list_fiel: Arena::new(),
-      list_thig: Arena::new(),
-      list_path: Arena::new(),
-      
-      extra_data: (Arena::new(), Arena::new()),
-      
-      map_attr: FxHashMap::default(),
-    }
-  }
-
 
   // Root
   pub fn root(&self) -> Option<ItemId> {
@@ -133,15 +115,15 @@ impl Krate {
 
 
   // Size
-  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(&self) }
-  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
+  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(self) }
+  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Patt>(&self) + Self::size_used::<Field>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<DefPath>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(self) + Self::size_used::<Expr>(self) + Self::size_used::<Item>(self) + Self::size_used::<Patt>(self) + Self::size_used::<Field>(self) + Self::size_used::<Thing>(self) + Self::size_used::<DefPath>(self) + Self::size_used::<AnyId>(self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Patt>(&self) + Self::size_alloc::<Field>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<DefPath>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(self) + Self::size_alloc::<Expr>(self) + Self::size_alloc::<Item>(self) + Self::size_alloc::<Patt>(self) + Self::size_alloc::<Field>(self) + Self::size_alloc::<Thing>(self) + Self::size_alloc::<DefPath>(self) + Self::size_alloc::<AnyId>(self)
   }
 
 }
@@ -204,8 +186,8 @@ pub trait PushApi<T: AstKind> {
 pub trait GetApi {
   type Node;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node;
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
+  fn get(krate: &Krate, id: Self) -> &Self::Node;
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node;
 }
 
 impl<T: AstKind> PushApi<T> for Type {
@@ -214,8 +196,8 @@ impl<T: AstKind> PushApi<T> for Type {
 
 impl GetApi for TypeId {
   type Node = Type;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_type[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_type[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_type[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for Expr {
@@ -224,8 +206,8 @@ impl<T: AstKind> PushApi<T> for Expr {
 
 impl GetApi for ExprId {
   type Node = Expr;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_expr[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_expr[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_expr[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_expr[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for Item {
@@ -234,8 +216,8 @@ impl<T: AstKind> PushApi<T> for Item {
 
 impl GetApi for ItemId {
   type Node = Item;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_item[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_item[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_item[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_item[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for Patt {
@@ -244,8 +226,8 @@ impl<T: AstKind> PushApi<T> for Patt {
 
 impl GetApi for PattId {
   type Node = Patt;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_patt[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_patt[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_patt[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_patt[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for Field {
@@ -254,8 +236,8 @@ impl<T: AstKind> PushApi<T> for Field {
 
 impl GetApi for FieldId {
   type Node = Field;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_fiel[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_fiel[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_fiel[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_fiel[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for Thing {
@@ -264,8 +246,8 @@ impl<T: AstKind> PushApi<T> for Thing {
 
 impl GetApi for ThingId {
   type Node = Thing;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_thig[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_thig[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_thig[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_thig[id.idx() as usize] }
 }
 
 impl<T: AstKind> PushApi<T> for DefPath {
@@ -274,22 +256,22 @@ impl<T: AstKind> PushApi<T> for DefPath {
 
 impl GetApi for DefPathId {
   type Node = DefPath;
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_path[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_path[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_path[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_path[id.idx() as usize] }
 }
 
 
 // attach
 pub trait AttachNode: Sized {
   fn attach(krate: &mut Krate, id: AnyId, obj: Self);
-  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self>;
-  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self>;
+  fn get(krate: &Krate, id: AnyId) -> Option<&Self>;
+  fn get_mut(krate: &mut Krate, id: AnyId) -> Option<&mut Self>;
 }
 
 impl AttachNode for Vec<Attribute> {
   fn attach(krate: &mut Krate, id: AnyId, obj: Self) { krate.map_attr.insert(id, obj); }
-  fn get<'a>(krate: &'a Krate, id: AnyId) -> Option<&'a Self> { krate.map_attr.get(&id) }
-  fn get_mut<'a>(krate: &'a mut Krate, id: AnyId) -> Option<&'a mut Self> { krate.map_attr.get_mut(&id) }
+  fn get(krate: &Krate, id: AnyId) -> Option<&Self> { krate.map_attr.get(&id) }
+  fn get_mut(krate: &mut Krate, id: AnyId) -> Option<&mut Self> { krate.map_attr.get_mut(&id) }
 }
 
 

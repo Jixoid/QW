@@ -30,18 +30,14 @@ impl File {
 }
 
 
+#[derive(Default)]
 pub struct Files {
   arena: Vec<File>
 }
 
 impl Files {
 
-  pub fn new() -> Self {
-    Self{ arena: Vec::new() }
-  }
-
-
-  pub fn add<'a>(&'a mut self, fpath: &Path) -> u16 {
+  pub fn add(&mut self, fpath: &Path) -> u16 {
     let map = fs::read(fpath).unwrap();
     self.add_buffer(fpath, map)
   }
@@ -61,6 +57,14 @@ impl Files {
 
   pub fn get(&self, fid: u16) -> &File {
     &self.arena[fid as usize]
+  }
+
+  pub fn len(&self) -> usize {
+    self.arena.len()
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.arena.is_empty()
   }
 
 }

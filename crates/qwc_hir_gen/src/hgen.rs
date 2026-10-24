@@ -113,6 +113,26 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
     HPoit::new(self.cre, self.ideps, self.sin, self.get(id).path())
   }
 
+  pub fn poit_path(&self, path: hir::DefPathId) -> HPoit {
+    HPoit::new(self.cre, self.ideps, self.sin, path)
+  }
+
+  pub fn type_path(&self, id: hir::TypeId) -> Option<hir::DefPathId> {
+    let ty = self.get(id);
+    match ty.kind {
+      hir::TypeKind::ItemStruct { path, .. }
+      | hir::TypeKind::ItemTuple { path, .. }
+      | hir::TypeKind::ItemTrait { path, .. }
+      | hir::TypeKind::ItemIface { path, .. }
+      | hir::TypeKind::ItemEnum { path, .. }
+      | hir::TypeKind::ItemFlag { path, .. } => Some(path),
+      hir::TypeKind::GenericRaw { kind, .. } => self.type_path(kind),
+      hir::TypeKind::TraitFrom { trait_ty, .. } => self.type_path(trait_ty),
+      hir::TypeKind::Ref(sub, _) | hir::TypeKind::Ptr(sub, _) => self.type_path(sub),
+      _ => None,
+    }
+  }
+
 
   pub fn get<T: hir::HirKind + hir::GetApi<T>>(&self, id: hir::HirId<T>) -> &T {
     self.get_krate(id.cid()).get(id)
@@ -137,7 +157,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
         let (hir::Thing::Name(name) | hir::Thing::NamedType(name, _)) = *self.cre.get(thing) else { unreachable!() };
         self.sin.str(name).to_string()
       }
-      hir::TypeKind::GenericRaw{generic, kind} => format!("<raw <{}>::{}>", self.poit(generic).to_string(), self.type_name(sum, kind)),
+      hir::TypeKind::GenericRaw{generic, kind} => format!("<raw <{}>::{}>", self.poit(generic), self.type_name(sum, kind)),
       hir::TypeKind::GenericSelfType => "Self".to_string(),
       hir::TypeKind::AssociatedType{trait_ty, idx} => format!("{}::<{}>", self.type_name(sum, trait_ty), idx),
       hir::TypeKind::Error => "{error}".to_string(),
@@ -179,21 +199,36 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       
       
       // Combinated
-      hir::TypeKind::Struct(..) => self.poit(id).to_string(),
-      hir::TypeKind::Tuple(..) => self.poit(id).to_string(),
+      hir::TypeKind::ItemStruct { path, .. }
+      | hir::TypeKind::ItemTuple { path, .. } => self.poit_path(path).to_string(),
+
+      hir::TypeKind::Struct(fields) => {
+        let krate = self.get_krate(id.cid());
+        let mut fields_str = vec![];
+        for fid in krate.extra_get(fields) {
+          let hir::Thing::NamedType(name, kind) = *krate.get(fid) else { unreachable!() };
+          fields_str.push(format!("{}: {}", self.sin.str(name), self.type_name(sum, kind)));
+        }
+        format!("{{{}}}", fields_str.join(", "))
+      }
+
+      hir::TypeKind::Tuple(fields) => {
+        let krate = self.get_krate(id.cid());
+        let fields_str: Vec<_> = krate.extra_get(fields).map(|fid| self.type_name(sum, fid)).collect();
+        format!("({})", fields_str.join(", "))
+      }
       
-      hir::TypeKind::Range(..) => self.poit(id).to_string(),
-      
+      hir::TypeKind::Range(sub) => format!("..{}", self.type_name(sum, sub)),
       
       // Trait
-      hir::TypeKind::Trait{..} => self.poit(id).to_string(),
-      hir::TypeKind::Iface(..) => self.poit(id).to_string(),
+      hir::TypeKind::ItemTrait{ path, .. } => self.poit_path(path).to_string(),
+      hir::TypeKind::ItemIface{ path, .. } => self.poit_path(path).to_string(),
 
-      hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("trait({}, hidden: {})", self.type_name(sum, trait_ty), self.type_name(sum, hidden)),
-
+      hir::TypeKind::TraitFrom {trait_ty, hidden} => format!("{} $({})", self.type_name(sum, trait_ty), self.type_name(sum, hidden)),
 
       // Enum
-      hir::TypeKind::Enum(..) => self.poit(id).to_string(),
+      hir::TypeKind::ItemEnum{ path, .. } => self.poit_path(path).to_string(),
+      hir::TypeKind::ItemFlag{ path, .. } => self.poit_path(path).to_string(),
 
       // Function
       hir::TypeKind::Fun{self_kind, args, ret} => {
@@ -242,7 +277,7 @@ macro_rules! ctx {
 
 pub struct HGen;
 
-impl<'ast, 'hir, 'imod> HGen {
+impl<'ast, 'imod> HGen {
 
   pub fn low(src: &'ast ast::Krate, sin: &'ast StrInterner, far: &'ast Files, scp: &'ast ScopeMap, implst: Vec<ImplFor>, imods: &'imod [CID], ideps: &'imod mut Deps) -> (Option<CID>, Summary) {
     let cid = ideps.get_next_id();
@@ -264,11 +299,17 @@ impl<'ast, 'hir, 'imod> HGen {
       unsafe_level: 0,
       relaxed_level: 0,
     };
-    let mut loc = LocalScopeManager::new();
+    let mut loc = LocalScopeManager::default();
     
     let root = src.root().unwrap();
     let root_it = src.get(root);
-    let root_name = root_it.name.map(|n| n.sid()).or_else(|| sin.get("main")).unwrap_or_else(|| sin.sid_entry());
+    let root_name = root_it.name.map(|n| n.sid())
+      .or_else(|| match *src.get(root_it.path) {
+        ast::DefPath::Root(sid) => Some(sid),
+        _ => None,
+      })
+      .or_else(|| sin.get("main"))
+      .unwrap_or_else(|| sin.sid_entry());
     let root_path = cre.push(hir::DefPath::Root(root_name));
     let lscp = scp.get(&root.to_any()).unwrap();
     
@@ -312,20 +353,16 @@ impl<'ast, 'hir, 'imod> HGen {
 
       // Reg
       let reg = |tyfuns: &mut TypeMethods| -> Result<(), Message> {
-        if let Some(trait_ty) = trait_ty {
-          if tyfuns.traits.insert(trait_ty, item).is_some() {
-            return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(trait_span.unwrap())));
-          }
+        if let Some(trait_ty) = trait_ty && tyfuns.traits.insert(trait_ty, item).is_some() {
+          return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(trait_span.unwrap())));
         }
         
         for id in ctx.src.extra_get(fields) {
           if let ast::Field{kind: ast::FieldKind::Fun{..}, pos, name, ..} = ctx.src.get(id) {
             let sid = name.unwrap().sid();
 
-            if trait_ty.is_none() {
-              if !tyfuns.inherent_methods.insert(sid) {
-                return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)));
-              }
+            if trait_ty.is_none() && !tyfuns.inherent_methods.insert(sid) {
+              return Err(Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*pos)));
             }
             
             let list = tyfuns.methods.entry(sid).or_default();

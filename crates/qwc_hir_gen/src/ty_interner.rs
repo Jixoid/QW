@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{DefPathId, Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -51,19 +51,16 @@ impl TypeInterner {
   }
 
   
-  pub fn ty_meta(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
+  pub fn ty_meta(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_meta.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, id);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::Meta(id),
           layout: Layout::META,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -74,19 +71,16 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_ref(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, ism: bool) -> TypeId {
+  pub fn ty_ref(&mut self, cre: &mut Krate, id: TypeId, ism: bool) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, id);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::Ref(id, ism),
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -97,19 +91,16 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_trait_from(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId, trait_ty: TypeId) -> TypeId {
+  pub fn ty_trait_from(&mut self, cre: &mut Krate, id: TypeId, trait_ty: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_trait_from.entry((id, trait_ty)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, trait_ty);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::TraitFrom{hidden: id, trait_ty},
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -120,19 +111,16 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_slice(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
+  pub fn ty_slice(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_slice.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, id);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::Slice(id),
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -143,19 +131,16 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_vscale(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
+  pub fn ty_vscale(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_vscale.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, id);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::VScale(id),
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -166,19 +151,16 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_range(&mut self, cre: &mut Krate, ideps: &Deps, id: TypeId) -> TypeId {
+  pub fn ty_range(&mut self, cre: &mut Krate, id: TypeId) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_range.entry(id) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
-        let it = Self::get(cre, ideps, id);
-        let path = it.path;
         let this = Type{
           kind: TypeKind::Range(id),
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);
@@ -200,7 +182,6 @@ impl TypeInterner {
           kind: TypeKind::Option(id),
           layout: it.layout,
           attr: TypeAttr::empty(),
-          path: it.path,
         };
 
         let id = cre.push(this);
@@ -211,7 +192,7 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_generic_type(&mut self, cre: &mut Krate, path: DefPathId, generic: ItemId, idx: usize) -> TypeId {
+  pub fn ty_generic_type(&mut self, cre: &mut Krate, generic: ItemId, idx: usize) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_generic_type.entry((generic, idx)) {
@@ -221,7 +202,6 @@ impl TypeInterner {
           kind: TypeKind::GenericType{generic, idx},
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
 
         let id = cre.push(this);

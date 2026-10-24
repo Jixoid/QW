@@ -10,6 +10,8 @@
 */
 
 
+use std::ops::Add;
+
 use backtrace::Backtrace;
 use thin_vec::ThinVec;
 
@@ -52,55 +54,78 @@ impl Message {
   pub fn hint(msg: impl Into<CodedString>, label: Label) -> Self {
     Message { level: Level::Hint, message: msg.into(), labels: ThinVec::from([label]), notes: ThinVec::new(), suggestions: ThinVec::new() }
   }
+}
 
 
-  pub fn add(mut self, it: impl MsgAddApi) -> Self {
-    match it.msg_get() {
-      MsgAdd::Note(it) => self.notes.push(it),
-      MsgAdd::Label(it) => self.labels.push(it),
-      MsgAdd::Sugg(it) => self.suggestions.push(it),
-    }
+impl Add<Label> for Message {
+  type Output = Self;
+
+  fn add(mut self, rhs: Label) -> Self::Output {
+    self.labels.push(rhs);
     self
   }
+}
 
+impl Add<Suggestion> for Message {
+  type Output = Self;
+
+  fn add(mut self, rhs: Suggestion) -> Self::Output {
+    self.suggestions.push(rhs);
+    self
+  }
+}
+
+impl Add<FmtMsg> for Message {
+  type Output = Self;
+
+  fn add(mut self, rhs: FmtMsg) -> Self::Output {
+    self.notes.push(rhs.msg.to_string());
+    self
+  }
+}
+
+impl Add<FmtString> for Message {
+  type Output = Self;
+
+  fn add(mut self, rhs: FmtString) -> Self::Output {
+    self.notes.push(rhs.msg);
+    self
+  }
+}
+
+
+impl Add<Option<Label>> for Message {
+  type Output = Self;
+
+  fn add(mut self, rhs: Option<Label>) -> Self::Output {
+    if let Some(rhs) = rhs { self.labels.push(rhs) };
+    self
+  }
+}
+
+impl Add<Option<Suggestion>> for Message {
+  type Output = Self;
   
-  pub fn add_if(mut self, it: Option<impl MsgAddApi>) -> Self {
-    if let Some(it) = it {
-      match it.msg_get() {
-        MsgAdd::Note(it) => self.notes.push(it),
-        MsgAdd::Label(it) => self.labels.push(it),
-        MsgAdd::Sugg(it) => self.suggestions.push(it),
-      }
-    }
+  fn add(mut self, rhs: Option<Suggestion>) -> Self::Output {
+    if let Some(rhs) = rhs { self.suggestions.push(rhs) };
     self
   }
 }
 
-
-
-pub enum MsgAdd {
-  Note(String),
-  Label(Label),
-  Sugg(Suggestion),
+impl Add<Option<FmtMsg>> for Message {
+  type Output = Self;
+  
+  fn add(mut self, rhs: Option<FmtMsg>) -> Self::Output {
+    if let Some(rhs) = rhs { self.notes.push(rhs.msg.to_string()) };
+    self
+  }
 }
 
-pub trait MsgAddApi {
-  fn msg_get(self) -> MsgAdd;
-}
-
-
-impl MsgAddApi for FmtMsg {
-  fn msg_get(self) -> MsgAdd { MsgAdd::Note(self.msg.to_string()) }
-}
-
-impl MsgAddApi for FmtString {
-  fn msg_get(self) -> MsgAdd { MsgAdd::Note(self.msg) }
-}
-
-impl MsgAddApi for Label {
-  fn msg_get(self) -> MsgAdd { MsgAdd::Label(self) }
-}
-
-impl MsgAddApi for Suggestion {
-  fn msg_get(self) -> MsgAdd { MsgAdd::Sugg(self) }
+impl Add<Option<FmtString>> for Message {
+  type Output = Self;
+  
+  fn add(mut self, rhs: Option<FmtString>) -> Self::Output {
+    if let Some(rhs) = rhs { self.notes.push(rhs.msg) };
+    self
+  }
 }

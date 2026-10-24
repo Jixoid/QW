@@ -38,12 +38,12 @@ pub enum Value {
   Param(u32),
 }
 
-impl Into<Value> for SSA {
-  fn into(self) -> Value { Value::SSA(self) }
+impl From<SSA> for Value {
+  fn from(val: SSA) -> Self { Value::SSA(val) }
 }
 
-impl Into<Value> for Const {
-  fn into(self) -> Value { Value::Const(self) }
+impl From<Const> for Value {
+  fn from(val: Const) -> Self { Value::Const(val) }
 }
 
 

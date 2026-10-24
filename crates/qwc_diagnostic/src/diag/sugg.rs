@@ -10,7 +10,7 @@
 */
 
 
-use std::fmt;
+use std::{fmt, ops::Add};
 
 use thin_vec::ThinVec;
 
@@ -45,27 +45,13 @@ impl Suggestion {
   pub fn new(msg: impl Into<CodedString>, applicability: Applicability, replacement: String, label: Label) -> Self {
     Self { message: msg.into(), labels: ThinVec::from([label]), replacement, applicability }
   }
+}
 
-  
-  pub fn add(mut self, it: impl SuggAddApi) -> Self {
-    match it.sugg_get() {
-      SuggAdd::Label(it) => self.labels.push(it),
-    }
+impl Add<Label> for Suggestion {
+  type Output = Self;
+
+  fn add(mut self, rhs: Label) -> Self::Output {
+    self.labels.push(rhs);
     self
   }
-}
-
-
-
-pub enum SuggAdd {
-  Label(Label),
-}
-
-pub trait SuggAddApi {
-  fn sugg_get(self) -> SuggAdd;
-}
-
-
-impl SuggAddApi for Label {
-  fn sugg_get(self) -> SuggAdd { SuggAdd::Label(self) }
 }

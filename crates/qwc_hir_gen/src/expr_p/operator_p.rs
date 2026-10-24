@@ -190,7 +190,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
 
     let lhs_arg = match self_kind {
       Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, true);
+        let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
         hir::Expr {
           kind: hir::ExprKind::Ref(lhs, true),
           category: ExprCategory::RValue,
@@ -199,7 +199,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
         }.push(ctx.cre)
       }
       Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, false);
+        let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, false);
         hir::Expr {
           kind: hir::ExprKind::Ref(lhs, false),
           category: ExprCategory::RValue,
@@ -212,7 +212,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
 
     let rhs_arg = match param_ty {
       Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., true)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, rhs_ety, true);
+        let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, true);
         hir::Expr {
           kind: hir::ExprKind::Ref(rhs, true),
           category: ExprCategory::RValue,
@@ -221,7 +221,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
         }.push(ctx.cre)
       }
       Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., false)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, rhs_ety, false);
+        let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, false);
         hir::Expr {
           kind: hir::ExprKind::Ref(rhs, false),
           category: ExprCategory::RValue,
@@ -343,26 +343,24 @@ fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
 
   let lhs_ty = ctx.get(lhs_ety);
 
-  if lhs_ety == rhs_ety {
-    if matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
-      use ast::BinaryOp::*;
-      let aop = match op {
-        Add => hir::IntArithmeticOp::Add,
-        Sub => hir::IntArithmeticOp::Sub,
-        Mul => hir::IntArithmeticOp::Mul,
-        Div => hir::IntArithmeticOp::Div,
-        Rem => hir::IntArithmeticOp::Rem,
-        _ => unreachable!(),
-      };
-      let flg = hir::IntArithmeticFlg::Overflow;
-      
-      return hir::Expr {
-        kind: hir::ExprKind::AssignIntArithmetic { op: aop, flg, lhs, rhs },
-        category: ExprCategory::RValue,
-        pos: it.pos,
-        ety: ctx.prims.ty_unit,
-      }.push_ok(ctx.cre);
-    }
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
+    use ast::BinaryOp::*;
+    let aop = match op {
+      Add => hir::IntArithmeticOp::Add,
+      Sub => hir::IntArithmeticOp::Sub,
+      Mul => hir::IntArithmeticOp::Mul,
+      Div => hir::IntArithmeticOp::Div,
+      Rem => hir::IntArithmeticOp::Rem,
+      _ => unreachable!(),
+    };
+    let flg = hir::IntArithmeticFlg::Overflow;
+    
+    return hir::Expr {
+      kind: hir::ExprKind::AssignIntArithmetic { op: aop, flg, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_unit,
+    }.push_ok(ctx.cre);
   }
 
   use ast::BinaryOp::*;
@@ -393,7 +391,7 @@ fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
 
   let lhs_arg = match self_kind {
     Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, lhs_ety, true);
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
       hir::Expr {
         kind: hir::ExprKind::Ref(lhs, true),
         category: ExprCategory::RValue,
@@ -504,7 +502,7 @@ pub fn low_call(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
         &args_ct.to_string(),
       ]),
       Label::new_pos(it.pos))
-      .add_if(extra1)
+        + extra1
     )
   }
 
@@ -558,7 +556,10 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &as
 
   // Get Keys
   let (keys, sort) = {
-    let hir::TypeKind::Struct(fields) = ctx.get(kind).kind else { panic!() };
+    let fields = match ctx.get(kind).kind {
+      hir::TypeKind::Struct(fields) | hir::TypeKind::ItemStruct { fields, .. } => fields,
+      _ => panic!(),
+    };
     let krate = ctx.get_krate(kind.cid());
     
     let mut keys = FxHashMap::default();
@@ -600,7 +601,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &as
 
         Occupied(entry) => {
           ret_err!(sum, Message::error(FIELD_X_SPECIFIED_MORE_THAN_ONCE.args(&[name.str(ctx.far)]), Label::new_pos(name))
-            .add(Label::new(entry.get().0, FIRST_DEFINITION_HERE))
+            + Label::new(entry.get().0, FIRST_DEFINITION_HERE)
           )
         }
       }
@@ -612,7 +613,7 @@ pub fn low_field_create(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &as
 
   // Missing Keys
   {
-    let missing_keys: Vec<Sid> = keys.iter().map(|(v, _)| v).filter(|&k| !gived_keys.contains_key(k)).copied().collect();
+    let missing_keys: Vec<Sid> = keys.keys().filter(|&k| !gived_keys.contains_key(k)).copied().collect();
 
     if !missing_keys.is_empty() {
       let mut emsg = String::new();
@@ -658,7 +659,7 @@ pub fn low_member(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
     
     // Basic Search
     let bsearch = match ctx.get(ctx.cre.get(current_id).ety).kind {
-      hir::TypeKind::Struct(fields) => Some(low_member_struct(ctx, it, current_id, ident, fields)?),
+      hir::TypeKind::Struct(fields) | hir::TypeKind::ItemStruct { fields, .. } => Some(low_member_struct(ctx, it, current_id, ident, fields)?),
 
       _ => None,
     }.flatten();

@@ -42,18 +42,18 @@ impl CodedMsg {
   }
 }
 
-impl Into<CodedString> for CodedMsg {
-  fn into(self) -> CodedString {
-    CodedString { code: self.code, msg: self.msg.to_string() }
+impl From<CodedMsg> for CodedString {
+  fn from(val: CodedMsg) -> Self {
+    Self{ code: val.code, msg: val.msg.to_string() }
   }
 }
 
-impl Into<String> for CodedMsg {
-  fn into(self) -> String {
-    if let Some(code) = self.code {
-      format!("[{}]{}", code, self.msg)
+impl From<CodedMsg> for String {
+  fn from(val: CodedMsg) -> Self {
+    if let Some(code) = val.code {
+      format!("[{}]{}", code, val.msg)
     } else {
-      self.msg.to_string()
+      val.msg.to_string()
     }
   }
 }

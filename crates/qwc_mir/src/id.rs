@@ -68,8 +68,8 @@ impl<T: MirKind> MirId<T> {
 
 }
 
-impl<T: MirKind> Into<AnyId> for MirId<T> {
-  fn into(self) -> AnyId { self.to_any() }
+impl<T: MirKind> From<MirId<T>> for AnyId {
+  fn from(val: MirId<T>) -> Self { val.to_any() }
 }
 
 pub type TypeId  = MirId<Type>;

@@ -33,10 +33,8 @@ impl Message {
     let primary_label = self.labels.first();
 
     // Check if message belongs to target_fid
-    if let Some(lbl) = primary_label {
-      if lbl.span.fid() != target_fid {
-        return None;
-      }
+    if let Some(lbl) = primary_label && lbl.span.fid() != target_fid {
+      return None;
     }
 
     let range = match primary_label {
@@ -57,13 +55,9 @@ impl Message {
     };
 
     let mut message_text = self.message.msg.clone();
-    if let Some(lbl) = primary_label {
-      if let Some(lbl_msg) = &lbl.message {
-        if !lbl_msg.is_empty() {
-          message_text.push_str(": ");
-          message_text.push_str(lbl_msg);
-        }
-      }
+    if let Some(lbl) = primary_label && let Some(lbl_msg) = &lbl.message && !lbl_msg.is_empty() {
+      message_text.push_str(": ");
+      message_text.push_str(lbl_msg);
     }
 
     if !self.notes.is_empty() {
@@ -146,25 +140,23 @@ impl Message {
       let mut fixes = Vec::new();
       for sugg in &self.suggestions {
         let target_label = sugg.labels.first().or(primary_label);
-        if let Some(target_lbl) = target_label {
-          if target_lbl.span.fid() == target_fid {
-            let interval = target_lbl.span.interval(far);
-            let range = Range {
-              start: Position {
-                line: interval.start[0].get().saturating_sub(1),
-                character: interval.start[1].get().saturating_sub(1),
-              },
-              end: Position {
-                line: interval.end[0].get().saturating_sub(1),
-                character: interval.end[1].get().saturating_sub(1),
-              },
-            };
-            fixes.push(serde_json::json!({
-              "title": sugg.message.msg.clone(),
-              "replacement": sugg.replacement.clone(),
-              "range": range,
-            }));
-          }
+        if let Some(target_lbl) = target_label && target_lbl.span.fid() == target_fid {
+          let interval = target_lbl.span.interval(far);
+          let range = Range {
+            start: Position {
+              line: interval.start[0].get().saturating_sub(1),
+              character: interval.start[1].get().saturating_sub(1),
+            },
+            end: Position {
+              line: interval.end[0].get().saturating_sub(1),
+              character: interval.end[1].get().saturating_sub(1),
+            },
+          };
+          fixes.push(serde_json::json!({
+            "title": sugg.message.msg.clone(),
+            "replacement": sugg.replacement.clone(),
+            "range": range,
+          }));
         }
       }
       if fixes.is_empty() {

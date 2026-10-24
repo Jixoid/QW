@@ -40,8 +40,8 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
     for (idx, label) in msg.labels.iter().enumerate() {
       if label.span.is_builtin() { continue }
       let hr = label.span.interval(far);
-      let s = hr.start[0].get() as u32;
-      let e = hr.end[0].get() as u32;
+      let s = hr.start[0].get();
+      let e = hr.end[0].get();
       max_line = max_line.max(s).max(e);
       file_groups.entry(label.span.fid()).or_default().push((idx, label));
     }
@@ -49,8 +49,8 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
     for sugg in &msg.suggestions {
       for label in &sugg.labels {
         let hr = label.span.interval(far);
-        let s = hr.start[0].get() as u32;
-        let e = hr.end[0].get() as u32;
+        let s = hr.start[0].get();
+        let e = hr.end[0].get();
         max_line = max_line.max(s).max(e);
       }
     }
@@ -147,7 +147,7 @@ fn render_file_snippets(f: &mut fmt::Formatter<'_>, content: &str, labels: Vec<(
     .iter()
     .map(|(_, l)| {
       let hr = l.span.interval(far);
-      (hr.start[0].get() as u32, hr.end[0].get() as u32)
+      (hr.start[0].get(), hr.end[0].get())
     })
     .collect();
   intervals.sort_by_key(|(s, _)| *s);
@@ -302,7 +302,7 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
     .iter()
     .map(|(_, l)| {
       let hr = l.span.interval(far);
-      (hr.start[0].get() as u32, hr.end[0].get() as u32)
+      (hr.start[0].get(), hr.end[0].get())
     })
     .collect();
   intervals.sort_by_key(|(s, _)| *s);
@@ -375,7 +375,7 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
               if ch == '\t' { underline.push('\t'); } else { underline.push(' '); }
             }
             let marker_count = if sugg.replacement.is_empty() { 1 } else { sugg.replacement.chars().count() };
-            underline.extend(std::iter::repeat('~').take(marker_count));
+            underline.extend(std::iter::repeat_n('~', marker_count));
             if let Some(msg) = primary_label.message.as_deref().filter(|m| !m.is_empty()) {
               writeln!(f, " {} {} {} {}", space, "|".bright_black(), underline.green().bold(), msg.green().bold())?;
             } else {
@@ -412,13 +412,13 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
                 for ch in prefix.chars() {
                   if ch == '\t' { underline.push('\t'); } else { underline.push(' '); }
                 }
-                underline.extend(std::iter::repeat('~').take(rep_line.chars().count()));
+                underline.extend(std::iter::repeat_n('~', rep_line.chars().count()));
                 writeln!(f, " {} {} {}", space, "|".bright_black(), underline.green().bold())?;
               } else if i == rep_lines.len() - 1 {
                 let mod_last = format!("{}{}", rep_line.yellow(), suffix);
                 writeln!(f, " {}{} {} {}", left_pad, line_str, "|".bright_black(), mod_last)?;
 
-                let underline: String = std::iter::repeat('~').take(rep_line.chars().count()).collect();
+                let underline: String = std::iter::repeat_n('~', rep_line.chars().count()).collect();
                 if let Some(msg) = primary_label.message.as_deref().filter(|m| !m.is_empty()) {
                   writeln!(f, " {} {} {} {}", space, "|".bright_black(), underline.green().bold(), msg.green().bold())?;
                 } else {
@@ -427,7 +427,7 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
               } else {
                 writeln!(f, " {}{} {} {}", left_pad, line_str, "|".bright_black(), rep_line.yellow())?;
 
-                let underline: String = std::iter::repeat('~').take(rep_line.chars().count()).collect();
+                let underline: String = std::iter::repeat_n('~', rep_line.chars().count()).collect();
                 writeln!(f, " {} {} {}", space, "|".bright_black(), underline.green().bold())?;
               }
             }
@@ -457,7 +457,7 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
                 if ch == '\t' { underline.push('\t'); } else { underline.push(' '); }
               }
               let marker_count = if sugg.replacement.is_empty() { 1 } else { sugg.replacement.chars().count() };
-              underline.extend(std::iter::repeat('~').take(marker_count));
+              underline.extend(std::iter::repeat_n('~', marker_count));
               if let Some(msg) = primary_label.message.as_deref().filter(|m| !m.is_empty()) {
                 writeln!(f, " {} {} {} {}", space, "|".bright_black(), underline.green().bold(), msg.green().bold())?;
               } else {
@@ -477,13 +477,13 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
                   for ch in prefix.chars() {
                     if ch == '\t' { underline.push('\t'); } else { underline.push(' '); }
                   }
-                  underline.extend(std::iter::repeat('~').take(rep_line.chars().count()));
+                  underline.extend(std::iter::repeat_n('~', rep_line.chars().count()));
                   writeln!(f, " {} {} {}", space, "|".bright_black(), underline.green().bold())?;
                 } else if i == rep_lines.len() - 1 {
                   let mod_last = format!("{}{}", rep_line.yellow(), suffix);
                   writeln!(f, " {}{} {} {}", left_pad, line_str, "|".bright_black(), mod_last)?;
 
-                  let underline: String = std::iter::repeat('~').take(rep_line.chars().count()).collect();
+                  let underline: String = std::iter::repeat_n('~', rep_line.chars().count()).collect();
                   if let Some(msg) = primary_label.message.as_deref().filter(|m| !m.is_empty()) {
                     writeln!(f, " {} {} {} {}", space, "|".bright_black(), underline.green().bold(), msg.green().bold())?;
                   } else {
@@ -492,7 +492,7 @@ fn render_single_suggestion(f: &mut fmt::Formatter, content: &str, sugg: &crate:
                 } else {
                   writeln!(f, " {}{} {} {}", left_pad, line_str, "|".bright_black(), rep_line.yellow())?;
 
-                  let underline: String = std::iter::repeat('~').take(rep_line.chars().count()).collect();
+                  let underline: String = std::iter::repeat_n('~', rep_line.chars().count()).collect();
                   writeln!(f, " {} {} {}", space, "|".bright_black(), underline.green().bold())?;
                 }
               }

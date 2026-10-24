@@ -17,17 +17,12 @@ use rustc_hash::FxHashMap;
 use qwc_diagnostic::{Label, Message, Span, Summary, msg::*};
 
 
+#[derive(Default)]
 pub struct ScopeMap {
   pub(crate) map: FxHashMap<ast::AnyId, Scope>,
 }
 
 impl ScopeMap {
-
-  pub fn new() -> Self {
-    Self {
-      map: FxHashMap::default(),
-    }
-  }
 
   pub fn get(&self, id: &ast::AnyId) -> Option<&Scope> {
     self.map.get(id)
@@ -164,7 +159,7 @@ impl Scope {
     match self.map.entry(ident.sid()) {
       Entry::Occupied(entry) => {
         let (_, last) = entry.get();
-        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(ident, CONFLICTING_DEFINITION)).add(Label::new(*last, FIRST_DEFINITION_HERE)));
+        sum.add(Message::error(DUPLICATE_IDENTIFIER, Label::new(ident, CONFLICTING_DEFINITION)) + Label::new(*last, FIRST_DEFINITION_HERE));
       }
       Entry::Vacant(entry) => {
         entry.insert((ScopeKind::Ast(kind), ident.into()));

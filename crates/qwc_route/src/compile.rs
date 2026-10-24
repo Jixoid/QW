@@ -55,30 +55,23 @@ pub struct CompileInfo<'a> {
   pub check_only: bool,
   pub execute: bool,
   pub deps: Vec<DepArtifact>,
+  pub krate_name: Option<String>,
 }
 
 
-pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary), Error> {
+pub fn read_file(fpath: &Path, base_path: ast::DefPathId, cre: &mut ast::Krate, sin: &mut StrInterner, far: &mut Files) -> Result<(ast::Item, Summary), Error> {
   let fi = {
     let fid = far.add(fpath);
     far.get(fid)
   };
 
-  let stem = match fpath.file_stem().and_then(|s| s.to_str()) {
-    Some("mod") => fpath.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()).unwrap_or("mod"),
-    Some(stem) => stem,
-    None => "main",
-  };
-
-  let sid = sin.sid(stem);
-
-  let (start, rng, mut sum) = Parse::parse(cre, sid, sin, far, fi);
+  let (start, rng, mut sum) = Parse::parse(cre, base_path, sin, far, fi);
 
   let submods_to_load = {
     let mut submods_to_load = vec![];
     
     for id in cre.extra_get(rng) {
-      let it: &ast::Item = cre.get(id);
+      let it = cre.get(id);
       
       if let ast::ItemKind::ModuleUnloaded = it.kind {
         let name = sin.str(it.name.unwrap().sid()).to_string();
@@ -109,12 +102,11 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
   };
 
   for (id, path) in submods_to_load {
-    let _ = read_file(&path, cre, sin, far).map(|(it, ssum)| {
+    let mod_path = cre.get(id).path;
+    let _ = read_file(&path, mod_path, cre, sin, far).map(|(it, ssum)| {
       let ast::ItemKind::Krate(rng) = it.kind else { unreachable!() };
       
-      let this: &mut ast::Item = cre.get_mut(id);
-      
-      this.kind = ast::ItemKind::ModuleFile(rng, it.pos.fid());
+      cre.get_mut(id).kind = ast::ItemKind::ModuleFile(rng, it.pos.fid());
 
       sum += ssum;
     });
@@ -126,16 +118,16 @@ pub fn read_file(fpath: &Path, cre: &mut ast::Krate, sin: &mut StrInterner, far:
     vis: ast::Visibility::Inherited,
     name: None,
     kind: ast::ItemKind::Krate(rng),
-    path: cre.push(ast::DefPath::Root(sid))
+    path: base_path,
   };
 
   Ok((this, sum))
 }
 
 
-pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, StrInterner, BuildKind, Duration), Error> {
-  let mut cre = ast::Krate::new();
-  let mut sin = StrInterner::new();
+pub fn build_ast_krate(fpath: &Path, far: &mut Files, krate_name: Option<&str>) -> Result<(ast::Krate, StrInterner, BuildKind, Duration), Error> {
+  let mut cre = ast::Krate::default();
+  let mut sin = StrInterner::default();
 
   let main_cwd = env::current_dir()?;
 
@@ -167,9 +159,22 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, Str
     raw_entry
   };
 
+  let crate_name_str = if let Some(name) = krate_name {
+    name.to_string()
+  } else if let Ok(conf) = qwc_config::read_conf(fpath, far) {
+    conf.name
+  } else if fpath.is_file() {
+    fpath.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string()
+  } else {
+    fpath.file_name().and_then(|s| s.to_str()).unwrap_or("main").to_string()
+  };
+
+  let crate_sid = sin.sid(&crate_name_str);
+  let root_path = cre.push(ast::DefPath::Root(crate_sid));
+
   let now = Instant::now();
   let (root, sum) = {
-    let (root, sum) = read_file(&entry_file, &mut cre, &mut sin, far)?;
+    let (root, sum) = read_file(&entry_file, root_path, &mut cre, &mut sin, far)?;
 
     let id = cre.push(root);
 
@@ -178,7 +183,7 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files) -> Result<(ast::Krate, Str
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(far)) };
 
     eprint!("{}", sum);
 
@@ -200,7 +205,7 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &mut StrInterner, far: &Files,
   match ret {
     Ok((v1, v2)) => Ok((v1, v2, time)),
     Err(sum) => {
-      for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
+      for emsg in &sum { eprintln!("{}", emsg.display_human(far)) };
     
       eprint!("{}", sum);
 
@@ -211,11 +216,11 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &mut StrInterner, far: &Files,
 
 pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, implst: Vec<ImplFor>, imods: &[hir::CID], ideps: &mut hir::Deps) -> Result<(hir::CID, Duration), Error> {
   let now = Instant::now();
-  let (cid, sum) = HGen::low(&ast_cre, sin, far, ast_scp, implst, imods, ideps);
+  let (cid, sum) = HGen::low(ast_cre, sin, far, ast_scp, implst, imods, ideps);
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(far)) };
     
     eprintln!("{}", sum);
 
@@ -233,7 +238,7 @@ pub fn build_hir_export(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterne
   match ret {
     Ok(v) => Ok((v, time)),
     Err(sum) => {
-      for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
+      for emsg in &sum { eprintln!("{}", emsg.display_human(far)) };
     
       eprint!("{}", sum);
 
@@ -244,11 +249,11 @@ pub fn build_hir_export(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterne
 
 pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo, expmaps: &[ExportMap]) -> Result<(mir::Krate, Duration), Error> {
   let now = Instant::now();
-  let (mir_cre, sum) = MGen::low(&hir_cre, deps, sin, layinfo, expmaps);
+  let (mir_cre, sum) = MGen::low(hir_cre, deps, sin, layinfo, expmaps);
   let time = now.elapsed();
 
   if !sum.is_empty() {
-    for emsg in &sum { eprintln!("{}", emsg.display_human(&far)) };
+    for emsg in &sum { eprintln!("{}", emsg.display_human(far)) };
     
     eprint!("{}", sum);
 
@@ -258,7 +263,7 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(info: &CompileInfo, backend: &Box<dyn ICGen>, mir_cre: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
+pub fn build_cgen(info: &CompileInfo, backend: &dyn ICGen, mir_cre: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
   let (out, ll) = backend.generate(
@@ -270,19 +275,19 @@ pub fn build_cgen(info: &CompileInfo, backend: &Box<dyn ICGen>, mir_cre: &mir::K
     match info.reloc { RelocMode::PIC => cgen::RelocMode::PIC, RelocMode::Static => cgen::RelocMode::Static },
     match info.mcmodel { CodeModel::Small => cgen::CodeModel::Small, CodeModel::Medium => cgen::CodeModel::Medium, CodeModel::Large => cgen::CodeModel::Large, CodeModel::Kernel => cgen::CodeModel::Kernel },
     match info.opt_level { OptLevel::O0 => Optimization::None, OptLevel::O1 => Optimization::Less, OptLevel::O2 => Optimization::Default, OptLevel::O3 => Optimization::Aggressive },
-  ).map_err(|err| Error::Str(err))?;
+  ).map_err(Error::Str)?;
 
   let time = now.elapsed();
 
   Ok((out, ll, time))
 }
 
-pub fn build_jit(info: &CompileInfo, backend: &Box<dyn ICGen>, bytecode: &Vec<u8>) -> Result<(), Error> {
+pub fn build_jit(info: &CompileInfo, backend: &dyn ICGen, bytecode: &[u8]) -> Result<(), Error> {
   if info.verbose > 0 {
     eprintln!("{}", "Running".green().bold());
   }
 
-  let exitcode = backend.run_vm(&bytecode)?;
+  let exitcode = backend.run_vm(bytecode)?;
 
   if exitcode != 0 {
     eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
@@ -387,15 +392,15 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     fs::create_dir_all(outdir)?;
   }
 
-  let mut far = Files::new();
+  let mut far = Files::default();
 
   // PASS 1 (parse)
   if info.verbose > 1 { eprintln!("{}", "PASS 1 (parse)".red().bold()) }
-  let (ast_cre, mut sin, bld_kind, time_pass1_parse) = build_ast_krate(info.path, &mut far)?;
+  let (ast_cre, mut sin, bld_kind, time_pass1_parse) = build_ast_krate(info.path, &mut far, info.krate_name.as_deref())?;
   if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
 
   // Core setup
-  let mut deps = hir::Deps::new();
+  let mut deps = hir::Deps::default();
   let core_cid = deps.get_next_id();
   let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
   deps.add(core_cre);
@@ -413,7 +418,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   for dep in &info.deps {
     let mut file = fs::File::open(&dep.qwu_path)
       .map_err(|e| Error::New | format!("cannot open dependency '{}' at {:?}: {}", dep.name, dep.qwu_path, e))?;
-    let (dep_hir, dep_exp) = Unit::deserialize(&mut file)
+    let (dep_hir, dep_exp) = Unit::deserialize(&mut file, &mut sin)
       .map_err(|e| Error::New | format!("cannot deserialize dependency '{}' at {:?}: {}", dep.name, dep.qwu_path, e))?;
     let dep_cid = deps.add(dep_hir);
     imod_cids.push(dep_cid);
@@ -458,7 +463,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
 
   // QWU save
   let mut qwu = fs::File::create(outdir.join("out.qwu"))?;
-  Unit::serialize(&mut qwu, hir_cre, &exp)?;
+  Unit::serialize(&mut qwu, hir_cre, &exp, &sin)?;
   qwu.flush()?;
 
   // PASS 3 (mgen)
@@ -473,7 +478,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   if info.verbose > 1 { eprintln!("{}", "PASS 4 (cgen)".red().bold()) }
   let (out, llir, time_pass4_cgen) = build_cgen(
     &info,
-    &backend,
+    backend.as_ref(),
     &mir_cre,
     &sin,
     info.dump.contains(&DumpStage::Lir),
@@ -484,7 +489,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   let object = (!info.execute).then_some(&out);
 
   if !info.execute {
-    fs::write(outdir.join("out.o"), &object.unwrap())?;
+    fs::write(outdir.join("out.o"), object.unwrap())?;
   }
 
   if info.dump.contains(&DumpStage::Lir) {
@@ -494,7 +499,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   }
 
   if info.execute {
-    build_jit(&info, &backend, bytecode.unwrap())?;
+    build_jit(&info, backend.as_ref(), bytecode.unwrap())?;
   } else {
     build_link(&info, outdir, bld_kind, &dep_objs)?;
   }

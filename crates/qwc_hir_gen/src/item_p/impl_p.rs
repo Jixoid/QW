@@ -26,9 +26,11 @@ pub fn low_impl(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Ite
   let trait_ty = trait_ty.map(|id| TypeLow::low(ctx, sum, id)).transpose()?;
 
   let impl_path = if let Some(trait_ty) = trait_ty {
-    ctx.cre.push(hir::DefPath::Impl { base: ctx.get(trait_ty).path, spec: ctx.get(type_ty).path })
+    let trait_path = ctx.type_path(trait_ty).unwrap_or(ctx.path);
+    let type_path = ctx.type_path(type_ty).unwrap_or(ctx.path);
+    ctx.cre.push(hir::DefPath::Impl { base: trait_path, spec: type_path })
   } else {
-    ctx.get(type_ty).path
+    ctx.type_path(type_ty).unwrap_or(ctx.path)
   };
 
   let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
@@ -125,8 +127,8 @@ fn low_impl_validate(
 ) -> Status<hir::ItemRng>
 {
   let (trait_methods, trait_types, trait_reqs) = match ctx.get(trait_ty).kind {
-    hir::TypeKind::Iface(methods) => (methods, None, None),
-    hir::TypeKind::Trait{methods, types, reqs} => (methods, Some(types), Some(reqs)),
+    hir::TypeKind::ItemIface{methods, ..} => (methods, None, None),
+    hir::TypeKind::ItemTrait{methods, types, reqs, ..} => (methods, Some(types), Some(reqs)),
     
     hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span))),
 
@@ -140,8 +142,8 @@ fn low_impl_validate(
   if let Some(reqs) = trait_reqs {
     for req in ctx.extra_get(reqs) {
       match ctx.get(req).kind {
-        hir::TypeKind::Iface(..) => {},
-        hir::TypeKind::Trait{..} => {},
+        hir::TypeKind::ItemIface{..} => {},
+        hir::TypeKind::ItemTrait{..} => {},
         
         hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(trait_span))),
 
@@ -183,7 +185,7 @@ fn low_impl_validate(
 
       if let Some((.., first_pos)) = map.get(&ident.sid()) {
         ret_err!(sum, Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
-          .add(Label::new(*first_pos, FIRST_DEFINITION_HERE)));
+          + Label::new(*first_pos, FIRST_DEFINITION_HERE));
       }
       
       map.insert(ident.sid(), (*ident, *method_id, *pos));
@@ -199,7 +201,7 @@ fn low_impl_validate(
 
       if let Some((.., first_pos)) = map.get(&ident.sid()) {
         ret_err!(sum, Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(*ident))
-          .add(Label::new(*first_pos, FIRST_DEFINITION_HERE)));
+          + Label::new(*first_pos, FIRST_DEFINITION_HERE));
       }
       
       map.insert(ident.sid(), (*ident, *type_id, *pos));
@@ -209,7 +211,7 @@ fn low_impl_validate(
   };
 
 
-  let trait_name = ctx.poit(trait_ty).to_string();
+  let trait_name = ctx.type_name(sum, trait_ty);
 
   // Extra Check
   for (sid, (ident, _, pos)) in &impl_method_map {

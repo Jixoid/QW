@@ -51,12 +51,12 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
 
       // Choose
       match ctx.get(target).kind {
-        hir::TypeKind::Iface(..) => Some((cast_to_iface_ref, target)),
+        hir::TypeKind::ItemIface{..} => Some((cast_to_iface_ref, target)),
         
         _ => None,
       }
     }
-    hir::TypeKind::Trait{..} => Some((cast_to_trait, target)),
+    hir::TypeKind::ItemTrait{..} => Some((cast_to_trait, target)),
     
     _ => None
   };
@@ -81,7 +81,7 @@ fn cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir
       
       // Choose
       match ctx.get(expr_ty).kind {
-        hir::TypeKind::Struct(..) => Some(expr_ty),
+        hir::TypeKind::Struct(..) | hir::TypeKind::ItemStruct { .. } => Some(expr_ty),
 
         _ => None
       }
@@ -127,7 +127,7 @@ fn cast_to_trait(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::Ex
   
   // Choose
   match ctx.get(expr_ty).kind {
-    hir::TypeKind::Struct(..) => Some(()),
+    hir::TypeKind::Struct(..) | hir::TypeKind::ItemStruct { .. } => Some(()),
 
     _ => None
   }
@@ -151,13 +151,13 @@ fn cast_to_trait(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::Ex
 
 
   // Static & Hidden
-  let hidden = ctx.tin.ty_trait_from(ctx.cre, ctx.ideps, expr_ty, target);
+  let hidden = ctx.tin.ty_trait_from(ctx.cre, expr_ty, target);
 
 
   // Post
   hir::Expr {
     kind: hir::ExprKind::CastToTrait {
-      expr: expr,
+      expr,
       target_trait: target,
     },
     category: ExprCategory::RValue,

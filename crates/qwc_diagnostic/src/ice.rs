@@ -29,7 +29,7 @@ pub struct ICE;
 
 impl ICE {
 
-  pub fn new(bt: Backtrace, msg: &str) -> ! {
+  pub fn throw(bt: Backtrace, msg: &str) -> ! {
     eprintln!("{}{} {}{} {msg}", "internal compiler error".yellow().bold(), ":".bright_black(), "qw panicked!".red().bold(), ":".bright_black());
 
     eprintln!();
@@ -102,7 +102,7 @@ impl ICE {
           }
         };
 
-        if ness { ret += &format!("{}\n", str); } else { ret += &format!("{}\n", str.bright_black().to_string()); }
+        if ness { ret += &format!("{}\n", str); } else { ret += &format!("{}\n", str.bright_black()); }
       }
     }
 
@@ -112,7 +112,7 @@ impl ICE {
 
   pub fn register() {
     panic::set_hook(Box::new(|phi| {
-      ICE::new(Backtrace::new(),
+      ICE::throw(Backtrace::new(),
         match phi.payload_as_str() {
           Some(v) => v,
           None => "<unknown>",

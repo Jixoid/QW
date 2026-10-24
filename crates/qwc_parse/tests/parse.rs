@@ -19,16 +19,17 @@ use qwc_string_interner::StrInterner;
 
 
 fn prepare_parser(file: &str) -> ast::ItemRng {
-  let cre = &mut ast::Krate::new();
-  let sin = &mut StrInterner::new();
+  let cre = &mut ast::Krate::default();
+  let sin = &mut StrInterner::default();
   let sid = sin.sid("test");
-  let far = &mut Files::new();
+  let far = &mut Files::default();
   let fi = {
     let fid = far.add_buffer(Path::new("test.qw"), file.to_string().into_bytes());
     far.get(fid)
   };
 
-  let (_, rng, sum) = Parse::parse(cre, sid, sin, far, fi);
+  let root_path = cre.push(ast::DefPath::Root(sid));
+  let (_, rng, sum) = Parse::parse(cre, root_path, sin, far, fi);
 
   if !sum.is_empty() {
     for msg in &sum {

@@ -41,7 +41,7 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, rng: ast::Type
 
 
 fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::TypeId> {
-  low_resolved_kind(ctx, sum, it.pos.into(), kind, lscp)
+  low_resolved_kind(ctx, sum, it.pos, kind, lscp)
 }
 
 pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: resolve::ScopeKind, lscp: &resolve::Scope) -> Status<hir::TypeId> {
@@ -53,16 +53,9 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
         kind
       }
 
-      resolve::ScopeKindAst::TypeParam(generic, idx, thing) => {
-        let name = match ctx.src.get(thing).kind {
-          ast::ThingKind::Name(name) => name,
-          ast::ThingKind::NamedType(name, _) => name,
-          _ => unreachable!(),
-        };
-
+      resolve::ScopeKindAst::TypeParam(generic, idx, ..) => {
         let generic_hir = ItemLow::low(ctx, sum, generic)?.unwrap();
-        let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name: name.sid() });
-        ctx.tin.ty_generic_type(ctx.cre, path, generic_hir, idx)
+        ctx.tin.ty_generic_type(ctx.cre, generic_hir, idx)
       }
 
       resolve::ScopeKindAst::AssocType(idx, field) => {
@@ -74,13 +67,10 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
 
           ast::FieldKind::Type(None) => {
             let trait_ty = *ctx.cmap.current_trait.last().expect("associated type outside trait");
-            let name = field_obj.name.unwrap().sid();
-            let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
             hir::Type {
               kind: hir::TypeKind::AssociatedType { trait_ty, idx },
               layout: hir::Layout::DSAT,
               attr: TypeAttr::empty(),
-              path,
             }.push(ctx.cre)
           }
 
@@ -110,7 +100,6 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
       
       resolve::ScopeKindAst::GenericType(generic, kind) => {
         let generic_item = ItemLow::low(ctx, sum, generic)?.unwrap();
-        let path = ctx.get(generic_item).path;
         let kind = match ctx.cmap.cache_type.get(&kind) {
           Some(&cached) => cached,
           None => TypeLow::low(ctx, sum, kind)?,
@@ -119,7 +108,6 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::META,
-          path,
         }.push(ctx.cre)
       }
 

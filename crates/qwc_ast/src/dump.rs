@@ -1288,18 +1288,16 @@ impl DumpHandler for DefPath {
 
 // Others
 fn dump_attrs(id: impl Into<AnyId>, cre: &Krate, sin: &StrInterner, far: &Files, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
-  if let Some(attrs) = cre.get_attached::<Vec<Attribute>>(id) {
-    if !attrs.is_empty() {
-      write_indent(f, indent)?;
-      write!(f, "{}", punct("!["))?;
-      let mut first = true;
-      for attr in attrs {
-        if !first { write!(f, "{} ", punct(","))?; }
-        first = false;
-        attr.dump(cre, sin, far, f, indent)?;
-      }
-      writeln!(f, "{}", punct("]"))?;
+  if let Some(attrs) = cre.get_attached::<Vec<Attribute>>(id) && !attrs.is_empty() {
+    write_indent(f, indent)?;
+    write!(f, "{}", punct("!["))?;
+    let mut first = true;
+    for attr in attrs {
+      if !first { write!(f, "{} ", punct(","))?; }
+      first = false;
+      attr.dump(cre, sin, far, f, indent)?;
     }
+    writeln!(f, "{}", punct("]"))?;
   }
   Ok(())
 }

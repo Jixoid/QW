@@ -23,7 +23,7 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields:
     let id_hir = TypeLow::low(ctx, sum, id)?;
     
     match ctx.get(id_hir).kind {
-      hir::TypeKind::Iface(..) | hir::TypeKind::Trait{..} => {}
+      hir::TypeKind::ItemIface{..} | hir::TypeKind::ItemTrait{..} => {}
       hir::TypeKind::Error => {}
       
       hir::TypeKind::GenericRaw{..} => ret_err!(sum, Message::error(CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION, Label::new_pos(ctx.src.get(id).pos))),
@@ -44,13 +44,12 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields:
   let dummy_me = hir::Type {
     kind: hir::TypeKind::Error,
     attr: TypeAttr::empty(),
-    path,
     layout: hir::Layout::DSAT,
   }.push(ctx.cre);
 
 
   ctx.cmap.current_trait.push(dummy_me);
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, path, attr: TypeAttr::empty()}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, attr: TypeAttr::empty()}.push(ctx.cre));
 
 
   // fields
@@ -102,10 +101,9 @@ pub fn low_trait(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, fields:
   let (methods, types) = fields?;
 
   let this = hir::Type {
-    kind: hir::TypeKind::Trait{methods, types, reqs},
+    kind: hir::TypeKind::ItemTrait{methods, types, reqs, path},
     layout: hir::Layout::DSAT,
     attr: TypeAttr::empty(),
-    path,
   };
   *ctx.cre.get_mut(dummy_me) = this;
 
@@ -121,12 +119,11 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
   let dummy_me = hir::Type {
     kind: hir::TypeKind::Error,
     attr: TypeAttr::empty(),
-    path,
     layout: hir::Layout::DSAT,
   }.push(ctx.cre);
 
   ctx.cmap.current_trait.push(dummy_me);
-  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, path, attr: TypeAttr::empty()}.push(ctx.cre));
+  ctx.cmap.self_ty.push(hir::Type{kind: hir::TypeKind::GenericSelfType, layout: hir::Layout::DSAT, attr: TypeAttr::empty()}.push(ctx.cre));
 
 
   let methods = (|| {
@@ -169,10 +166,9 @@ pub fn low_iface(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, rng: as
   
   // Post
   let this = hir::Type {
-    kind: hir::TypeKind::Iface(methods?),
+    kind: hir::TypeKind::ItemIface{methods: methods?, path},
     layout: hir::Layout::DSAT,
     attr: TypeAttr::empty(),
-    path,
   };
   *ctx.cre.get_mut(dummy_me) = this;
 

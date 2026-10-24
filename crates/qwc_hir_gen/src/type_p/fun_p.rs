@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{self as hir, DefPathId, PushOkApi, TypeAttr};
+use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 use qwc_diagnostic::{Label, Message, Status, StatusApi, Summary, msg::*, ret_err};
 use qwc_ast as ast;
 
@@ -18,7 +18,7 @@ use crate::{Ctx, TypeLow};
 
 
 // Function
-pub fn low_fun(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Status<hir::TypeId> {
+pub fn low_fun(ctx: &mut Ctx, sum: &mut Summary, self_kind: Option<ast::TypeId>, rng: ast::ThingRng, ret: Option<ast::TypeId>) -> Status<hir::TypeId> {
   let args = {
     let mut ctn = vec![];
 
@@ -52,6 +52,5 @@ pub fn low_fun(ctx: &mut Ctx, sum: &mut Summary, path: DefPathId, self_kind: Opt
     kind: hir::TypeKind::Fun{self_kind, args, ret},
     layout: hir::Layout::DST,
     attr: TypeAttr::empty(),
-    path,
   }.push_ok(ctx.cre)
 }

@@ -31,7 +31,7 @@ fn with_timeout<T: Send + 'static>(secs: u64, f: impl FnOnce() -> T + Send + 'st
 
 
 fn lex_all(src: &str) -> Vec<(WK, String)> {
-  let mut files = Files::new();
+  let mut files = Files::default();
   let fid = files.add_buffer(Path::new("t.qw"), src.as_bytes().to_vec());
   let mut lx = Lexer::new(files.get(fid));
 
@@ -154,7 +154,7 @@ fn strings() {
 // peek / get / bump
 #[test]
 fn peek_get_bump_and_parse_token() {
-  let mut files = Files::new();
+  let mut files = Files::default();
   let fid = files.add_buffer(Path::new("t.qw"), b"a && b".to_vec());
   let mut lx = Lexer::new(files.get(fid));
   let mut sum = Summary::new();
@@ -186,7 +186,7 @@ fn peek_get_bump_and_parse_token() {
 // peek / get / bump
 #[test]
 fn parse_nested_generic() {
-  let mut files = Files::new();
+  let mut files = Files::default();
   let fid = files.add_buffer(Path::new("t.qw"), b"Add<Vec2<i32>>".to_vec());
   let mut lx = Lexer::new(files.get(fid));
   let mut sum = &mut Summary::new();
@@ -388,7 +388,7 @@ fn truncated_token_ends_on_a_char_boundary() {
 
 #[test]
 fn file_span_is_clamped_on_a_char_boundary() {
-  let mut files = Files::new();
+  let mut files = Files::default();
   let fid = files.add_buffer(Path::new("t.qw"), "é".repeat(50_000).into_bytes());
   let lx = Lexer::new(files.get(fid));
 

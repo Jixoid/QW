@@ -47,7 +47,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     .join("build")
     .join(variant_dir);
 
-  let mut far = Files::new();
+  let mut far = Files::default();
 
   // Config
   let conf = qwc_config::read_conf(&info.path.canonicalize().unwrap_or_else(|_| info.path.to_path_buf()), &mut far)?;
@@ -105,6 +105,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     check_only: info.check_only,
     execute: info.execute,
     deps: dep_artifacts,
+    krate_name: Some(conf.name.clone()),
   };
 
   compile::compile(compile_info)?;

@@ -10,7 +10,7 @@
 */
 
 
-use qwc_diagnostic::{Label, Message, Span, Status::{self, Fail, Success}, StatusApi2, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Span, Status::{self, Fail, Success}, Summary, msg::*, ret_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 use qwc_string_interner::Sid;
 
@@ -92,14 +92,44 @@ impl Infer {
 
   pub fn lookup_method(ctx: &mut Ctx, sum: &mut Summary, current_id: hir::ExprId, sid: Sid) -> Status<hir::ExprId> {
     let this_ty = ctx.cre.get(current_id).ety;
-    let methods = ctx.type_impls.get(&this_ty).status()?;
-    let items = methods.methods.get(&sid).status()?;
+    if let Some(methods) = ctx.type_impls.get(&this_ty) {
+      if let Some(items) = methods.methods.get(&sid) {
+        for &item in items {
+          if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+            let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
+            let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
+            let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
 
-    for &item in items {
-      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
-        let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
-        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
-        let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
+            let callee = hir::Expr {
+              kind: hir::ExprKind::GlobalRef(method),
+              category: ExprCategory::RValue,
+              ety: kind,
+              pos: ctx.cre.get(current_id).pos,
+            }.push(ctx.cre);
+
+            return hir::Expr {
+              kind: hir::ExprKind::BoundSelfMethod {
+                callee,
+                this: current_id,
+              },
+              category: ExprCategory::RValue,
+              ety: ctx.prims.ty_unit,
+              pos: ctx.cre.get(current_id).pos,
+            }.push_ok(ctx.cre);
+          }
+        }
+      }
+    }
+
+    for &cid in ctx.imods {
+      let dep_krate = ctx.ideps.get(cid);
+      for impl_id in dep_krate.impl_items() {
+        let hir::ItemKind::Impl { type_ty, methods, .. } = ctx.get(impl_id).kind else { continue; };
+        if type_ty != this_ty {
+          continue;
+        }
+        let Some(method) = ctx.extra_get(methods).find(|&m| ctx.get(m).name == Some(sid)) else { continue; };
+        let hir::ItemKind::Function { kind, .. } = ctx.get(method).kind else { continue; };
 
         let callee = hir::Expr {
           kind: hir::ExprKind::GlobalRef(method),
@@ -135,8 +165,8 @@ impl Infer {
     };
     let found_const = {
       let krate = ctx.get_krate(target_unraw_ty.cid());
-      if let hir::TypeKind::Enum(fields) = krate.get(target_unraw_ty).kind {
-        krate.extra_get(fields).find_map(|field_id| {
+      if let hir::TypeKind::ItemEnum{values, ..} = krate.get(target_unraw_ty).kind {
+        krate.extra_get(values).find_map(|field_id| {
           if let hir::Thing::NamedConst(name, cons) = *krate.get(field_id) {
             if name == sid {
               return Some(cons);
@@ -186,30 +216,45 @@ impl Infer {
       })
     };
 
-    let Some(methods) = methods else {
-      ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[ctx.sin.str(sid)]), Label::new_pos(pos)));
-    };
-
-    let Some(items) = methods.methods.get(&sid) else {
-      ret_err!(sum, Message::error(HAS_NO_FIELD_NAMED_X.args(&[ctx.sin.str(sid)]), Label::new_pos(pos)));
-    };
-
-    let mut ordered_items: Vec<ast::ItemId> = items.clone();
-    if methods.inherent_methods.contains(&sid) {
-      ordered_items.sort_by_key(|&item| {
-        if let ast::ItemKind::Impl { trait_ty: None, .. } = ctx.src.get(item).kind {
-          0
-        } else {
-          1
+    if let Some(methods) = methods {
+      if let Some(items) = methods.methods.get(&sid) {
+        let mut ordered_items: Vec<ast::ItemId> = items.clone();
+        if methods.inherent_methods.contains(&sid) {
+          ordered_items.sort_by_key(|&item| {
+            if let ast::ItemKind::Impl { trait_ty: None, .. } = ctx.src.get(item).kind {
+              0
+            } else {
+              1
+            }
+          });
         }
-      });
+
+        for item in ordered_items {
+          if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+            let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
+            let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
+            let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
+
+            return hir::Expr {
+              kind: hir::ExprKind::GlobalRef(method),
+              category: ExprCategory::RValue,
+              ety: kind,
+              pos,
+            }.push_ok(ctx.cre);
+          }
+        }
+      }
     }
 
-    for item in ordered_items {
-      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
-        let hir::ItemKind::Impl { methods, .. } = ctx.cre.get(impl_id).kind else { unreachable!() };
-        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue };
-        let hir::ItemKind::Function { kind, .. } = ctx.cre.get(method).kind else { unreachable!() };
+    for &cid in ctx.imods {
+      let dep_krate = ctx.ideps.get(cid);
+      for impl_id in dep_krate.impl_items() {
+        let hir::ItemKind::Impl { type_ty, methods, .. } = ctx.get(impl_id).kind else { continue; };
+        if type_ty != target_ty && type_ty != target_unraw_ty {
+          continue;
+        }
+        let Some(method) = ctx.extra_get(methods).find(|&m| ctx.get(m).name == Some(sid)) else { continue; };
+        let hir::ItemKind::Function { kind, .. } = ctx.get(method).kind else { continue; };
 
         return hir::Expr {
           kind: hir::ExprKind::GlobalRef(method),
@@ -228,28 +273,80 @@ impl Infer {
     let rhs_ty = ctx.cre.get(rhs_id).ety;
     let pos_span = pos.into();
 
-    let methods = ctx.type_impls.get(&this_ty).status()?;
-    let items = methods.methods.get(&sid).status()?;
+    let target_path = ctx.type_path(target_trait);
 
-    let target_path = ctx.get(target_trait).path;
+    if let Some(methods) = ctx.type_impls.get(&this_ty) {
+      if let Some(items) = methods.methods.get(&sid) {
+        for &item in items {
+          if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+            let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
 
-    for &item in items {
-      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
-        let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
+            let Some(trait_ty) = trait_ty else { continue; };
 
+            let Some(mut impl_path) = ctx.type_path(trait_ty) else { continue; };
+            while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
+              impl_path = base;
+            }
+
+            if Some(impl_path) != target_path {
+              continue;
+            }
+
+            let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
+            let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+            let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
+
+            if args.count() != 1 { continue; }
+            let arg_thing = ctx.extra_get(args).next().unwrap();
+
+            let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
+            let param_unref_ty = match ctx.get(param_ty).kind {
+              hir::TypeKind::Ref(inner, _) => inner,
+              _ => param_ty,
+            };
+            let rhs_unref_ty = match ctx.get(rhs_ty).kind {
+              hir::TypeKind::Ref(inner, _) => inner,
+              _ => rhs_ty,
+            };
+
+            if param_ty != rhs_ty && param_unref_ty != rhs_unref_ty {
+              continue;
+            }
+
+            return Success((
+              hir::Expr {
+                kind: hir::ExprKind::GlobalRef(method),
+                category: ExprCategory::RValue,
+                ety: fn_ty,
+                pos: pos_span,
+              }.push(ctx.cre),
+              ret,
+            ));
+          }
+        }
+      }
+    }
+
+    for &cid in ctx.imods {
+      let dep_krate = ctx.ideps.get(cid);
+      for impl_id in dep_krate.impl_items() {
+        let hir::ItemKind::Impl { type_ty, trait_ty, methods } = ctx.get(impl_id).kind else { continue; };
+        if type_ty != this_ty {
+          continue;
+        }
         let Some(trait_ty) = trait_ty else { continue; };
 
-        let mut impl_path = ctx.get(trait_ty).path;
+        let Some(mut impl_path) = ctx.type_path(trait_ty) else { continue; };
         while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
           impl_path = base;
         }
 
-        if impl_path != target_path {
+        if Some(impl_path) != target_path {
           continue;
         }
 
-        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
-        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+        let Some(method) = ctx.extra_get(methods).find(|&m| ctx.get(m).name == Some(sid)) else { continue; };
+        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.get(method).kind else { continue; };
         let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
 
         if args.count() != 1 { continue; }
@@ -288,28 +385,65 @@ impl Infer {
     let this_ty = ctx.cre.get(current_id).ety;
     let pos_span = pos.into();
 
-    let methods = ctx.type_impls.get(&this_ty).status()?;
-    let items = methods.methods.get(&sid).status()?;
+    let target_path = ctx.type_path(target_trait);
 
-    let target_path = ctx.get(target_trait).path;
+    if let Some(methods) = ctx.type_impls.get(&this_ty) {
+      if let Some(items) = methods.methods.get(&sid) {
+        for &item in items {
+          if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
+            let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
 
-    for &item in items {
-      if let Success(Some(impl_id)) = ItemLow::low(ctx, sum, item) {
-        let hir::ItemKind::Impl { methods, trait_ty, .. } = ctx.cre.get(impl_id).kind else { continue; };
+            let Some(trait_ty) = trait_ty else { continue; };
 
+            let Some(mut impl_path) = ctx.type_path(trait_ty) else { continue; };
+            while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
+              impl_path = base;
+            }
+
+            if Some(impl_path) != target_path {
+              continue;
+            }
+
+            let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
+            let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+            let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
+
+            if args.count() != 0 { continue; }
+
+            return Success((
+              hir::Expr {
+                kind: hir::ExprKind::GlobalRef(method),
+                category: ExprCategory::RValue,
+                ety: fn_ty,
+                pos: pos_span,
+              }.push(ctx.cre),
+              ret,
+            ));
+          }
+        }
+      }
+    }
+
+    for &cid in ctx.imods {
+      let dep_krate = ctx.ideps.get(cid);
+      for impl_id in dep_krate.impl_items() {
+        let hir::ItemKind::Impl { type_ty, trait_ty, methods } = ctx.get(impl_id).kind else { continue; };
+        if type_ty != this_ty {
+          continue;
+        }
         let Some(trait_ty) = trait_ty else { continue; };
 
-        let mut impl_path = ctx.get(trait_ty).path;
+        let Some(mut impl_path) = ctx.type_path(trait_ty) else { continue; };
         while let hir::DefPath::Spec { base, .. } = *ctx.get(impl_path) {
           impl_path = base;
         }
 
-        if impl_path != target_path {
+        if Some(impl_path) != target_path {
           continue;
         }
 
-        let Some(method) = ctx.cre.extra_get(methods).find(|&m| ctx.cre.get(m).name.unwrap() == sid) else { continue; };
-        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.cre.get(method).kind else { continue; };
+        let Some(method) = ctx.extra_get(methods).find(|&m| ctx.get(m).name == Some(sid)) else { continue; };
+        let hir::ItemKind::Function { kind: fn_ty, .. } = ctx.get(method).kind else { continue; };
         let hir::TypeKind::Fun { args, ret, .. } = ctx.get(fn_ty).kind else { continue; };
 
         if args.count() != 0 { continue; }

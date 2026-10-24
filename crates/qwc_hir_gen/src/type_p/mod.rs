@@ -49,7 +49,7 @@ impl TypeLow {
       Unit => ctx.prims.ty_unit,
 
       // Reference
-      Ref(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ref(ctx.cre, ctx.ideps, id, ism)},
+      Ref(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
       
       // Vector
       Vector(kind, ext) => Self::low_vector(ctx, sum, kind, ext)?,
@@ -85,7 +85,7 @@ impl TypeLow {
       }
 
       // Function
-      Fun{self_kind, args, ret, ..} => fun_p::low_fun(ctx, sum, ctx.path, self_kind, args, ret)?,
+      Fun{self_kind, args, ret, ..} => fun_p::low_fun(ctx, sum, self_kind, args, ret)?,
 
       // Specialize
       Spec{base, args} => spec_p::low_specialize(ctx, sum, it, base, args)?,
@@ -114,15 +114,12 @@ impl TypeLow {
     let fctx = FunCtx::new_const(ctx.src.get(ext).pos);
     let len_expr = ExprLow::low(ctx, &fctx, sum, ext)?;
 
-    let path = ctx.get(elem_ty).path;
-
 
     // Post
     hir::Type {
       kind: hir::TypeKind::Vector(elem_ty, len_expr),
       layout: hir::Layout::STATIC,
       attr: TypeAttr::empty(),
-      path,
     }.push_ok(ctx.cre)
   }
   
@@ -139,7 +136,7 @@ impl TypeLow {
 
     
     // Post
-    Status::Success(ctx.tin.ty_vscale(ctx.cre, ctx.ideps, hir_kind))
+    Status::Success(ctx.tin.ty_vscale(ctx.cre, hir_kind))
   }
 
 
@@ -158,15 +155,12 @@ impl TypeLow {
     let fctx = FunCtx::new_const(ctx.src.get(ext).pos);
     let len_expr = ExprLow::low(ctx, &fctx, sum, ext)?;
 
-    let path = ctx.get(elem_ty).path;
-
 
     // Post
     hir::Type {
       kind: hir::TypeKind::Array(elem_ty, len_expr),
       layout: hir::Layout::STATIC,
       attr: TypeAttr::empty(),
-      path,
     }.push_ok(ctx.cre)
   }
   
@@ -183,9 +177,11 @@ impl TypeLow {
 
     
     // Post
-    Status::Success(ctx.tin.ty_slice(ctx.cre, ctx.ideps, hir_kind))
+    Status::Success(ctx.tin.ty_slice(ctx.cre, hir_kind))
   }
 
+
+  // Basic
   fn low_range(ctx: &mut Ctx, sum: &mut Summary, kind: ast::TypeId) -> Status<hir::TypeId> {
     let hir_kind = TypeLow::low(ctx, sum, kind)?;
 
@@ -199,7 +195,7 @@ impl TypeLow {
 
     
     // Post
-    Status::Success(ctx.tin.ty_range(ctx.cre, ctx.ideps, hir_kind))
+    Status::Success(ctx.tin.ty_range(ctx.cre, hir_kind))
   }
 
 }
@@ -215,15 +211,13 @@ impl TypeMatch {
     let ty1_ty = ctx.get(ty1).kind;
     let ty2_ty = ctx.get(ty2).kind;
 
-    let self_ty = ctx.cmap.self_ty.last().map(|id| *id);
+    let self_ty = ctx.cmap.self_ty.last().copied();
 
-    if let Some(self_ty) = self_ty {
-      if ty1_ty == hir::TypeKind::GenericSelfType {
-        if self_ty == ty2 {
-          return Status::Success(());
-        } else {
-          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
-        }
+    if let Some(self_ty) = self_ty && ty1_ty == hir::TypeKind::GenericSelfType {
+      if self_ty == ty2 {
+        return Status::Success(());
+      } else {
+        ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
       }
     }
 

@@ -72,7 +72,7 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
               "tag" => check2(&mut select, GitSelect::Tag(val.expect_string()?))?,
               "rev" => check2(&mut select, GitSelect::Rev(val.expect_string()?))?,
 
-              c @ _ => return Err(format!("unknown key: `{}`", c))
+              c => return Err(format!("unknown key: `{}`", c))
             }
           }
 
@@ -91,7 +91,7 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
 
               "remote" => check2(&mut remote, val.expect_string()?)?,
               
-              c @ _ => return Err(format!("unknown key: `{}`", c))
+              c => return Err(format!("unknown key: `{}`", c))
             }
           }
           
@@ -106,11 +106,11 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
           check2(&mut feat, set)?
         }
 
-        c @ _ => return Err(format!("unknown key: `{}`", c))
+        c => return Err(format!("unknown key: `{}`", c))
       }
     }
 
-    Ok(Deps{feat, from: from.ok_or_else(|| "`from` not specified")?})
+    Ok(Deps{feat, from: from.ok_or("`from` not specified")?})
   };
 
   for (name, val) in conf.expect_struct()? {
@@ -141,7 +141,7 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
         check2(&mut setup.deps, map)?
       }
 
-      c @ _ => return Err(format!("unknown key: `{}`", c))
+      c => return Err(format!("unknown key: `{}`", c))
     }
   }
 
@@ -150,8 +150,8 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
     name: setup.name.unwrap(),
     //desc: setup.desc.unwrap(),
     vers: setup.vers.unwrap(),
-    feat: setup.feat.unwrap_or_else(|| FxHashSet::default()),
-    deps: setup.deps.unwrap_or_else(|| FxHashMap::default()),
+    feat: setup.feat.unwrap_or_default(),
+    deps: setup.deps.unwrap_or_default(),
   };
 
   Ok(ret)

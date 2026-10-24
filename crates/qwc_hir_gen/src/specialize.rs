@@ -204,15 +204,6 @@ impl<'a> Specialization<'a> {
       }
     }
 
-    let mut path = it.path;
-    for &id in self.args {
-      if id.kind() != hir::id::NodeKind::Type { continue }
-
-      let id = hir::TypeId::from_any(id);
-      let arg_path = ctx.get(id).path;
-      path = ctx.cre.push(hir::DefPath::Spec { base: path, spec: arg_path });
-    }
-
     let it_id = id;
     let id = match it.kind {
       hir::TypeKind::Struct (rng) => {
@@ -229,7 +220,25 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Struct(rng),
           layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
+        }.push(ctx.cre)
+      }
+
+      hir::TypeKind::ItemStruct { fields: rng, path } => {
+        let rng = convert!(
+          ctx, rng,
+          |id| {
+            let hir::Thing::NamedType(name, kind) = *ctx.get(id) else { unreachable!() };
+            (name, kind)
+          },
+          |&(name, kind)| {
+            hir::Thing::NamedType(name, self.sub_spec_type(ctx, sum, kind)).push(ctx.cre)
+          },
+        );
+
+        hir::Type {
+          kind: hir::TypeKind::ItemStruct { fields: rng, path },
+          layout: hir::Layout::STATIC,
+          attr: TypeAttr::empty(),
         }.push(ctx.cre)
       }
 
@@ -240,16 +249,26 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Tuple(rng),
           layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         }.push(ctx.cre)
       }
 
-      hir::TypeKind::Enum(..) => id,
+      hir::TypeKind::ItemTuple { fields: rng, path } => {
+        let rng = convert!(ctx, rng, |id| id, |&id| self.sub_spec_type(ctx, sum, id));
+
+        hir::Type {
+          kind: hir::TypeKind::ItemTuple { fields: rng, path },
+          layout: hir::Layout::STATIC,
+          attr: TypeAttr::empty(),
+        }.push(ctx.cre)
+      }
+
+      hir::TypeKind::ItemEnum{..} => id,
+      hir::TypeKind::ItemFlag{..} => id,
 
       hir::TypeKind::Ref (kind, ism) => {
         let kind = self.sub_spec_type(ctx, sum, kind);
 
-        ctx.tin.ty_ref(ctx.cre, ctx.ideps, kind, ism)
+        ctx.tin.ty_ref(ctx.cre, kind, ism)
       }
 
       hir::TypeKind::Option (kind) => {
@@ -261,7 +280,7 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::Slice (kind) => {
         let kind = self.sub_spec_type(ctx, sum, kind);
   
-        ctx.tin.ty_slice(ctx.cre, ctx.ideps, kind)
+        ctx.tin.ty_slice(ctx.cre, kind)
       }
 
       hir::TypeKind::Array (kind, ext) => {
@@ -272,7 +291,6 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Array(kind, ext),
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         }.push(ctx.cre)
       }
 
@@ -290,7 +308,6 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::Fun { self_kind, args, ret: self.sub_spec_type(ctx, sum, ret) },
           layout: Layout::DSAT,
           attr: TypeAttr::empty(),
-          path,
         }.push(ctx.cre)
       }
 
@@ -300,16 +317,14 @@ impl<'a> Specialization<'a> {
           kind: hir::TypeKind::AssociatedType { trait_ty, idx },
           layout: it.layout,
           attr: it.attr,
-          path: it.path,
         }.push(ctx.cre)
       }
 
-      hir::TypeKind::Trait {methods, types, reqs} => {
+      hir::TypeKind::ItemTrait {methods, types, reqs, path} => {
         let new_trait_ty = hir::Type {
           kind: hir::TypeKind::Error,
           layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         }.push(ctx.cre);
 
         ctx.cmap.cache_generic_type.insert(key.clone(), new_trait_ty);
@@ -345,10 +360,9 @@ impl<'a> Specialization<'a> {
         );
 
         let this = hir::Type {
-          kind: hir::TypeKind::Trait{methods, types, reqs},
+          kind: hir::TypeKind::ItemTrait{methods, types, reqs, path},
           layout: hir::Layout::STATIC,
           attr: TypeAttr::empty(),
-          path,
         };
         *ctx.cre.get_mut(new_trait_ty) = this;
 
@@ -426,19 +440,10 @@ impl<'a> Specialization<'a> {
         let kind = self.sub_spec_type(ctx, sum, kind);
         let expr = self.sub_spec_expr(ctx, sum, expr);
 
-        let mut path = it.path;
-        for &id in self.args {
-          if id.kind() != hir::id::NodeKind::Type { continue }
-
-          let id = hir::TypeId::from_any(id);
-          let arg_path = ctx.get(id).path;
-          path = ctx.cre.push(hir::DefPath::Spec { base: path, spec: arg_path });
-        }
-
         hir::Item {
           kind: hir::ItemKind::Function { kind, expr },
           name: it.name,
-          path,
+          path: it.path,
           vis: it.vis,
           attr: it.attr,
         }.push(ctx.cre)

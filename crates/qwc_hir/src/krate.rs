@@ -22,8 +22,19 @@ use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimOps, Prim
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CID (pub(crate) NonZero<u16>);
 
+impl CID {
+  #[cfg(feature = "unit-internal")]
+  pub fn from_raw(raw: u16) -> Self {
+    Self(NonZero::<u16>::new(raw).unwrap())
+  }
 
-#[derive(Clone)]
+  pub fn raw(&self) -> u16 {
+    self.0.get()
+  }
+}
+
+
+#[derive(Default, Clone)]
 pub struct Deps {
   imod: Vec<Krate>,
   prims: Option<PrimTypes>,
@@ -31,10 +42,6 @@ pub struct Deps {
 }
 
 impl Deps {
-  pub fn new() -> Self {
-    Self { imod: vec![], prims: None, prim_op: None }
-  }
-
   pub fn set_prims(&mut self, prims: PrimTypes) {
     self.prims = Some(prims);
   }
@@ -68,8 +75,43 @@ impl Deps {
 
 
 
+pub trait LazyLoader: Send + Sync {
+  fn load_type(&self, idx: usize) -> Type;
+  fn load_expr(&self, idx: usize) -> Expr;
+  fn load_item(&self, idx: usize) -> Item;
+  fn load_thing(&self, idx: usize) -> Thing;
+  fn load_dpath(&self, idx: usize) -> DefPath;
+}
 
-#[derive(Serialize, Deserialize, Clone)]
+pub struct LazyKrateData {
+  pub loader: std::sync::Arc<dyn LazyLoader>,
+  pub types: Box<[std::sync::OnceLock<Type>]>,
+  pub exprs: Box<[std::sync::OnceLock<Expr>]>,
+  pub items: Box<[std::sync::OnceLock<Item>]>,
+  pub thins: Box<[std::sync::OnceLock<Thing>]>,
+  pub dpaths: Box<[std::sync::OnceLock<DefPath>]>,
+  pub extra_ids: Vec<HirId<SpecAny>>,
+  pub extra_kinds: Vec<NodeKind>,
+  pub impl_items: Vec<ItemId>,
+}
+
+#[derive(Clone)]
+pub struct EagerData {
+  list_type: Arena<Type>,
+  list_expr: Arena<Expr>,
+  list_item: Arena<Item>,
+  list_thin: Arena<Thing>,
+  list_dpath: Arena<DefPath>,
+  extra_data: (Arena<HirId<SpecAny>>, Arena<NodeKind>),
+}
+
+#[derive(Clone)]
+pub enum KrateData {
+  Eager(EagerData),
+  Lazy(std::sync::Arc<LazyKrateData>),
+}
+
+#[derive(Clone)]
 pub struct Krate {
   // Root
   root: Option<ItemId>,
@@ -77,39 +119,57 @@ pub struct Krate {
   // cid
   cid: CID,
 
-  // Arena
-  list_type: Arena<Type>,
-  list_expr: Arena<Expr>,
-  list_item: Arena<Item>,
-  list_thin: Arena<Thing>,
-  list_dpath: Arena<DefPath>,
-
-  extra_data: (Arena<HirId<SpecAny>>, Arena<NodeKind>),
+  data: KrateData,
 }
 
 impl Krate {
 
   // New
   pub fn new(cid: CID) -> Self {
-    Self{
+    Self {
       root: None,
-
       cid,
+      data: KrateData::Eager(EagerData {
+        list_type: Arena::new(),
+        list_expr: Arena::new(),
+        list_item: Arena::new(),
+        list_thin: Arena::new(),
+        list_dpath: Arena::new(),
+        extra_data: (Arena::new(), Arena::new()),
+      }),
+    }
+  }
 
-      list_type: Arena::new(),
-      list_expr: Arena::new(),
-      list_item: Arena::new(),
-      list_thin: Arena::new(),
-      list_dpath: Arena::new(),
-      
-      extra_data: (Arena::new(), Arena::new()),
+  #[cfg(feature = "unit-internal")]
+  pub fn new_lazy(
+    cid: CID,
+    root: Option<ItemId>,
+    loader: std::sync::Arc<dyn LazyLoader>,
+    counts: (usize, usize, usize, usize, usize),
+    extra_data: (Vec<HirId<SpecAny>>, Vec<NodeKind>),
+    impl_items: Vec<ItemId>,
+  ) -> Self {
+    let (t_cnt, e_cnt, i_cnt, th_cnt, d_cnt) = counts;
+    Self {
+      root,
+      cid,
+      data: KrateData::Lazy(std::sync::Arc::new(LazyKrateData {
+        loader,
+        types: (0..t_cnt).map(|_| std::sync::OnceLock::new()).collect(),
+        exprs: (0..e_cnt).map(|_| std::sync::OnceLock::new()).collect(),
+        items: (0..i_cnt).map(|_| std::sync::OnceLock::new()).collect(),
+        thins: (0..th_cnt).map(|_| std::sync::OnceLock::new()).collect(),
+        dpaths: (0..d_cnt).map(|_| std::sync::OnceLock::new()).collect(),
+        extra_ids: extra_data.0,
+        extra_kinds: extra_data.1,
+        impl_items,
+      })),
     }
   }
 
   pub fn cid(&self) -> CID {
     self.cid
   }
-
 
   // Root
   pub fn root(&self) -> Option<ItemId> {
@@ -120,16 +180,18 @@ impl Krate {
     self.root = Some(id)
   }
 
-
-  // Arena
+  // Arena push & get
   pub fn push<T: HirKind, P: PushApi<T>>(&mut self, obj: P) -> HirId<T> { P::push(self, obj) }
   pub fn get<T: HirKind + GetApi<T>>(&self, id: HirId<T>) -> &T { T::get(self, id) }
   pub fn get_mut<T: HirKind + GetApi<T>>(&mut self, id: HirId<T>) -> &mut T { T::get_mut(self, id) }
 
-
   // Extra
   pub fn extra<T: HirKind>(&mut self, vec: &[HirId<T>]) -> Rng<T> {
-    let (ids, kds) = &mut self.extra_data;
+    let eager = match &mut self.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot add extra to lazy krate"),
+    };
+    let (ids, kds) = &mut eager.extra_data;
 
     let vec = unsafe { slice::from_raw_parts(vec.as_ptr() as *const HirId<SpecAny>, vec.len()) };
 
@@ -141,7 +203,11 @@ impl Krate {
   }
 
   pub fn extra_any(&mut self, vec: &[AnyId]) -> AnyRng {
-    let (ids, kds) = &mut self.extra_data;
+    let eager = match &mut self.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot add extra to lazy krate"),
+    };
+    let (ids, kds) = &mut eager.extra_data;
     let start = ids.len();
     for any in vec {
       ids.push(any.id());
@@ -150,45 +216,175 @@ impl Krate {
     AnyRng::new(self.cid, u32::try_from(start).unwrap(), u32::try_from(ids.len()).unwrap())
   }
 
-  pub fn extra_get<T: HirKind>(&self, rng: Rng<T>) -> impl Iterator<Item = HirId<T>> {
+  pub fn extra_get<T: HirKind>(&self, rng: Rng<T>) -> Box<dyn Iterator<Item = HirId<T>> + '_> {
     assert_eq!(rng.cid(), self.cid);
-
-    let (ids, kinds) = &self.extra_data;
     let range = rng.range();
-
-    std::iter::zip(
-      ids.range(range.clone()),
-      kinds.range(range),
-    )
-    .map(|(&id, &kind)| HirId::<T>::new_from((id, kind)))
+    match &self.data {
+      KrateData::Eager(eager) => {
+        let (ids, kinds) = &eager.extra_data;
+        Box::new(
+          std::iter::zip(
+            ids.range(range.clone()),
+            kinds.range(range),
+          )
+          .map(|(&id, &kind)| HirId::<T>::new_from((id, kind)))
+        )
+      }
+      KrateData::Lazy(lazy) => {
+        Box::new(
+          std::iter::zip(
+            lazy.extra_ids[range.clone()].iter(),
+            lazy.extra_kinds[range].iter(),
+          )
+          .map(|(&id, &kind)| HirId::<T>::new_from((id, kind)))
+        )
+      }
+    }
   }
-  
-  pub fn extra_any_get(&self, rng: AnyRng) -> impl Iterator<Item = AnyId> {
+
+  pub fn extra_any_get(&self, rng: AnyRng) -> Box<dyn Iterator<Item = AnyId> + '_> {
     assert_eq!(rng.cid(), self.cid);
-    
-    let (ids, kinds) = &self.extra_data;
     let range = rng.range();
-
-    std::iter::zip(
-      ids.range(range.clone()),
-      kinds.range(range),
-    )
-    .map(|(&id, &kind)| AnyId::new_from((id, kind)))
+    match &self.data {
+      KrateData::Eager(eager) => {
+        let (ids, kinds) = &eager.extra_data;
+        Box::new(
+          std::iter::zip(
+            ids.range(range.clone()),
+            kinds.range(range),
+          )
+          .map(|(&id, &kind)| AnyId::new_from((id, kind)))
+        )
+      }
+      KrateData::Lazy(lazy) => {
+        Box::new(
+          std::iter::zip(
+            lazy.extra_ids[range.clone()].iter(),
+            lazy.extra_kinds[range].iter(),
+          )
+          .map(|(&id, &kind)| AnyId::new_from((id, kind)))
+        )
+      }
+    }
   }
 
+  pub fn impl_items(&self) -> Vec<ItemId> {
+    match &self.data {
+      KrateData::Eager(eager) => {
+        let cid = self.cid;
+        let mut list = Vec::new();
+        for idx in 0..eager.list_item.len() {
+          if matches!(eager.list_item[idx].kind, crate::ItemKind::Impl { .. }) {
+            list.push(ItemId::new(cid, idx as u32));
+          }
+        }
+        list
+      }
+      KrateData::Lazy(lazy) => {
+        lazy.impl_items.clone()
+      }
+    }
+  }
 
   // Size
-  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(&self) }
-  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
-  
+  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(self) }
+  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(self) }
+
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Expr>(&self) + Self::size_used::<Item>(&self) + Self::size_used::<Thing>(&self) + Self::size_used::<DefPath>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(self) + Self::size_used::<Expr>(self) + Self::size_used::<Item>(self) + Self::size_used::<Thing>(self) + Self::size_used::<DefPath>(self) + Self::size_used::<AnyId>(self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Expr>(&self) + Self::size_alloc::<Item>(&self) + Self::size_alloc::<Thing>(&self) + Self::size_alloc::<DefPath>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(self) + Self::size_alloc::<Expr>(self) + Self::size_alloc::<Item>(self) + Self::size_alloc::<Thing>(self) + Self::size_alloc::<DefPath>(self) + Self::size_alloc::<AnyId>(self)
   }
 
+}
+
+#[cfg(feature = "unit-internal")]
+impl Krate {
+  pub fn types_count(&self) -> usize {
+    match &self.data {
+      KrateData::Eager(eager) => eager.list_type.len(),
+      KrateData::Lazy(lazy) => lazy.types.len(),
+    }
+  }
+
+  pub fn exprs_count(&self) -> usize {
+    match &self.data {
+      KrateData::Eager(eager) => eager.list_expr.len(),
+      KrateData::Lazy(lazy) => lazy.exprs.len(),
+    }
+  }
+
+  pub fn items_count(&self) -> usize {
+    match &self.data {
+      KrateData::Eager(eager) => eager.list_item.len(),
+      KrateData::Lazy(lazy) => lazy.items.len(),
+    }
+  }
+
+  pub fn thins_count(&self) -> usize {
+    match &self.data {
+      KrateData::Eager(eager) => eager.list_thin.len(),
+      KrateData::Lazy(lazy) => lazy.thins.len(),
+    }
+  }
+
+  pub fn dpaths_count(&self) -> usize {
+    match &self.data {
+      KrateData::Eager(eager) => eager.list_dpath.len(),
+      KrateData::Lazy(lazy) => lazy.dpaths.len(),
+    }
+  }
+
+  pub fn get_type_by_idx(&self, idx: usize) -> &Type {
+    match &self.data {
+      KrateData::Eager(eager) => &eager.list_type[idx],
+      KrateData::Lazy(lazy) => lazy.types[idx].get_or_init(|| lazy.loader.load_type(idx)),
+    }
+  }
+
+  pub fn get_expr_by_idx(&self, idx: usize) -> &Expr {
+    match &self.data {
+      KrateData::Eager(eager) => &eager.list_expr[idx],
+      KrateData::Lazy(lazy) => lazy.exprs[idx].get_or_init(|| lazy.loader.load_expr(idx)),
+    }
+  }
+
+  pub fn get_item_by_idx(&self, idx: usize) -> &Item {
+    match &self.data {
+      KrateData::Eager(eager) => &eager.list_item[idx],
+      KrateData::Lazy(lazy) => lazy.items[idx].get_or_init(|| lazy.loader.load_item(idx)),
+    }
+  }
+
+  pub fn get_thin_by_idx(&self, idx: usize) -> &Thing {
+    match &self.data {
+      KrateData::Eager(eager) => &eager.list_thin[idx],
+      KrateData::Lazy(lazy) => lazy.thins[idx].get_or_init(|| lazy.loader.load_thing(idx)),
+    }
+  }
+
+  pub fn get_dpath_by_idx(&self, idx: usize) -> &DefPath {
+    match &self.data {
+      KrateData::Eager(eager) => &eager.list_dpath[idx],
+      KrateData::Lazy(lazy) => lazy.dpaths[idx].get_or_init(|| lazy.loader.load_dpath(idx)),
+    }
+  }
+
+  pub fn extra_raw(&self) -> (Vec<HirId<SpecAny>>, Vec<NodeKind>) {
+    match &self.data {
+      KrateData::Eager(eager) => {
+        let (ids, kinds) = &eager.extra_data;
+        let id_vec = (0..ids.len()).map(|i| ids[i]).collect();
+        let kd_vec = (0..kinds.len()).map(|i| kinds[i]).collect();
+        (id_vec, kd_vec)
+      }
+      KrateData::Lazy(lazy) => {
+        (lazy.extra_ids.clone(), lazy.extra_kinds.clone())
+      }
+    }
+  }
 }
 
 
@@ -205,58 +401,148 @@ pub trait PushApi<T: HirKind> {
 }
 
 pub trait GetApi<T: HirKind> {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self;
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self;
+  fn get(krate: &Krate, id: HirId<T>) -> &Self;
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self;
 }
 
 
 impl<T: HirKind> PushApi<T> for Type {
-  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_type.push(obj)).unwrap()) }
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> {
+    let eager = match &mut krate.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot push to lazy krate"),
+    };
+    HirId::<T>::new(krate.cid, u32::try_from(eager.list_type.push(obj)).unwrap())
+  }
 }
 
 impl<T: HirKind> GetApi<T> for Type {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_type[id.idx() as usize] }
+  fn get(krate: &Krate, id: HirId<T>) -> &Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &krate.data {
+      KrateData::Eager(eager) => &eager.list_type[id.idx() as usize],
+      KrateData::Lazy(lazy) => lazy.types[id.idx() as usize].get_or_init(|| lazy.loader.load_type(id.idx() as usize)),
+    }
+  }
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &mut krate.data {
+      KrateData::Eager(eager) => &mut eager.list_type[id.idx() as usize],
+      KrateData::Lazy(_) => panic!("cannot get_mut on lazy krate"),
+    }
+  }
 }
 
 
 impl<T: HirKind> PushApi<T> for Expr {
-  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_expr.push(obj)).unwrap()) }
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> {
+    let eager = match &mut krate.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot push to lazy krate"),
+    };
+    HirId::<T>::new(krate.cid, u32::try_from(eager.list_expr.push(obj)).unwrap())
+  }
 }
 
 impl<T: HirKind> GetApi<T> for Expr {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_expr[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_expr[id.idx() as usize] }
+  fn get(krate: &Krate, id: HirId<T>) -> &Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &krate.data {
+      KrateData::Eager(eager) => &eager.list_expr[id.idx() as usize],
+      KrateData::Lazy(lazy) => lazy.exprs[id.idx() as usize].get_or_init(|| lazy.loader.load_expr(id.idx() as usize)),
+    }
+  }
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &mut krate.data {
+      KrateData::Eager(eager) => &mut eager.list_expr[id.idx() as usize],
+      KrateData::Lazy(_) => panic!("cannot get_mut on lazy krate"),
+    }
+  }
 }
 
 
 impl<T: HirKind> PushApi<T> for Item {
-  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_item.push(obj)).unwrap()) }
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> {
+    let eager = match &mut krate.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot push to lazy krate"),
+    };
+    HirId::<T>::new(krate.cid, u32::try_from(eager.list_item.push(obj)).unwrap())
+  }
 }
 
 impl<T: HirKind> GetApi<T> for Item {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_item[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_item[id.idx() as usize] }
+  fn get(krate: &Krate, id: HirId<T>) -> &Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &krate.data {
+      KrateData::Eager(eager) => &eager.list_item[id.idx() as usize],
+      KrateData::Lazy(lazy) => lazy.items[id.idx() as usize].get_or_init(|| lazy.loader.load_item(id.idx() as usize)),
+    }
+  }
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &mut krate.data {
+      KrateData::Eager(eager) => &mut eager.list_item[id.idx() as usize],
+      KrateData::Lazy(_) => panic!("cannot get_mut on lazy krate"),
+    }
+  }
 }
 
 
 impl<T: HirKind> PushApi<T> for Thing {
-  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_thin.push(obj)).unwrap()) }
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> {
+    let eager = match &mut krate.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot push to lazy krate"),
+    };
+    HirId::<T>::new(krate.cid, u32::try_from(eager.list_thin.push(obj)).unwrap())
+  }
 }
 
 impl<T: HirKind> GetApi<T> for Thing {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_thin[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_thin[id.idx() as usize] }
+  fn get(krate: &Krate, id: HirId<T>) -> &Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &krate.data {
+      KrateData::Eager(eager) => &eager.list_thin[id.idx() as usize],
+      KrateData::Lazy(lazy) => lazy.thins[id.idx() as usize].get_or_init(|| lazy.loader.load_thing(id.idx() as usize)),
+    }
+  }
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &mut krate.data {
+      KrateData::Eager(eager) => &mut eager.list_thin[id.idx() as usize],
+      KrateData::Lazy(_) => panic!("cannot get_mut on lazy krate"),
+    }
+  }
 }
 
 
 impl<T: HirKind> PushApi<T> for DefPath {
-  fn push(krate: &mut Krate, obj: Self) -> HirId<T> { HirId::<T>::new(krate.cid, u32::try_from(krate.list_dpath.push(obj)).unwrap()) }
+  fn push(krate: &mut Krate, obj: Self) -> HirId<T> {
+    let eager = match &mut krate.data {
+      KrateData::Eager(eager) => eager,
+      KrateData::Lazy(_) => panic!("cannot push to lazy krate"),
+    };
+    HirId::<T>::new(krate.cid, u32::try_from(eager.list_dpath.push(obj)).unwrap())
+  }
 }
 
 impl<T: HirKind> GetApi<T> for DefPath {
-  fn get<'a>(krate: &'a Krate, id: HirId<T>) -> &'a Self { assert_eq!(id.cid(), krate.cid); &krate.list_dpath[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: HirId<T>) -> &'a mut Self { assert_eq!(id.cid(), krate.cid); &mut krate.list_dpath[id.idx() as usize] }
+  fn get(krate: &Krate, id: HirId<T>) -> &Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &krate.data {
+      KrateData::Eager(eager) => &eager.list_dpath[id.idx() as usize],
+      KrateData::Lazy(lazy) => lazy.dpaths[id.idx() as usize].get_or_init(|| lazy.loader.load_dpath(id.idx() as usize)),
+    }
+  }
+  fn get_mut(krate: &mut Krate, id: HirId<T>) -> &mut Self {
+    assert_eq!(id.cid(), krate.cid);
+    match &mut krate.data {
+      KrateData::Eager(eager) => &mut eager.list_dpath[id.idx() as usize],
+      KrateData::Lazy(_) => panic!("cannot get_mut on lazy krate"),
+    }
+  }
 }
 
 
@@ -267,31 +553,91 @@ pub trait SizeApi {
 }
 
 impl SizeApi for Type {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_type.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_type.allocated_len() }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_type.len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.types.len(),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_type.allocated_len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.types.len(),
+    }
+  }
 }
 
 impl SizeApi for Expr {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_expr.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_expr.allocated_len() }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_expr.len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.exprs.len(),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_expr.allocated_len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.exprs.len(),
+    }
+  }
 }
 
 impl SizeApi for Item {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_item.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_item.allocated_len() }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_item.len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.items.len(),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_item.allocated_len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.items.len(),
+    }
+  }
 }
 
 impl SizeApi for Thing {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thin.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_thin.allocated_len() }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_thin.len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.thins.len(),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_thin.allocated_len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.thins.len(),
+    }
+  }
 }
 
 impl SizeApi for DefPath {
-  fn size_used(cre: &Krate) -> usize { size_of::<Self>() * cre.list_dpath.len() }
-  fn size_alloc(cre: &Krate) -> usize { size_of::<Self>() * cre.list_dpath.allocated_len() }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_dpath.len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.dpaths.len(),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => size_of::<Self>() * eager.list_dpath.allocated_len(),
+      KrateData::Lazy(lazy) => size_of::<Self>() * lazy.dpaths.len(),
+    }
+  }
 }
 
 impl SizeApi for AnyId {
-  fn size_used(cre: &Krate) -> usize { (size_of::<HirId<SpecAny>>() * cre.extra_data.0.len()) + (size_of::<NodeKind>() * cre.extra_data.1.len()) }
-  fn size_alloc(cre: &Krate) -> usize { (size_of::<HirId<SpecAny>>() * cre.extra_data.0.allocated_len()) + (size_of::<NodeKind>() * cre.extra_data.1.allocated_len()) }
+  fn size_used(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => (size_of::<HirId<SpecAny>>() * eager.extra_data.0.len()) + (size_of::<NodeKind>() * eager.extra_data.1.len()),
+      KrateData::Lazy(lazy) => (size_of::<HirId<SpecAny>>() * lazy.extra_ids.len()) + (size_of::<NodeKind>() * lazy.extra_kinds.len()),
+    }
+  }
+  fn size_alloc(cre: &Krate) -> usize {
+    match &cre.data {
+      KrateData::Eager(eager) => (size_of::<HirId<SpecAny>>() * eager.extra_data.0.allocated_len()) + (size_of::<NodeKind>() * eager.extra_data.1.allocated_len()),
+      KrateData::Lazy(lazy) => (size_of::<HirId<SpecAny>>() * lazy.extra_ids.len()) + (size_of::<NodeKind>() * lazy.extra_kinds.len()),
+    }
+  }
 }

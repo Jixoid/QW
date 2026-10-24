@@ -147,7 +147,7 @@ impl ItemLow {
 
     let hir_kind = TypeLow::low(ctx!(path path -> ctx), sum, kind)?;
     
-    let mut loc = qwc_resolve::LocalScopeManager::new();
+    let mut loc = qwc_resolve::LocalScopeManager::default();
 
     // Args
     let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
@@ -173,7 +173,7 @@ impl ItemLow {
     let expr_ty = ctx.cre.get(expr_hir).ety;
 
     // Trait Patch
-    let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+    let ret = if let hir::TypeKind::ItemTrait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
@@ -214,7 +214,7 @@ impl ItemLow {
 
     let hir_kind = TypeLow::low(ctx!(path path -> ctx), sum, kind)?;
     
-    let mut loc = qwc_resolve::LocalScopeManager::new();
+    let mut loc = qwc_resolve::LocalScopeManager::default();
 
     // Args
     let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
@@ -263,7 +263,7 @@ impl ItemLow {
     let hir::TypeKind::Fun{ret, ..} = ctx.cre.get(hir_kind).kind else { unreachable!() };
 
     // Trait Patch
-    let ret = if let hir::TypeKind::Trait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+    let ret = if let hir::TypeKind::ItemTrait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
       let fun_sign = ctx.cre.get_mut(hir_kind);
 
       if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
@@ -298,8 +298,8 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
         _ if key.sid() == ctx.sin.sid_c() => {
           if attr.contains(ItemAttr::C) {
             ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
-              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              //+ Label::new(pos, FIRST_DEFINITION_HERE)
+               + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           attr |= ItemAttr::C;
@@ -309,8 +309,8 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
         _ if key.sid() == ctx.sin.sid_import() => {
           if let Some((pos, _)) = ivis {
             ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
-              .add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              + Label::new(pos, FIRST_DEFINITION_HERE)
+              + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           ivis = Some((key, hir::SymVis::Import))
@@ -320,8 +320,8 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
         _ if key.sid() == ctx.sin.sid_export() => {
           if let Some((pos, _)) = ivis {
             ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
-              .add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              + Label::new(pos, FIRST_DEFINITION_HERE)
+              + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           ivis = Some((key, hir::SymVis::Export))
@@ -331,14 +331,14 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
         _ if key.sid() == ctx.sin.sid_entry() => {
           if let Some((pos, _)) = ivis {
             ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
-              .add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              + Label::new(pos, FIRST_DEFINITION_HERE)
+              + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           if attr.contains(ItemAttr::Entry) {
             ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
-              //.add(Label::new(pos, FIRST_DEFINITION_HERE))
-              .add(ONLY_ONE_DEFINITION_REMAIN)
+              //+ Label::new(pos, FIRST_DEFINITION_HERE)
+              + ONLY_ONE_DEFINITION_REMAIN
             );
           };
           if vis != ast::Visibility::Public {

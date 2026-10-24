@@ -176,23 +176,8 @@ impl DumpHandler for Item {
           match *thing {
             Thing::NamedType(name_sid, kind) => {
               write!(f, "{}", name(ctx.sin.str(name_sid)))?;
-              // Only print bound if it's not the default primitive `type`
-              let t = ctx.get(kind);
-              let is_default_type = match t.kind {
-                TypeKind::GenericSelfType => {
-                  let path_name = match ctx.get(t.path) {
-                    DefPath::Path { name, .. } => Some(ctx.sin.str(*name)),
-                    _ => None,
-                  };
-                  path_name == Some("type")
-                }
-                _ => false,
-              };
-
-              if !is_default_type {
-                write!(f, "{} ", punct(":"))?;
-                kind.dump(ctx, f, indent)?;
-              }
+              write!(f, "{} ", punct(":"))?;
+              kind.dump(ctx, f, indent)?;
             }
             _ => {
               id.dump(ctx, f, indent)?;
@@ -258,11 +243,11 @@ impl DumpHandler for Item {
 
       ItemKind::Impl { type_ty, trait_ty, methods } => {
         write!(f, "{} ", kw("impl"))?;
-        ctx.get(type_ty).path.dump(ctx, f, indent)?;
+        ctx.get(type_ty).dump(ctx, f, indent)?;
         
         if let Some(iface) = trait_ty {
           write!(f, " {} ", punct(":"))?;
-          ctx.get(iface).path.dump(ctx, f, indent)?;
+          ctx.get(iface).dump(ctx, f, indent)?;
         }
         
         let methods_list = ctx.extra_get(methods);
@@ -290,9 +275,10 @@ impl DumpHandler for Type {
       write!(f, "{} ", attr("![c]"))?;
     }
 
+    use TypeKind::*;
     match self.kind {
       // Generic
-      TypeKind::GenericType{generic, idx} => {
+      GenericType{generic, idx} => {
         let it = ctx.get(generic);
         if let ItemKind::GenericNS { args, .. } = it.kind {
           let thing = ctx.extra_get(args)[idx];
@@ -306,7 +292,7 @@ impl DumpHandler for Type {
         }
       }
 
-      TypeKind::GenericRaw{generic, kind} => {
+      GenericRaw{generic, kind} => {
         write!(f, "{}<", punct("raw_generic"))?;
         let it = ctx.get(generic);
         if let Some(name_sid) = it.name {
@@ -316,24 +302,14 @@ impl DumpHandler for Type {
         write!(f, ">")?;
       }
 
-      TypeKind::GenericSelfType => {
-        let is_type = match ctx.get(self.path) {
-          DefPath::Path { name, .. } => ctx.sin.str(*name) == "type",
-          _ => false,
-        };
-        if is_type {
-          write!(f, "{}", ty("type"))?;
-        } else {
-          write!(f, "{}", ty("Self"))?;
-        }
-      }
+      GenericSelfType => write!(f, "{}", ty("Self"))?,
 
-      TypeKind::AssociatedType{trait_ty, idx} => {
+      AssociatedType{trait_ty, idx} => {
         let trait_ty = ctx.get(trait_ty);
-        trait_ty.path.dump(ctx, f, indent)?;
+        trait_ty.dump(ctx, f, indent)?;
 
         let sub = match trait_ty.kind {
-          TypeKind::Trait{types, ..} => {
+          TypeKind::ItemTrait{types, ..} => {
             let thing = ctx.extra_get(types)[idx];
 
             if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
@@ -348,244 +324,142 @@ impl DumpHandler for Type {
       }
       
       // Basic
-      TypeKind::Error => write!(f, "{}", "{error}".red().bold())?,
-      TypeKind::Unit => write!(f, "{}", ty("()"))?,
-      TypeKind::Never => write!(f, "{}", ty("!"))?,
-
-
-      // Primitive
-      TypeKind::Bit(bits) => write!(f, "{}", ty(format!("b{}", bits)))?,
+      Error => write!(f, "{}", "{error}".red().bold())?,
+      Never => write!(f, "{}", punct("!"))?,
+      Unit => write!(f, "{}", punct("()"))?,
       
-      TypeKind::Int(bits, signed) => {
-        let prefix = if signed { "i" } else { "u" };
-        write!(f, "{}", ty(format!("{}{}", prefix, bits)))?;
+      ItemStruct {path, ..} | ItemTuple {path, ..} |
+      ItemTrait {path, ..} | ItemIface {path, ..} |
+      ItemEnum {path, ..} | ItemFlag {path, ..} => path.dump(ctx, f, 0)?,
+
+      Int(len, sig) => write!(f, "{}", format!("{}{len}", if sig {"i"} else {"u"}))?,
+      ArchInt(sig) => write!(f, "{}", ty(if sig {"isize"} else {"usize"}))?,
+      Float(len) => write!(f, "{}{}", ty("f"), ty(len))?,
+      Bit(len) => write!(f, "{}{}", ty("b"), ty(len))?,
+      Bool => write!(f, "{}", ty("bool"))?,
+      Char => write!(f, "{}", ty("char"))?,
+      Str => write!(f, "{}", ty("str"))?,
+      
+
+      Ref(kind, ism) => {
+        write!(f, "{}{}", punct("&"), punct(if ism {"mut "} else {""}))?;
+        kind.dump(ctx, f, indent)?;
       }
 
-      TypeKind::Float(bits) => write!(f, "{}", ty(format!("f{}", bits)))?,
+      Ptr(kind, ism) => {
+        write!(f, "{}{}", punct("^"), punct(if ism {"mut "} else {""}))?;
+        kind.dump(ctx, f, indent)?;
+      }
+      
 
-      TypeKind::ArchInt(signed) => {
-        let s = if signed { "isize" } else { "usize" };
-        write!(f, "{}", ty(s))?;
+      Range(kind) => {
+        write!(f, "{}", ty(".."))?;
+        kind.dump(ctx, f, indent)?;
       }
 
-      TypeKind::Bool => write!(f, "{}", ty("bool"))?,
-      TypeKind::Char => write!(f, "{}", ty("char"))?,
-      
-      TypeKind::Str => write!(f, "{}", ty("str"))?,
-
-
-      // Meta
-      TypeKind::Meta(kind) => {
-        write!(f, "{}", "#".bright_black())?;
+      Option(kind) => {
+        write!(f, "{}", ty("?"))?;
         kind.dump(ctx, f, indent)?;
       }
 
 
-      // Reference
-      TypeKind::Ref(sub, ism) => {
-        write!(f, "{}", op("&"))?;
-
-        if ism { write!(f, "{} ", kw("mut"))?; }
-        
-        sub.dump(ctx, f, indent)?;
+      Meta(kind) => {
+        write!(f, "{}", punct("#"))?;
+        kind.dump(ctx, f, indent)?;
       }
-      
-      TypeKind::Ptr(sub, ism) => {
-        write!(f, "{}", op("^"))?;
+    
 
-        if ism { write!(f, "{} ", kw("mut"))?; }
-        
-        sub.dump(ctx, f, indent)?;
-      }
-
-
-      // Vector
-      TypeKind::Vector(elem, len) => {
+      Vector(kind, len) => {
         write!(f, "{}", punct("["))?;
-        elem.dump(ctx, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, " {} ", punct("*"))?;
         len.dump(ctx, f, indent)?;
         write!(f, "{}", punct("]"))?;
       }
 
-      TypeKind::VScale(sub) => {
+      VScale(kind) => {
         write!(f, "{}", punct("["))?;
-        sub.dump(ctx, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, " {}", punct("*]"))?;
       }
+      
 
-
-      // Sequentiel
-      TypeKind::Array(elem, len) => {
+      Array(kind, len) => {
         write!(f, "{}", punct("["))?;
-        elem.dump(ctx, f, indent)?;
+        kind.dump(ctx, f, indent)?;
         write!(f, "{} ", punct(";"))?;
         len.dump(ctx, f, indent)?;
         write!(f, "{}", punct("]"))?;
       }
 
-      TypeKind::Slice(sub) => {
+      Slice(kind) => {
         write!(f, "{}", punct("["))?;
-        sub.dump(ctx, f, indent)?;
-        write!(f, "{}", punct("]"))?;
+        kind.dump(ctx, f, indent)?;
+        write!(f, " {}", punct("]"))?;
       }
+    
 
-      TypeKind::Range(sub) => {
-        write!(f, "{}", punct(".."))?;
-        sub.dump(ctx, f, indent)?;
-      }
-
-
-      // Combinated
-      TypeKind::Struct(rng) => {
-        write!(f, "{}", kw("struct"))?;
-        let items = ctx.extra_get(rng);
-        if items.is_empty() {
-          write!(f, " {{}}")?;
-        } else {
-          write!(f, " {{ ")?;
-          let mut first = true;
-          for id in items {
-            if !first { write!(f, "{}", punct(", "))?; }
-            first = false;
-            id.dump(ctx, f, indent)?;
-          }
-          write!(f, " }}")?;
-        }
-      }
-
-      TypeKind::Tuple(rng) => {
-        write!(f, "{}", punct("("))?;
-        let items = ctx.extra_get(rng);
+      Struct(fields) => {
+        write!(f, "{}", punct("{"))?;
+        
         let mut first = true;
-        for id in items {
-          if !first { write!(f, "{}", punct(", "))?; }
+        for id in ctx.extra_get(fields) {
+          let Thing::NamedType(name, kind) = *ctx.get(id) else { unreachable!() };
+
+          if !first { write!(f, " {}", punct(","))? }
           first = false;
+
+          write!(f, "{}{} ", ctx.sin.str(name), punct(":"))?;
+          kind.dump(ctx, f, indent)?;
+        }
+        
+        write!(f, "{}", punct("}"))?;
+      }
+
+      Tuple(fields) => {
+        write!(f, "{}", punct("("))?;
+        
+        let mut first = true;
+        for id in ctx.extra_get(fields) {
+          if !first { write!(f, " {}", punct(","))? }
+          first = false;
+
           id.dump(ctx, f, indent)?;
         }
+        
         write!(f, "{}", punct(")"))?;
       }
 
 
-      // Trait
-      TypeKind::Trait{methods, types, reqs} => {
-        write!(f, "{}", kw("trait"))?;
-
-        if !reqs.is_empty() { write!(f, "{} ", punct(":"))? }
-        let mut first = true;
-        for id in ctx.extra_get(reqs) {
-          if !first { write!(f, "{} ", punct(","))? }
-          first = false;
-          ctx.get(id).path.dump(ctx, f, indent)?;
-        }
-
-        let t_items = ctx.extra_get(types);
-        let m_items = ctx.extra_get(methods);
-        if t_items.is_empty() && m_items.is_empty() {
-          write!(f, " {{}}")?;
-        } else {
-          write!(f, " {{")?;
-          for id in t_items {
-            writeln!(f)?;
-            write_indent(f, indent+1)?;
-            id.dump(ctx, f, indent)?;
-            write!(f, "{}", punct(","))?;
-          }
-          for id in m_items {
-            writeln!(f)?;
-            write_indent(f, indent+1)?;
-            id.dump(ctx, f, indent)?;
-            write!(f, "{}", punct(","))?;
-          }
-          writeln!(f)?;
-          write_indent(f, indent)?;
-          write!(f, "}}")?;
-        }
-      }
-
-      TypeKind::Iface(rng) => {
-        write!(f, "{}", kw("iface"))?;
-        let items = ctx.extra_get(rng);
-        if items.is_empty() {
-          write!(f, " {{}}")?;
-        } else {
-          write!(f, " {{ ")?;
-          let mut first = true;
-          for id in items {
-            if !first { write!(f, "{}", punct(", "))?; }
-            first = false;
-            id.dump(ctx, f, indent)?;
-          }
-          write!(f, " }}")?;
-        }
-      }
-
-
-      TypeKind::TraitFrom {trait_ty, hidden} => {
-        write!(f, "{}{}", kw("trait"), punct("("))?;
+      TraitFrom{trait_ty, hidden} => {
         trait_ty.dump(ctx, f, indent)?;
-        write!(f, "{} ", punct(", hidden:"))?;
+        write!(f, "{}", punct("$("))?;
         hidden.dump(ctx, f, indent)?;
         write!(f, "{}", punct(")"))?;
       }
 
 
-      // Enum
-      TypeKind::Enum(rng) => {
-        write!(f, "{}", kw("enum"))?;
-        let items = ctx.extra_get(rng);
-        if items.is_empty() {
-          write!(f, " {{}}")?;
-        } else {
-          write!(f, " {{")?;
-          for id in items {
-            writeln!(f)?;
-            write_indent(f, indent+1)?;
-            id.dump(ctx, f, indent)?;
-            write!(f, "{}", punct(","))?;
-          }
-          writeln!(f)?;
-          write_indent(f, indent)?;
-          write!(f, "}}")?;
-        }
-      }
+      Fun{self_kind, args, ret} => {
+        write!(f, "{}", punct("fun("))?;
 
-
-      // Function
-      TypeKind::Fun { self_kind, args, ret } => {
-        write!(f, "{}{}", ty("fun"), punct("("))?;
-
-        let mut first = true;
         if let Some(self_kind) = self_kind {
-          first = false;
-          let self_kind_val = ctx.get(self_kind);
-          match &self_kind_val.kind {
-            TypeKind::Ref(.., false) => write!(f, "{}{}", op("&"), ident("self"))?,
-            TypeKind::Ref(.., true) => write!(f, "{}{} {}", op("&"), kw("mut"), ident("self"))?,
-            _ => write!(f, "{}", ident("self"))?,
-          }
-        }
-
-        for id in ctx.extra_get(args) {
-          if !first { write!(f, "{}", punct(", "))?; }
-          first = false;
-
-          let Thing::NamedType(nm, kind) = *ctx.get(id) else { unreachable!() };
-
-          write!(f, "{}{} ", ident(ctx.sin.str(nm)), punct(":"))?;
-
-          ctx.get(kind).path.dump(ctx, f, indent)?;
+          self_kind.dump(ctx, f, indent)?;
         }
         
-        write!(f, "{} {} ", punct(")"), op("->"))?;
-        ctx.get(ret).path.dump(ctx, f, indent)?;
-      }
+        let mut first = true;
+        for id in ctx.extra_get(args) {
+          let Thing::NamedType(name, kind) = *ctx.get(id) else { unreachable!() };
 
+          if !first { write!(f, " {}", punct(","))? }
+          first = false;
 
-      // Variant
-      TypeKind::Option(sub) => {
-        write!(f, "{}", op("?"))?;
-        sub.dump(ctx, f, indent)?;
+          write!(f, "{}{} ", ctx.sin.str(name), punct(":"))?;
+          kind.dump(ctx, f, indent)?;
+        }
+        
+        write!(f, "{} {} ", punct(")"), punct("->"))?;
+
+        ret.dump(ctx, f, indent)?;
       }
 
     }
@@ -738,7 +612,7 @@ impl DumpHandler for Expr {
 
       // TypeOf
       ExprKind::TypeOf { kind } => {
-        ctx.get(kind).path.dump(ctx, f, indent)?;
+        ctx.get(kind).dump(ctx, f, indent)?;
       }
 
 
@@ -770,7 +644,7 @@ impl DumpHandler for Expr {
       }
 
       ExprKind::CombinatedInit { kind, fields } => {
-        ctx.get(kind).path.dump(ctx, f, indent)?;
+        ctx.get(kind).dump(ctx, f, indent)?;
         let items = ctx.extra_get(fields);
         if items.is_empty() {
           write!(f, "{{}}")?;

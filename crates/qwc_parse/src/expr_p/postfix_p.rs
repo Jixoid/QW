@@ -99,7 +99,7 @@ pub fn post_scope(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Status<ExprId> { c
     kind: ExprKind::Path(rng)
   }.push(cre);
   
-  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Success(this) }
+  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start, this) } else { Success(this) }
 }
 
 
@@ -140,7 +140,7 @@ pub fn post_specialize(ctx: &mut Ctx, start: Span, lhs: ExprId) -> Status<ExprId
     kind: ExprKind::Spec{ callee: lhs, args }
   }.push(cre);
 
-  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start.into(), this) } else { Success(this) }
+  if lex.peek(sum)?.kind() == WK::BraceL { postfix_p::post_field_create(ctx, start, this) } else { Success(this) }
 }
 
 

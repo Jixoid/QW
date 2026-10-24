@@ -56,7 +56,7 @@ impl MetaParser {
 
       if let Some((w, vis)) = vis {
         if lex.peek(sum)?.kind() == WK::Colon {
-          if let Some(..) = attr {
+          if attr.is_some() {
             ret_err!(sum, Message::error(VISIBILITY_AFTER_ATTRIBUTE, Label::new_pos(w)));
           }
 

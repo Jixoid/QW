@@ -83,7 +83,7 @@ impl<'a> Evaluator<'a> {
 
         hir::ExprKind::GenericExpr {..} => ret_err!(sum, Message::error(FIXED_VALUE_CANNOT_BE_EVALUATED, Label::new_pos(it.pos))),
 
-        _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE).add(ICE_MESSAGE.args(&[&format!("evaluator kind: {it:#?}")])))
+        _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE) + (ICE_MESSAGE.args(&[&format!("evaluator kind: {it:#?}")])))
       };
       
       return Status::Success(val);

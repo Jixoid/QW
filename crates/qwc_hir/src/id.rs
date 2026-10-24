@@ -49,6 +49,12 @@ impl<T: HirKind> std::hash::Hash for HirId<T> {
 
 impl<T: HirKind> HirId<T> {
 
+  #[cfg(feature = "unit-internal")]
+  pub fn new(cid: CID, idx: u32) -> Self {
+    Self{cid, idx: NonZero::<u32>::new(idx+1).unwrap(), pkind: PhantomData}
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn new(cid: CID, idx: u32) -> Self {
     Self{cid, idx: NonZero::<u32>::new(idx+1).unwrap(), pkind: PhantomData}
   }
@@ -59,6 +65,12 @@ impl<T: HirKind> HirId<T> {
   }
 
 
+  #[cfg(feature = "unit-internal")]
+  pub fn idx(&self) -> u32 {
+    self.idx.get()-1
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn idx(&self) -> u32 {
     self.idx.get()-1
   }
@@ -79,8 +91,8 @@ impl<T: HirKind> HirId<T> {
 
 }
 
-impl<T: HirKind> Into<AnyId> for HirId<T> {
-  fn into(self) -> AnyId { self.to_any() }
+impl<T: HirKind> From<HirId<T>> for AnyId {
+  fn from(val: HirId<T>) -> Self { val.to_any() }
 }
 
 pub type TypeId  = HirId<Type>;
@@ -103,8 +115,24 @@ pub struct Rng<T>
 }
 
 impl<T: HirKind> Rng<T> {
+  #[cfg(feature = "unit-internal")]
+  pub fn new(cid: CID, start: u32, end: u32) -> Self {
+    Self { cid, start, end, pkind: PhantomData }
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
     Self { cid, start, end, pkind: PhantomData }
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub fn start(&self) -> u32 {
+    self.start
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub fn end(&self) -> u32 {
+    self.end
   }
 
   pub fn count(&self) -> u32 {
@@ -161,8 +189,24 @@ pub struct AnyRng {
 }
 
 impl AnyRng {
+  #[cfg(feature = "unit-internal")]
+  pub fn new(cid: CID, start: u32, end: u32) -> Self {
+    Self { cid, start, end }
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
     Self { cid, start, end }
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub fn start(&self) -> u32 {
+    self.start
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub fn end(&self) -> u32 {
+    self.end
   }
 
   pub fn range(&self) -> std::ops::Range<usize> {
@@ -223,6 +267,12 @@ impl AnyId {
   }
 
 
+  #[cfg(feature = "unit-internal")]
+  pub fn idx(&self) -> u32 {
+    self.idx.get()-1
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn idx(&self) -> u32 {
     self.idx.get()-1
   }
@@ -232,6 +282,12 @@ impl AnyId {
   }
 
 
+  #[cfg(feature = "unit-internal")]
+  pub fn id(&self) -> HirId<SpecAny> {
+    HirId { cid: self.cid, idx: self.idx, pkind: PhantomData }
+  }
+
+  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn id(&self) -> HirId<SpecAny> {
     HirId { cid: self.cid, idx: self.idx, pkind: PhantomData }
   }

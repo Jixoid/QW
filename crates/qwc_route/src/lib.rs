@@ -11,6 +11,7 @@
 
 
 use std::path::PathBuf;
+use qwc_arena::Files;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -335,6 +336,7 @@ fn main_cmd(cmd: MainCommands) {
         check_only: false,
         execute: false,
         deps: dep_artifacts,
+        krate_name: qwc_config::read_conf(&path, &mut Files::default()).ok().map(|c| c.name),
       };
 
       match compile::compile(info) {
@@ -435,6 +437,7 @@ enum BuildVariant {
 }
 
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(ValueEnum, Clone, Debug)]
 enum BuildStartRoutine {
   CRT,

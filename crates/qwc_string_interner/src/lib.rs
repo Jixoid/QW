@@ -76,60 +76,6 @@ pub struct StrInterner {
 
 impl StrInterner {
   
-  pub fn new() -> Self {
-    let mut rodeo = Rodeo::default();
-
-    Self {
-      sid_core:  Sid::from(rodeo.get_or_intern_static("core").into_inner()),
-      sid_types: Sid::from(rodeo.get_or_intern_static("types").into_inner()),
-      
-      sid_bool: Sid::from(rodeo.get_or_intern_static("bool").into_inner()),
-      
-      sid_usize: Sid::from(rodeo.get_or_intern_static("usize").into_inner()),
-      sid_isize: Sid::from(rodeo.get_or_intern_static("isize").into_inner()),
-
-      sid_import: Sid::from(rodeo.get_or_intern_static("import").into_inner()),
-      sid_export: Sid::from(rodeo.get_or_intern_static("export").into_inner()),
-      sid_entry:  Sid::from(rodeo.get_or_intern_static("entry").into_inner()),
-      sid_c:      Sid::from(rodeo.get_or_intern_static("C").into_inner()),
-
-      sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
-      
-      sid_add: Sid::from(rodeo.get_or_intern_static("add").into_inner()),
-      sid_sub: Sid::from(rodeo.get_or_intern_static("sub").into_inner()),
-      sid_mul: Sid::from(rodeo.get_or_intern_static("mul").into_inner()),
-      sid_div: Sid::from(rodeo.get_or_intern_static("div").into_inner()),
-      sid_rem: Sid::from(rodeo.get_or_intern_static("rem").into_inner()),
-
-      sid_add_assign: Sid::from(rodeo.get_or_intern_static("add_assign").into_inner()),
-      sid_sub_assign: Sid::from(rodeo.get_or_intern_static("sub_assign").into_inner()),
-      sid_mul_assign: Sid::from(rodeo.get_or_intern_static("mul_assign").into_inner()),
-      sid_div_assign: Sid::from(rodeo.get_or_intern_static("div_assign").into_inner()),
-      sid_rem_assign: Sid::from(rodeo.get_or_intern_static("rem_assign").into_inner()),
-
-      sid_neg: Sid::from(rodeo.get_or_intern_static("neg").into_inner()),
-      sid_eq: Sid::from(rodeo.get_or_intern_static("eq").into_inner()),
-      sid_ne: Sid::from(rodeo.get_or_intern_static("ne").into_inner()),
-
-      sid_ordering: Sid::from(rodeo.get_or_intern_static("Ordering").into_inner()),
-      sid_less: Sid::from(rodeo.get_or_intern_static("Less").into_inner()),
-      sid_equal: Sid::from(rodeo.get_or_intern_static("Equal").into_inner()),
-      sid_greater: Sid::from(rodeo.get_or_intern_static("Greater").into_inner()),
-
-      sid_partial_ord: Sid::from(rodeo.get_or_intern_static("PartialOrd").into_inner()),
-      sid_ord: Sid::from(rodeo.get_or_intern_static("Ord").into_inner()),
-      sid_partial_cmp: Sid::from(rodeo.get_or_intern_static("partial_cmp").into_inner()),
-      sid_cmp: Sid::from(rodeo.get_or_intern_static("cmp").into_inner()),
-      sid_lt: Sid::from(rodeo.get_or_intern_static("lt").into_inner()),
-      sid_le: Sid::from(rodeo.get_or_intern_static("le").into_inner()),
-      sid_gt: Sid::from(rodeo.get_or_intern_static("gt").into_inner()),
-      sid_ge: Sid::from(rodeo.get_or_intern_static("ge").into_inner()),
-      
-      rodeo,
-    }
-  }
-
-
   #[inline]
   pub fn sid(&mut self, s: &str) -> Sid {
     let spur = self.rodeo.get_or_intern(s);
@@ -191,4 +137,59 @@ impl StrInterner {
   pub fn sid_le(&self) -> Sid { self.sid_le }
   pub fn sid_gt(&self) -> Sid { self.sid_gt }
   pub fn sid_ge(&self) -> Sid { self.sid_ge }
+}
+
+impl Default for StrInterner {
+  fn default() -> Self {
+    let mut rodeo = Rodeo::default();
+
+    Self {
+      sid_core:  Sid::from(rodeo.get_or_intern_static("core").into_inner()),
+      sid_types: Sid::from(rodeo.get_or_intern_static("types").into_inner()),
+      
+      sid_bool: Sid::from(rodeo.get_or_intern_static("bool").into_inner()),
+      
+      sid_usize: Sid::from(rodeo.get_or_intern_static("usize").into_inner()),
+      sid_isize: Sid::from(rodeo.get_or_intern_static("isize").into_inner()),
+
+      sid_import: Sid::from(rodeo.get_or_intern_static("import").into_inner()),
+      sid_export: Sid::from(rodeo.get_or_intern_static("export").into_inner()),
+      sid_entry:  Sid::from(rodeo.get_or_intern_static("entry").into_inner()),
+      sid_c:      Sid::from(rodeo.get_or_intern_static("C").into_inner()),
+
+      sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
+      
+      sid_add: Sid::from(rodeo.get_or_intern_static("add").into_inner()),
+      sid_sub: Sid::from(rodeo.get_or_intern_static("sub").into_inner()),
+      sid_mul: Sid::from(rodeo.get_or_intern_static("mul").into_inner()),
+      sid_div: Sid::from(rodeo.get_or_intern_static("div").into_inner()),
+      sid_rem: Sid::from(rodeo.get_or_intern_static("rem").into_inner()),
+
+      sid_add_assign: Sid::from(rodeo.get_or_intern_static("add_assign").into_inner()),
+      sid_sub_assign: Sid::from(rodeo.get_or_intern_static("sub_assign").into_inner()),
+      sid_mul_assign: Sid::from(rodeo.get_or_intern_static("mul_assign").into_inner()),
+      sid_div_assign: Sid::from(rodeo.get_or_intern_static("div_assign").into_inner()),
+      sid_rem_assign: Sid::from(rodeo.get_or_intern_static("rem_assign").into_inner()),
+
+      sid_neg: Sid::from(rodeo.get_or_intern_static("neg").into_inner()),
+      sid_eq: Sid::from(rodeo.get_or_intern_static("eq").into_inner()),
+      sid_ne: Sid::from(rodeo.get_or_intern_static("ne").into_inner()),
+
+      sid_ordering: Sid::from(rodeo.get_or_intern_static("Ordering").into_inner()),
+      sid_less: Sid::from(rodeo.get_or_intern_static("Less").into_inner()),
+      sid_equal: Sid::from(rodeo.get_or_intern_static("Equal").into_inner()),
+      sid_greater: Sid::from(rodeo.get_or_intern_static("Greater").into_inner()),
+
+      sid_partial_ord: Sid::from(rodeo.get_or_intern_static("PartialOrd").into_inner()),
+      sid_ord: Sid::from(rodeo.get_or_intern_static("Ord").into_inner()),
+      sid_partial_cmp: Sid::from(rodeo.get_or_intern_static("partial_cmp").into_inner()),
+      sid_cmp: Sid::from(rodeo.get_or_intern_static("cmp").into_inner()),
+      sid_lt: Sid::from(rodeo.get_or_intern_static("lt").into_inner()),
+      sid_le: Sid::from(rodeo.get_or_intern_static("le").into_inner()),
+      sid_gt: Sid::from(rodeo.get_or_intern_static("gt").into_inner()),
+      sid_ge: Sid::from(rodeo.get_or_intern_static("ge").into_inner()),
+      
+      rodeo,
+    }
+  }
 }

@@ -57,7 +57,7 @@ impl ICGen for CGenLLVM {
 
 			OutKind::Object => {
 				Target::initialize_all(&InitializationConfig::default());
-				let triple = triple.clone().map(|str| TargetTriple::create(&str)).unwrap_or_else(|| TargetMachine::get_default_triple());
+				let triple = triple.clone().map(|str| TargetTriple::create(&str)).unwrap_or_else(TargetMachine::get_default_triple);
 				
 				Target::from_triple(&triple)
 				.map_err(|err| format!("{} for {}", err.to_string(), triple))?

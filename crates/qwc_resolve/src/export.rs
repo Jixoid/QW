@@ -25,6 +25,11 @@ pub struct ExportMap {
 
 impl ExportMap {
 
+  #[cfg(feature = "unit-internal")]
+  pub fn from_raw(cid: CID, root: Option<ItemId>, map: FxHashMap<AnyId, Export>, symbols: FxHashMap<ItemId, String>) -> Self {
+    Self { cid, root, map, symbols }
+  }
+
   pub fn new(cid: CID, root: Option<ItemId>) -> Self {
     Self {
       cid,
@@ -96,6 +101,11 @@ pub struct Export {
 }
 
 impl Export {
+
+  #[cfg(feature = "unit-internal")]
+  pub fn from_raw(parent: Option<AnyId>, map: FxHashMap<String, ExportKind>) -> Self {
+    Self { parent, map }
+  }
 
   pub fn new(parent: Option<AnyId>) -> Self {
     Self {

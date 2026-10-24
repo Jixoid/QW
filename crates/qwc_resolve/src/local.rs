@@ -34,13 +34,6 @@ pub struct LocalScopeManager {
 
 impl LocalScopeManager {
 
-  pub fn new() -> Self {
-    Self {
-      locals: Vec::new(),
-      scopes: vec![FxHashMap::default()],
-    }
-  }
-
   pub fn push_scope(&mut self) {
     self.scopes.push(FxHashMap::default());
   }
@@ -73,4 +66,13 @@ impl LocalScopeManager {
     self.locals.len()
   }
 
+}
+
+impl Default for LocalScopeManager {
+  fn default() -> Self {
+    Self {
+      locals: Vec::new(),
+      scopes: vec![FxHashMap::default()],
+    }
+  }
 }

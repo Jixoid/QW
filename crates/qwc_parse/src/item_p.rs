@@ -246,8 +246,8 @@ impl ItemParser {
       lex.bump(sum)?;
       let mut reqs = vec![];
       
-      loop {
-        let name = if let (WK::Word, c) = lex.peek_k(sum)? { lex.bump(sum)?; c.ident(sum, sin, far)? } else { break };
+      while let (WK::Word, c) = lex.peek_k(sum)? {
+        let name = { lex.bump(sum)?; c.ident(sum, sin, far)? };
         
         lex.get(sum)?.expect_kind(sum, WK::Colon)?;
         

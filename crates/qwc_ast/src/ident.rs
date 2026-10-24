@@ -44,10 +44,8 @@ impl Ident {
   pub fn sid(&self) -> Sid { self.sid }
 }
 
-impl Into<Span> for Ident {
-
-  fn into(self) -> Span {
-    Span::new(self.off, self.len, self.fid)
+impl From<Ident> for Span {
+  fn from(val: Ident) -> Self {
+    Span::new(val.off, val.len, val.fid)
   }
-
 }

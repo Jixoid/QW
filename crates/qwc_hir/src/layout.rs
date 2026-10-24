@@ -31,6 +31,7 @@ pub struct LayoutInfo {
 }
 
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum LayoutKind { Static, Meta, DST, DSAT }
 
@@ -82,6 +83,27 @@ impl Layout {
   // sub
   pub(crate) const fn kind(&self) -> LayoutKind {
     self.kind
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub const fn from_raw(kind: u8, inhabited: bool) -> Self {
+    let kind = match kind {
+      0 => LayoutKind::Static,
+      1 => LayoutKind::Meta,
+      2 => LayoutKind::DST,
+      _ => LayoutKind::DSAT,
+    };
+    Self { kind, inhabited }
+  }
+
+  #[cfg(feature = "unit-internal")]
+  pub const fn raw_kind(&self) -> u8 {
+    match self.kind {
+      LayoutKind::Static => 0,
+      LayoutKind::Meta => 1,
+      LayoutKind::DST => 2,
+      LayoutKind::DSAT => 3,
+    }
   }
 
 }

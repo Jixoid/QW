@@ -15,7 +15,7 @@ use std::{fmt, mem, ops::Range};
 
 use serde::{Deserialize, Deserializer, de::{self, MapAccess, SeqAccess, Visitor}, ser::{Serialize, SerializeStruct, Serializer}};
 
-const PAGE_SIZE: usize = 1 * 1024 * 1024; // 1 MB
+const PAGE_SIZE: usize = 1024 * 1024; // 1 MB
 
 
 pub struct Arena<T>
@@ -195,7 +195,7 @@ impl<'de, T: Copy> Deserialize<'de> for Arena<T> {
       }
     }
 
-    const FIELDS: &'static [&'static str] = &["len", "bytes"];
+    const FIELDS: &[&str] = &["len", "bytes"];
     deserializer.deserialize_struct("Arena", FIELDS, ArenaVisitor(std::marker::PhantomData))
   }
 }

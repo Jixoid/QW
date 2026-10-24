@@ -45,7 +45,7 @@ pub fn low_module(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::I
   let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
   let ids = ctx.src.extra_get(rng)
-    .filter_map(|id| ItemLow::low(ctx!(lscp -> ctx), sum, id).transpose())
+    .filter_map(|id| ItemLow::low(ctx!(lscp, path -> ctx), sum, id).transpose())
     .collect_or_errors()?;
 
   let rng = ctx.cre.extra(&ids);

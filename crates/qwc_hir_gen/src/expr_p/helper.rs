@@ -57,11 +57,11 @@ pub fn verify_assignable(ctx: &Ctx, sum: &mut Summary, lhs_ast: ast::ExprId, lhs
 
   match lhs_hir.category {
     ExprCategory::RValue => ret_err!(sum, Message::error(CANNOT_ASSIGN_RVALUE, Label::new_pos(op_span))
-      .add(Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION))
+      + Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION)
     ),
     
     ExprCategory::LValueImm => ret_err!(sum, Message::error(CANNOT_ASSIGN_IMMUTABLE, Label::new_pos(op_span))
-      .add(Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION))
+      + Label::new(lhs_ast.pos, CANNOT_ASSIGN_TO_THIS_EXPRESSION)
     ),
 
     ExprCategory::LValueMut => Status::Success(())

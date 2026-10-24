@@ -125,17 +125,17 @@ impl<'a> fmt::Display for RawWriter<'a> {
       Value::Str(v) => write!(f, "\"{}\"", *v)?,
 
       Value::Arr(v) => {
-        write!(f, "[\n")?;
-        for x in v { write!(f, "{}{},\n", "\t".repeat(idn+1), RawWriter(x, idn+1, false))? }
+        writeln!(f, "[")?;
+        for x in v { writeln!(f, "{}{},", "\t".repeat(idn+1), RawWriter(x, idn+1, false))? }
         write!(f, "{}]", "\t".repeat(idn))?;
       }
 
       Value::Stc(v) => {
         if self.2 {
-          for (s, x) in v { write!(f, "{}{}: {},\n", "\t".repeat(idn), s, RawWriter(x, idn, false))? }
+          for (s, x) in v { writeln!(f, "{}{}: {},", "\t".repeat(idn), s, RawWriter(x, idn, false))? }
         } else {
-          write!(f, "{{\n")?;
-          for (s, x) in v { write!(f, "{}{}: {},\n", "\t".repeat(idn+1), s, RawWriter(x, idn+1, false))? }
+          writeln!(f, "{{")?;
+          for (s, x) in v { writeln!(f, "{}{}: {},", "\t".repeat(idn+1), s, RawWriter(x, idn+1, false))? }
           write!(f, "{}}}", "\t".repeat(idn))?;
         }
       }
@@ -201,7 +201,7 @@ impl Parser {
 
     loop {
       if is_root {
-        if let None = lex.peek_safe() { break }
+        if lex.peek_safe().is_none() { break }
       } else {
         if lex.peek(sum)?.kind() == WK::BraceR { lex.bump(sum)?; break }
       }
@@ -215,11 +215,9 @@ impl Parser {
 
       ctn.insert(name, it);
 
-      if is_root { if let None = lex.peek_safe() { break } }
+      if is_root && let None = lex.peek_safe() { break }
 
-      if let Some(w) = lex.peek_safe() {
-        if w.kind() == WK::Comma { lex.bump(sum)? }
-      }
+      if let Some(w) = lex.peek_safe() && w.kind() == WK::Comma { lex.bump(sum)? }
     }
 
     Success(Value::Stc(ctn))
@@ -237,9 +235,7 @@ impl Parser {
 
       ctn.push(it);
 
-      if let Some(w) = lex.peek_safe() {
-        if w.kind() == WK::Comma { lex.bump(sum)? }
-      }
+      if let Some(w) = lex.peek_safe() && w.kind() == WK::Comma { lex.bump(sum)? }
     }
 
     Success(Value::Arr(ctn))

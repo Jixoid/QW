@@ -3,6 +3,10 @@ name = "qwc_resolve"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+unit-internal = []
+
 [dependencies]
 qwc_ast = { path = "../qwc_ast" }
 qwc_hir = { path = "../qwc_hir" }

@@ -49,7 +49,7 @@ impl PartialOrd for Version {
         }
       }
       
-      ord @_ => Some(ord),
+      ord => Some(ord),
     }
   }
 }

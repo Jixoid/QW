@@ -42,9 +42,17 @@ impl TypeLow {
 
       // Combinated
       Struct(rng) => Self::low_struct(ctx, sum, rng, id.cid())?,
-      Iface(rng) => Self::low_iface(ctx, sum, rng)?,
+      ItemStruct{fields: rng, ..} => Self::low_struct(ctx, sum, rng, id.cid())?,
+      Tuple(rng) => Self::low_tuple(ctx, sum, rng, id.cid())?,
+      ItemTuple{fields: rng, ..} => Self::low_tuple(ctx, sum, rng, id.cid())?,
+      
+      ItemIface{methods: rng, ..} => Self::low_iface(ctx, sum, rng)?,
+      
       TraitFrom{hidden, ..} => Self::low_trait_from(ctx, sum, hidden)?,
-      Enum(..) => ctx.tin.ty_i32(),
+      
+      ItemEnum{..} => ctx.tin.ty_i32(),
+      ItemFlag{..} => ctx.tin.ty_i32(),
+      
       Option(inner) => Self::low(ctx, sum, inner)?,
       
       // Sequential
@@ -54,7 +62,7 @@ impl TypeLow {
       Fun{self_kind, args, ret} => Self::low_fun(ctx, sum, self_kind, args, ret, id.cid())?,
       
       // Logic Error
-      Trait{..} | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
+      ItemTrait{..} | AssociatedType{..} | GenericType{..} => panic!("this type must not have infiltrated this layer!"),
 
       kind @_ => todo!("{kind:#?}")
     };
@@ -97,7 +105,7 @@ impl TypeLow {
     let it = match ctx.get(id).kind {
       Str | Slice(..) => ctx.tin.ty_fatptrint(),
       
-      Iface(..) => ctx.tin.ty_fatptr(),
+      ItemIface{..} => ctx.tin.ty_fatptr(),
     
       _ => ctx.tin.ty_ptr()
     };
@@ -126,6 +134,27 @@ impl TypeLow {
         let hir::Thing::NamedType(_, kind) = *krate.get(id) else { unreachable!() };
         kind
       }).collect()
+    };
+
+    let mut sub = Vec::with_capacity(kinds.len());
+    for kind in kinds {
+      sub.push(TypeLow::low(ctx, sum, kind)?);
+    }
+    let rng = ctx.cre.extra(&sub);
+
+    // Post
+    let kind = mir::TypeKind::Struct(rng);
+
+    mir::Type {
+      kind,
+      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
+    }.push_ok(ctx.cre)
+  }
+
+  fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, rng: hir::TypeRng, cid: hir::CID) -> Status<mir::TypeId> {
+    let kinds: Vec<hir::TypeId> = {
+      let krate = ctx.get_krate(cid);
+      krate.extra_get(rng).collect()
     };
 
     let mut sub = Vec::with_capacity(kinds.len());

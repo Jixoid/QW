@@ -56,7 +56,7 @@ pub fn low_self_big(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr,) -> Status
     kind: hir::ExprKind::TypeOf { kind },
     category: ExprCategory::RValue,
     pos: it.pos,
-    ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
+    ety: ctx.tin.ty_meta(ctx.cre, kind),
   };
 
   Success(ctx.cre.push(this))
@@ -80,7 +80,7 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, rng: ast::Expr
         kind: hir::ExprKind::TypeOf { kind: self_ty },
         category: ExprCategory::RValue,
         pos: it.pos,
-        ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, self_ty),
+        ety: ctx.tin.ty_meta(ctx.cre, self_ty),
       };
       return Success(ctx.cre.push(this));
     }
@@ -176,7 +176,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
           pos: it.pos,
-          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
         };
 
         ctx.cre.push(this)
@@ -192,7 +192,6 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
 
       resolve::ScopeKindAst::GenericType(generic, kind) => {
         let generic_item = ItemLow::low(ctx, sum, generic)?.unwrap();
-        let path = ctx.get(generic_item).path;
         let kind = match ctx.cmap.cache_type.get(&kind) {
           Some(&cached) => cached,
           None => TypeLow::low(ctx, sum, kind)?,
@@ -201,14 +200,13 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
           kind: hir::TypeKind::GenericRaw { generic: generic_item, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::META,
-          path,
         }.push(ctx.cre);
 
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
           pos: it.pos,
-          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
         };
 
         ctx.cre.push(this)
@@ -230,12 +228,10 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
           ety: kind,
         }.push(ctx.cre);
 
-        let path = ctx.get(generic).path;
         let kind = hir::Type {
           kind: hir::TypeKind::GenericRaw { generic, kind },
           attr: TypeAttr::empty(),
           layout: hir::Layout::META,
-          path,
         }.push(ctx.cre);
         
         
@@ -265,7 +261,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         let kind = if let hir::TypeKind::Fun { .. } = ctx.get(ty).kind {
           ty
         } else {
-          ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, false)
+          ctx.tin.ty_ref(ctx.cre, ty, false)
         };
 
         hir::Expr {
@@ -280,7 +276,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         let this = hir::Expr {
           kind: hir::ExprKind::TypeOf { kind },
           category: ExprCategory::RValue,
-          ety: ctx.tin.ty_meta(ctx.cre, ctx.ideps, kind),
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
           pos: it.pos,
         };
 

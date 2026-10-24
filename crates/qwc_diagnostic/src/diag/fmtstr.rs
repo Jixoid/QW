@@ -29,9 +29,9 @@ impl FmtMsg {
   }
 }
 
-impl Into<FmtString> for FmtMsg {
-  fn into(self) -> FmtString {
-    FmtString { msg: self.msg.to_string() }
+impl From<FmtMsg> for FmtString {
+  fn from(val: FmtMsg) -> Self {
+    Self{ msg: val.msg.to_string() }
   }
 }
 

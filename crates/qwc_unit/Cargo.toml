@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-qwc_hir = { path = "../qwc_hir" }
-qwc_resolve = { path = "../qwc_resolve" }
-postcard = { version = "1.1.3", features = ["alloc"] }
-serde = "1.0.229"
+qwc_hir = { path = "../qwc_hir", features = ["unit-internal"] }
+qwc_resolve = { path = "../qwc_resolve", features = ["unit-internal"] }
+qwc_diagnostic = { path = "../qwc_diagnostic", features = ["unit-internal"] }
+qwc_string_interner = { path = "../qwc_string_interner" }
+rustc-hash = "2.1.3"
+rustc_apfloat = "0.2.3"
 byteorder = "1.5.0"

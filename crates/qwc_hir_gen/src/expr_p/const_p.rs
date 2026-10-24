@@ -198,7 +198,7 @@ pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) -
 }
 
 pub fn low_string(ctx: &mut Ctx, it: &ast::Expr, sid: Sid) -> Status<hir::ExprId> {
-  let ety = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ctx.prims.ty_str, false);
+  let ety = ctx.tin.ty_ref(ctx.cre, ctx.prims.ty_str, false);
   
   // Post
   let this = hir::Expr{
@@ -262,12 +262,10 @@ pub fn low_array(ctx: &mut Ctx, sum: &mut Summary, fctx: &FunCtx, it: &ast::Expr
     ety: ctx.prims.ty_usize,
   }.push(ctx.cre);
 
-  let path = ctx.get(kind).path;
   let ety = hir::Type {
     kind: hir::TypeKind::Array(kind, len),
     attr: TypeAttr::empty(),
     layout: Layout::STATIC,
-    path,
   }.push(ctx.cre);
 
   hir::Expr {

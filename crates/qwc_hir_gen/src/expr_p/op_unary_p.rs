@@ -68,7 +68,7 @@ fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   err_bypass!(ctx, ctx.cre.get(id).pos, id);
   
   let ty = ctx.cre.get(id).ety;
-  let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, ty, ism);
+  let ty = ctx.tin.ty_ref(ctx.cre, ty, ism);
 
   // Post
   let this = hir::Expr {
@@ -89,7 +89,7 @@ fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
 
   use hir::TypeKind::*;
 
-  assert_matches!(ty.kind, Bool{..});
+  assert_matches!(ty.kind, Bool);
 
 
   // Post
@@ -151,7 +151,7 @@ fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
 
   let val_arg = match self_kind {
     Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, val_ety, true);
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, true);
       hir::Expr {
         kind: hir::ExprKind::Ref(val, true),
         category: ExprCategory::RValue,
@@ -160,7 +160,7 @@ fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
       }.push(ctx.cre)
     }
     Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, ctx.ideps, val_ety, false);
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, false);
       hir::Expr {
         kind: hir::ExprKind::Ref(val, false),
         category: ExprCategory::RValue,

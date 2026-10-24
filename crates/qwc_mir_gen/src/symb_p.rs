@@ -117,10 +117,15 @@ impl SymbLow {
     assert_matches!(value, mir::Value::Const(..) | mir::Value::GlobalRef(..));
 
 
+    let stat = match convert_vis(it) {
+      mir::SymbolStat::Private => mir::SymbolStat::Private,
+      _ => mir::SymbolStat::Export,
+    };
+
     // Post
     mir::Symbol {
       name: ctx.cre.sym(&sym),
-      stat: convert_vis(it),
+      stat,
       ety,
       kind: mir::SymbolKind::Variable{ value, ism }
     }.push_ok(ctx.cre)
@@ -154,18 +159,26 @@ impl SymbLow {
 
     let (entry, blocks) = BlokLow::low_fn(ctx, sum, expr, is_ret_unit, &param_tys)?;
 
+    let stat = if it.attr.contains(ItemAttr::Entry) {
+      mir::SymbolStat::Export
+    } else {
+      match convert_vis(it) {
+        mir::SymbolStat::Private => mir::SymbolStat::Private,
+        _ => mir::SymbolStat::Export,
+      }
+    };
 
     // Post
     mir::Symbol {
       name: ctx.cre.sym(&sym),
-      stat: convert_vis(it),
+      stat,
       ety,
       kind: mir::SymbolKind::Function{ entry, blocks }
     }.push_ok(ctx.cre)
   }
 
 
-  fn low_method_sym(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId) -> Status<mir::SymbId> {
+  fn low_method_sym(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId, is_trait: bool) -> Status<mir::SymbId> {
     let sym = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
     
     let ety = TypeLow::low(ctx, sum, kind)?;
@@ -185,19 +198,27 @@ impl SymbLow {
 
     let (entry, blocks) = BlokLow::low_fn(ctx, sum, expr, is_ret_unit, &param_tys)?;
 
+    let stat = if is_trait {
+      mir::SymbolStat::Export
+    } else {
+      match convert_vis(it) {
+        mir::SymbolStat::Private => mir::SymbolStat::Private,
+        _ => mir::SymbolStat::Export,
+      }
+    };
 
     // Post
     mir::Symbol {
       name: ctx.cre.sym(&sym),
-      stat: convert_vis(it),
+      stat,
       ety,
       kind: mir::SymbolKind::Function{ entry, blocks }
     }.push_ok(ctx.cre)
   }
 
   fn low_impl(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, struct_ty: hir::TypeId, trait_ty: Option<hir::TypeId>, methods: hir::ItemRng) -> Status<()> {
-    let is_iface = trait_ty.map(|id| if let hir::TypeKind::Iface(..) = ctx.get(id).kind { true } else { false }).unwrap_or(false);
-
+    let is_iface = trait_ty.map(|id| if let hir::TypeKind::ItemIface{..} = ctx.get(id).kind { true } else { false }).unwrap_or(false);
+    let is_trait = trait_ty.is_some();
 
     let mut method_symbs = vec![];
 
@@ -210,7 +231,7 @@ impl SymbLow {
       }
       let it = ctx.src.get(id);
       let mir_id = if let hir::ItemKind::Function { kind, expr } = it.kind {
-        let symb_id = Self::low_method_sym(ctx, sum, it, kind, expr)?;
+        let symb_id = Self::low_method_sym(ctx, sum, it, kind, expr, is_trait)?;
         method_symbs.push(symb_id);
         Some(symb_id)
       } else {

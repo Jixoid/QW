@@ -219,7 +219,7 @@ const fn create_char_lut() -> [CharKind; 256] {
   let mut lut = [CharKind::Word; 256];
 
   // Whitespace
-  let whitespace = [b' ', b'\n', b'\r', b'\t'];
+  let whitespace = *b" \n\r\t";
   let mut i = 0;
   while i < whitespace.len() {
     lut[whitespace[i] as usize] = CharKind::Ignored;
@@ -238,11 +238,7 @@ const fn create_char_lut() -> [CharKind; 256] {
   lut[b'"' as usize] = CharKind::String;
 
   // Symbols
-  let symbols = [
-    b'#', b'{', b'}', b'.', b':', b';', b',', b'=', b'(', b')', 
-    b'<', b'>', b'[', b']', b'-', b'+', b'/', b'%', b'*', b'^', 
-    b'~', b'&', b'|', b'@', b'?', b'!', b'`',
-  ];
+  let symbols = *b"#{}.:;,=()<>[]-+/%*^~&|@?!`";
   let mut j = 0;
   while j < symbols.len() {
     lut[symbols[j] as usize] = CharKind::Symbol;

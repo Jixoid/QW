@@ -57,10 +57,7 @@ impl<'a> Lexer<'a> {
       None => {
         let (w, o) = self.lex(self.off);
 
-        let w = match w {
-          Some(v) => v,
-          None => return None,
-        };
+        let w = w?;
 
         self.cache = Some((w,o));
         w
@@ -128,9 +125,9 @@ impl<'a> Lexer<'a> {
 
     let Some(cache) = &mut self.cache else { unreachable!() }; // because self.peek() cached word
 
-    (*cache).0.kind = fk;
-    (*cache).0.len = unsafe {NonZero::<u16>::new_unchecked(1)};
-    (*cache).1 -= 1;
+    cache.0.kind = fk;
+    cache.0.len = unsafe {NonZero::<u16>::new_unchecked(1)};
+    cache.1 -= 1;
 
     Status::Success(())
   }
@@ -194,7 +191,7 @@ impl<'a> Lexer<'a> {
 
   
   #[inline(always)]
-  fn kind(c: u8) -> CharKind { return CHAR_LUT[c as usize] }
+  fn kind(c: u8) -> CharKind { CHAR_LUT[c as usize] }
 
   
   #[inline(always)]

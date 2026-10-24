@@ -24,10 +24,10 @@ use qwc_string_interner::StrInterner;
 
 
 fn test_code(file: &str) {
-	let ast = &mut ast::Krate::new();
-  let sin = &mut StrInterner::new();
+	let ast = &mut ast::Krate::default();
+  let sin = &mut StrInterner::default();
   let sid = sin.sid("test");
-  let far = &mut Files::new();
+  let far = &mut Files::default();
   let fi = {
     let fid = far.add_buffer(Path::new("test.qw"), file.to_string().into_bytes());
     far.get(fid)
@@ -35,13 +35,14 @@ fn test_code(file: &str) {
 
 
 	// Parse
-	let (pos, rng, sum) = Parse::parse(ast, sid, sin, far, fi);
+	let root_path = ast.push(ast::DefPath::Root(sid));
+	let (pos, rng, sum) = Parse::parse(ast, root_path, sin, far, fi);
 	let root = ast::Item {
     pos,
     vis: ast::Visibility::Inherited,
     name: None,
     kind: ast::ItemKind::Krate(rng),
-    path: ast.push(ast::DefPath::Root(sid))
+    path: root_path,
   }.push(ast);
 
 	ast.set_root(root);
@@ -85,7 +86,7 @@ fn test_code(file: &str) {
 
 
 	// Core & Imods
-  let mut deps = hir::Deps::new();
+  let mut deps = hir::Deps::default();
   let core_cid = deps.get_next_id();
   let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, sin, &hir_layinfo);
   deps.add(core_cre);
@@ -108,8 +109,6 @@ fn test_code(file: &str) {
       println!("{}", msg.display_human(far));
     }
     println!("{}", sum);
-
-		return;
   }
 }
 

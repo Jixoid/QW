@@ -17,6 +17,7 @@ use qwc_arena::Arena;
 use crate::{AnyId, AnyRng, Block, BlokId, Inst, Rng, SymbId, Symbol, Type, TypeId, Value, ValueId, id::{InstId, MirId, MirKind, NodeKind, SpecAny}};
 
 
+#[derive(Default)]
 pub struct Krate {
   // Arena
   list_type: Arena<Type>,
@@ -33,22 +34,7 @@ pub struct Krate {
 
 
 impl Krate {
-
-  pub fn new() -> Self {
-    Self{
-      list_type: Arena::new(),
-      list_symb: Arena::new(),
-      list_blok: Arena::new(),
-      list_inst: Arena::new(),
-      list_valu: Arena::new(),
-      
-      extra_data: (Arena::new(), Arena::new()),
-
-      symbols: vec![],
-    }
-  }
-
-
+  
   // Arena
   pub fn push<T: MirKind, P: PushApi<T>>(&mut self, obj: P) -> MirId<T> { P::push(self, obj) }
   pub fn get<I: GetApi>(&self, id: I) -> &I::Node { I::get(self, id) }
@@ -129,15 +115,15 @@ impl Krate {
 
 
   // Size
-  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(&self) }
-  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(&self) }
+  pub fn size_used<T: SizeApi>(&self) -> usize { T::size_used(self) }
+  pub fn size_alloc<T: SizeApi>(&self) -> usize { T::size_alloc(self) }
   
   pub fn size_all_used(&self) -> usize {
-    Self::size_used::<Type>(&self) + Self::size_used::<Symbol>(&self) + Self::size_used::<Block>(&self) + Self::size_used::<Inst>(&self) + Self::size_used::<Value>(&self) + Self::size_used::<AnyId>(&self)
+    Self::size_used::<Type>(self) + Self::size_used::<Symbol>(self) + Self::size_used::<Block>(self) + Self::size_used::<Inst>(self) + Self::size_used::<Value>(self) + Self::size_used::<AnyId>(self)
   }
 
   pub fn size_all_alloc(&self) -> usize {
-    Self::size_alloc::<Type>(&self) + Self::size_alloc::<Symbol>(&self) + Self::size_alloc::<Block>(&self) + Self::size_alloc::<Inst>(&self) + Self::size_alloc::<Value>(&self) + Self::size_alloc::<AnyId>(&self)
+    Self::size_alloc::<Type>(self) + Self::size_alloc::<Symbol>(self) + Self::size_alloc::<Block>(self) + Self::size_alloc::<Inst>(self) + Self::size_alloc::<Value>(self) + Self::size_alloc::<AnyId>(self)
   }
 
 }
@@ -152,8 +138,8 @@ pub trait PushApi<T: MirKind> {
 pub trait GetApi {
   type Node;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node;
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node;
+  fn get(krate: &Krate, id: Self) -> &Self::Node;
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node;
 }
 
 impl<T: MirKind> PushApi<T> for Type {
@@ -163,8 +149,8 @@ impl<T: MirKind> PushApi<T> for Type {
 impl GetApi for TypeId {
   type Node = Type;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_type[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_type[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_type[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_type[id.idx() as usize] }
 }
 
 impl<T: MirKind> PushApi<T> for Symbol {
@@ -174,8 +160,8 @@ impl<T: MirKind> PushApi<T> for Symbol {
 impl GetApi for SymbId {
   type Node = Symbol;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_symb[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_symb[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_symb[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_symb[id.idx() as usize] }
 }
 
 impl<T: MirKind> PushApi<T> for Block {
@@ -185,8 +171,8 @@ impl<T: MirKind> PushApi<T> for Block {
 impl GetApi for BlokId {
   type Node = Block;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_blok[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_blok[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_blok[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_blok[id.idx() as usize] }
 }
 
 impl<T: MirKind> PushApi<T> for Inst {
@@ -196,8 +182,8 @@ impl<T: MirKind> PushApi<T> for Inst {
 impl GetApi for InstId {
   type Node = Inst;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_inst[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_inst[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_inst[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_inst[id.idx() as usize] }
 }
 
 impl<T: MirKind> PushApi<T> for Value {
@@ -207,8 +193,8 @@ impl<T: MirKind> PushApi<T> for Value {
 impl GetApi for ValueId {
   type Node = Value;
 
-  fn get<'a>(krate: &'a Krate, id: Self) -> &'a Self::Node { &krate.list_valu[id.idx() as usize] }
-  fn get_mut<'a>(krate: &'a mut Krate, id: Self) -> &'a mut Self::Node { &mut krate.list_valu[id.idx() as usize] }
+  fn get(krate: &Krate, id: Self) -> &Self::Node { &krate.list_valu[id.idx() as usize] }
+  fn get_mut(krate: &mut Krate, id: Self) -> &mut Self::Node { &mut krate.list_valu[id.idx() as usize] }
 }
 
 

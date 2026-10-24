@@ -62,10 +62,10 @@ pub fn find_deps(sum: &mut Summary, path: &Path, deps: &FxHashMap<String, Deps>)
           ret_err!(sum, Message::error_nopos(FOLDER_X_NOT_FOUND.args(&[path.join("wspace").to_str().unwrap()])));
         };
 
-        let dir = wspace.join(&name);
+        let dir = wspace.join(name);
         let dir = dir.exists().then_some(dir.as_path());
         let Some(dir) = dir else {
-          ret_err!(sum, Message::error_nopos(FOLDER_X_NOT_FOUND.args(&[wspace.join(&name).to_str().unwrap()])));
+          ret_err!(sum, Message::error_nopos(FOLDER_X_NOT_FOUND.args(&[wspace.join(name).to_str().unwrap()])));
         };
 
         list.push((entry_name.clone(), dir.to_path_buf()));
@@ -86,7 +86,7 @@ pub fn find_deps(sum: &mut Summary, path: &Path, deps: &FxHashMap<String, Deps>)
           list.push((entry_name.clone(), dir.to_path_buf()));
           continue;
         } else {
-          if let Err(..) = fs::create_dir(&dir) {
+          if fs::create_dir(&dir).is_err() {
             ret_err!(sum, Message::error_nopos(FOLDER_X_CAN_NOT_CREATED.args(&[dir.to_str().unwrap()])));
           }
         }
@@ -100,7 +100,7 @@ pub fn find_deps(sum: &mut Summary, path: &Path, deps: &FxHashMap<String, Deps>)
 
         if !cmd.status.success() {
           let err = String::from_utf8(cmd.stderr).unwrap();
-          ret_err!(sum, Message::error_nopos(GIT_REPO_CAN_NOT_CLONED).add(ERROR_X.args(&[&format!("{err}")])));
+          ret_err!(sum, Message::error_nopos(GIT_REPO_CAN_NOT_CLONED) + (ERROR_X.args(&[&err.to_string()])));
         }
 
 
@@ -123,7 +123,7 @@ pub fn find_deps(sum: &mut Summary, path: &Path, deps: &FxHashMap<String, Deps>)
 
           if !out.status.success() {
             let err = String::from_utf8(out.stderr).unwrap();
-            ret_err!(sum, Message::error_nopos(GIT_REPO_CAN_NOT_CLONED).add(ERROR_X.args(&[&format!("{err}")])));
+            ret_err!(sum, Message::error_nopos(GIT_REPO_CAN_NOT_CLONED) + (ERROR_X.args(&[&err.to_string()])));
           }
         }
 

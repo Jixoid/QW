@@ -134,7 +134,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
                 let import_span = scope.import[import_idx].span;
                 sum.add(
                   Message::error(DUPLICATE_IDENTIFIER, Label::new_pos(import_span))
-                    .add(Label::new(first_span, FIRST_DEFINITION_HERE)),
+                    +(Label::new(first_span, FIRST_DEFINITION_HERE)),
                 );
               }
             }
@@ -470,7 +470,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
               CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(seg_ident.sid())]),
               Label::new_pos(seg_ident),
             )
-            .add_if(sugg),
+            +sugg,
           );
           return;
         }
@@ -563,22 +563,18 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
                 }
               }
               ScopeKind::Hir(kind) => {
-                if let ScopeKindHir::Module(item_id) = kind {
-                  if let Some(imod) = self.imods.iter().find(|im| im.expmap.cid() == item_id.cid()) {
-                    let mut cur = item_id;
-                    for seg in &import.segments[next_seg_idx..] {
-                      if let ImportSegment::Name(id) = seg {
-                        if let Some(exp) = imod.expmap.get(&cur.to_any()) {
-                          let seg_name = self.sin.str(id.sid());
-                          if let Some(&ExportKind::NameSpace(ns)) = exp.get(seg_name) {
-                            cur = ns;
-                            continue;
-                          }
-                        }
+                if let ScopeKindHir::Module(item_id) = kind && let Some(imod) = self.imods.iter().find(|im| im.expmap.cid() == item_id.cid()) {
+                  let mut cur = item_id;
+                  for seg in &import.segments[next_seg_idx..] {
+                    if let ImportSegment::Name(id) = seg && let Some(exp) = imod.expmap.get(&cur.to_any()) {
+                      let seg_name = self.sin.str(id.sid());
+                      if let Some(&ExportKind::NameSpace(ns)) = exp.get(seg_name) {
+                        cur = ns;
+                        continue;
                       }
                     }
-                    return;
                   }
+                  return;
                 }
                 return;
               }
@@ -591,7 +587,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
                 CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(first_ident.sid())]),
                 Label::new_pos(first_ident),
               )
-              .add_if(sugg),
+              +sugg,
             );
             return;
           }
@@ -669,7 +665,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
               ]),
               Label::new_pos(seg_ident),
             )
-            .add_if(sugg),
+            +sugg,
           );
           return;
         }
@@ -692,7 +688,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         matched.to_string(),
         Label::new(ident, YOU_SAID.args(&[input])),
       )
-      .add(Label::new(span, X_DEFINED_HERE.args(&[matched])))
+        + Label::new(span, X_DEFINED_HERE.args(&[matched]))
     })
   }
 

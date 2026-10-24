@@ -98,7 +98,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
                     Label::new(seg, YOU_SAID.args(&[
                       self.sin.str(seg.sid())
                     ])))
-                    .add(Label::new(span, X_DEFINED_HERE.args(&[str])))
+                      + Label::new(span, X_DEFINED_HERE.args(&[str]))
                 })
               };
 
@@ -108,8 +108,8 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
                   self.sin.str(segments[i].sid())
                 ]),
                 Label::new_pos(seg))
-                .add(Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())])))
-                .add_if(sugg)
+                  + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())]))
+                  + sugg
               );
             }
           };
@@ -154,7 +154,7 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
                   self.sin.str(segments[i].sid())
                 ]),
                 Label::new_pos(seg))
-                .add(Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())])))
+                 + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())]))
               );
             }
           };
@@ -178,17 +178,13 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
   
   fn lookup_in_scope(&self, sum: &mut Summary, ident: ast::Ident, scope: &'ast Scope) -> Status<LookupResult<'ast>> {
     // Local scope check (only when searching the starting/current scope)
-    if std::ptr::eq(scope, self.current) {
-      if let Some(loc) = self.loc {
-        if let Some(local_id) = loc.lookup(&ident.sid()) {
-          let local = loc.get_local(local_id);
-          return Success(LookupResult {
-            kind: ScopeKind::Ast(ScopeKindAst::Local(local_id)),
-            in_scope: scope,
-            span: local.span,
-          });
-        }
-      }
+    if std::ptr::eq(scope, self.current) &&  let Some(loc) = self.loc && let Some(local_id) = loc.lookup(&ident.sid()) {
+      let local = loc.get_local(local_id);
+      return Success(LookupResult {
+        kind: ScopeKind::Ast(ScopeKindAst::Local(local_id)),
+        in_scope: scope,
+        span: local.span,
+      });
     }
 
     // Yerel Kapsam
@@ -255,12 +251,12 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
           Label::new(ident, YOU_SAID.args(&[
             self.sin.str(ident.sid())
           ])))
-          .add(Label::new(span, X_DEFINED_HERE.args(&[str])))
+            + Label::new(span, X_DEFINED_HERE.args(&[str]))
       })
     };
 
     // Hiçbir yerde bulunamadı
-    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(ident.sid())]), Label::new_pos(ident)).add_if(sugg))
+    ret_err!(sum, Message::error(CANNOT_FIND_X_IN_SCOPE.args(&[self.sin.str(ident.sid())]), Label::new_pos(ident)) + sugg)
   }
 
 }

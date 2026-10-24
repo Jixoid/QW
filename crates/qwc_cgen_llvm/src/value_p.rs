@@ -50,7 +50,7 @@ impl ValueLow {
       Const::I8(i) => ictx.ctx.i8_type().const_int(i as u64, true).into(),
       Const::I16(i) => ictx.ctx.i16_type().const_int(i as u64, true).into(),
       Const::I32(i) => ictx.ctx.i32_type().const_int(i as u64, true).into(),
-      Const::I64(i) => ictx.ctx.i64_type().const_int(i as u64, true).into(),
+      Const::I64(i) => ictx.ctx.i64_type().const_int(i, true).into(),
       Const::I128(i) => ictx.ctx.i128_type().const_int_arbitrary_precision(&[i as u64, (i >> 64) as u64]).into(),
       
       

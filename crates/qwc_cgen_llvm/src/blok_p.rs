@@ -81,10 +81,7 @@ impl BlokLow {
 					if is_ret_unit {
 						ictx.builder.build_return(None).unwrap();
 					} else {
-						let ret_val: Option<inkwell::values::BasicValueEnum<'ctx>> = match val {
-							None => None,
-							Some(val) => Some(ValueLow::low(uctx, ictx, &fctx, &val)),
-						};
+						let ret_val: Option<inkwell::values::BasicValueEnum<'ctx>> = val.map(|val| ValueLow::low(uctx, ictx, &fctx, &val));
 						let ret_ref = ret_val
 							.as_ref()
 							.map(|v| v as &dyn inkwell::values::BasicValue);

@@ -41,10 +41,8 @@ impl Word {
   pub fn kind(&self) -> WK { self.kind }
 }
 
-impl Into<Span> for Word {
-
-  fn into(self) -> Span {
-    Span::new(self.off, self.len, self.fid)
+impl From<Word> for Span {
+  fn from(val: Word) -> Self {
+    Span::new(val.off, val.len, val.fid)
   }
-
 }

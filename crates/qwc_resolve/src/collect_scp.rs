@@ -10,8 +10,8 @@
 */
 
 
-use qwc_ast::{AnyId, FieldKind, FieldRng, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind};
-use qwc_diagnostic::Summary;
+use qwc_ast::{AnyId, FieldKind, FieldRng, Ident, Item, ItemId, ItemKind, Krate, ThingId, ThingKind, TypeKind, Visibility};
+use qwc_diagnostic::{Span, Summary};
 use qwc_string_interner::StrInterner;
 
 use crate::{Imod, Scope, ScopeKindAst, ScopeMap, import, scope::{ImportDef, ImportSegment}};
@@ -32,7 +32,7 @@ pub struct ScopeCollector<'a, 'imod> {
 impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
   pub fn collect(cre: &'a Krate, sin: &'a mut StrInterner, imods: &'a [Imod<'imod>]) -> Result<(ScopeMap, Vec<ImplFor>), Summary> {
-    let mut collector = Self { cre, sin, imods, scp: ScopeMap::new(), sum: Summary::new(), impl_for: vec![] };
+    let mut collector = Self { cre, sin, imods, scp: ScopeMap::default(), sum: Summary::new(), impl_for: vec![] };
 
     let root = cre.root().unwrap();
 
@@ -54,6 +54,21 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
   fn process_container(&mut self, container_id: AnyId, parent_scope: Option<AnyId>) {
     let mut current_scope = Scope::new(parent_scope);
 
+    // Otomatik prelude: her modüle `use core::types::*` ekle
+    let container_item = self.cre.get(ItemId::from_any(container_id));
+    if matches!(container_item.kind, ItemKind::Krate(..) | ItemKind::Module(..) | ItemKind::ModuleFile(..)) && self.imods.iter().any(|im| im.name == self.sin.sid_core()) {
+      let seg_core = ImportSegment::Name(Ident::new(0, std::num::NonZeroU16::MIN, 0, self.sin.sid_core()));
+      let seg_types = ImportSegment::Name(Ident::new(0, std::num::NonZeroU16::MIN, 0, self.sin.sid_types()));
+      let default_import = ImportDef::new(
+        Span::BUILTIN,
+        Visibility::Inherited,
+        vec![seg_core, seg_types],
+        true,
+        None,
+      );
+      current_scope.import.push(default_import);
+    }
+
     // Kapsayıcının içindeki item ID listesini al
     let item_ids = self.get_container_items(container_id);
 
@@ -63,6 +78,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
       
       let kind = match it.kind {
         ItemKind::Module(..) | ItemKind::ModuleFile(..) => ScopeKindAst::Module(id),
+        ItemKind::ModuleUnloaded => continue,
         
         ItemKind::Let{..} | ItemKind::Fun{..} | ItemKind::Task{..} => ScopeKindAst::Expr(id),
         
@@ -95,7 +111,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
                   _ => panic!("invalid aliased thing")
                 }
               }
-              it @_ => todo!("{it:#?}")
+              it => todo!("{it:#?}")
             }
           }
 

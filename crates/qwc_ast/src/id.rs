@@ -67,8 +67,8 @@ impl<T: AstKind> AstId<T> {
 
 }
 
-impl<T: AstKind> Into<AnyId> for AstId<T> {
-  fn into(self) -> AnyId { self.to_any() }
+impl<T: AstKind> From<AstId<T>> for AnyId {
+  fn from(val: AstId<T>) -> Self { val.to_any() }
 }
 
 pub type TypeId  = AstId<Type>;

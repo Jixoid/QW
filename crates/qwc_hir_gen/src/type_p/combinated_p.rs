@@ -46,10 +46,9 @@ pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: ast::TypeId, path: ast::
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Struct(vars),
+    kind: hir::TypeKind::ItemStruct{fields: vars, path},
     layout: hir::Layout::STATIC,
     attr,
-    path,
   }.push_ok(ctx.cre)
 }
 
@@ -78,31 +77,24 @@ pub fn low_tuple(ctx: &mut Ctx, sum: &mut Summary, path: ast::DefPathId, vars: a
 
   // Post
   hir::Type {
-    kind: hir::TypeKind::Tuple(vars),
+    kind: hir::TypeKind::ItemTuple{fields: vars, path},
     layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
-    path,
   }.push_ok(ctx.cre)
 }
 
 
 pub fn low_tuple_anon(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> Status<hir::TypeId> {
-  let mut path_ids = vec![];
-  
   let elem_ids = {
     let mut ctn = vec![];
 
     for id in ctx.src.extra_get(rng) {
       let elem_ty = TypeLow::low(ctx, sum, id)?;
-      path_ids.push(ctx.get(elem_ty).path);
       ctn.push(elem_ty);
     }
     
     ctx.cre.extra(&ctn)
   };
-  
-  let path_rng = ctx.cre.extra(&path_ids);
-  let path = ctx.cre.push(hir::DefPath::AnonymousTuple(path_rng));
   
 
   // Post
@@ -110,6 +102,5 @@ pub fn low_tuple_anon(ctx: &mut Ctx, sum: &mut Summary, rng: ast::TypeRng) -> St
     kind: hir::TypeKind::Tuple(elem_ids),
     layout: hir::Layout::STATIC,
     attr: TypeAttr::empty(),
-    path,
   }.push_ok(ctx.cre)
 }

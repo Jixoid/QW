@@ -35,13 +35,13 @@ impl Span {
   }
 
 
-  #[cfg(feature = "lexer-internal")]
+  #[cfg(any(feature = "lexer-internal", feature = "unit-internal"))]
   pub fn new(off: u32, len: NonZero<u16>, fid: u16) -> Self {
     Self{ off, len: len.get(), fid }
   }
 
 
-  #[cfg(any(feature = "lexer-internal", feature = "ast-internal"))]
+  #[cfg(any(feature = "lexer-internal", feature = "ast-internal", feature = "unit-internal"))]
   pub fn to(&self) -> (u32, NonZero<u16>, u16) {
     (self.off, NonZero::<u16>::new(self.len).unwrap(), self.fid)
   }
@@ -55,21 +55,18 @@ impl Span {
     str::from_utf8(a).unwrap()
   }
 
-  pub fn interval<'a>(&self, far: &'a Files) -> Range<[NonZero<u32>; 2]> {
+  pub fn interval(&self, far: &Files) -> Range<[NonZero<u32>; 2]> {
     let calc = |text: &[u8], offset: usize| -> [NonZero<u32>; 2] {
       let mut line = 1;
       let mut last_newline_pos = 0;
 
-      for i in 0..offset {
-        if text[i] == b'\n' {
-          line += 1;
-          last_newline_pos = i + 1;
-        }
+      for (i, _) in text.iter().enumerate().take(offset) {
+        line += 1;
+        last_newline_pos = i + 1;
       }
 
       let mut column = 1;
-      for i in last_newline_pos..offset {
-        let c = text[i];
+      for c in text.iter().take(offset).skip(last_newline_pos) {
         if (c & 0xC0) != 0x80 {
           column += 1;
         }
@@ -78,7 +75,7 @@ impl Span {
       [NonZero::<u32>::new(line).unwrap(), NonZero::<u32>::new(column).unwrap()]
     };
 
-    let text = &far.get(self.fid).map()[..];
+    let text = &far.get(self.fid).map();
     
     calc(text, self.off as usize)..calc(text, (self.off as usize) + (NonZero::<u16>::new(self.len).unwrap().get() as usize))
   }

@@ -98,48 +98,42 @@ impl SymbLow {
 
       match it.kind {
         SymbolKind::Variable { value, .. } => {
-          if it.stat != SymbolStat::Import {
-            if let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
-              gv.set_initializer(&match value {
-                Value::Const(cons) => ValueLow::low_const(ictx, &cons),
-                Value::GlobalRef(symb) => ValueLow::low_global_ref(uctx, symb),
-                _ => unreachable!()
-              });
-            }
+          if it.stat != SymbolStat::Import && let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
+            gv.set_initializer(&match value {
+              Value::Const(cons) => ValueLow::low_const(ictx, &cons),
+              Value::GlobalRef(symb) => ValueLow::low_global_ref(uctx, symb),
+              _ => unreachable!()
+            });
           }
         }
 
         SymbolKind::Function { entry, blocks } => {
-          if it.stat != SymbolStat::Import {
-            if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&symb_id).copied() {
-              let ty: &Type = ictx.cre.get(it.ety);
-              BlokLow::low_fn(uctx, ictx, fv, ty, entry, blocks);
-            }
+          if it.stat != SymbolStat::Import && let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&symb_id).copied() {
+            let ty: &Type = ictx.cre.get(it.ety);
+            BlokLow::low_fn(uctx, ictx, fv, ty, entry, blocks);
           }
         }
 
         SymbolKind::Vmt { size, align, table } => {
-          if it.stat != SymbolStat::Import {
-            if let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
-              let struct_ty = gv.get_value_type().into_struct_type();
-              let arch_int_ty = struct_ty.get_field_type_at_index(0).unwrap().into_int_type();
-              let ptr_ty = struct_ty.get_field_type_at_index(2).unwrap().into_pointer_type();
+          if it.stat != SymbolStat::Import && let Some(SymbolVal::Global(gv)) = uctx.symbols.get(&symb_id).copied() {
+            let struct_ty = gv.get_value_type().into_struct_type();
+            let arch_int_ty = struct_ty.get_field_type_at_index(0).unwrap().into_int_type();
+            let ptr_ty = struct_ty.get_field_type_at_index(2).unwrap().into_pointer_type();
 
-              let mut field_vals: Vec<inkwell::values::BasicValueEnum> = vec![
-                arch_int_ty.const_int(size, false).into(),
-                arch_int_ty.const_int(align, false).into(),
-                ptr_ty.const_null().into(),
-              ];
+            let mut field_vals: Vec<inkwell::values::BasicValueEnum> = vec![
+              arch_int_ty.const_int(size, false).into(),
+              arch_int_ty.const_int(align, false).into(),
+              ptr_ty.const_null().into(),
+            ];
 
-              for method_symb_id in ictx.cre.extra_get(table) {
-                if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&method_symb_id).copied() {
-                  field_vals.push(fv.as_global_value().as_pointer_value().into());
-                }
+            for method_symb_id in ictx.cre.extra_get(table) {
+              if let Some(SymbolVal::Function(fv)) = uctx.symbols.get(&method_symb_id).copied() {
+                field_vals.push(fv.as_global_value().as_pointer_value().into());
               }
-
-              let struct_val = ictx.ctx.const_struct(&field_vals, false);
-              gv.set_initializer(&struct_val);
             }
+
+            let struct_val = ictx.ctx.const_struct(&field_vals, false);
+            gv.set_initializer(&struct_val);
           }
         }
       }

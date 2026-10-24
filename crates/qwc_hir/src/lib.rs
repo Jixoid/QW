@@ -22,8 +22,8 @@ mod defpath;
 pub mod dump;
 
 pub use defpath::DefPath;
-pub use krate::{Krate, Deps, CID, PushApi, GetApi, PathApi};
-pub use id::{HirId, HirKind, AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng, ThingRng, DefPathId, DefPathRng};
+pub use krate::{Krate, Deps, CID, PushApi, GetApi, PathApi, LazyLoader};
+pub use id::{HirId, HirKind, AnyId, TypeId, ExprId, ItemId, ThingId, PushOkApi, NodeKind, Rng, AnyRng, TypeRng, ExprRng, ItemRng, ThingRng, DefPathId, DefPathRng, SpecAny};
 pub use {items::*, types::*, exprs::*, things::* };
 pub use layout::*;
 pub use poit::HPoit;

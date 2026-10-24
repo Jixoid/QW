@@ -26,14 +26,6 @@ impl HPoit {
 
     Self { str }
   }
-
-  pub fn to_string(self) -> String {
-    self.str
-  }
-
-  pub fn to_str(&self) -> &str {
-    &self.str
-  }
 }
 
 impl Poit for HPoit {

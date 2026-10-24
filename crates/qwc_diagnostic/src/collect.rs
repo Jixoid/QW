@@ -242,13 +242,13 @@ impl<T> FromResidual<Status<!>> for Status<T> {
 
 
 pub trait CollectOrErrors: Iterator {
-  fn collect_or_errors<T>(mut self) -> Status<Vec<T>>
+  fn collect_or_errors<T>(self) -> Status<Vec<T>>
   where
     Self: Sized + Iterator<Item = Status<T>>,
   {
     let mut vec = vec![];
 
-    while let Some(item) = self.next() {
+    for item in self {
       match item {
         Status::Success(val) => vec.push(val),
         Status::Fail => return Status::Fail,
