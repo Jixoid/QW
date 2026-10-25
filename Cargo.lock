@@ -775,6 +775,8 @@ dependencies = [
  "lsp-types",
  "owo-colors",
  "qwc_arena",
+ "qwc_serial",
+ "qwc_serial_macro",
  "serde_json",
  "thin-vec",
 ]
@@ -820,6 +822,8 @@ dependencies = [
  "qwc_arena",
  "qwc_diagnostic",
  "qwc_dump",
+ "qwc_serial",
+ "qwc_serial_macro",
  "qwc_string_interner",
  "rustc_apfloat",
  "serde",
@@ -939,6 +943,8 @@ dependencies = [
  "qwc_dump",
  "qwc_hir",
  "qwc_mangling",
+ "qwc_serial",
+ "qwc_serial_macro",
  "qwc_string_interner",
  "rustc-hash",
  "serde",
@@ -975,11 +981,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwc_serial"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "qwc_serial_macro",
+ "rustc-hash",
+ "rustc_apfloat",
+]
+
+[[package]]
+name = "qwc_serial_macro"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "proc-macro2",
+ "quote",
+ "rustc-hash",
+ "rustc_apfloat",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "qwc_string_interner"
 version = "0.1.0"
 dependencies = [
  "lasso",
- "serde",
+ "qwc_serial",
+ "qwc_serial_macro",
 ]
 
 [[package]]
@@ -990,6 +1019,7 @@ dependencies = [
  "qwc_diagnostic",
  "qwc_hir",
  "qwc_resolve",
+ "qwc_serial",
  "qwc_string_interner",
  "rustc-hash",
  "rustc_apfloat",

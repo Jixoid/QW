@@ -205,7 +205,7 @@ pub struct TypeMatch;
 
 impl TypeMatch {
 
-  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn matches(ctx: &Ctx, sum: &mut Summary, ty1: hir::TypeId, ty2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<u32, hir::TypeId>>) -> Status<()> {
     if ty1 == ty2 { return Status::Success(()) }
 
     let ty1_ty = ctx.get(ty1).kind;
@@ -279,7 +279,7 @@ impl TypeMatch {
   }
 
 
-  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<usize, hir::TypeId>>) -> Status<()> {
+  pub fn match_fun(ctx: &Ctx, sum: &mut Summary, fun1: hir::TypeId, fun2: hir::TypeId, pos: Span, assoc_types: Option<&FxHashMap<u32, hir::TypeId>>) -> Status<()> {
     let hir::TypeKind::Fun{self_kind: self_1, args: args_1, ret: ret_1} = ctx.get(fun1).kind else { unreachable!() };
     let hir::TypeKind::Fun{self_kind: self_2, args: args_2, ret: ret_2} = ctx.get(fun2).kind else { unreachable!() };
 

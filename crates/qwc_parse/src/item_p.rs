@@ -12,7 +12,7 @@
 
 use qwc_ast::{DefPath, DefPathId, IdentSave, Item, ItemId, ItemKind, PushOkApi, Rng, Thing, ThingId, ThingKind, Visibility};
 use qwc_diagnostic::{ret_err, Label, Message, Status::{self, Success}, msg::*};
-use qwc_lexer::WK;
+use qwc_lexer::{WK, Word};
 
 use crate::{ExprParser, MetaParser, TypeParser, WordCheck, ctx, field_p::FieldParser, parse::Ctx};
 
@@ -319,7 +319,9 @@ impl ItemParser {
     let begin = match lex.get_k(sum)? {
       (WK::Crate, c) => Thing{kind: ThingKind::Crate, pos: c.into()}.push(cre),
       (WK::Super, c) => Thing{kind: ThingKind::Super, pos: c.into()}.push(cre),
+      (WK::SelfS, c) => Thing{kind: ThingKind::Self_, pos: c.into()}.push(cre),
       (WK::Word, c)  => { let a = c.ident(sum, sin, far)?; Thing{kind: ThingKind::Name(a), pos: a.into()}.push(cre) },
+      (WK::BraceL, c) => Self::read_use_list(ctx!(cre, sin, far, lex, sum, side), c)?,
 
       (_, c) => ret_err!(sum, Message::error(UNKNOWN_USE_STARTER, Label::new_pos(c))),
     };
@@ -330,8 +332,18 @@ impl ItemParser {
       loop {
         match lex.get_k(sum)? {
           (WK::Semicolon, _) => break,
-          (WK::Colon2, _) => all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?),
-          (WK::As, _) => {
+          (WK::Colon2, c) => {
+            let last_kind = all.last().map(|&id| cre.get(id).kind);
+            if matches!(last_kind, Some(ThingKind::List(..) | ThingKind::Wildcard)) {
+              ret_err!(sum, Message::error(UNKNOWN_USE_SEGMENT, Label::new_pos(c)));
+            }
+            all.push(Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?);
+          }
+          (WK::As, c) => {
+            let last_kind = all.last().map(|&id| cre.get(id).kind);
+            if matches!(last_kind, Some(ThingKind::List(..) | ThingKind::Wildcard)) {
+              ret_err!(sum, Message::error(UNKNOWN_USE_SEGMENT, Label::new_pos(c)));
+            }
             let alias = lex.get(sum)?.ident(sum, sin, far)?;
             let last_id = all.pop().unwrap();
             all.push(Thing{kind: ThingKind::Alias(last_id, alias), pos: alias.into()}.push(cre));
@@ -357,11 +369,80 @@ impl ItemParser {
     }.push_ok(cre)
   }
 
+  fn read_use_list(ctx: &mut Ctx, start: Word) -> Status<ThingId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let mut items = vec![];
+
+    loop {
+      if lex.peek(sum)?.kind() == WK::BraceR {
+        lex.bump(sum)?;
+        break;
+      }
+
+      let item = Self::read_use_tree(ctx!(cre, sin, far, lex, sum, side))?;
+      items.push(item);
+
+      match lex.get_k(sum)? {
+        (WK::Comma, _) => {
+          if lex.peek(sum)?.kind() == WK::BraceR {
+            lex.bump(sum)?;
+            break;
+          }
+          continue;
+        }
+        (WK::BraceR, _) => break,
+        (_, c) => c.panic_kind2(sum, WK::Comma, WK::BraceR)?,
+      }
+    }
+
+    let rng = cre.extra(&items);
+    Success(Thing { kind: ThingKind::List(rng), pos: lex.pos_extend(start) }.push(cre))
+  }
+
+  fn read_use_tree(ctx: &mut Ctx) -> Status<ThingId> { ctx!(ctx => cre, sin, far, lex, sum, side);
+    let start = lex.peek(sum)?;
+    let first = Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?;
+    if matches!(cre.get(first).kind, ThingKind::List(..) | ThingKind::Wildcard) {
+      return Success(first);
+    }
+
+    let mut segments = vec![ first ];
+
+    loop {
+      match lex.peek_k(sum)? {
+        (WK::Colon2, _) => {
+          lex.bump(sum)?;
+          let seg = Self::read_use_sub(ctx!(cre, sin, far, lex, sum, side))?;
+          segments.push(seg);
+          if matches!(cre.get(seg).kind, ThingKind::List(..) | ThingKind::Wildcard) {
+            break;
+          }
+        }
+        (WK::As, _) => {
+          lex.bump(sum)?;
+          let alias = lex.get(sum)?.ident(sum, sin, far)?;
+          let last_id = segments.pop().unwrap();
+          segments.push(Thing{kind: ThingKind::Alias(last_id, alias), pos: alias.into()}.push(cre));
+          break;
+        }
+        _ => break,
+      }
+    }
+
+    if segments.len() == 1 {
+      Success(segments.pop().unwrap())
+    } else {
+      let rng = cre.extra(&segments);
+      Success(Thing { kind: ThingKind::Path(rng), pos: lex.pos_extend(start) }.push(cre))
+    }
+  }
+
   fn read_use_sub(ctx: &mut Ctx) -> Status<ThingId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let ret = match lex.get_k(sum)? {
       (WK::Crate, c) => Thing{kind: ThingKind::Crate, pos: c.into()}.push(cre),
       (WK::Super, c) => Thing{kind: ThingKind::Super, pos: c.into()}.push(cre),
+      (WK::SelfS, c) => Thing{kind: ThingKind::Self_, pos: c.into()}.push(cre),
       (WK::Mul, c)   => Thing{kind: ThingKind::Wildcard, pos: c.into()}.push(cre),
+      (WK::BraceL, c) => Self::read_use_list(ctx!(cre, sin, far, lex, sum, side), c)?,
 
       (WK::Word, c) => { let a = c.ident(sum, sin, far)?; Thing{kind: ThingKind::Name(a), pos: a.into()}.push(cre) },
 

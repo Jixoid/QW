@@ -101,6 +101,11 @@ fn dump(dmp: &Dump, lscp: &Scope, indent: usize, f: &mut fmt::Formatter) -> fmt:
           writeln!(f, "{} {} {}{}", kw("imod"), kw("type"), name(name_str), punct(";"))?;
         }
 
+        ScopeKindHir::GenericType(..) => {
+          write_indent(f, indent)?;
+          writeln!(f, "{} {}{} {}{}", kw("imod"), kw("type"), punct("<>"), name(name_str), punct(";"))?;
+        }
+
         ScopeKindHir::Expr(..) => {
           write_indent(f, indent)?;
           writeln!(f, "{} {} {}{}", kw("imod"), kw("expr"), name(name_str), punct(";"))?;

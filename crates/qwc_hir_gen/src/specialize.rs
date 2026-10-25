@@ -143,7 +143,7 @@ impl<'a> Specialization<'a> {
     match it.kind {
       hir::TypeKind::GenericType{generic, idx} => {
         if generic == self.generic {
-          return hir::TypeId::from_any(self.args[idx]);
+          return hir::TypeId::from_any(self.args[idx as usize]);
         } else {
           return id;
         }
@@ -386,7 +386,7 @@ impl<'a> Specialization<'a> {
     let id = match it.kind {
       hir::ExprKind::GenericExpr{generic, idx} => {
         if generic == self.generic {
-          return hir::ExprId::from_any(self.args[idx]);
+          return hir::ExprId::from_any(self.args[idx as usize]);
         } else {
           return id;
         }

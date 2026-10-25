@@ -10,7 +10,7 @@
 */
 
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use inkwell::{builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
 use inkwell::targets::{InitializationConfig, Target, TargetMachine, TargetTriple};
@@ -83,7 +83,14 @@ impl ICGen for CGenLLVM {
 		Ok((out, ll))
 	}
 
-	fn run_vm(&self, code: &[u8]) -> Result<i32, String> {
+	fn run_vm(&self, code: &[u8], deps: &[PathBuf]) -> Result<i32, String> {
+		for dep in deps {
+			if dep.exists() {
+				inkwell::support::load_library_permanently(dep)
+					.map_err(|_| format!("cannot load dependency library: {}", dep.display()))?;
+			}
+		}
+
 		let ctx = Context::create();
 
 		let mol = Module

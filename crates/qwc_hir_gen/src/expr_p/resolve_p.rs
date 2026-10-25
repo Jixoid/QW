@@ -283,6 +283,23 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         ctx.cre.push(this)
       }
 
+      qwc_resolve::ScopeKindHir::GenericType(generic, kind) => {
+        let kind = hir::Type {
+          kind: hir::TypeKind::GenericRaw { generic, kind },
+          attr: TypeAttr::empty(),
+          layout: hir::Layout::META,
+        }.push(ctx.cre);
+
+        let this = hir::Expr {
+          kind: hir::ExprKind::TypeOf { kind },
+          category: ExprCategory::RValue,
+          pos: it.pos,
+          ety: ctx.tin.ty_meta(ctx.cre, kind),
+        };
+
+        ctx.cre.push(this)
+      }
+
       resolve::ScopeKindHir::Module(..) => {
         ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["expr", "module"]), Label::new_pos(it.pos)));
       }

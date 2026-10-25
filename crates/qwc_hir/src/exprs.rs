@@ -11,13 +11,14 @@
 
 
 use qwc_diagnostic::Span;
+use qwc_serial_macro::{Decode, Encode};
 use qwc_string_interner::Sid;
 use rustc_apfloat::ieee;
 
 use crate::{ExprId, ExprRng, ItemId, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum Const {
   // ZST
   Unit,
@@ -52,39 +53,39 @@ pub enum Const {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum IntArithmeticFlg {
   Overflow, Checked, Saturating
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum IntArithmeticOp {
   Add, Sub, Mul, Div, Rem
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum IntConditionOp {
   Eq, Ne, Gt, Lt, GtEq, LtEq
 }
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum FloatArithmeticOp {
   Add, Sub, Mul, Div, Rem
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum BoolLogicOp {
   And, Or, Xor
 }
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum ExprKind {
-  GenericExpr{generic: ItemId, idx: usize},
+  GenericExpr{generic: ItemId, idx: u32},
   GenericRaw{generic: ItemId, kind: ExprId},
   Error,
   
@@ -162,7 +163,7 @@ pub enum ExprKind {
 
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum ExprCategory {
   RValue,
   LValueMut,
@@ -180,7 +181,7 @@ impl ExprCategory {
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub struct Expr {
   pub kind: ExprKind,
   pub category: ExprCategory,

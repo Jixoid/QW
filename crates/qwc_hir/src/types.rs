@@ -11,17 +11,20 @@
 
 
 use bitflags::bitflags;
+use qwc_serial::{Decoder, Encoder};
+use qwc_serial_macro::{Decode, Encode};
 
 use crate::{DefPathId, ExprId, ItemId, Layout, ThingRng, TypeId, TypeRng};
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum TypeKind {
+
   // Generic
-  GenericType{generic: ItemId, idx: usize},
+  GenericType{generic: ItemId, idx: u32},
   GenericRaw{generic: ItemId, kind: TypeId},
   GenericSelfType,
-  AssociatedType{trait_ty: TypeId, idx: usize},
+  AssociatedType{trait_ty: TypeId, idx: u32},
   
   // Basic
   Error,
@@ -101,10 +104,24 @@ bitflags! {
   }
 }
 
+impl Encoder for TypeAttr {
+  fn encode(&self, ctx: &mut qwc_serial::EncodeCtx) -> Result<(), qwc_serial::EncodeErr> {
+    self.bits().encode(ctx)
+  }
+}
+
+impl Decoder for TypeAttr {
+  fn decode(ctx: &mut qwc_serial::DecodeCtx) -> Result<Self, qwc_serial::DecodeErr> {
+    let bits = u16::decode(ctx)?;
+    Ok(Self::from_bits_truncate(bits))
+  }
+}
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub struct Type {
+
   pub kind: TypeKind,
   pub layout: Layout,
   pub attr: TypeAttr,

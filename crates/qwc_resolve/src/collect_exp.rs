@@ -56,12 +56,23 @@ impl<'a> ExportCollector<'a> {
     }
   }
 
+
   fn process_container(&mut self, container_id: AnyId) {
     // Export tablosunda 'parent' zinciri tutulmaz; sadece sembol sözlüğü üretilir:
     let mut current_exports = Export::new(Some(container_id));
 
+
+    let mut generic = None;
+
     // Kapsayıcının içindeki HIR item ID listesini al
-    let item_ids = self.get_container_items(container_id);
+    let item_ids = match self.cre.get(ItemId::from_any(container_id)).kind {
+      ItemKind::RootNS{rng} | ItemKind::NameSpace{rng} => self.cre.extra_get(rng).collect(),
+
+      ItemKind::GenericNS{rng, ..} => {generic = Some(ItemId::from_any(container_id)); self.cre.extra_get(rng).collect()},
+
+      _ => vec![],
+    };
+
 
     // Mevcut modülün dışa açtığı tüm sembolleri kaydet
     for &id in &item_ids {
@@ -72,8 +83,9 @@ impl<'a> ExportCollector<'a> {
       let (name_sid, kind) = match it.kind {
         // Modüller / İsim Alanları
         ItemKind::NameSpace{..} => (it.name.unwrap(), ExportKind::NameSpace(id)),
+        ItemKind::GenericNS{..} => continue,
 
-        ItemKind::Using{kind} => (it.name.unwrap(), ExportKind::Type(kind)),
+        ItemKind::Using{kind} => (it.name.unwrap(), if let Some(generic) = generic {ExportKind::GenericType(generic, kind)} else {ExportKind::Type(kind)}),
 
         ItemKind::Variable{kind, ..} => {
           let sym = ManglerQW::new(self.cre, self.deps, self.sin, it.path);
@@ -91,7 +103,6 @@ impl<'a> ExportCollector<'a> {
           (it.name.unwrap(), ExportKind::Expr(id, kind))
         }
 
-        ItemKind::GenericNS{..} => continue,
         ItemKind::Impl{methods, ..} => {
           for method_id in self.cre.extra_get(methods) {
             let m_it = self.cre.get(method_id);
@@ -123,13 +134,4 @@ impl<'a> ExportCollector<'a> {
     }
   }
 
-
-  fn get_container_items(&self, id: AnyId) -> Vec<ItemId> {
-    let item = self.cre.get(ItemId::from_any(id));
-    match item.kind {
-      ItemKind::RootNS{rng} | ItemKind::NameSpace{rng, ..} => self.cre.extra_get(rng).collect(),
-
-      _ => vec![],
-    }
-  }
 }

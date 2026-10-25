@@ -76,10 +76,14 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
         .join("build")
         .join(variant_dir);
 
+      let so_path = dep_outdir.join("out.so");
+      let so_path = if so_path.exists() { Some(so_path) } else { None };
+
       dep_artifacts.push(compile::DepArtifact {
         name: name.clone(),
         qwu_path: dep_outdir.join("out.qwu"),
         obj_path: Some(dep_outdir.join("out.o")),
+        so_path,
       });
     }
   }

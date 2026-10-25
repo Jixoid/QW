@@ -13,11 +13,13 @@
 use std::num::NonZeroU32;
 
 use lasso::{Key, Rodeo, Spur};
-use serde::{Deserialize, Serialize};
+use qwc_serial_macro::{Decode, Encode};
 
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
+#[serial(map)]
 pub struct Sid (NonZeroU32);
+
 
 impl From<NonZeroU32> for Sid {
   fn from(value: NonZeroU32) -> Self { Self(value) }

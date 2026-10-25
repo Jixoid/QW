@@ -152,7 +152,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       // Generic
       hir::TypeKind::GenericType{generic, idx} => {
         let hir::ItemKind::GenericNS { args, .. } = self.cre.get(generic).kind else { unreachable!() };
-        let Some(thing) = self.cre.extra_get(args).nth(idx) else { unreachable!() };
+        let Some(thing) = self.cre.extra_get(args).nth(idx as usize) else { unreachable!() };
 
         let (hir::Thing::Name(name) | hir::Thing::NamedType(name, _)) = *self.cre.get(thing) else { unreachable!() };
         self.sin.str(name).to_string()

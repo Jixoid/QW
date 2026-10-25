@@ -28,7 +28,7 @@ pub struct TypeInterner {
   
   ty_option: FxHashMap<TypeId, TypeId>,
 
-  ty_generic_type: FxHashMap<(ItemId, usize), TypeId>,
+  ty_generic_type: FxHashMap<(ItemId, u32), TypeId>,
 }
 
 
@@ -192,7 +192,7 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_generic_type(&mut self, cre: &mut Krate, generic: ItemId, idx: usize) -> TypeId {
+  pub fn ty_generic_type(&mut self, cre: &mut Krate, generic: ItemId, idx: u32) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_generic_type.entry((generic, idx)) {

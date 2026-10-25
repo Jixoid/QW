@@ -1,0 +1,15 @@
+[package]
+name = "qwc_serial"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+byteorder = "1.5.0"
+rustc-hash = "2.1.3"
+rustc_apfloat = "0.2.3"
+
+[dev-dependencies]
+qwc_serial_macro = { path = "../qwc_serial_macro" }
+
+
+

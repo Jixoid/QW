@@ -80,6 +80,11 @@ fn dump(dmp: &Dump, exp: &Export, indent: usize, f: &mut fmt::Formatter) -> fmt:
         write_indent(f, indent)?;
         writeln!(f, "{} {}{}", kw("type"), name(name_str), punct(";"))?;
       }
+      
+      ExportKind::GenericType(..) => {
+        write_indent(f, indent)?;
+        writeln!(f, "{}{} {}{}", kw("type"), punct("<>"), name(name_str), punct(";"))?;
+      }
 
       ExportKind::Expr(_id, ty_id) => {
         write_indent(f, indent)?;

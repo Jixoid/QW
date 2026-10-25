@@ -35,6 +35,7 @@ pub struct DepArtifact {
   pub name: String,
   pub qwu_path: PathBuf,
   pub obj_path: Option<PathBuf>,
+  pub so_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -287,7 +288,8 @@ pub fn build_jit(info: &CompileInfo, backend: &dyn ICGen, bytecode: &[u8]) -> Re
     eprintln!("{}", "Running".green().bold());
   }
 
-  let exitcode = backend.run_vm(bytecode)?;
+  let dep_sos: Vec<PathBuf> = info.deps.iter().filter_map(|d| d.so_path.clone()).collect();
+  let exitcode = backend.run_vm(bytecode, &dep_sos)?;
 
   if exitcode != 0 {
     eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);

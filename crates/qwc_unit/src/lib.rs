@@ -15,10 +15,11 @@ use byteorder::{ByteOrder, LittleEndian};
 
 use qwc_hir as hir;
 use qwc_resolve::ExportMap;
-use qwc_string_interner::StrInterner;
+use qwc_serial::{DecodeCtx, Decoder, EncodeCtx, Encoder};
+use qwc_string_interner::{Sid, StrInterner};
 
 mod codec;
-use codec::{Decoder, Encoder};
+use codec::StringEncoderMap;
 
 
 const MAGIC: [u8; 8] = *b"\x1BQAOSQWU";
@@ -27,7 +28,7 @@ const VERSION: u32 = 1;
 
 struct UnitLoader {
   raw: Arc<[u8]>,
-  local_sids: Vec<qwc_string_interner::Sid>,
+  local_sids: Vec<Sid>,
   type_offsets: Vec<u32>,
   expr_offsets: Vec<u32>,
   item_offsets: Vec<u32>,
@@ -38,32 +39,37 @@ struct UnitLoader {
 impl hir::LazyLoader for UnitLoader {
   fn load_type(&self, idx: usize) -> hir::Type {
     let offset = self.type_offsets[idx] as usize;
-    let mut dec = Decoder::new(&self.raw[offset..], &self.local_sids);
-    dec.read_type()
+    let mut slice = &self.raw[offset..];
+    let mut dec = DecodeCtx::new_with_map(&mut slice, &self.local_sids);
+    hir::Type::decode(&mut dec).expect("failed to decode lazy type")
   }
 
   fn load_expr(&self, idx: usize) -> hir::Expr {
     let offset = self.expr_offsets[idx] as usize;
-    let mut dec = Decoder::new(&self.raw[offset..], &self.local_sids);
-    dec.read_expr()
+    let mut slice = &self.raw[offset..];
+    let mut dec = DecodeCtx::new_with_map(&mut slice, &self.local_sids);
+    hir::Expr::decode(&mut dec).expect("failed to decode lazy expr")
   }
 
   fn load_item(&self, idx: usize) -> hir::Item {
     let offset = self.item_offsets[idx] as usize;
-    let mut dec = Decoder::new(&self.raw[offset..], &self.local_sids);
-    dec.read_item()
+    let mut slice = &self.raw[offset..];
+    let mut dec = DecodeCtx::new_with_map(&mut slice, &self.local_sids);
+    hir::Item::decode(&mut dec).expect("failed to decode lazy item")
   }
 
   fn load_thing(&self, idx: usize) -> hir::Thing {
     let offset = self.thin_offsets[idx] as usize;
-    let mut dec = Decoder::new(&self.raw[offset..], &self.local_sids);
-    dec.read_thing()
+    let mut slice = &self.raw[offset..];
+    let mut dec = DecodeCtx::new_with_map(&mut slice, &self.local_sids);
+    hir::Thing::decode(&mut dec).expect("failed to decode lazy thing")
   }
 
   fn load_dpath(&self, idx: usize) -> hir::DefPath {
     let offset = self.dpath_offsets[idx] as usize;
-    let mut dec = Decoder::new(&self.raw[offset..], &self.local_sids);
-    dec.read_defpath()
+    let mut slice = &self.raw[offset..];
+    let mut dec = DecodeCtx::new_with_map(&mut slice, &self.local_sids);
+    hir::DefPath::decode(&mut dec).expect("failed to decode lazy defpath")
   }
 }
 
@@ -72,17 +78,16 @@ pub struct Unit;
 
 impl Unit {
   pub fn serialize(w: &mut dyn Write, hir: &hir::Krate, exp: &ExportMap, sin: &StrInterner) -> Result<(), String> {
-    let mut enc = Encoder::new(sin);
+    let mut buf = Vec::new();
+    let mut str_map = StringEncoderMap::new(sin);
+    let mut enc = EncodeCtx::new_with_map(&mut buf, &mut str_map);
 
-    // 1. Header placeholder (46 bytes)
-    enc.buf.extend_from_slice(&MAGIC); // 8 bytes
-    enc.write_u32(VERSION);             // 4 bytes
-    enc.write_cid(hir.cid());           // 2 bytes
-    let root_raw = match hir.root() {
-      Some(id) => id.idx() + 1,
-      None => 0,
-    };
-    enc.write_u32(root_raw);            // 4 bytes
+
+    // Header placeholder (49 bytes)
+    MAGIC.encode(&mut enc)?;
+    VERSION.encode(&mut enc)?;
+    hir.cid().encode(&mut enc)?;
+    hir.root().encode(&mut enc)?;
 
     let types_count = hir.types_count();
     let exprs_count = hir.exprs_count();
@@ -90,111 +95,103 @@ impl Unit {
     let thins_count = hir.thins_count();
     let dpaths_count = hir.dpaths_count();
 
-    enc.write_u32(types_count as u32);
-    enc.write_u32(exprs_count as u32);
-    enc.write_u32(items_count as u32);
-    enc.write_u32(thins_count as u32);
-    enc.write_u32(dpaths_count as u32); // 20 bytes total for counts
-    enc.write_u64(0);                   // 8 bytes placeholder for footer_offset
+    (types_count as u32).encode(&mut enc)?;
+    (exprs_count as u32).encode(&mut enc)?;
+    (items_count as u32).encode(&mut enc)?;
+    (thins_count as u32).encode(&mut enc)?;
+    (dpaths_count as u32).encode(&mut enc)?;
+    let footer_offset_pos = enc.written();
+    0u64.encode(&mut enc)?; // placeholder for footer_offset
 
-    debug_assert_eq!(enc.buf.len(), 46);
-
-    // 2. Data section: Types
+    // Data section: Types
     let mut type_offsets = Vec::with_capacity(types_count);
     for idx in 0..types_count {
-      type_offsets.push(enc.buf.len() as u32);
+      type_offsets.push(enc.written() as u32);
       let ty = hir.get_type_by_idx(idx);
-      enc.write_type(ty);
+      ty.encode(&mut enc)?;
     }
 
-    // 3. Data section: Exprs
+    // Data section: Exprs
     let mut expr_offsets = Vec::with_capacity(exprs_count);
     for idx in 0..exprs_count {
-      expr_offsets.push(enc.buf.len() as u32);
+      expr_offsets.push(enc.written() as u32);
       let expr = hir.get_expr_by_idx(idx);
-      enc.write_expr(expr);
+      expr.encode(&mut enc)?;
     }
 
-    // 4. Data section: Items
+    // Data section: Items
     let mut item_offsets = Vec::with_capacity(items_count);
     for idx in 0..items_count {
-      item_offsets.push(enc.buf.len() as u32);
+      item_offsets.push(enc.written() as u32);
       let item = hir.get_item_by_idx(idx);
-      enc.write_item(item);
+      item.encode(&mut enc)?;
     }
 
-    // 5. Data section: Things
+    // Data section: Things
     let mut thin_offsets = Vec::with_capacity(thins_count);
     for idx in 0..thins_count {
-      thin_offsets.push(enc.buf.len() as u32);
+      thin_offsets.push(enc.written() as u32);
       let thing = hir.get_thin_by_idx(idx);
-      enc.write_thing(thing);
+      thing.encode(&mut enc)?;
     }
 
-    // 6. Data section: DefPaths
+    // Data section: DefPaths
     let mut dpath_offsets = Vec::with_capacity(dpaths_count);
     for idx in 0..dpaths_count {
-      dpath_offsets.push(enc.buf.len() as u32);
+      dpath_offsets.push(enc.written() as u32);
       let dpath = hir.get_dpath_by_idx(idx);
-      enc.write_defpath(dpath);
+      dpath.encode(&mut enc)?;
     }
 
-    // 7. ExtraData section
-    let extra_offset = enc.buf.len() as u64;
+    // ExtraData section
+    let extra_offset = enc.written() as u64;
     let (extra_ids, extra_kinds) = hir.extra_raw();
-    enc.write_u32(extra_ids.len() as u32);
+    (extra_ids.len() as u32).encode(&mut enc)?;
     for (id, kind) in extra_ids.iter().zip(extra_kinds.iter()) {
-      enc.write_hir_id(*id);
-      enc.write_u8(match kind {
-        hir::NodeKind::Any => 0,
-        hir::NodeKind::Type => 1,
-        hir::NodeKind::Expr => 2,
-        hir::NodeKind::Item => 3,
-        hir::NodeKind::Thing => 4,
-        hir::NodeKind::DefPath => 5,
-      });
+      id.encode(&mut enc)?;
+      kind.encode(&mut enc)?;
     }
 
-    // 8. ExportMap section
-    let export_offset = enc.buf.len() as u64;
-    enc.write_export_map(exp);
+    // ExportMap section
+    let export_offset = enc.written() as u64;
+    exp.encode(&mut enc)?;
 
-    // 9. ImplTable section
-    let impl_offset = enc.buf.len() as u64;
+    // ImplTable section
+    let impl_offset = enc.written() as u64;
     let impl_items = hir.impl_items();
-    enc.write_u32(impl_items.len() as u32);
-    for id in &impl_items {
-      enc.write_hir_id(*id);
-    }
+    impl_items.encode(&mut enc)?;
 
-    // 10. StringTable section
-    let string_table_offset = enc.buf.len() as u64;
-    enc.write_u32(enc.strings.len() as u32);
-    for s in &enc.strings.clone() {
-      enc.write_str(s);
-    }
+    // Drop enc so str_map can be accessed
+    let written_so_far = enc.written();
+    drop(enc);
 
-    // 11. IndexTable section
-    let index_table_offset = enc.buf.len() as u64;
-    for o in &type_offsets { enc.write_u32(*o); }
-    for o in &expr_offsets { enc.write_u32(*o); }
-    for o in &item_offsets { enc.write_u32(*o); }
-    for o in &thin_offsets { enc.write_u32(*o); }
-    for o in &dpath_offsets { enc.write_u32(*o); }
+    // StringTable section
+    let string_table_offset = written_so_far as u64;
+    let mut enc = EncodeCtx::new_with_offset(&mut buf, written_so_far);
+    str_map.strings.encode(&mut enc)?;
 
-    // 12. Footer section
-    let footer_offset = enc.buf.len() as u64;
-    enc.write_u64(string_table_offset);
-    enc.write_u64(index_table_offset);
-    enc.write_u64(export_offset);
-    enc.write_u64(impl_offset);
-    enc.write_u64(extra_offset);
+    // IndexTable section
+    let index_table_offset = enc.written() as u64;
+    for o in &type_offsets { o.encode(&mut enc)?; }
+    for o in &expr_offsets { o.encode(&mut enc)?; }
+    for o in &item_offsets { o.encode(&mut enc)?; }
+    for o in &thin_offsets { o.encode(&mut enc)?; }
+    for o in &dpath_offsets { o.encode(&mut enc)?; }
 
-    // Patch footer_offset in header at bytes 38..46
-    LittleEndian::write_u64(&mut enc.buf[38..46], footer_offset);
+    // Footer section
+    let footer_offset = enc.written() as u64;
+    string_table_offset.encode(&mut enc)?;
+    index_table_offset.encode(&mut enc)?;
+    export_offset.encode(&mut enc)?;
+    impl_offset.encode(&mut enc)?;
+    extra_offset.encode(&mut enc)?;
+    drop(enc);
+
+    // Patch footer_offset in header
+    LittleEndian::write_u64(&mut buf[footer_offset_pos..footer_offset_pos + 8], footer_offset);
 
     // Write to stream
-    w.write_all(&enc.buf).map_err(|e| format!("io write error: {e}"))?;
+    w.write_all(&buf).map_err(|e| format!("io write error: {e}"))?;
     Ok(())
   }
 
@@ -202,89 +199,76 @@ impl Unit {
     let mut buffer = Vec::new();
     r.read_to_end(&mut buffer).map_err(|e| format!("io read error: {e}"))?;
 
-    if buffer.len() < 46 {
-      return Err(String::from("qwu file too short"));
-    }
+    let mut slice = &buffer[..];
+    let mut dec = DecodeCtx::new(&mut slice);
 
-    if buffer[0..8] != MAGIC {
-      return Err(String::from("corrupt qwu: invalid magic"));
-    }
+    let magic = <[u8; 8]>::decode(&mut dec)?;
+    if magic != MAGIC { return Err(String::from("corrupt qwu: invalid magic")); }
 
-    let version = LittleEndian::read_u32(&buffer[8..12]);
+    let version = u32::decode(&mut dec)?;
     if version != VERSION {
       return Err(format!("unsupported qwu version: {version}"));
     }
 
-    let cid_raw = LittleEndian::read_u16(&buffer[12..14]);
-    let cid = hir::CID::from_raw(cid_raw);
-    let root_raw = LittleEndian::read_u32(&buffer[14..18]);
+    let cid = hir::CID::decode(&mut dec)?;
+    let root = Option::<hir::ItemId>::decode(&mut dec)?;
 
-    let types_count = LittleEndian::read_u32(&buffer[18..22]) as usize;
-    let exprs_count = LittleEndian::read_u32(&buffer[22..26]) as usize;
-    let items_count = LittleEndian::read_u32(&buffer[26..30]) as usize;
-    let thins_count = LittleEndian::read_u32(&buffer[30..34]) as usize;
-    let dpaths_count = LittleEndian::read_u32(&buffer[34..38]) as usize;
-    let footer_offset = LittleEndian::read_u64(&buffer[38..46]) as usize;
+    let types_count = u32::decode(&mut dec)? as usize;
+    let exprs_count = u32::decode(&mut dec)? as usize;
+    let items_count = u32::decode(&mut dec)? as usize;
+    let thins_count = u32::decode(&mut dec)? as usize;
+    let dpaths_count = u32::decode(&mut dec)? as usize;
+    let footer_offset = u64::decode(&mut dec)? as usize;
 
     if footer_offset + 40 > buffer.len() {
       return Err(String::from("corrupt qwu: invalid footer offset"));
     }
 
-    let string_table_offset = LittleEndian::read_u64(&buffer[footer_offset..footer_offset + 8]) as usize;
-    let index_table_offset = LittleEndian::read_u64(&buffer[footer_offset + 8..footer_offset + 16]) as usize;
-    let export_offset = LittleEndian::read_u64(&buffer[footer_offset + 16..footer_offset + 24]) as usize;
-    let impl_offset = LittleEndian::read_u64(&buffer[footer_offset + 24..footer_offset + 32]) as usize;
-    let extra_offset = LittleEndian::read_u64(&buffer[footer_offset + 32..footer_offset + 40]) as usize;
+    let mut footer_slice = &buffer[footer_offset..];
+    let mut fdec = DecodeCtx::new(&mut footer_slice);
+    let string_table_offset = u64::decode(&mut fdec)? as usize;
+    let index_table_offset = u64::decode(&mut fdec)? as usize;
+    let export_offset = u64::decode(&mut fdec)? as usize;
+    let impl_offset = u64::decode(&mut fdec)? as usize;
+    let extra_offset = u64::decode(&mut fdec)? as usize;
 
-    // 1. Decode String Table and intern all strings into target compiler
-    let mut str_dec = Decoder::new(&buffer[string_table_offset..], &[]);
-    let str_count = str_dec.read_u32() as usize;
-    let mut local_sids = Vec::with_capacity(str_count);
-    for _ in 0..str_count {
-      let s = str_dec.read_str();
-      local_sids.push(sin.sid(&s));
-    }
+    // Decode String Table and intern all strings into target compiler
+    let mut slice = &buffer[string_table_offset..];
+    let mut str_dec = DecodeCtx::new(&mut slice);
+    let strings = Vec::<String>::decode(&mut str_dec).map_err(|e| format!("string table decode error: {e}"))?;
+    let local_sids: Vec<Sid> = strings.into_iter().map(|s| sin.sid(&s)).collect();
 
-    // 2. Decode Index Tables
-    let mut idx_dec = Decoder::new(&buffer[index_table_offset..], &local_sids);
+    // Decode Index Tables
+    let mut slice = &buffer[index_table_offset..];
+    let mut idx_dec = DecodeCtx::new(&mut slice);
     let mut type_offsets = Vec::with_capacity(types_count);
-    for _ in 0..types_count { type_offsets.push(idx_dec.read_u32()); }
+    for _ in 0..types_count { type_offsets.push(u32::decode(&mut idx_dec)?); }
     let mut expr_offsets = Vec::with_capacity(exprs_count);
-    for _ in 0..exprs_count { expr_offsets.push(idx_dec.read_u32()); }
+    for _ in 0..exprs_count { expr_offsets.push(u32::decode(&mut idx_dec)?); }
     let mut item_offsets = Vec::with_capacity(items_count);
-    for _ in 0..items_count { item_offsets.push(idx_dec.read_u32()); }
+    for _ in 0..items_count { item_offsets.push(u32::decode(&mut idx_dec)?); }
     let mut thin_offsets = Vec::with_capacity(thins_count);
-    for _ in 0..thins_count { thin_offsets.push(idx_dec.read_u32()); }
+    for _ in 0..thins_count { thin_offsets.push(u32::decode(&mut idx_dec)?); }
     let mut dpath_offsets = Vec::with_capacity(dpaths_count);
-    for _ in 0..dpaths_count { dpath_offsets.push(idx_dec.read_u32()); }
+    for _ in 0..dpaths_count { dpath_offsets.push(u32::decode(&mut idx_dec)?); }
 
-    // 3. Decode ExtraData
-    let mut ext_dec = Decoder::new(&buffer[extra_offset..], &local_sids);
-    let extra_cnt = ext_dec.read_u32() as usize;
+    // Decode ExtraData
+    let mut slice = &buffer[extra_offset..];
+    let mut ext_dec = DecodeCtx::new(&mut slice);
+    let extra_cnt = u32::decode(&mut ext_dec)? as usize;
     let mut extra_ids = Vec::with_capacity(extra_cnt);
     let mut extra_kinds = Vec::with_capacity(extra_cnt);
     for _ in 0..extra_cnt {
-      extra_ids.push(ext_dec.read_hir_id::<hir::SpecAny>());
-      let kind = match ext_dec.read_u8() {
-        0 => hir::NodeKind::Any,
-        1 => hir::NodeKind::Type,
-        2 => hir::NodeKind::Expr,
-        3 => hir::NodeKind::Item,
-        4 => hir::NodeKind::Thing,
-        _ => hir::NodeKind::DefPath,
-      };
-      extra_kinds.push(kind);
+      extra_ids.push(hir::HirId::<hir::SpecAny>::decode(&mut ext_dec)?);
+      extra_kinds.push(hir::NodeKind::decode(&mut ext_dec)?);
     }
 
-    // 4. Decode Impl Table
-    let mut imp_dec = Decoder::new(&buffer[impl_offset..], &local_sids);
-    let impl_cnt = imp_dec.read_u32() as usize;
-    let mut impl_items = Vec::with_capacity(impl_cnt);
-    for _ in 0..impl_cnt {
-      impl_items.push(imp_dec.read_hir_id::<hir::Item>());
-    }
+    // Decode Impl Table
+    let mut slice = &buffer[impl_offset..];
+    let mut imp_dec = DecodeCtx::new(&mut slice);
+    let impl_items = Vec::<hir::ItemId>::decode(&mut imp_dec)?;
 
-    // 5. Wrap raw buffer and create Lazy Krate
+    // Wrap raw buffer and create Lazy Krate
     let raw: Arc<[u8]> = Arc::from(buffer.into_boxed_slice());
     let loader = Arc::new(UnitLoader {
       raw: raw.clone(),
@@ -296,25 +280,77 @@ impl Unit {
       dpath_offsets,
     });
 
-    let root_id = if root_raw > 0 {
-      Some(hir::ItemId::new(cid, root_raw - 1))
-    } else {
-      None
-    };
-
+    
     let krate = hir::Krate::new_lazy(
       cid,
-      root_id,
+      root,
       loader,
       (types_count, exprs_count, items_count, thins_count, dpaths_count),
       (extra_ids, extra_kinds),
       impl_items,
     );
 
-    // 6. Decode ExportMap
-    let mut exp_dec = Decoder::new(&raw[export_offset..], &local_sids);
-    let exp = exp_dec.read_export_map();
+    // Decode ExportMap
+    let mut slice = &raw[export_offset..];
+    let mut exp_dec = DecodeCtx::new_with_map(&mut slice, &local_sids);
+    let exp = ExportMap::decode(&mut exp_dec).map_err(|e| format!("export map decode error: {e}"))?;
+
 
     Ok((krate, exp))
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::io::Cursor;
+  use qwc_hir::PushApi;
+
+  #[test]
+  fn test_unit_roundtrip_none_root() {
+    let mut sin = StrInterner::default();
+    let cid = hir::Deps::default().get_next_id();
+    let krate = hir::Krate::new(cid);
+    let exp = ExportMap::new(cid, None);
+
+    let mut buf = Vec::new();
+    Unit::serialize(&mut buf, &krate, &exp, &sin).unwrap();
+
+    let mut cursor = Cursor::new(buf);
+    let (loaded_krate, _loaded_exp) = Unit::deserialize(&mut cursor, &mut sin).unwrap();
+
+    assert_eq!(loaded_krate.cid(), cid);
+    assert_eq!(loaded_krate.root(), None);
+  }
+
+  #[test]
+  fn test_unit_roundtrip_some_root() {
+    let mut sin = StrInterner::default();
+    let cid = hir::Deps::default().get_next_id();
+    let mut krate = hir::Krate::new(cid);
+    let sid = sin.sid("test_item");
+    let path = hir::DefPath::push(&mut krate, hir::DefPath::Root(sid));
+    let item = hir::Item {
+      vis: hir::ItemVis::Private,
+      name: Some(sid),
+      kind: hir::ItemKind::RootNS { rng: hir::ItemRng::empty(cid) },
+      attr: hir::ItemAttr::empty(),
+      path,
+    };
+    let item_id = hir::Item::push(&mut krate, item);
+    krate.set_root(item_id);
+
+    let exp = ExportMap::new(cid, Some(item_id));
+
+    let mut buf = Vec::new();
+    Unit::serialize(&mut buf, &krate, &exp, &sin).unwrap();
+
+    let mut cursor = Cursor::new(buf);
+    let (loaded_krate, _loaded_exp) = Unit::deserialize(&mut cursor, &mut sin).unwrap();
+
+    assert_eq!(loaded_krate.cid(), cid);
+    assert_eq!(loaded_krate.root(), Some(item_id));
+    assert_eq!(loaded_krate.get(item_id).name, Some(sid));
+  }
+}
+

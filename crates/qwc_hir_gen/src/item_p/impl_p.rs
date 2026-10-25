@@ -11,7 +11,7 @@
 
 
 use itertools::{Itertools, izip};
-use qwc_diagnostic::{Label, Message, Span, Status, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
+use qwc_diagnostic::{Label, Message, Span, Status::{self, Success}, CollectOrErrors, StatusApi, StatusApi2, Summary, msg::*, ret_err, send_err};
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi};
 use qwc_string_interner::Sid;
@@ -160,16 +160,18 @@ fn low_impl_validate(
   // Expected List
   let expected_methods = krate.extra_get(trait_methods)
     .map(|id| {
-      let hir::Thing::NamedType(name, kind) = *krate.get(id) else { unreachable!() };
-      (name, kind)
-    }).collect_vec().into_boxed_slice();
-    
+      let hir::Thing::NamedType(name, kind) = *krate.get(id) else {
+        ret_err!(sum, Message::error(IT_CAN_NOT_BE_DEFINED_WITHIN_X, Label::new_pos(trait_span)));
+      };
+
+      Success((name, kind))
+    }).collect_or_errors()?;
+  
   let expected_types = trait_types.map(|id| krate.extra_get(id)
     .map(|id| {
       let (name, kind) = match *krate.get(id) {
         hir::Thing::Name(name) => (name, None),
         hir::Thing::NamedType(name, kind) => (name, Some(kind)),
-
         _ => unreachable!()
       };
 
@@ -257,10 +259,10 @@ fn low_impl_validate(
   };
 
 
-  let assoc_by_idx: FxHashMap<usize, hir::TypeId> = match &expected_types {
+  let assoc_by_idx: FxHashMap<u32, hir::TypeId> = match &expected_types {
     Some(expected_types) => {
       expected_types.iter().enumerate().filter_map(|(idx, (name, _))| {
-        impl_types_map.get(name).map(|(_, ty, _)| (idx, *ty))
+        impl_types_map.get(name).map(|(_, ty, _)| (idx as u32, *ty))
       }).collect()
     }
     None => FxHashMap::default(),
@@ -270,7 +272,10 @@ fn low_impl_validate(
   for ((exp_sid, exp_fun), (.., pos)) in izip!(&expected_methods, &implemented_methods) {
     let (_, method_id, _) = impl_method_map.get(exp_sid).unwrap();
     
-    let hir::ItemKind::Function{kind: act_fun, ..} = ctx.cre.get(*method_id).kind else { unreachable!() };
+    let hir::ItemKind::Function{kind: act_fun, ..} = ctx.get(*method_id).kind else {
+      send_err!(sum, Message::error(IT_CAN_NOT_BE_DEFINED_WITHIN_X, Label::new_pos(*pos)));
+      continue;
+    };
 
     ctx.cmap.self_ty.push(type_ty);
     TypeMatch::match_fun(ctx, sum, *exp_fun, act_fun, *pos, Some(&assoc_by_idx))?;

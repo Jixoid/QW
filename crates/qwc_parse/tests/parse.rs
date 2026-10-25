@@ -62,3 +62,17 @@ fn two_ref() {
     }
   "#);
 }
+
+#[test]
+fn use_grouped() {
+  prepare_parser(r#"
+    use math::vec2::{Vec2};
+    use math::vec2::{Vec2, Vec3};
+    use math::vec2::{Vec2 as V2, Vec3};
+    use math::vec2::{self, Vec2};
+    use math::{vec2::Vec2, vec3::Vec3};
+    use math::{vec2::{Vec2, SubVec}, *};
+    use {math::vec2::Vec2, std::string::String};
+  "#);
+}
+

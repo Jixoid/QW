@@ -13,17 +13,20 @@
 use bitflags::bitflags;
 use qwc_string_interner::Sid;
 
+use qwc_serial::{Decoder, Encoder};
+use qwc_serial_macro::{Decode, Encode};
+
 use crate::{DefPathId, ExprId, ItemRng, PathApi, ThingRng, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum SymVis { Internal, Export, Import }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum ItemVis { Private, Public(SymVis) }
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum ItemKind {
   RootNS {rng: ItemRng},
   NameSpace {rng: ItemRng},
@@ -46,8 +49,21 @@ bitflags! {
   }
 }
 
+impl Encoder for ItemAttr {
+  fn encode(&self, ctx: &mut qwc_serial::EncodeCtx) -> Result<(), qwc_serial::EncodeErr> {
+    self.bits().encode(ctx)
+  }
+}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+impl Decoder for ItemAttr {
+  fn decode(ctx: &mut qwc_serial::DecodeCtx) -> Result<Self, qwc_serial::DecodeErr> {
+    let bits = u16::decode(ctx)?;
+    Ok(Self::from_bits_truncate(bits))
+  }
+}
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct Item {
   pub vis: ItemVis,
   pub name: Option<Sid>,
@@ -55,6 +71,7 @@ pub struct Item {
   pub attr: ItemAttr,
   pub path: DefPathId,
 }
+
 
 impl PathApi for Item {
   fn path(&self) -> DefPathId {

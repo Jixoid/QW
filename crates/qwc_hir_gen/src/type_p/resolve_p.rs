@@ -121,6 +121,14 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
     resolve::ScopeKind::Hir(hir_kind) => match hir_kind {
       resolve::ScopeKindHir::Type(ty) => ty,
 
+      resolve::ScopeKindHir::GenericType(generic, kind) => {
+        hir::Type {
+          kind: hir::TypeKind::GenericRaw { generic, kind },
+          attr: TypeAttr::empty(),
+          layout: hir::Layout::META,
+        }.push(ctx.cre)
+      }
+
       resolve::ScopeKindHir::Expr(..) | resolve::ScopeKindHir::Module(..) => {
         ret_err!(sum, Message::error(EXPECTED_BUT_FOUND.args(&["type", "expr"]), Label::new_pos(pos)))
       }

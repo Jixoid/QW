@@ -38,8 +38,10 @@ pub enum OutKind {
 }
 
 
+use std::path::PathBuf;
+
 pub trait ICGen {
   fn generate(&self, mir: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind, triple: &Option<String>, reloc: RelocMode, mcmodel: CodeModel, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String>;
 
-  fn run_vm(&self, code: &[u8]) -> Result<i32, String>;
+  fn run_vm(&self, code: &[u8], deps: &[PathBuf]) -> Result<i32, String>;
 }

@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 lasso = "0.7.3"
-serde = { version = "1.0.229", features = ["derive"] }
+qwc_serial = { path = "../qwc_serial" }
+qwc_serial_macro = { path = "../qwc_serial_macro" }

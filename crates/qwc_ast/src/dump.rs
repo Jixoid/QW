@@ -1173,7 +1173,7 @@ impl DumpHandler for Thing {
       }
 
       ThingKind::List(rng) => {
-        write!(f, "(")?;
+        write!(f, "{{")?;
         let mut first = true;
         for id in cre.extra_get(rng) {
           if !first { write!(f, ", ")?; }
@@ -1181,7 +1181,17 @@ impl DumpHandler for Thing {
           
           id.dump(cre, sin, far, f, indent)?;
         }
-        write!(f, ")")?;
+        write!(f, "}}")?;
+      }
+
+      ThingKind::Path(rng) => {
+        let mut first = true;
+        for id in cre.extra_get(rng) {
+          if !first { write!(f, "{}", "::".bright_black())?; }
+          first = false;
+          
+          id.dump(cre, sin, far, f, indent)?;
+        }
       }
 
       ThingKind::Wildcard => {
@@ -1194,6 +1204,10 @@ impl DumpHandler for Thing {
 
       ThingKind::Super => {
         write!(f, "{}", "super".magenta())?;
+      }
+
+      ThingKind::Self_ => {
+        write!(f, "{}", "self".magenta())?;
       }
 
       ThingKind::NamedExpr(ident, expr_id) => {

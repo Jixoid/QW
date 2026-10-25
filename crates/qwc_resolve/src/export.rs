@@ -11,17 +11,18 @@
 
 
 use qwc_hir::{AnyId, CID, ItemId, TypeId};
+use qwc_serial_macro::{Decode, Encode};
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone, Encode, Decode)]
 pub struct ExportMap {
   pub(crate) cid: CID,
   pub(crate) root: Option<ItemId>,
   pub(crate) map: FxHashMap<AnyId, Export>,
   pub symbols: FxHashMap<ItemId, String>,
 }
+
 
 impl ExportMap {
 
@@ -84,9 +85,10 @@ impl ExportMap {
 }
 
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Encode, Decode)]
 pub enum ExportKind {
   Type(TypeId),
+  GenericType(ItemId, TypeId),
   
   Expr(ItemId, TypeId),
 
@@ -94,7 +96,7 @@ pub enum ExportKind {
 }
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone, Encode, Decode)]
 pub struct Export {
   pub parent: Option<AnyId>,
   pub(crate) map: FxHashMap<String, ExportKind>,

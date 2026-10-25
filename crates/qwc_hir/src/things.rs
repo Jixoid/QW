@@ -10,12 +10,13 @@
 */
 
 
+use qwc_serial_macro::{Decode, Encode};
 use qwc_string_interner::Sid;
 
 use crate::{Const, ExprId, TypeId};
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum Thing {
   Name(Sid),
   

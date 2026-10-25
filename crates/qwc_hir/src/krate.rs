@@ -11,7 +11,7 @@
 
 
 use std::{num::NonZero, slice};
-use serde::{Deserialize, Serialize};
+use qwc_serial_macro::{Decode, Encode};
 
 use qwc_arena::Arena;
 
@@ -19,19 +19,8 @@ use crate::{AnyId, AnyRng, DefPath, DefPathId, Expr, Item, ItemId, PrimOps, Prim
 
 
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, Encode, Decode, PartialEq, Eq, Hash)]
 pub struct CID (pub(crate) NonZero<u16>);
-
-impl CID {
-  #[cfg(feature = "unit-internal")]
-  pub fn from_raw(raw: u16) -> Self {
-    Self(NonZero::<u16>::new(raw).unwrap())
-  }
-
-  pub fn raw(&self) -> u16 {
-    self.0.get()
-  }
-}
 
 
 #[derive(Default, Clone)]
@@ -299,6 +288,7 @@ impl Krate {
   }
 
 }
+
 
 #[cfg(feature = "unit-internal")]
 impl Krate {

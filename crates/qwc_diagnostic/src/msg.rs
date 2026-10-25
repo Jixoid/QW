@@ -79,6 +79,7 @@ pub const X_IS_NOT_A_FOLDER:                         CodedMsg = CodedMsg::new_st
 pub const FOLDER_X_CAN_NOT_CREATED:                  CodedMsg = CodedMsg::new_str("folder `{}` can not created");
 pub const GIT_REPO_CAN_NOT_CLONED:                   CodedMsg = CodedMsg::new_str("git repo can not cloned");
 pub const TOOL_X_NOT_FOUND_IN_SYSTEM:                CodedMsg = CodedMsg::new_str("tool `{}` not found in system");
+pub const IT_CAN_NOT_BE_DEFINED_WITHIN_X:            CodedMsg = CodedMsg::new_str("it cannot be defined within {}");
 
 
 // Label

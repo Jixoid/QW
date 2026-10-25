@@ -13,22 +13,38 @@
 use std::{marker::PhantomData, num::NonZero};
 
 use qwc_diagnostic::Status;
-use serde::{Deserialize, Serialize};
+use qwc_serial::{Decoder, Encoder};
+use qwc_serial_macro::{Decode, Encode};
 
 use crate::{Expr, Item, Krate, PushApi, Thing, Type, DefPath, krate::CID};
 
 
 // AstId
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct HirId<T>
   where T: HirKind
 {
   cid: CID,
   idx: NonZero<u32>,
-  
-  #[serde(skip)]
   pkind: PhantomData<T>
 }
+
+impl<T: HirKind> Encoder for HirId<T> {
+  fn encode(&self, ctx: &mut qwc_serial::EncodeCtx) -> Result<(), qwc_serial::EncodeErr> {
+    self.cid.encode(ctx)?;
+    self.idx.encode(ctx)?;
+    Ok(())
+  }
+}
+
+impl<T: HirKind> Decoder for HirId<T> {
+  fn decode(ctx: &mut qwc_serial::DecodeCtx) -> Result<Self, qwc_serial::DecodeErr> {
+    let cid = CID::decode(ctx)?;
+    let idx = NonZero::<u32>::decode(ctx)?;
+    Ok(Self { cid, idx, pkind: PhantomData })
+  }
+}
+
 
 
 impl<T: HirKind> PartialEq for HirId<T> {
@@ -49,12 +65,6 @@ impl<T: HirKind> std::hash::Hash for HirId<T> {
 
 impl<T: HirKind> HirId<T> {
 
-  #[cfg(feature = "unit-internal")]
-  pub fn new(cid: CID, idx: u32) -> Self {
-    Self{cid, idx: NonZero::<u32>::new(idx+1).unwrap(), pkind: PhantomData}
-  }
-
-  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn new(cid: CID, idx: u32) -> Self {
     Self{cid, idx: NonZero::<u32>::new(idx+1).unwrap(), pkind: PhantomData}
   }
@@ -64,13 +74,6 @@ impl<T: HirKind> HirId<T> {
     HirId::<T>::new(id.0.cid(), id.0.idx())
   }
 
-
-  #[cfg(feature = "unit-internal")]
-  pub fn idx(&self) -> u32 {
-    self.idx.get()-1
-  }
-
-  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn idx(&self) -> u32 {
     self.idx.get()-1
   }
@@ -114,25 +117,27 @@ pub struct Rng<T>
   pkind: PhantomData<T>,
 }
 
-impl<T: HirKind> Rng<T> {
-  #[cfg(feature = "unit-internal")]
-  pub fn new(cid: CID, start: u32, end: u32) -> Self {
-    Self { cid, start, end, pkind: PhantomData }
+impl<T: HirKind> Encoder for Rng<T> {
+  fn encode(&self, ctx: &mut qwc_serial::EncodeCtx) -> Result<(), qwc_serial::EncodeErr> {
+    self.cid.encode(ctx)?;
+    self.start.encode(ctx)?;
+    self.end.encode(ctx)?;
+    Ok(())
   }
+}
 
-  #[cfg(not(feature = "unit-internal"))]
+impl<T: HirKind> Decoder for Rng<T> {
+  fn decode(ctx: &mut qwc_serial::DecodeCtx) -> Result<Self, qwc_serial::DecodeErr> {
+    let cid = CID::decode(ctx)?;
+    let start = u32::decode(ctx)?;
+    let end = u32::decode(ctx)?;
+    Ok(Self { cid, start, end, pkind: PhantomData })
+  }
+}
+
+impl<T: HirKind> Rng<T> {
   pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
     Self { cid, start, end, pkind: PhantomData }
-  }
-
-  #[cfg(feature = "unit-internal")]
-  pub fn start(&self) -> u32 {
-    self.start
-  }
-
-  #[cfg(feature = "unit-internal")]
-  pub fn end(&self) -> u32 {
-    self.end
   }
 
   pub fn count(&self) -> u32 {
@@ -181,7 +186,7 @@ impl<T: HirKind> std::hash::Hash for Rng<T> {
 
 
 // AnyRng
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct AnyRng {
   cid: CID,
   start: u32,
@@ -189,24 +194,8 @@ pub struct AnyRng {
 }
 
 impl AnyRng {
-  #[cfg(feature = "unit-internal")]
-  pub fn new(cid: CID, start: u32, end: u32) -> Self {
-    Self { cid, start, end }
-  }
-
-  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn new(cid: CID, start: u32, end: u32) -> Self {
     Self { cid, start, end }
-  }
-
-  #[cfg(feature = "unit-internal")]
-  pub fn start(&self) -> u32 {
-    self.start
-  }
-
-  #[cfg(feature = "unit-internal")]
-  pub fn end(&self) -> u32 {
-    self.end
   }
 
   pub fn range(&self) -> std::ops::Range<usize> {
@@ -249,7 +238,7 @@ impl<T: HirKind, P: PushApi<T>> PushOkApi<T> for P {
 // AnyId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)] pub struct SpecAny;
 
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct AnyId {
   cid: CID,
   idx: NonZero<u32>,
@@ -267,12 +256,6 @@ impl AnyId {
   }
 
 
-  #[cfg(feature = "unit-internal")]
-  pub fn idx(&self) -> u32 {
-    self.idx.get()-1
-  }
-
-  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn idx(&self) -> u32 {
     self.idx.get()-1
   }
@@ -282,12 +265,6 @@ impl AnyId {
   }
 
 
-  #[cfg(feature = "unit-internal")]
-  pub fn id(&self) -> HirId<SpecAny> {
-    HirId { cid: self.cid, idx: self.idx, pkind: PhantomData }
-  }
-
-  #[cfg(not(feature = "unit-internal"))]
   pub(crate) fn id(&self) -> HirId<SpecAny> {
     HirId { cid: self.cid, idx: self.idx, pkind: PhantomData }
   }
@@ -300,7 +277,7 @@ impl AnyId {
 
 
 // Trait
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum NodeKind { Any, Type, Expr, Item, Thing, DefPath }
 
 

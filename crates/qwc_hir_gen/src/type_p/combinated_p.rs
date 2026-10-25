@@ -11,7 +11,7 @@
 
 
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err, send_err};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 
 use crate::{Ctx, TypeLow, type_p::helper};
@@ -23,7 +23,10 @@ pub fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: ast::TypeId, path: ast::
     let mut ctn = vec![];
     
     for id in ctx.src.extra_get(vars) {
-      let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else { unreachable!() };
+      let ast::ThingKind::NamedType(name, kind) = ctx.src.get(id).kind else {
+        send_err!(sum, Message::error(IT_CAN_NOT_BE_DEFINED_WITHIN_X, Label::new_pos(ctx.src.get(id).pos)));
+        continue;
+      };
 
       // Check
       let id = TypeLow::low(ctx, sum, kind)?;

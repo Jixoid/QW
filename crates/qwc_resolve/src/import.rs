@@ -205,6 +205,7 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
       if is_last_segment && !glob {
         let hir_kind = match export_kind {
           ExportKind::Type(ty) => ScopeKindHir::Type(ty),
+          ExportKind::GenericType(item, ty) => ScopeKindHir::GenericType(item, ty),
           ExportKind::Expr(item, ty) => ScopeKindHir::Expr(item, ty),
           ExportKind::NameSpace(item) => ScopeKindHir::Module(item),
         };
@@ -222,17 +223,18 @@ impl<'a, 'imod> ImportResolver<'a, 'imod> {
         }
       }
     }
-
+    
     if glob {
       let exports = match imod.expmap.get(&current_item.to_any()) {
         Some(e) => e,
         None => return ResolveResult::Failed,
       };
-
+      
       let mut items = Vec::new();
       for (name_str, &export_kind) in exports.iter() {
         let hir_kind = match export_kind {
           ExportKind::Type(ty) => ScopeKindHir::Type(ty),
+          ExportKind::GenericType(item, ty) => ScopeKindHir::GenericType(item, ty),
           ExportKind::Expr(item, ty) => ScopeKindHir::Expr(item, ty),
           ExportKind::NameSpace(item) => ScopeKindHir::Module(item),
         };

@@ -13,9 +13,10 @@
 use std::{num::NonZero, ops::Range};
 
 use qwc_arena::Files;
+use qwc_serial_macro::{Decode, Encode};
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct Span {
   off: u32,
   len: u16,
@@ -35,13 +36,13 @@ impl Span {
   }
 
 
-  #[cfg(any(feature = "lexer-internal", feature = "unit-internal"))]
+  #[cfg(any(feature = "lexer-internal"))]
   pub fn new(off: u32, len: NonZero<u16>, fid: u16) -> Self {
     Self{ off, len: len.get(), fid }
   }
 
 
-  #[cfg(any(feature = "lexer-internal", feature = "ast-internal", feature = "unit-internal"))]
+  #[cfg(any(feature = "lexer-internal", feature = "ast-internal"))]
   pub fn to(&self) -> (u32, NonZero<u16>, u16) {
     (self.off, NonZero::<u16>::new(self.len).unwrap(), self.fid)
   }

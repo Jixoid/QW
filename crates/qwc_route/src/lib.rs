@@ -311,10 +311,12 @@ fn main_cmd(cmd: MainCommands) {
           } else {
             (paths, None)
           };
+          let so_path = obj_str.map(|o| PathBuf::from(o).with_extension("so")).filter(|p| p.exists());
           dep_artifacts.push(compile::DepArtifact {
             name: name.to_string(),
             qwu_path: PathBuf::from(qwu_str),
             obj_path: obj_str.map(PathBuf::from),
+            so_path,
           });
         }
       }

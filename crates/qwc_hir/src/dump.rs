@@ -281,7 +281,7 @@ impl DumpHandler for Type {
       GenericType{generic, idx} => {
         let it = ctx.get(generic);
         if let ItemKind::GenericNS { args, .. } = it.kind {
-          let thing = ctx.extra_get(args)[idx];
+          let thing = ctx.extra_get(args)[idx as usize];
           if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
             write!(f, "{}", ty(ctx.sin.str(name)))?;
           } else {
@@ -310,7 +310,7 @@ impl DumpHandler for Type {
 
         let sub = match trait_ty.kind {
           TypeKind::ItemTrait{types, ..} => {
-            let thing = ctx.extra_get(types)[idx];
+            let thing = ctx.extra_get(types)[idx as usize];
 
             if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
                ctx.sin.str(name)
@@ -474,7 +474,7 @@ impl DumpHandler for Expr {
       ExprKind::GenericExpr{generic, idx} => {
         let it = ctx.get(generic);
         if let ItemKind::GenericNS { args, .. } = it.kind {
-          let thing = ctx.extra_get(args)[idx];
+          let thing = ctx.extra_get(args)[idx as usize];
           if let Thing::Name(name) | Thing::NamedType(name, _) = *ctx.get(thing) {
             write!(f, "{}", ty(ctx.sin.str(name)))?;
           } else {

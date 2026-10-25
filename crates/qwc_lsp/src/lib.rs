@@ -472,6 +472,7 @@ impl Backend {
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::TypeParam(..) | qwc_resolve::ScopeKindAst::AssocType(..)) => CompletionItemKind::TYPE_PARAMETER,
               qwc_resolve::ScopeKind::Ast(qwc_resolve::ScopeKindAst::ExprParam(..)) => CompletionItemKind::VARIABLE,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Type(_)) => CompletionItemKind::STRUCT,
+              qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::GenericType(..)) => CompletionItemKind::STRUCT,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Expr(_, _)) => CompletionItemKind::FUNCTION,
               qwc_resolve::ScopeKind::Hir(qwc_resolve::ScopeKindHir::Module(_)) => CompletionItemKind::MODULE,
             };
@@ -493,6 +494,7 @@ impl Backend {
         if seen.insert(name.clone()) {
           let item_kind = match kind {
             qwc_resolve::ExportKind::Type(_) => CompletionItemKind::STRUCT,
+            qwc_resolve::ExportKind::GenericType(..) => CompletionItemKind::STRUCT,
             qwc_resolve::ExportKind::Expr(_, _) => CompletionItemKind::FUNCTION,
             qwc_resolve::ExportKind::NameSpace(_) => CompletionItemKind::MODULE,
           };

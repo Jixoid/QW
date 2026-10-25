@@ -92,33 +92,15 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
 
         // No Named / continue
         ItemKind::Import(rng) => {
-          let mut segments = vec![];
-          let mut glob = false;
-          let mut alias = None;
-
-          for id in self.cre.extra_get(rng) {
-            match self.cre.get(id).kind {
-              ThingKind::Crate => segments.push(ImportSegment::Crate),
-              ThingKind::Super => segments.push(ImportSegment::Super),
-              ThingKind::Name(ident) => segments.push(ImportSegment::Name(ident)),
-              ThingKind::Wildcard => { glob = true; break }
-              ThingKind::Alias(inner_id, alias_ident) => {
-                alias = Some(alias_ident);
-                match self.cre.get(inner_id).kind {
-                  ThingKind::Crate => segments.push(ImportSegment::Crate),
-                  ThingKind::Super => segments.push(ImportSegment::Super),
-                  ThingKind::Name(ident) => segments.push(ImportSegment::Name(ident)),
-                  _ => panic!("invalid aliased thing")
-                }
-              }
-              it => todo!("{it:#?}")
-            }
-          }
-
-          if segments.is_empty() && !glob { panic!("empty import path"); }
-
-          current_scope.import.push(ImportDef::new(it.pos, it.vis, segments, glob, alias));
-          continue
+          collect_import_tree(
+            self.cre,
+            it.pos,
+            it.vis,
+            self.cre.extra_get(rng),
+            &mut vec![],
+            &mut current_scope.import,
+          );
+          continue;
         }
         
         // Generic
@@ -146,6 +128,7 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
     if let Some(params) = self.get_generic_params(container_id) {
       let generic_id = ItemId::from_any(container_id);
       for (idx, &param_id) in params.iter().enumerate() {
+        let idx = idx as u32;
 
         match self.cre.get(param_id).kind {
           ThingKind::Name(name) => {
@@ -270,4 +253,84 @@ impl<'a, 'imod> ScopeCollector<'a, 'imod> {
     }
   }
 
+}
+ 
+fn collect_import_tree(cre: &Krate, it_pos: Span, vis: Visibility, items: impl IntoIterator<Item = ThingId>, prefix: &mut Vec<ImportSegment>, out: &mut Vec<ImportDef>) {
+  let mut glob = false;
+  let mut alias = None;
+  let mut pushed_count = 0;
+  let mut leaf_span = None;
+
+  for id in items {
+    let thing = cre.get(id);
+    leaf_span = Some(thing.pos);
+    match thing.kind {
+      ThingKind::Crate => {
+        prefix.push(ImportSegment::Crate);
+        pushed_count += 1;
+      }
+      ThingKind::Super => {
+        prefix.push(ImportSegment::Super);
+        pushed_count += 1;
+      }
+      ThingKind::Self_ => {
+        // Module itself; no segment added
+      }
+      ThingKind::Name(ident) => {
+        prefix.push(ImportSegment::Name(ident));
+        pushed_count += 1;
+      }
+      ThingKind::Wildcard => {
+        glob = true;
+        break;
+      }
+      ThingKind::Alias(inner_id, alias_ident) => {
+        alias = Some(alias_ident);
+        let inner = cre.get(inner_id);
+        leaf_span = Some(alias_ident.into());
+        match inner.kind {
+          ThingKind::Crate => {
+            prefix.push(ImportSegment::Crate);
+            pushed_count += 1;
+          }
+          ThingKind::Super => {
+            prefix.push(ImportSegment::Super);
+            pushed_count += 1;
+          }
+          ThingKind::Self_ => {}
+          ThingKind::Name(ident) => {
+            prefix.push(ImportSegment::Name(ident));
+            pushed_count += 1;
+          }
+          _ => panic!("invalid aliased thing: {:?}", inner.kind),
+        }
+      }
+      ThingKind::List(list_rng) => {
+        for sub_id in cre.extra_get(list_rng) {
+          collect_import_tree(cre, it_pos, vis, Some(sub_id), prefix, out);
+        }
+        for _ in 0..pushed_count {
+          prefix.pop();
+        }
+        return;
+      }
+      ThingKind::Path(path_rng) => {
+        collect_import_tree(cre, it_pos, vis, cre.extra_get(path_rng), prefix, out);
+        for _ in 0..pushed_count {
+          prefix.pop();
+        }
+        return;
+      }
+      it => todo!("{it:#?}"),
+    }
+  }
+
+  if !prefix.is_empty() || glob {
+    let span = leaf_span.unwrap_or(it_pos);
+    out.push(ImportDef::new(span, vis, prefix.clone(), glob, alias));
+  }
+
+  for _ in 0..pushed_count {
+    prefix.pop();
+  }
 }

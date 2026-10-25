@@ -10,12 +10,13 @@
 */
 
 
+use qwc_serial_macro::{Decode, Encode};
 use qwc_string_interner::Sid;
 
 use crate::{DefPathId, DefPathRng};
 
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum DefPath {
   Root(Sid),
   Path{base: DefPathId, name: Sid},

@@ -19,8 +19,9 @@ use crate::{ExprId, ExprRng, Ident, ThingId, ThingRng, TypeId, TypeRng, Visibili
 pub enum ThingKind {
   Name(Ident),
   List(ThingRng),
+  Path(ThingRng),
   
-  Wildcard, Crate, Super,
+  Wildcard, Crate, Super, Self_,
   
   NamedExpr(Ident, ExprId),
   NamedType(Ident, TypeId),
