@@ -826,7 +826,6 @@ dependencies = [
  "qwc_serial_macro",
  "qwc_string_interner",
  "rustc_apfloat",
- "serde",
 ]
 
 [[package]]
@@ -947,7 +946,6 @@ dependencies = [
  "qwc_serial_macro",
  "qwc_string_interner",
  "rustc-hash",
- "serde",
  "strsim",
 ]
 
@@ -994,11 +992,8 @@ dependencies = [
 name = "qwc_serial_macro"
 version = "0.1.0"
 dependencies = [
- "byteorder",
  "proc-macro2",
  "quote",
- "rustc-hash",
- "rustc_apfloat",
  "syn 2.0.119",
 ]
 

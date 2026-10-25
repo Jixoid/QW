@@ -18,7 +18,5 @@ qwc_mangling = { path = "../qwc_mangling" }
 rustc-hash = "2.1.3"
 owo-colors = "4.4.0"
 strsim = "0.11.1"
-serde = { version = "1.0.229", features = ["derive"] }
 qwc_serial = { path = "../qwc_serial" }
 qwc_serial_macro = { path = "../qwc_serial_macro" }
-

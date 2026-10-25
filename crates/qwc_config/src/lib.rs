@@ -66,11 +66,27 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
           
           for (name, val) in val.expect_struct()? {
             match name.as_str() {
-              "repo" => check2(&mut repo, val.expect_string()?)?,
+              "repo" => {
+                let r = val.expect_string()?;
+                if r.starts_with('-') { return Err(format!("invalid git repo `{}`: cannot start with '-'", r)); }
+                check2(&mut repo, r)?
+              }
 
-              "branch" => check2(&mut select, GitSelect::Branch(val.expect_string()?))?,
-              "tag" => check2(&mut select, GitSelect::Tag(val.expect_string()?))?,
-              "rev" => check2(&mut select, GitSelect::Rev(val.expect_string()?))?,
+              "branch" => {
+                let b = val.expect_string()?;
+                if b.starts_with('-') { return Err(format!("invalid git branch `{}`: cannot start with '-'", b)); }
+                check2(&mut select, GitSelect::Branch(b))?
+              }
+              "tag" => {
+                let t = val.expect_string()?;
+                if t.starts_with('-') { return Err(format!("invalid git tag `{}`: cannot start with '-'", t)); }
+                check2(&mut select, GitSelect::Tag(t))?
+              }
+              "rev" => {
+                let r = val.expect_string()?;
+                if r.starts_with('-') { return Err(format!("invalid git rev `{}`: cannot start with '-'", r)); }
+                check2(&mut select, GitSelect::Rev(r))?
+              }
 
               c => return Err(format!("unknown key: `{}`", c))
             }

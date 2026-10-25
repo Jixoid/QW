@@ -80,6 +80,23 @@ pub const FOLDER_X_CAN_NOT_CREATED:                  CodedMsg = CodedMsg::new_st
 pub const GIT_REPO_CAN_NOT_CLONED:                   CodedMsg = CodedMsg::new_str("git repo can not cloned");
 pub const TOOL_X_NOT_FOUND_IN_SYSTEM:                CodedMsg = CodedMsg::new_str("tool `{}` not found in system");
 pub const IT_CAN_NOT_BE_DEFINED_WITHIN_X:            CodedMsg = CodedMsg::new_str("it cannot be defined within {}");
+pub const COULD_NOT_DETERMINE_HOME_DIR:              CodedMsg = CodedMsg::new_str("could not determine home directory (neither HOME nor USERPROFILE is set)");
+pub const INVALID_GIT_REPO_URL:                      CodedMsg = CodedMsg::new_str("invalid git repository URL `{}`: cannot start with '-'");
+pub const INVALID_GIT_SPECIFIER:                     CodedMsg = CodedMsg::new_str("invalid git branch/tag/rev `{}`: cannot start with '-'");
+pub const REMOTE_DEPS_NOT_SUPPORTED:                 CodedMsg = CodedMsg::new_str("remote dependencies are not supported yet");
+pub const TYPE_NOT_ARRAY:                            CodedMsg = CodedMsg::new_str("type is not a array");
+pub const TYPE_NOT_STRUCT:                           CodedMsg = CodedMsg::new_str("type is not a struct");
+pub const EXPECTED_WORD:                             CodedMsg = CodedMsg::new_str("expected word");
+pub const EXPECTED_KIND2:                            CodedMsg = CodedMsg::new_str("expected `{}` or `{}`, but found `{}`");
+pub const INVALID_VALUE:                             CodedMsg = CodedMsg::new_str("invalid value: `{}`");
+pub const DUPLICATED_VALUE:                          CodedMsg = CodedMsg::new_str("duplicated value");
+pub const CANNOT_CONVERT_FLOAT:                      CodedMsg = CodedMsg::new_str("cannot convert to float");
+pub const CANNOT_CONVERT_INTEGER:                    CodedMsg = CodedMsg::new_str("cannot convert to integer");
+pub const EMPTY_IMPORT_PATH:                         CodedMsg = CodedMsg::new_str("empty import path");
+pub const CANNOT_USE_SUPER_AT_ROOT:                  CodedMsg = CodedMsg::new_str("cannot use `super` at the root module");
+pub const EXPECTED_MODULE_FOR_GLOB:                  CodedMsg = CodedMsg::new_str("expected a module for glob import");
+pub const EXPECTED_MODULE_IN_PATH:                   CodedMsg = CodedMsg::new_str("expected module in import path");
+pub const MODULE_SCOPE_NOT_FOUND:                    CodedMsg = CodedMsg::new_str("module scope not found");
 
 
 // Label
@@ -100,4 +117,5 @@ pub const CANNOT_CAST:                      FmtMsg = FmtMsg::new("cannot cast");
 pub const UNEXPECTED_PARAMETER:             FmtMsg = FmtMsg::new("unexpected parameter:  `{}`");
 pub const ARGUMENT_X_IS_MISSING:            FmtMsg = FmtMsg::new("argument `{}` is missing");
 pub const ICE_MESSAGE:                      FmtMsg = FmtMsg::new("ICE: {}");
-pub const ERROR_X:                                FmtMsg = FmtMsg::new("error: {}");
+pub const ERROR_X:                          FmtMsg = FmtMsg::new("error: {}");
+pub const VALUE_IS_HERE:                    FmtMsg = FmtMsg::new("value is here");

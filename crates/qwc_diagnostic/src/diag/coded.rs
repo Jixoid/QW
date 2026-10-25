@@ -24,11 +24,11 @@ pub struct CodedString {
 
 
 impl CodedMsg {
-  pub const fn new(code: u16, msg: &'static str) -> Self {
+  pub(crate) const fn new(code: u16, msg: &'static str) -> Self {
     Self{code: Some(code), msg}
   }
 
-  pub const fn new_str(msg: &'static str) -> Self {
+  pub(crate) const fn new_str(msg: &'static str) -> Self {
     Self{code: None, msg}
   }
 

@@ -11,17 +11,11 @@
 
 
 use qwc_ast::{AnyId, Ident, Krate};
-use qwc_diagnostic::{Applicability, CodedMsg, Label, Message, Span, Suggestion, Summary, msg::*};
+use qwc_diagnostic::{Applicability, Label, Message, Span, Suggestion, Summary, msg::*};
 use qwc_string_interner::{Sid, StrInterner};
 use strsim::damerau_levenshtein;
 
 use crate::{ExportKind, Imod, ImportDef, ImportSegment, ImportStatus, InsertResult, ScopeKind, ScopeKindAst, ScopeKindHir, ScopeMap};
-
-const EMPTY_IMPORT_PATH:        CodedMsg = CodedMsg::new_str("empty import path");
-const CANNOT_USE_SUPER_AT_ROOT: CodedMsg = CodedMsg::new_str("cannot use `super` at the root module");
-const EXPECTED_MODULE_FOR_GLOB: CodedMsg = CodedMsg::new_str("expected a module for glob import");
-const EXPECTED_MODULE_IN_PATH:  CodedMsg = CodedMsg::new_str("expected module in import path");
-const MODULE_SCOPE_NOT_FOUND:   CodedMsg = CodedMsg::new_str("module scope not found");
 
 
 

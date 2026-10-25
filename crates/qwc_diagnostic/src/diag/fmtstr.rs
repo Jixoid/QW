@@ -20,7 +20,7 @@ pub struct FmtString {
 
 
 impl FmtMsg {
-  pub const fn new(msg: &'static str) -> Self {
+  pub(crate) const fn new(msg: &'static str) -> Self {
     Self{msg}
   }
 

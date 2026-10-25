@@ -14,7 +14,7 @@ use core::fmt;
 use std::{collections::HashMap, fs};
 
 use qwc_arena::File;
-use qwc_diagnostic::{CodedMsg, FmtMsg, Label, Message, Status::{self, Success}, StatusApi2, Summary, ret_err, send_err};
+use qwc_diagnostic::{CodedMsg, Label, Message, Status::{self, Success}, StatusApi2, Summary, msg::*, ret_err, send_err};
 use qwc_lexer::{Lexer, WK, Word};
 
 
@@ -29,17 +29,6 @@ pub enum Value {
   Stc(HashMap<String, Value>),
   Tup(Vec<Value>),
 }
-
-const TYPE_NOT_ARRAY:         CodedMsg = CodedMsg::new_str("type is not a array");
-const TYPE_NOT_STRUCT:        CodedMsg = CodedMsg::new_str("type is not a struct");
-const EXPECTED_WORD:          CodedMsg = CodedMsg::new_str("expected word");
-const EXPECTED_KIND2:         CodedMsg = CodedMsg::new_str("expected `{}` or `{}`, but found `{}`");
-const INVALID_VALUE:          CodedMsg = CodedMsg::new_str("invalid value: `{}`");
-const DUPLICATED_VALUE:       CodedMsg = CodedMsg::new_str("duplicated value");
-const CANNOT_CONVERT_FLOAT:   CodedMsg = CodedMsg::new_str("cannot convert to float");
-const CANNOT_CONVERT_INTEGER: CodedMsg = CodedMsg::new_str("cannot convert to integer");
-
-const VALUE_IS_HERE:          FmtMsg = FmtMsg::new("value is here");
 
 
 #[derive(Debug)]
