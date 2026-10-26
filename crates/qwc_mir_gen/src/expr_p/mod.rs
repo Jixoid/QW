@@ -20,6 +20,7 @@ use crate::{FunBuilder, Ctx, SymbLow, builder::{ExprEmit, LoopFrame, RawTerminat
 mod integer_p;
 mod route_p;
 mod float_p;
+mod bool_p;
 mod cast_p;
 
 
@@ -76,19 +77,27 @@ impl ExprLow {
       IntArithmetic{op, flg, lhs, rhs} => Some(integer_p::low_int_arithmetic(ctx, sum, bbld, op, flg, lhs, rhs)?),
       AssignIntArithmetic{op, flg, lhs, rhs} => {integer_p::low_int_arithmetic_op(ctx, sum, bbld, op, flg, lhs, rhs)?; None},
       IntNeg(val) => Some(integer_p::low_int_neg(ctx, sum, bbld, val)?),
-
+      
       IntCondition{op, lhs, rhs} => Some(integer_p::low_int_condition(ctx, sum, bbld, op, lhs, rhs)?),
-
+      
       // Float
       FloatArithmetic{op, lhs, rhs} => Some(float_p::low_float_arithmetic(ctx, sum, bbld, op, lhs, rhs)?),
+      AssignFloatArithmetic{op, lhs, rhs} => {float_p::low_float_arithmetic_op(ctx, sum, bbld, op, lhs, rhs)?; None},
       FloatNeg(val) => Some(float_p::low_float_neg(ctx, sum, bbld, val)?),
+      
+      FloatCondition{op, lhs, rhs} => Some(float_p::low_float_condition(ctx, sum, bbld, op, lhs, rhs)?),
 
       // Logic
-      BoolLogic{op, lhs, rhs} => Some(Self::low_bool_logic(ctx, sum, bbld, op, lhs, rhs)?),
-      BoolNot(val) => Some(Self::low_bool_not(ctx, sum, bbld, val)?),
+      BoolCondition{op, lhs, rhs} => Some(bool_p::low_bool_condition(ctx, sum, bbld, op, lhs, rhs)?),
+      BoolLogic{op, lhs, rhs} => Some(bool_p::low_bool_logic(ctx, sum, bbld, op, lhs, rhs)?),
+      BoolNot(val) => Some(bool_p::low_bool_not(ctx, sum, bbld, val)?),
 
       // Cast
       IntCast(expr) => Some(cast_p::low_cast_int(ctx, sum, bbld, it, expr)?),
+      FloatCast(expr) => Some(cast_p::low_cast_float(ctx, sum, bbld, it, expr)?),
+      
+      IntToFloatCast(expr) => Some(cast_p::low_cast_int_to_float(ctx, sum, bbld, it, expr)?),
+      FloatToIntCast(expr) => Some(cast_p::low_cast_float_to_int(ctx, sum, bbld, it, expr)?),
 
       CastToIfaceRef{ref_of_expr, ref_of_type, target_iface} => Some(cast_p::low_cast_to_iface_ref(ctx, sum, bbld, ref_of_expr, ref_of_type, target_iface)?),
       CastToTrait{expr, target_trait} => cast_p::low_cast_to_trait(ctx, sum, bbld, expr, target_trait)?,
@@ -121,6 +130,12 @@ impl ExprLow {
       I32(i) => mir::Const::I32(i as u32).into(),
       I64(i) => mir::Const::I64(i as u64).into(),
       I128(i) => mir::Const::I128(i as u128).into(),
+      
+      B8(i) => mir::Const::I8(i).into(),
+      B16(i) => mir::Const::I16(i).into(),
+      B32(i) => mir::Const::I32(i).into(),
+      B64(i) => mir::Const::I64(i).into(),
+      B128(i) => mir::Const::I128(i).into(),
       
       F16(fp) => mir::Const::F16(fp).into(),
       F32(fp) => mir::Const::F32(fp).into(),
@@ -534,45 +549,6 @@ impl ExprLow {
     let field_ptr = bbld.emit(mir::Expr::Gep { target: target_ptr, kind: struct_ty, idx }).unwrap();
     let val = bbld.emit(mir::Expr::Load { target: field_ptr.into(), kind: field_ty }).unwrap();
     Success(val.into())
-  }
-
-
-  // Logic
-  fn low_bool_logic(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, op: hir::BoolLogicOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<Value> {
-    let kind = TypeLow::low(ctx, sum, (ctx.src.get(lhs) as &hir::Expr).ety)?;
-    let lhs = ExprLow::low(ctx, sum, bbld, lhs)?.unwrap();
-    let rhs = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
-
-    let op = match op {
-      hir::BoolLogicOp::And => mir::IntLogicOp::And,
-      hir::BoolLogicOp::Or  => mir::IntLogicOp::Or,
-      hir::BoolLogicOp::Xor => mir::IntLogicOp::Xor,
-    };
-
-
-    // Post
-    let this = mir::Expr::IntLogic {
-      op,
-      kind,
-      lhs,
-      rhs
-    }.emit(bbld).unwrap();
-
-    Success(this.into())
-  }
-
-  fn low_bool_not(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: hir::ExprId) -> Status<Value> {
-    let kind = TypeLow::low(ctx, sum, (ctx.src.get(val) as &hir::Expr).ety)?;
-    let val = ExprLow::low(ctx, sum, bbld, val)?.unwrap();
-
-    // Post
-    let this = mir::Expr::IntUnary {
-      op: qwc_mir::IntUnaryOp::Not,
-      kind,
-      val,
-    }.emit(bbld).unwrap();
-
-    Success(this.into())
   }
 
 }

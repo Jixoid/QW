@@ -74,11 +74,11 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		let ty_u64  = reg!("u64"  => TypeKind::Int(64, false),  layinfo.i64_lay);
 		let ty_u128 = reg!("u128" => TypeKind::Int(128, false), layinfo.i128_lay);
 		
-		let ty_b8   = reg!("b8"   => TypeKind::Int(8,  false),  layinfo.i8_lay);
-		let ty_b16  = reg!("b16"  => TypeKind::Int(16, false),  layinfo.i16_lay);
-		let ty_b32  = reg!("b32"  => TypeKind::Int(32, false),  layinfo.i32_lay);
-		let ty_b64  = reg!("b64"  => TypeKind::Int(64, false),  layinfo.i64_lay);
-		let ty_b128 = reg!("b128" => TypeKind::Int(128, false), layinfo.i128_lay);
+		let ty_b8   = reg!("b8"   => TypeKind::Bit(8),   layinfo.i8_lay);
+		let ty_b16  = reg!("b16"  => TypeKind::Bit(16),  layinfo.i16_lay);
+		let ty_b32  = reg!("b32"  => TypeKind::Bit(32),  layinfo.i32_lay);
+		let ty_b64  = reg!("b64"  => TypeKind::Bit(64),  layinfo.i64_lay);
+		let ty_b128 = reg!("b128" => TypeKind::Bit(128), layinfo.i128_lay);
 		
 		let ty_f16  = reg!("f16"  => TypeKind::Float(16),  layinfo.f16_lay);
 		let ty_f32  = reg!("f32"  => TypeKind::Float(32),  layinfo.f32_lay);
@@ -810,6 +810,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		let op_rem_assign = def_bin_assign_op!(its, "RemAssign", "rem_assign");
 
 		let op_neg = def_unary_op!(its, "Neg", "neg");
+		let op_not = def_unary_op!(its, "Not", "not");
+		let op_deref = def_unary_op!(its, "Deref", "deref");
+
 		let op_partial_eq = def_partial_eq!(its);
 		let op_eq = def_eq!(its);
 		let op_partial_ord = def_partial_ord!(its, op_partial_eq, ty_opt_ordering);
@@ -827,6 +830,8 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 			op_div_assign,
 			op_rem_assign,
 			op_neg,
+			op_not,
+			op_deref,
 			op_partial_eq,
 			op_eq,
 			op_partial_ord,

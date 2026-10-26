@@ -50,6 +50,7 @@ impl TypeLow {
 
       // Reference
       Ref(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
+      Ptr(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ptr(ctx.cre, id, ism)},
       
       // Vector
       Vector(kind, ext) => Self::low_vector(ctx, sum, kind, ext)?,

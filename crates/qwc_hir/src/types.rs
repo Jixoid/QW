@@ -144,23 +144,28 @@ pub struct PrimTypes {
   pub ty_bool: TypeId,
   pub ty_char: TypeId,
   pub ty_str: TypeId,
+  
   pub ty_isize: TypeId,
   pub ty_usize: TypeId,
+
   pub ty_i8: TypeId,
   pub ty_i16: TypeId,
   pub ty_i32: TypeId,
   pub ty_i64: TypeId,
   pub ty_i128: TypeId,
+
   pub ty_u8: TypeId,
   pub ty_u16: TypeId,
   pub ty_u32: TypeId,
   pub ty_u64: TypeId,
   pub ty_u128: TypeId,
+  
   pub ty_b8: TypeId,
   pub ty_b16: TypeId,
   pub ty_b32: TypeId,
   pub ty_b64: TypeId,
   pub ty_b128: TypeId,
+
   pub ty_f16: TypeId,
   pub ty_f32: TypeId,
   pub ty_f64: TypeId,
@@ -182,9 +187,11 @@ pub struct PrimOps {
   pub op_rem_assign: TypeId,
 
   pub op_neg: TypeId,
+  pub op_not: TypeId,
+  pub op_deref: TypeId,
+  
   pub op_partial_eq: TypeId,
   pub op_eq: TypeId,
-
   pub op_partial_ord: TypeId,
   pub op_ord: TypeId,
   pub ty_ordering: TypeId,

@@ -727,6 +727,34 @@ impl DumpHandler for Expr {
         write!(f, "{}", punct(")"))?;
       }
 
+      ExprKind::AssignFloatArithmetic { op: fop, lhs, rhs } => {
+        write!(f, "{}", punct("("))?;
+        lhs.dump(ctx, f, indent)?;
+        
+        use crate::FloatArithmeticOp::*;
+        
+        let op_str = match fop { Add => "+=", Sub => "-=", Mul => "*=", Div => "/=", Rem => "%=" };
+        
+        write!(f, " {} ", op(op_str))?;
+        
+        rhs.dump(ctx, f, indent)?;
+        write!(f, "{}", punct(")"))?;
+      }
+
+      ExprKind::FloatCondition { op: cop, lhs, rhs } => {
+        write!(f, "{}", punct("("))?;
+        lhs.dump(ctx, f, indent)?;
+        
+        use crate::FloatConditionOp::*;
+        
+        let op_str = match cop { Gt => ">", Lt => "<", GtEq => ">=", LtEq => "<=", Eq => "==", Ne => "!=" };
+        
+        write!(f, " {} ", op(op_str))?;
+        
+        rhs.dump(ctx, f, indent)?;
+        write!(f, "{}", punct(")"))?;
+      }
+
       ExprKind::FloatNeg(val) => {
         write!(f, "{}", punct("-"))?;
         val.dump(ctx, f, indent)?;
@@ -734,6 +762,20 @@ impl DumpHandler for Expr {
 
 
       // Logic
+      ExprKind::BoolCondition { op: cop, lhs, rhs } => {
+        write!(f, "{}", punct("("))?;
+        lhs.dump(ctx, f, indent)?;
+        
+        use crate::BoolConditionOp::*;
+        
+        let op_str = match cop { Eq => "==", Ne => "!=" };
+        
+        write!(f, " {} ", op(op_str))?;
+        
+        rhs.dump(ctx, f, indent)?;
+        write!(f, "{}", punct(")"))?;
+      }
+
       ExprKind::BoolLogic { op: bop, lhs, rhs } => {
         write!(f, "{}", punct("("))?;
         lhs.dump(ctx, f, indent)?;
@@ -756,11 +798,12 @@ impl DumpHandler for Expr {
 
 
       // Cast
-      ExprKind::IntCast(expr) => {
+      ExprKind::FloatToIntCast(expr) | ExprKind::IntToFloatCast(expr) | ExprKind::IntCast(expr) | ExprKind::FloatCast(expr) => {
         expr.dump(ctx, f, indent)?;
         write!(f, " {} ", kw("as"))?;
         self.ety.dump(ctx, f, indent)?;
       }
+
 
       ExprKind::CastToIfaceRef { ref_of_expr, ref_of_type: _, target_iface } => {
         ref_of_expr.dump(ctx, f, indent)?;
@@ -772,6 +815,13 @@ impl DumpHandler for Expr {
         expr.dump(ctx, f, indent)?;
         write!(f, " {} ", kw("as"))?;
         target_trait.dump(ctx, f, indent)?;
+      }
+      
+      
+      ExprKind::CastToPtr { expr } => {
+        expr.dump(ctx, f, indent)?;
+        write!(f, " {} ", kw("as"))?;
+        self.ety.dump(ctx, f, indent)?;
       }
     }
 
@@ -826,6 +876,12 @@ impl DumpHandler for Const {
       Const::I32(i) => write!(f, "{}{}{}{}", punct("{i32}"), punct("("), lit_num(i), punct(")"))?,
       Const::I64(i) => write!(f, "{}{}{}{}", punct("{i64}"), punct("("), lit_num(i), punct(")"))?,
       Const::I128(i) => write!(f, "{}{}{}{}", punct("{i128}"), punct("("), lit_num(i), punct(")"))?,
+      
+      Const::B8(i) => write!(f, "{}{}{}{}", punct("{u8}"), punct("("), lit_num(i), punct(")"))?,
+      Const::B16(i) => write!(f, "{}{}{}{}", punct("{u16}"), punct("("), lit_num(i), punct(")"))?,
+      Const::B32(i) => write!(f, "{}{}{}{}", punct("{u32}"), punct("("), lit_num(i), punct(")"))?,
+      Const::B64(i) => write!(f, "{}{}{}{}", punct("{u64}"), punct("("), lit_num(i), punct(")"))?,
+      Const::B128(i) => write!(f, "{}{}{}{}", punct("{u128}"), punct("("), lit_num(i), punct(")"))?,
 
       Const::F16(fp) => write!(f, "{}{}{}{}", punct("{f16}"), punct("("), lit_num(fp), punct(")"))?,
       Const::F32(fp) => write!(f, "{}{}{}{}", punct("{f32}"), punct("("), lit_num(fp), punct(")"))?,

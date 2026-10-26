@@ -54,6 +54,7 @@ pub const CONTINUE_OUTSIDE_OF_LOOP:                         CodedMsg = CodedMsg:
 pub const BREAK_OUTSIDE_OF_LOOP:                            CodedMsg = CodedMsg::new(0x0027, "`break` outside of loop");
 pub const FIXED_VALUE_CANNOT_BE_EVALUATED:                  CodedMsg = CodedMsg::new(0x0028, "the fixed value cannot be evaluated");
 pub const GLOBAL_VARIABLES_CAN_ONLY_BE_CONSTANT:            CodedMsg = CodedMsg::new(0x0029, "global variables can only be constant");
+pub const REQUIRES_UNSAFE_BLOCK:                            CodedMsg = CodedMsg::new(0x002a, "requires unsafe block");
 
 
 // Non Coded Messages

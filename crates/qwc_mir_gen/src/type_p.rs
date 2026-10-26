@@ -34,11 +34,13 @@ impl TypeLow {
       
       Int(len, _) => Self::low_int(ctx, sum, len)?,
       ArchInt(_) => ctx.tin.ty_arch_int(),
+      Bit(len) => Self::low_int(ctx, sum, len)?,
       Float(len) => Self::low_float(ctx, sum, len)?,
       Bool => ctx.tin.ty_bool(),
       Char => ctx.tin.ty_i32(),
 
       Ref(id, _) => Self::low_ref(ctx, sum, id)?,
+      Ptr(id, _) => Self::low_ptr(ctx, sum, id)?,
 
       // Combinated
       Struct(rng) => Self::low_struct(ctx, sum, rng, id.cid())?,
@@ -100,6 +102,20 @@ impl TypeLow {
 
 
   fn low_ref(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
+    use hir::TypeKind::*;
+
+    let it = match ctx.get(id).kind {
+      Str | Slice(..) => ctx.tin.ty_fatptrint(),
+      
+      ItemIface{..} => ctx.tin.ty_fatptr(),
+    
+      _ => ctx.tin.ty_ptr()
+    };
+    
+    Success(it)
+  }
+
+  fn low_ptr(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
     use hir::TypeKind::*;
 
     let it = match ctx.get(id).kind {

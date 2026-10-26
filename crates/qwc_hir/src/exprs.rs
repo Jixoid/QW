@@ -40,6 +40,13 @@ pub enum Const {
   I32(i32),
   I64(i64),
   I128(i128),
+  
+  // Bit
+  B8(u8),
+  B16(u16),
+  B32(u32),
+  B64(u64),
+  B128(u128),
 
   // Float
   F16(ieee::Half),
@@ -75,6 +82,18 @@ pub enum FloatArithmeticOp {
   Add, Sub, Mul, Div, Rem
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
+pub enum FloatConditionOp {
+  Eq, Ne, Gt, Lt, GtEq, LtEq
+}
+
+
+
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
+pub enum BoolConditionOp {
+  Eq, Ne
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum BoolLogicOp {
@@ -135,17 +154,21 @@ pub enum ExprKind {
   // Integer
   IntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
   AssignIntArithmetic{op: IntArithmeticOp, flg: IntArithmeticFlg, lhs: ExprId, rhs: ExprId},
-
+  
   IntCondition{op: IntConditionOp, lhs: ExprId, rhs: ExprId},
-
+  
   IntNeg(ExprId),
-
+  
   // Floating
   FloatArithmetic{op: FloatArithmeticOp, lhs: ExprId, rhs: ExprId},
-
+  AssignFloatArithmetic{op: FloatArithmeticOp, lhs: ExprId, rhs: ExprId},
+  
+  FloatCondition{op: FloatConditionOp, lhs: ExprId, rhs: ExprId},
+  
   FloatNeg(ExprId),
-
+  
   // Bool
+  BoolCondition{op: BoolConditionOp, lhs: ExprId, rhs: ExprId},
   BoolLogic{op: BoolLogicOp, lhs: ExprId, rhs: ExprId},
   BoolNot(ExprId),
 
@@ -153,12 +176,18 @@ pub enum ExprKind {
 
   /// Primitive integer cast (x as i64, etc.)
   IntCast(ExprId),
+  FloatCast(ExprId),
+  
+  IntToFloatCast(ExprId),
+  FloatToIntCast(ExprId),
 
   /// &Type => &Iface
   CastToIfaceRef{ref_of_expr: ExprId, ref_of_type: TypeId, target_iface: TypeId},
   
   /// Type => Trait
   CastToTrait{expr: ExprId, target_trait: TypeId},
+  
+  CastToPtr{expr: ExprId},
 }
 
 

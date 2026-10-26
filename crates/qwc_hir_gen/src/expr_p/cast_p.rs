@@ -10,7 +10,7 @@
 */
 
 
-use crate::{ExprLow, TypeLow, Ctx, FunCtx};
+use crate::{Ctx, ExprLow, FunCtx, TypeLow, TypeMatch};
 
 use qwc_ast as ast;
 use qwc_diagnostic::{Label, Message, Status::{self, Success}, StatusApi2, Summary, msg::*, ret_err, send_err};
@@ -29,11 +29,13 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
     return Success(expr);
   }
 
-  // Inter integer cast
-  let is_int = |ty: hir::TypeId| -> bool {
-    matches!(ctx.get(ty).kind, hir::TypeKind::Int(..) | hir::TypeKind::ArchInt(..))
-  };
+  
+  // Quick
+  let is_int = |ty: hir::TypeId| -> bool { matches!(ctx.get(ty).kind, hir::TypeKind::Int(..) | hir::TypeKind::ArchInt(..)) };
+  let is_float = |ty: hir::TypeId| -> bool { matches!(ctx.get(ty).kind, hir::TypeKind::Float(..)) };
+  
 
+  // Inter integer cast
   if is_int(expr_ty) && is_int(target) {
     return hir::Expr {
       kind: hir::ExprKind::IntCast(expr),
@@ -42,20 +44,51 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
       ety: target,
     }.push_ok(ctx.cre);
   }
+  
+  // Inter float cast
+  if is_float(expr_ty) && is_float(target) {
+    return hir::Expr {
+      kind: hir::ExprKind::FloatCast(expr),
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: target,
+    }.push_ok(ctx.cre);  
+  }
+  
+  // float -> int cast
+  if is_float(expr_ty) && is_int(target) {
+    return hir::Expr {
+      kind: hir::ExprKind::FloatToIntCast(expr),
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: target,
+    }.push_ok(ctx.cre);  
+  }
+  
+  // int -> float cast
+  if is_int(expr_ty) && is_float(target) {
+    return hir::Expr {
+      kind: hir::ExprKind::IntToFloatCast(expr),
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: target,
+    }.push_ok(ctx.cre);  
+  }
 
 
   // Choose
   let ret: Option<(fn(_, _, _, _, _, _) -> _, hir::TypeId)> =
   match ctx.get(target).kind {
     hir::TypeKind::Ref(target, _) => {
-
-      // Choose
       match ctx.get(target).kind {
         hir::TypeKind::ItemIface{..} => Some((cast_to_iface_ref, target)),
         
         _ => None,
       }
     }
+
+    hir::TypeKind::Ptr(target, _) => Some((cast_to_ptr, target)),
+
     hir::TypeKind::ItemTrait{..} => Some((cast_to_trait, target)),
     
     _ => None
@@ -163,5 +196,42 @@ fn cast_to_trait(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::Ex
     category: ExprCategory::RValue,
     pos: it.pos,
     ety: hidden,
+  }.push_ok(ctx.cre)
+}
+
+
+fn cast_to_ptr(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::ExprId, target: hir::TypeId, target_unwrap: hir::TypeId) -> Status<hir::ExprId> {
+  let expr_ty = ctx.cre.get(expr).ety;
+  
+  // Choose
+  let expr_unwrap = match ctx.get(expr_ty).kind {
+    hir::TypeKind::Ref(expr_ty, _) => Some(expr_ty),
+    _ => None
+  }
+  .status()
+  .map_err(||
+    send_err!(sum, Message::error(
+      CANNOT_CAST_X_TO_Y.args(&[&ctx.type_name(sum, expr_ty), &ctx.type_name(sum, target)]),
+      Label::new(it.pos, CANNOT_CAST),
+    ))
+  )?;
+
+  TypeMatch::matches(ctx, sum, target_unwrap, expr_unwrap, it.pos, None)?;
+
+
+  if ctx.cmap.unsafe_level == 0 {
+    ret_err!(sum, Message::error(REQUIRES_UNSAFE_BLOCK, Label::new_pos(it.pos)));
+  }
+
+
+  // Post
+  hir::Expr {
+    kind: hir::ExprKind::CastToTrait {
+      expr,
+      target_trait: target,
+    },
+    category: ExprCategory::RValue,
+    pos: it.pos,
+    ety: target,
   }.push_ok(ctx.cre)
 }

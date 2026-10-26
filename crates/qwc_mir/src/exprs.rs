@@ -106,6 +106,16 @@ mod float_s {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
   pub enum FloatArithmeticOp { Add, Sub, Mul, Div, Rem }
 
+
+
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum FloatConditionOp { GtEq, LtEq, Gt, Lt, Eq, Ne }
+
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+  pub enum FloatConditionFlg { Ordered, Unordered }
+
+
+
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
   pub enum FloatUnaryOp { Neg }
 }
@@ -129,9 +139,14 @@ pub enum Expr {
   IntLogic {op: IntLogicOp, kind: TypeId, lhs: Value, rhs: Value},
   IntUnary {op: IntUnaryOp, kind: TypeId, val: Value},
   IntCast {kind: TypeId, val: Value, signed: bool},
-
+  
   FloatArithmetic {op: FloatArithmeticOp, kind: TypeId, lhs: Value, rhs: Value},
+  FloatCondition {op: FloatConditionOp, flg: FloatConditionFlg, kind: TypeId, lhs: Value, rhs: Value},
   FloatUnary {op: FloatUnaryOp, kind: TypeId, val: Value},
+  FloatCast {kind: TypeId, val: Value},
+  
+  IntToFloatCast {kind: TypeId, val: Value, signed: bool},
+  FloatToIntCast {kind: TypeId, val: Value, signed: bool},
 }
 
 impl Expr {
@@ -151,9 +166,14 @@ impl Expr {
       Expr::IntLogic{..} => true,
       Expr::IntUnary{..} => true,
       Expr::IntCast{..} => true,
-
+      
       Expr::FloatArithmetic{..} => true,
+      Expr::FloatCondition{..} => true,
       Expr::FloatUnary{..} => true,
+      Expr::FloatCast{..} => true,
+
+      Expr::IntToFloatCast{..} => true,
+      Expr::FloatToIntCast{..} => true,
     }
   }
 }

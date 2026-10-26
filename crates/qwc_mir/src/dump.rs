@@ -350,6 +350,21 @@ impl DumpHandler for Expr {
         rhs.dump(cre, sin, f, indent)?;
       }
     
+      Expr::FloatCondition{op, flg, kind, lhs, rhs} => {
+        use crate::FloatConditionOp::*;
+        use crate::FloatConditionFlg::*;
+
+        let op = match op { GtEq => ".ge", LtEq => ".le", Gt => ".gt", Lt => ".ls", Eq => ".eq", Ne => ".ne" };
+        let flg = match flg { Ordered => ".o", Unordered => ".u" };
+        write!(f, "{}{}{}{} ", kw("cmp"), kw(".f"), kw(flg), kw(op))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+
+        lhs.dump(cre, sin, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        rhs.dump(cre, sin, f, indent)?;
+      }
+    
       Expr::FloatUnary{op, kind, val} => {
         use crate::FloatUnaryOp::*;
 
@@ -358,6 +373,28 @@ impl DumpHandler for Expr {
         kind.dump(cre, sin, f, indent)?;
         write!(f, " ")?;
 
+        val.dump(cre, sin, f, indent)?;
+      }
+    
+      Expr::FloatCast { kind, val } => {
+        write!(f, "{} ", kw("cast.f"))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+        val.dump(cre, sin, f, indent)?;
+      }
+      
+      
+      Expr::IntToFloatCast { kind, val, signed } => {
+        write!(f, "{}{}{} ", kw("cast"), kw(if signed {".i"} else {".u"}), kw(".f"))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+        val.dump(cre, sin, f, indent)?;
+      }
+      
+      Expr::FloatToIntCast { kind, val, signed } => {
+        write!(f, "{}{}{} ", kw("cast"), kw(".f"), kw(if signed {".i"} else {".u"}))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
         val.dump(cre, sin, f, indent)?;
       }
     }

@@ -53,7 +53,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
   if lhs_ex.ety == rhs_ex.ety {
     if matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
       use ast::BinaryOp::*;
-      let aop = match op {
+      let op = match op {
         Add => hir::IntArithmeticOp::Add,
         Sub => hir::IntArithmeticOp::Sub,
         Mul => hir::IntArithmeticOp::Mul,
@@ -64,7 +64,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
       let flg = hir::IntArithmeticFlg::Overflow;
       
       return hir::Expr {
-        kind: hir::ExprKind::IntArithmetic { op: aop, flg, lhs, rhs },
+        kind: hir::ExprKind::IntArithmetic { op, flg, lhs, rhs },
         category: ExprCategory::RValue,
         pos: it.pos,
         ety: lhs_ex.ety,
@@ -73,7 +73,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
 
     if matches!(lhs_ty.kind, hir::TypeKind::Float(..)) {
       use ast::BinaryOp::*;
-      let aop = match op {
+      let op = match op {
         Add => hir::FloatArithmeticOp::Add,
         Sub => hir::FloatArithmeticOp::Sub,
         Mul => hir::FloatArithmeticOp::Mul,
@@ -83,7 +83,7 @@ fn low_binary_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
       };
 
       return hir::Expr {
-        kind: hir::ExprKind::FloatArithmetic { op: aop, lhs, rhs },
+        kind: hir::ExprKind::FloatArithmetic { op, lhs, rhs },
         category: ExprCategory::RValue,
         pos: it.pos,
         ety: lhs_ex.ety,
@@ -136,7 +136,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
   if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
     use ast::BinaryOp::*;
     
-    let aop = match op {
+    let op = match op {
       Gt   => hir::IntConditionOp::Gt,
       Lt   => hir::IntConditionOp::Lt,
       GtEq => hir::IntConditionOp::GtEq,
@@ -147,7 +147,7 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
     };
 
     let this = hir::Expr {
-      kind: hir::ExprKind::IntCondition{ op: aop, lhs, rhs },
+      kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
       category: ExprCategory::RValue,
       pos: it.pos,
       ety: ctx.prims.ty_bool,
@@ -155,6 +155,105 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
     
     return Success(ctx.cre.push(this));
   }
+
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::Bit(..)) {
+    use ast::BinaryOp::*;
+    
+    let op = match op {
+      Gt   => hir::IntConditionOp::Gt,
+      Lt   => hir::IntConditionOp::Lt,
+      GtEq => hir::IntConditionOp::GtEq,
+      LtEq => hir::IntConditionOp::LtEq,
+      Eq   => hir::IntConditionOp::Eq,
+      Ne   => hir::IntConditionOp::Ne,
+      _ => panic!()
+    };
+
+    let this = hir::Expr {
+      kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_bool,
+    };
+    
+    return Success(ctx.cre.push(this));
+  }
+  
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::Char) {
+    use ast::BinaryOp::*;
+    
+    let op = match op {
+      Gt   => hir::IntConditionOp::Gt,
+      Lt   => hir::IntConditionOp::Lt,
+      GtEq => hir::IntConditionOp::GtEq,
+      LtEq => hir::IntConditionOp::LtEq,
+      Eq   => hir::IntConditionOp::Eq,
+      Ne   => hir::IntConditionOp::Ne,
+      _ => panic!()
+    };
+
+    let this = hir::Expr {
+      kind: hir::ExprKind::IntCondition{ op, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_bool,
+    };
+    
+    return Success(ctx.cre.push(this));
+  }
+
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::Float(..)) {
+    use ast::BinaryOp::*;
+    
+    let op = match op {
+      Gt   => hir::FloatConditionOp::Gt,
+      Lt   => hir::FloatConditionOp::Lt,
+      GtEq => hir::FloatConditionOp::GtEq,
+      LtEq => hir::FloatConditionOp::LtEq,
+      Eq   => hir::FloatConditionOp::Eq,
+      Ne   => hir::FloatConditionOp::Ne,
+      _ => panic!()
+    };
+
+    let this = hir::Expr {
+      kind: hir::ExprKind::FloatCondition{ op, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_bool,
+    };
+    
+    return Success(ctx.cre.push(this));
+  }
+  
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::Bool) {
+    use ast::BinaryOp::*;
+    
+    let op = match op {
+      Eq   => hir::BoolConditionOp::Eq,
+      Ne   => hir::BoolConditionOp::Ne,
+
+      Gt | Lt | GtEq | LtEq => ret_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &format!("{}<{}>", ctx.type_name(sum, ctx.ideps.prim_op().unwrap().op_partial_ord), ctx.type_name(sum, rhs_ety)),
+          &ctx.type_name(sum, lhs_ety),
+        ]),
+        Label::new_pos(it.pos)
+      )),
+
+      _ => panic!()
+    };
+
+    let this = hir::Expr {
+      kind: hir::ExprKind::BoolCondition{ op, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_bool,
+    };
+    
+    return Success(ctx.cre.push(this));
+  }
+
 
   use ast::BinaryOp::*;
   let (op_trt, op_sid) = match op {
@@ -167,81 +266,81 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
     _ => panic!("unsupported condition operator: {:?}", op),
   };
 
-    let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, it.pos)
-      .map_err(||
-        send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
-          .args(&[
-            "trait",
-            &format!("{}<{}>", ctx.type_name(sum, op_trt), ctx.type_name(sum, rhs_ety)),
-            &ctx.type_name(sum, lhs_ety),
-          ]),
-          Label::new_pos(it.pos)
-        ))
-      )?;
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait(ctx, sum, op_trt, lhs, rhs, op_sid, it.pos)
+    .map_err(||
+      send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &format!("{}<{}>", ctx.type_name(sum, op_trt), ctx.type_name(sum, rhs_ety)),
+          &ctx.type_name(sum, lhs_ety),
+        ]),
+        Label::new_pos(it.pos)
+      ))
+    )?;
 
-    let op_fun_ty = ctx.cre.get(op_fun).ety;
-    let (self_kind, param_ty) = if let hir::TypeKind::Fun { self_kind, args, .. } = ctx.get(op_fun_ty).kind {
-      let param_ty = ctx.extra_get(args).next().map(|id| {
-        let hir::Thing::NamedType(_, ty) = *ctx.get(id) else { unreachable!() };
-        ty
-      });
-      (self_kind, param_ty)
-    } else { (None, None) };
+  let op_fun_ty = ctx.cre.get(op_fun).ety;
+  let (self_kind, param_ty) = if let hir::TypeKind::Fun { self_kind, args, .. } = ctx.get(op_fun_ty).kind {
+    let param_ty = ctx.extra_get(args).next().map(|id| {
+      let hir::Thing::NamedType(_, ty) = *ctx.get(id) else { unreachable!() };
+      ty
+    });
+    (self_kind, param_ty)
+  } else { (None, None) };
 
-    let lhs_arg = match self_kind {
-      Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
-        hir::Expr {
-          kind: hir::ExprKind::Ref(lhs, true),
-          category: ExprCategory::RValue,
-          pos: it.pos,
-          ety: ty,
-        }.push(ctx.cre)
-      }
-      Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, false);
-        hir::Expr {
-          kind: hir::ExprKind::Ref(lhs, false),
-          category: ExprCategory::RValue,
-          pos: it.pos,
-          ety: ty,
-        }.push(ctx.cre)
-      }
-      _ => lhs,
-    };
+  let lhs_arg = match self_kind {
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(lhs, true),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, false);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(lhs, false),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    _ => lhs,
+  };
 
-    let rhs_arg = match param_ty {
-      Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., true)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, true);
-        hir::Expr {
-          kind: hir::ExprKind::Ref(rhs, true),
-          category: ExprCategory::RValue,
-          pos: it.pos,
-          ety: ty,
-        }.push(ctx.cre)
-      }
-      Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., false)) => {
-        let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, false);
-        hir::Expr {
-          kind: hir::ExprKind::Ref(rhs, false),
-          category: ExprCategory::RValue,
-          pos: it.pos,
-          ety: ty,
-        }.push(ctx.cre)
-      }
-      _ => rhs,
-    };
+  let rhs_arg = match param_ty {
+    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., true)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, true);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(rhs, true),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., false)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, false);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(rhs, false),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    _ => rhs,
+  };
 
-    let args = ctx.cre.extra(&[lhs_arg, rhs_arg]);
+  let args = ctx.cre.extra(&[lhs_arg, rhs_arg]);
 
-    let this = hir::Expr {
-      kind: hir::ExprKind::Call { callee: op_fun, args },
-      category: ExprCategory::RValue,
-      pos: it.pos,
-      ety: op_ret,
-    }.push(ctx.cre);
+  let this = hir::Expr {
+    kind: hir::ExprKind::Call { callee: op_fun, args },
+    category: ExprCategory::RValue,
+    pos: it.pos,
+    ety: op_ret,
+  }.push(ctx.cre);
 
-    Success(this)
+  Success(this)
 }
 
 fn low_binary_logic(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::ExprId, rhs: hir::ExprId) -> Status<hir::ExprId> {
@@ -345,7 +444,7 @@ fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
 
   if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
     use ast::BinaryOp::*;
-    let aop = match op {
+    let op = match op {
       Add => hir::IntArithmeticOp::Add,
       Sub => hir::IntArithmeticOp::Sub,
       Mul => hir::IntArithmeticOp::Mul,
@@ -356,7 +455,26 @@ fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
     let flg = hir::IntArithmeticFlg::Overflow;
     
     return hir::Expr {
-      kind: hir::ExprKind::AssignIntArithmetic { op: aop, flg, lhs, rhs },
+      kind: hir::ExprKind::AssignIntArithmetic { op, flg, lhs, rhs },
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: ctx.prims.ty_unit,
+    }.push_ok(ctx.cre);
+  }
+  
+  if lhs_ety == rhs_ety && matches!(lhs_ty.kind, hir::TypeKind::Float(..)) {
+    use ast::BinaryOp::*;
+    let op = match op {
+      Add => hir::FloatArithmeticOp::Add,
+      Sub => hir::FloatArithmeticOp::Sub,
+      Mul => hir::FloatArithmeticOp::Mul,
+      Div => hir::FloatArithmeticOp::Div,
+      Rem => hir::FloatArithmeticOp::Rem,
+      _ => unreachable!(),
+    };
+    
+    return hir::Expr {
+      kind: hir::ExprKind::AssignFloatArithmetic { op, lhs, rhs },
       category: ExprCategory::RValue,
       pos: it.pos,
       ety: ctx.prims.ty_unit,

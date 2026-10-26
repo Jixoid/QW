@@ -58,9 +58,11 @@ pub struct StrInterner {
   sid_rem_assign: Sid,
 
   sid_neg: Sid,
+  sid_not: Sid,
+  sid_deref: Sid,
+  
   sid_eq: Sid,
   sid_ne: Sid,
-
   sid_ordering: Sid,
   sid_less: Sid,
   sid_equal: Sid,
@@ -123,9 +125,11 @@ impl StrInterner {
   pub fn sid_rem_assign(&self) -> Sid { self.sid_rem_assign }
 
   pub fn sid_neg(&self) -> Sid { self.sid_neg }
+  pub fn sid_not(&self) -> Sid { self.sid_not }
+  pub fn sid_deref(&self) -> Sid { self.sid_deref }
+  
   pub fn sid_eq(&self) -> Sid { self.sid_eq }
   pub fn sid_ne(&self) -> Sid { self.sid_ne }
-
   pub fn sid_ordering(&self) -> Sid { self.sid_ordering }
   pub fn sid_less(&self) -> Sid { self.sid_less }
   pub fn sid_equal(&self) -> Sid { self.sid_equal }
@@ -174,9 +178,11 @@ impl Default for StrInterner {
       sid_rem_assign: Sid::from(rodeo.get_or_intern_static("rem_assign").into_inner()),
 
       sid_neg: Sid::from(rodeo.get_or_intern_static("neg").into_inner()),
+      sid_not: Sid::from(rodeo.get_or_intern_static("not").into_inner()),
+      sid_deref: Sid::from(rodeo.get_or_intern_static("deref").into_inner()),
+      
       sid_eq: Sid::from(rodeo.get_or_intern_static("eq").into_inner()),
       sid_ne: Sid::from(rodeo.get_or_intern_static("ne").into_inner()),
-
       sid_ordering: Sid::from(rodeo.get_or_intern_static("Ordering").into_inner()),
       sid_less: Sid::from(rodeo.get_or_intern_static("Less").into_inner()),
       sid_equal: Sid::from(rodeo.get_or_intern_static("Equal").into_inner()),

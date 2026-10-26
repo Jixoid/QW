@@ -175,6 +175,26 @@ impl InstLow {
         };
       }
 
+      Expr::FloatCondition{op, flg, kind: _, lhs, rhs} => {
+        let lhs = ValueLow::low(uctx, ictx, fctx, &lhs).into_float_value();
+        let rhs = ValueLow::low(uctx, ictx, fctx, &rhs).into_float_value();
+
+        use mir::FloatConditionFlg::*;
+
+        let op = match op {
+          mir::FloatConditionOp::GtEq => match flg { Ordered => inkwell::FloatPredicate::OGE, Unordered => inkwell::FloatPredicate::UGE }
+          mir::FloatConditionOp::LtEq => match flg { Ordered => inkwell::FloatPredicate::OLE, Unordered => inkwell::FloatPredicate::ULE }
+          
+          mir::FloatConditionOp::Gt => match flg { Ordered => inkwell::FloatPredicate::OGT, Unordered => inkwell::FloatPredicate::UGT }
+          mir::FloatConditionOp::Lt => match flg { Ordered => inkwell::FloatPredicate::OLT, Unordered => inkwell::FloatPredicate::ULT }
+          
+          mir::FloatConditionOp::Eq => match flg { Ordered => inkwell::FloatPredicate::OEQ, Unordered => inkwell::FloatPredicate::UEQ }
+          mir::FloatConditionOp::Ne => match flg { Ordered => inkwell::FloatPredicate::ONE, Unordered => inkwell::FloatPredicate::UNE }
+        };
+
+        fctx.ssa_map.insert(dest, ictx.builder.build_float_compare(op, lhs, rhs, "").unwrap().into());
+      }
+    
       Expr::FloatUnary{op, kind: _, val} => {
         let val = ValueLow::low(uctx, ictx, fctx, &val).into_float_value();
 
@@ -185,6 +205,34 @@ impl InstLow {
         };
       }
     
+      Expr::FloatCast { kind, val } => {
+        let val = ValueLow::low(uctx, ictx, fctx, &val).into_float_value();
+        let dest_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_float_type();
+        let casted = ictx.builder.build_float_cast(val, dest_ty, "").unwrap();
+        fctx.ssa_map.insert(dest, casted.into());
+      }
+    
+
+      Expr::IntToFloatCast { kind, val, signed } => {
+        let val = ValueLow::low(uctx, ictx, fctx, &val).into_int_value();
+        let dest_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_float_type();
+        let casted = match signed {
+          true  => ictx.builder.build_signed_int_to_float(val, dest_ty, "").unwrap(),
+          false => ictx.builder.build_unsigned_int_to_float(val, dest_ty, "").unwrap()
+        };
+        fctx.ssa_map.insert(dest, casted.into());
+      }
+      
+      Expr::FloatToIntCast { kind, val, signed } => {
+        let val = ValueLow::low(uctx, ictx, fctx, &val).into_float_value();
+        let dest_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_int_type();
+        let casted = match signed {
+          true  => ictx.builder.build_float_to_signed_int(val, dest_ty, "").unwrap(),
+          false => ictx.builder.build_float_to_unsigned_int(val, dest_ty, "").unwrap()
+        };
+        fctx.ssa_map.insert(dest, casted.into());
+      }
+  
     }
   }
 
@@ -238,7 +286,12 @@ impl InstLow {
       Expr::IntCast{..} => panic!(),
 
       Expr::FloatArithmetic{..} |
-      Expr::FloatUnary{..} => panic!(),
+      Expr::FloatCondition{..} |
+      Expr::FloatUnary{..} |
+      Expr::FloatCast{..}=> panic!(),
+
+      Expr::IntToFloatCast{..} |
+      Expr::FloatToIntCast{..} => panic!(),
     }
   }
 

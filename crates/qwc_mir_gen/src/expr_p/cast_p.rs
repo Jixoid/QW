@@ -19,14 +19,67 @@ use crate::{Ctx, ExprLow, FunBuilder, SymbLow, TypeLow};
 
 pub fn low_cast_int(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
   let val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
-  
-  let target_ty = TypeLow::low(ctx, sum, it.ety)?;
+  let kind = TypeLow::low(ctx, sum, it.ety)?;
+
   let src_ty = ctx.src.get(expr).ety;
-  let is_signed = match ctx.get(src_ty).kind {
+  let signed = match ctx.get(src_ty).kind {
     hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
     _ => false,
   };
-  let res = bbld.emit(mir::Expr::IntCast { kind: target_ty, val, signed: is_signed });
+
+  let res = bbld.emit(mir::Expr::IntCast {
+    kind,
+    val,
+    signed,
+  });
+  Success(res.unwrap().into())
+}
+
+pub fn low_cast_float(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
+  let val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
+  let kind = TypeLow::low(ctx, sum, it.ety)?;
+  
+  let res = bbld.emit(mir::Expr::FloatCast {
+    kind,
+    val,
+  });
+  Success(res.unwrap().into())
+}
+
+
+pub fn low_cast_int_to_float(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
+  let val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
+  let kind = TypeLow::low(ctx, sum, it.ety)?;
+
+  let src_ty = ctx.src.get(expr).ety;
+  let signed = match ctx.get(src_ty).kind {
+    hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
+    _ => false,
+  };
+  
+  let res = bbld.emit(mir::Expr::IntToFloatCast {
+    kind,
+    val,
+    signed,
+  });
+  Success(res.unwrap().into())
+}
+
+pub fn low_cast_float_to_int(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
+  let val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
+  let kind = TypeLow::low(ctx, sum, it.ety)?;
+  
+  let signed = match ctx.get(it.ety).kind {
+    hir::TypeKind::Int(_, signed) | hir::TypeKind::ArchInt(signed) => signed,
+    _ => false,
+  };
+  
+
+  let res = bbld.emit(mir::Expr::FloatToIntCast {
+    kind,
+    val,
+    signed
+  });
   Success(res.unwrap().into())
 }
 

@@ -104,6 +104,8 @@ impl Message {
       }
       for sugg in &self.suggestions {
         for sec in sugg.labels.iter().skip(1) {
+          if sec.span.is_builtin() { continue }
+
           let file = far.get(sec.span.fid());
           if let Ok(uri) = Url::from_file_path(file.fpath()) {
             let sec_int = sec.span.interval(far);

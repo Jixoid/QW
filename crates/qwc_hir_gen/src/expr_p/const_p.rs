@@ -66,6 +66,7 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
   enum FP {
     I8, I16, I32, I64, I128,
     U8, U16, U32, U64, U128,
+    B8, B16, B32, B64, B128,
     F16, F32, F64, F128,
   }
 
@@ -82,6 +83,12 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
       "i32"  => FP::I32,
       "i64"  => FP::I64,
       "i128" => FP::I128,
+
+      "b8"   => FP::B8,
+      "b16"  => FP::B16,
+      "b32"  => FP::B32,
+      "b64"  => FP::B64,
+      "b128" => FP::B128,
       
       "f16"  => FP::F16,
       "f32"  => FP::F32,
@@ -106,12 +113,21 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
       }
     };
   }
+  
+  macro_rules! parse_bit {
+    ($ty:ident, $cons:ident) => {
+      match $ty::from_str(str) {
+        Ok(v) => Const::$cons(v),
+        Err(_) => ret_err!(sum, Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span))),
+      }
+    };
+  }
 
   macro_rules! parse_float {
     ($ty:path, $cons:ident) => {
       match <$ty>::from_str(str) {
         Ok(v) => Const::$cons(v),
-        Err(_) => ret_err!(sum, Message::error(CANNOT_CONVERT_TO_INT, Label::new_pos(span))),
+        Err(_) => ret_err!(sum, Message::error(CANNOT_CONVERT_TO_FLOAT, Label::new_pos(span))),
       }
     };
   }
@@ -128,6 +144,12 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
     FP::I32  => (ctx.prims.ty_i32,  parse_int!(i32, I32)),
     FP::I64  => (ctx.prims.ty_i64,  parse_int!(i64, I64)),
     FP::I128 => (ctx.prims.ty_i128, parse_int!(i128, I128)),
+
+    FP::B8   => (ctx.prims.ty_b8,   parse_bit!(u8, B8)),
+    FP::B16  => (ctx.prims.ty_b16,  parse_bit!(u16, B16)),
+    FP::B32  => (ctx.prims.ty_b32,  parse_bit!(u32, B32)),
+    FP::B64  => (ctx.prims.ty_b64,  parse_bit!(u64, B64)),
+    FP::B128 => (ctx.prims.ty_b128, parse_bit!(u128, B128)),
     
     FP::F16  => (ctx.prims.ty_f16,  parse_float!(ieee::Half, F16)),
     FP::F32  => (ctx.prims.ty_f32,  parse_float!(ieee::Single, F32)),

@@ -10,10 +10,8 @@
 */
 
 
-use std::assert_matches;
-
 use qwc_ast as ast;
-use qwc_diagnostic::{Label, Message, Status::{self, Success}, Summary, msg::*, send_err};
+use qwc_diagnostic::{Label, Message, Status::{self, Success}, Summary, msg::*, ret_err, send_err};
 use qwc_hir::{self as hir, ExprCategory, PushOkApi};
 
 use crate::{Ctx, FunCtx, ExprLow, Infer};
@@ -38,29 +36,87 @@ pub fn low_unary(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, op: ast::Unary
 }
 
 fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
-  let id = ExprLow::low(ctx, fctx, sum, id)?;
-  err_bypass!(ctx, it.pos, id);
-  let it = ctx.cre.get(id);
-  let ty = ctx.get(it.ety);
+  let val = ExprLow::low(ctx, fctx, sum, id)?;
+  err_bypass!(ctx, it.pos, val);
 
-  use hir::TypeKind::*;
+  let val_ety = ctx.cre.get(val).ety;
+  let val_ty = ctx.get(val_ety);
 
-  let (ty, ism) = match ty.kind {
-    Ref(ty, ism) => (ty, ism),
+  // Primitive ref deref
+  if let hir::TypeKind::Ref(ty, ism) = val_ty.kind {
+    return hir::Expr {
+      kind: hir::ExprKind::Deref(val),
+      category: ExprCategory::lvalue(ism),
+      pos: it.pos,
+      ety: ty,
+    }.push_ok(ctx.cre);
+  }
+  
+  // Primitive ptr deref
+  if let hir::TypeKind::Ptr(ty, ism) = val_ty.kind {
+    if ctx.cmap.unsafe_level == 0 {
+      ret_err!(sum, Message::error(REQUIRES_UNSAFE_BLOCK, Label::new_pos(it.pos)))
+    }
 
-    _ => todo!("{ty:#?}")
+    return hir::Expr {
+      kind: hir::ExprKind::Deref(val),
+      category: ExprCategory::lvalue(ism),
+      pos: it.pos,
+      ety: ty,
+    }.push_ok(ctx.cre);
+  }
+
+  // Trait lookup: Deref
+  let op_trt = ctx.ideps.prim_op().unwrap().op_deref;
+  let op_sid = ctx.sin.sid_deref();
+
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait_unary(ctx, sum, op_trt, val, op_sid, it.pos)
+    .map_err(||
+      send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &ctx.type_name(sum, op_trt),
+          &ctx.type_name(sum, val_ety),
+        ]),
+        Label::new_pos(it.pos)
+      ))
+    )?;
+
+  let op_fun_ty = ctx.cre.get(op_fun).ety;
+  let self_kind = if let hir::TypeKind::Fun { self_kind, .. } = ctx.get(op_fun_ty).kind { self_kind } else { None };
+
+  let val_arg = match self_kind {
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, true);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(val, true),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, false);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(val, false),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    _ => val,
   };
+
+  let args = ctx.cre.extra(&[val_arg]);
 
 
   // Post
-  let this = hir::Expr {
-    kind: hir::ExprKind::Deref(id),
-    category: ExprCategory::lvalue(ism),
+  hir::Expr {
+    kind: hir::ExprKind::Call { callee: op_fun, args },
+    category: ExprCategory::RValue,
     pos: it.pos,
-    ety: ty,
-  };
-
-  Success(ctx.cre.push(this))
+    ety: op_ret,
+  }.push_ok(ctx.cre)
 }
 
 fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId, ism: bool) -> Status<hir::ExprId> {
@@ -71,36 +127,82 @@ fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   let ty = ctx.tin.ty_ref(ctx.cre, ty, ism);
 
   // Post
-  let this = hir::Expr {
+  hir::Expr {
     kind: hir::ExprKind::Ref(id, ism),
     category: ExprCategory::RValue,
     pos: it.pos,
     ety: ty,
-  };
-
-  Success(ctx.cre.push(this))
+  }.push_ok(ctx.cre)
 }
 
 fn low_unary_not(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
-  let id = ExprLow::low(ctx, fctx, sum, id)?;
-  err_bypass!(ctx, it.pos, id);
-  let it = ctx.cre.get(id);
-  let ty = ctx.get(it.ety);
+  let val = ExprLow::low(ctx, fctx, sum, id)?;
+  err_bypass!(ctx, it.pos, val);
 
-  use hir::TypeKind::*;
+  let val_ety = ctx.cre.get(val).ety;
+  let val_ty = ctx.get(val_ety);
 
-  assert_matches!(ty.kind, Bool);
+  // Primitive bool not
+  if let hir::TypeKind::Bool = val_ty.kind {
+    return hir::Expr {
+      kind: hir::ExprKind::BoolNot(val),
+      category: ExprCategory::RValue,
+      pos: it.pos,
+      ety: val_ety,
+    }.push_ok(ctx.cre);
+  }
+
+  // Trait lookup: Not
+  let op_trt = ctx.ideps.prim_op().unwrap().op_not;
+  let op_sid = ctx.sin.sid_not();
+
+  let (op_fun, op_ret) = Infer::lookup_method_with_trait_unary(ctx, sum, op_trt, val, op_sid, it.pos)
+    .map_err(||
+      send_err!(sum, Message::error(X_NOT_IMPLEMENTED_FOR_TYPE
+        .args(&[
+          "trait",
+          &ctx.type_name(sum, op_trt),
+          &ctx.type_name(sum, val_ety),
+        ]),
+        Label::new_pos(it.pos)
+      ))
+    )?;
+
+  let op_fun_ty = ctx.cre.get(op_fun).ety;
+  let self_kind = if let hir::TypeKind::Fun { self_kind, .. } = ctx.get(op_fun_ty).kind { self_kind } else { None };
+
+  let val_arg = match self_kind {
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, true);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(val, true),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, val_ety, false);
+      hir::Expr {
+        kind: hir::ExprKind::Ref(val, false),
+        category: ExprCategory::RValue,
+        pos: it.pos,
+        ety: ty,
+      }.push(ctx.cre)
+    }
+    _ => val,
+  };
+
+  let args = ctx.cre.extra(&[val_arg]);
 
 
   // Post
-  let this = hir::Expr {
-    kind: hir::ExprKind::BoolNot(id),
+  hir::Expr {
+    kind: hir::ExprKind::Call { callee: op_fun, args },
     category: ExprCategory::RValue,
     pos: it.pos,
-    ety: it.ety,
-  };
-
-  Success(ctx.cre.push(this))
+    ety: op_ret,
+  }.push_ok(ctx.cre)
 }
 
 fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId) -> Status<hir::ExprId> {
@@ -111,7 +213,7 @@ fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   let val_ty = ctx.get(val_ety);
 
   // Primitive integer negation
-  if matches!(val_ty.kind, hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..)) {
+  if let hir::TypeKind::ArchInt(..) | hir::TypeKind::Int(..) = val_ty.kind {
     return hir::Expr {
       kind: hir::ExprKind::IntNeg(val),
       category: ExprCategory::RValue,
@@ -121,7 +223,7 @@ fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
   }
 
   // Primitive float negation
-  if matches!(val_ty.kind, hir::TypeKind::Float(..)) {
+  if let hir::TypeKind::Float(..) = val_ty.kind {
     return hir::Expr {
       kind: hir::ExprKind::FloatNeg(val),
       category: ExprCategory::RValue,
@@ -173,12 +275,12 @@ fn low_unary_neg(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
 
   let args = ctx.cre.extra(&[val_arg]);
 
-  let it = hir::Expr {
+
+  // Post
+  hir::Expr {
     kind: hir::ExprKind::Call { callee: op_fun, args },
     category: ExprCategory::RValue,
     pos: it.pos,
     ety: op_ret,
-  }.push(ctx.cre);
-
-  Success(it)
+  }.push_ok(ctx.cre)
 }
