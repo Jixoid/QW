@@ -21,10 +21,11 @@ use crate::{Ctx, Specialization, TypeLow};
 pub fn low_specialize(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, base: ast::TypeId, args: ast::AnyRng) -> Status<hir::TypeId> {
   let base = TypeLow::low(ctx, sum, base)?;
 
-  let hir::TypeKind::GenericRaw { generic, kind } = ctx.get(base).kind else { panic!() };
+  let hir::TypeKind::GenericRaw { generic, kind } = ctx.get(base).kind else {
+    ret_err!(sum, Message::error(TYPE_X_DOES_NOT_HAVE_A_GENERIC.args(&[&ctx.type_name(sum, base)]), Label::new_pos(it.pos)))
+  };
 
   let hir::ItemKind::GenericNS { args: generic_trait, .. } = ctx.get(generic).kind else { panic!() };
-
 
   let expected = ctx.extra_get(generic_trait).collect_vec();
   let received = ctx.src.extra_any_get(args).collect_vec();

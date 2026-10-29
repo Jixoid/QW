@@ -39,6 +39,13 @@ impl Message {
     Message { level: Level::Fatal, message: msg.into(), labels: ThinVec::new(), notes: ThinVec::from([str]), suggestions: ThinVec::new() }
   }
 
+  pub fn fatal_pos(msg: impl Into<CodedString>, label: Label) -> Self {
+    let bt = Backtrace::new();
+    let str = format!("\n{}", ICE::bt(bt));
+
+    Message { level: Level::Fatal, message: msg.into(), labels: ThinVec::from([label]), notes: ThinVec::from([str]), suggestions: ThinVec::new() }
+  }
+
   pub fn error(msg: impl Into<CodedString>, label: Label) -> Self {
     Message { level: Level::Error, message: msg.into(), labels: ThinVec::from([label]), notes: ThinVec::new(), suggestions: ThinVec::new() }
   }

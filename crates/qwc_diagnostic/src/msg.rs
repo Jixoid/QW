@@ -55,6 +55,8 @@ pub const BREAK_OUTSIDE_OF_LOOP:                            CodedMsg = CodedMsg:
 pub const FIXED_VALUE_CANNOT_BE_EVALUATED:                  CodedMsg = CodedMsg::new(0x0028, "the fixed value cannot be evaluated");
 pub const GLOBAL_VARIABLES_CAN_ONLY_BE_CONSTANT:            CodedMsg = CodedMsg::new(0x0029, "global variables can only be constant");
 pub const REQUIRES_UNSAFE_BLOCK:                            CodedMsg = CodedMsg::new(0x002a, "requires unsafe block");
+pub const TYPE_X_DOES_NOT_HAVE_A_GENERIC:                   CodedMsg = CodedMsg::new(0x002b, "type `{}` does not have a generic");
+pub const X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION:    CodedMsg = CodedMsg::new(0x002c, "`{}` in paths can only be used in start position");
 
 
 // Non Coded Messages
@@ -75,6 +77,7 @@ pub const DID_YOU_MEAN:                              CodedMsg = CodedMsg::new_st
 pub const CANNOT_USE_GENERIC_WITHOUT_SPECIALIZATION: CodedMsg = CodedMsg::new_str("cannot use generic type without specialization");
 pub const YOU_MIGHT_HAVE_MEANT_TO_BREAK_THE_LOOP:    CodedMsg = CodedMsg::new_str("you might have meant to break the loop");
 pub const ICE_UNSUPPORTED_FEATURE:                   CodedMsg = CodedMsg::new_str("internal compiler error: unsupported feature");
+pub const ICE_UNREACHABLE:                           CodedMsg = CodedMsg::new_str("internal compiler error: unreachable");
 pub const FOLDER_X_NOT_FOUND:                        CodedMsg = CodedMsg::new_str("folder `{}` not found");
 pub const X_IS_NOT_A_FOLDER:                         CodedMsg = CodedMsg::new_str("`{}` is not a folder");
 pub const FOLDER_X_CAN_NOT_CREATED:                  CodedMsg = CodedMsg::new_str("folder `{}` can not created");
@@ -118,5 +121,6 @@ pub const CANNOT_CAST:                      FmtMsg = FmtMsg::new("cannot cast");
 pub const UNEXPECTED_PARAMETER:             FmtMsg = FmtMsg::new("unexpected parameter:  `{}`");
 pub const ARGUMENT_X_IS_MISSING:            FmtMsg = FmtMsg::new("argument `{}` is missing");
 pub const ICE_MESSAGE:                      FmtMsg = FmtMsg::new("ICE: {}");
+pub const ICE_EXPECTED_BUT_FOUND:           FmtMsg = FmtMsg::new("ICE: expected `{}`, but found `{}`");
 pub const ERROR_X:                          FmtMsg = FmtMsg::new("error: {}");
 pub const VALUE_IS_HERE:                    FmtMsg = FmtMsg::new("value is here");

@@ -96,10 +96,13 @@ pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, rng: ast::Expr
   let mut segment = vec![];
   for &id in &ids {
     let item = ctx.src.get(id);
-    if let ast::ExprKind::Nick(ident) = item.kind {
-      segment.push(ident);
-    } else {
-      ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(item.pos)));
+    match item.kind {
+      ast::ExprKind::Nick(ident) => segment.push(ident),
+      ast::ExprKind::SelfB() => ret_err!(sum, Message::error(
+        X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION.args(&["Self"]),
+        Label::new_pos(item.pos)
+      )),
+      _ => ret_err!(sum, Message::error(EXPECTED_IDENTIFIER, Label::new_pos(item.pos))),
     }
   }
 

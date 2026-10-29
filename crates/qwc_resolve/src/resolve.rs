@@ -72,13 +72,21 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
   }
 
   pub fn resolve_path(&self, sum: &mut Summary, segments: &[ast::Ident]) -> Status<LookupResult<'ast>> {
-    if segments.is_empty() { unreachable!(); }
+    self.resolve_path_in_scope(sum, segments, self.current)
+  }
+
+  pub fn resolve_path_in_scope(&self, sum: &mut Summary, segments: &[ast::Ident], scope: &'ast Scope) -> Status<LookupResult<'ast>> {
+    if segments.is_empty() { unreachable!() }
 
     // İlk segmenti ara
-    let mut current_target = self.lookup(sum, segments[0])?;
+    let current_target = self.lookup_in_scope(sum, segments[0], scope)?;
 
+    self.resolve_from_target(sum, current_target, segments[0], &segments[1..])
+  }
+
+  pub fn resolve_from_target(&self, sum: &mut Summary, mut current_target: LookupResult<'ast>, mut prev_seg: ast::Ident, remaining: &[ast::Ident]) -> Status<LookupResult<'ast>> {
     // Kalan segmentleri eklemeli ara
-    for (i, &seg) in segments[1..].iter().enumerate() {
+    for &seg in remaining {
       match current_target.kind {
         ScopeKind::Ast(ScopeKindAst::Module(id)) => {
           let me_scope = self.scp.get(&id.to_any()).unwrap();
@@ -105,10 +113,10 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
               ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE
                 .args(&[
                   self.sin.str(seg.sid()),
-                  self.sin.str(segments[i].sid())
+                  self.sin.str(prev_seg.sid())
                 ]),
                 Label::new_pos(seg))
-                  + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())]))
+                  + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(prev_seg.sid())]))
                   + sugg
               );
             }
@@ -151,10 +159,10 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
               ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE
                 .args(&[
                   self.sin.str(seg.sid()),
-                  self.sin.str(segments[i].sid())
+                  self.sin.str(prev_seg.sid())
                 ]),
                 Label::new_pos(seg))
-                 + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(segments[i].sid())]))
+                 + Label::new(current_target.span, X_DEFINED_HERE.args(&[self.sin.str(prev_seg.sid())]))
               );
             }
           };
@@ -167,9 +175,10 @@ impl<'ast, 'loc, 'imod> Resolver<'ast, 'loc, 'imod> {
         }
 
         _ => {
-          ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE.args(&[self.sin.str(seg.sid()), self.sin.str(segments[i].sid())]), Label::new_pos(seg)));
+          ret_err!(sum, Message::error(NOT_FOUND_IN_SCOPE.args(&[self.sin.str(seg.sid()), self.sin.str(prev_seg.sid())]), Label::new_pos(seg)));
         }
       }
+      prev_seg = seg;
     }
 
     Success(current_target)

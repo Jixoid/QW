@@ -10,8 +10,9 @@
 */
 
 
+use itertools::Itertools;
 use qwc_diagnostic::{Label, Message, Span, Status, Summary, msg::*, ret_err};
-use qwc_resolve::Resolver;
+use qwc_resolve::{LookupResult, Resolver};
 use qwc_ast::{self as ast, Ident};
 use qwc_hir::{self as hir, PushOkApi, TypeAttr};
 use qwc_resolve as resolve;
@@ -27,12 +28,79 @@ pub fn low_nick(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, ident: Ident) 
 }
 
 pub fn low_path(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, rng: ast::TypeRng) -> Status<hir::TypeId> {
+  let ids = ctx.src.extra_get(rng).collect_vec();
+  if ids.is_empty() { unreachable!() }
+
+  let first = ctx.src.get(ids[0]);
+
+  if let ast::TypeKind::SelfT = first.kind {
+    let self_ty = match ctx.cmap.self_ty.last() {
+      Some(&v) => v,
+      None => ret_err!(sum, Message::error(SELF_TYPE_IS_ONLY_ALLOWED_IN_ASSOCIATED_CONTEXT, Label::new_pos(first.pos))),
+    };
+
+    if ids.len() == 1 {
+      return Status::Success(self_ty);
+    }
+
+    let mut segments = vec![];
+    for &id in &ids[1..] {
+      let item = ctx.src.get(id);
+      match item.kind {
+        ast::TypeKind::Nick(ident) => segments.push(ident),
+        ast::TypeKind::SelfT => ret_err!(sum, Message::error(
+          X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION.args(&["Self"]),
+          Label::new_pos(item.pos)
+        )),
+        _ => ret_err!(sum, Message::fatal_pos(
+          ICE_UNREACHABLE,
+          Label::new(item.pos, ICE_EXPECTED_BUT_FOUND.args(&["Nick", &format!("{:#?}", item.kind)]))
+        )),
+      }
+    }
+
+    let first_seg = segments[0];
+    let (kind, span) = match ctx.lscp.get(&first_seg.sid()) {
+      Some(&(kind, span)) => (kind, span),
+      None => {
+        ret_err!(sum, Message::error(
+          NOT_FOUND_IN_SCOPE.args(&[ctx.sin.str(first_seg.sid()), "Self"]),
+          Label::new_pos(first_seg)
+        ));
+      }
+    };
+
+    let target = LookupResult {
+      kind,
+      span,
+      in_scope: ctx.lscp,
+    };
+
+    let (final_target, lscp) = if segments.len() > 1 {
+      let resolver = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods);
+      let res = resolver.resolve_from_target(sum, target, first_seg, &segments[1..])?;
+      (res.kind, res.in_scope)
+    } else {
+      (target.kind, target.in_scope)
+    };
+
+    return low_resolved_kind(ctx, sum, it.pos, final_target, lscp);
+  }
+
   let mut segment = vec![];
-
-  for id in ctx.src.extra_get(rng) {
-    let it = ctx.src.get(id);
-
-    if let ast::TypeKind::Nick(ident) = it.kind { segment.push(ident) } else { unreachable!() }
+  for &id in &ids {
+    let item = ctx.src.get(id);
+    match item.kind {
+      ast::TypeKind::Nick(ident) => segment.push(ident),
+      ast::TypeKind::SelfT => ret_err!(sum, Message::error(
+        X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION.args(&["Self"]),
+        Label::new_pos(item.pos)
+      )),
+      _ => ret_err!(sum, Message::fatal_pos(
+        ICE_UNREACHABLE,
+        Label::new(item.pos, ICE_EXPECTED_BUT_FOUND.args(&["Nick", &format!("{:#?}", item.kind)]))
+      )),
+    }
   }
 
   let (kind, lscp, _) = Resolver::new(ctx.scp, ctx.sin, ctx.lscp, ctx.ideps, ctx.imods).resolve_path(sum, &segment)?.get_k();
