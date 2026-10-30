@@ -10,7 +10,7 @@
 */
 
 
-use qwc_hir::{Deps, GetApi, HirId, HirKind, ItemId, Krate, Layout, Type, TypeAttr, TypeId, TypeKind};
+use qwc_hir::{Deps, ExprId, GetApi, HirId, HirKind, ItemId, Krate, Layout, Type, TypeAttr, TypeId, TypeKind};
 use rustc_hash::FxHashMap;
 
 
@@ -73,14 +73,14 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_ref(&mut self, cre: &mut Krate, id: TypeId, ism: bool) -> TypeId {
+  pub fn ty_ref(&mut self, cre: &mut Krate, id: TypeId, ism: bool, addrspace: Option<ExprId>) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_ref.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
         let this = Type{
-          kind: TypeKind::Ref(id, ism),
+          kind: TypeKind::Ref{kind: id, ism, addrspace},
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
         };
@@ -93,14 +93,14 @@ impl TypeInterner {
     }
   }
 
-  pub fn ty_ptr(&mut self, cre: &mut Krate, id: TypeId, ism: bool) -> TypeId {
+  pub fn ty_ptr(&mut self, cre: &mut Krate, id: TypeId, ism: bool, addrspace: Option<ExprId>) -> TypeId {
     use std::collections::hash_map::Entry;
     
     match self.ty_ptr.entry((id, ism)) {
       Entry::Occupied(entry) => *entry.get(),
       Entry::Vacant(entry) => {
         let this = Type{
-          kind: TypeKind::Ptr(id, ism),
+          kind: TypeKind::Ptr{kind: id, ism, addrspace},
           layout: Layout::STATIC,
           attr: TypeAttr::empty(),
         };

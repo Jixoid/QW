@@ -301,11 +301,11 @@ impl Infer {
 
             let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
             let param_unref_ty = match ctx.get(param_ty).kind {
-              hir::TypeKind::Ref(inner, _) => inner,
+              hir::TypeKind::Ref{kind: inner, ..} => inner,
               _ => param_ty,
             };
             let rhs_unref_ty = match ctx.get(rhs_ty).kind {
-              hir::TypeKind::Ref(inner, _) => inner,
+              hir::TypeKind::Ref{kind: inner, ..} => inner,
               _ => rhs_ty,
             };
 
@@ -354,11 +354,11 @@ impl Infer {
 
         let hir::Thing::NamedType(_, param_ty) = *ctx.get(arg_thing) else { continue; };
         let param_unref_ty = match ctx.get(param_ty).kind {
-          hir::TypeKind::Ref(inner, _) => inner,
+          hir::TypeKind::Ref{kind: inner, ..} => inner,
           _ => param_ty,
         };
         let rhs_unref_ty = match ctx.get(rhs_ty).kind {
-          hir::TypeKind::Ref(inner, _) => inner,
+          hir::TypeKind::Ref{kind: inner, ..} => inner,
           _ => rhs_ty,
         };
 

@@ -24,6 +24,7 @@ mod run;
 //mod pkg;
 
 use error::Error;
+use qwc_target::DialectOption;
 
 
 pub fn route() {
@@ -324,6 +325,7 @@ fn main_cmd(cmd: MainCommands) {
       let info = compile::CompileInfo {
         path: &path,
         outdir,
+        dialect: DialectOption::empty(),
         opt_level,
         variant,
         start_routine,

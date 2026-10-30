@@ -10,6 +10,7 @@
 */
 
 
+use qwc_diagnostic::{Message, Status::{self, Success}, Summary, msg::*, ret_err};
 use qwc_mir::{Krate, Layout, LayoutInfo, Type, TypeId, TypeKind, TypeRng};
 
 
@@ -17,7 +18,7 @@ pub struct Layouter;
 
 
 impl Layouter {
-  pub fn layout(it: &TypeKind, layinfo: &LayoutInfo, cre: &Krate) -> Layout {
+  pub fn layout(sum: &mut Summary, it: &TypeKind, layinfo: &LayoutInfo, cre: &Krate) -> Status<Layout> {
     match *it {
       // Combinated
       TypeKind::Struct(rng) => lay_struct(cre, rng),
@@ -26,10 +27,14 @@ impl Layouter {
       TypeKind::Array(ty, count) => lay_array(cre, ty, count),
 
       // Reference
-      TypeKind::Ptr => layinfo.ptr_size,
+      TypeKind::Ptr(addrspace) => if let Some(&addr) = layinfo.ptr.get(&addrspace) { Success(addr) } else {
+        ret_err!(sum, Message::error_nopos(THE_ADDRESS_SPACE_X_WAS_NOT_FOUND_IN_THIS_TARGET.args(&[&addrspace.to_string()])))
+      },
 
       // Callable
-      TypeKind::Fun{..} => layinfo.ptr_size,
+      TypeKind::Fun{..} => if let Some(&addr) = layinfo.ptr.get(&layinfo.fun) { Success(addr) } else {
+        panic!()
+      },
 
       _ => todo!("{it:#?}")
     }
@@ -37,7 +42,7 @@ impl Layouter {
 }
 
 
-fn lay_struct(cre: &Krate, rng: TypeRng) -> Layout {
+fn lay_struct(cre: &Krate, rng: TypeRng) -> Status<Layout> {
   let var = {
     let mut var = vec![];
     
@@ -69,19 +74,23 @@ fn lay_struct(cre: &Krate, rng: TypeRng) -> Layout {
     (align, off)
   };
 
-  if size == 0 {
+  let it = if size == 0 {
     Layout::new_zst()
   } else {
     Layout::new_sst(size, align)
-  }
+  };
+
+  Success(it)
 }
 
-fn lay_array(cre: &Krate, ty: TypeId, count: u64) -> Layout {
+fn lay_array(cre: &Krate, ty: TypeId, count: u64) -> Status<Layout> {
   let lay = (cre.get(ty) as &Type).layout;
 
-  if lay.is_zst() || count == 0 {
+  let it = if lay.is_zst() || count == 0 {
     Layout::new_zst()
   } else {
     Layout::new_sst(lay.aligned_size().unwrap() * (count as u64), lay.align().unwrap())
-  }
+  };
+
+  Success(it)
 }

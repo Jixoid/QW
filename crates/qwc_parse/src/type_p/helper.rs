@@ -60,7 +60,7 @@ pub fn read_fun_args(ctx: &mut Ctx) -> Status<(Option<TypeId>, ThingRng)> { ctx!
       }.push(cre);
       let ref_t = Type {
         pos: lex.pos_extend(amp_word),
-        kind: TypeKind::Ref(self_t, ism),
+        kind: TypeKind::Ref{kind: self_t, ism, addrspace: None},
       }.push(cre);
       self_kind = Some(ref_t);
     } else if lex.peek(sum)?.kind() == WK::Mut {

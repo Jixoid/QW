@@ -264,7 +264,7 @@ pub fn low_resolved(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, kind: reso
         let kind = if let hir::TypeKind::Fun { .. } = ctx.get(ty).kind {
           ty
         } else {
-          ctx.tin.ty_ref(ctx.cre, ty, false)
+          ctx.tin.ty_ref(ctx.cre, ty, false, None)
         };
 
         hir::Expr {

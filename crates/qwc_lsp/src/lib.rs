@@ -13,6 +13,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use qwc_target::DialectOption;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
@@ -284,7 +285,7 @@ impl Backend {
                   let dep_imods = [Imod::new(self.core.core_name_sid, &self.core.core_exp)];
                   if let Ok((dep_scope_map, dep_impl_for)) = ScopeCollector::collect(&dep_cre, &mut sin, &dep_imods) {
                     let dep_imod_cids = [core_cid];
-                    let (dep_hir_cid, dep_hir_sum) = HGen::low(&dep_cre, &sin, &far, &dep_scope_map, dep_impl_for, &dep_imod_cids, &mut deps);
+                    let (dep_hir_cid, dep_hir_sum) = HGen::low(&dep_cre, &sin, &far, &dep_scope_map, dep_impl_for, &dep_imod_cids, &mut deps, DialectOption::empty());
                     summary += dep_hir_sum;
                     if let Some(dep_cid) = dep_hir_cid {
                       let dep_hir_cre = deps.get(dep_cid);
@@ -333,7 +334,7 @@ impl Backend {
     let mut hir_state = None;
     if let Some(Ok((scope_map, impl_for))) = scope_res {
       if summary.sumerr() == 0 {
-        let (hir_cid, hir_sum) = HGen::low(&main_cre, &sin, &far, &scope_map, impl_for.clone(), &imod_cids_for_main, &mut deps);
+        let (hir_cid, hir_sum) = HGen::low(&main_cre, &sin, &far, &scope_map, impl_for.clone(), &imod_cids_for_main, &mut deps, DialectOption::empty());
         summary += hir_sum;
         hir_state = Some((scope_map, impl_for, hir_cid, deps));
       } else {

@@ -94,10 +94,25 @@ impl<'a> Evaluator<'a> {
 
 
 pub trait GetConst {
+  fn get_u16(self, sum: &mut Summary) -> Status<u16>;
   fn get_u64(self, sum: &mut Summary) -> Status<u64>;
 }
 
 impl GetConst for Const {
+  fn get_u16(self, sum: &mut Summary) -> Status<u16> {
+    let val = match self {
+      Const::U8(v) => v as u16,
+      Const::U16(v) => v,
+      
+      Const::I8(v) if v >= 0 => v as u16,
+      Const::I16(v) if v >= 0 => v as u16,
+      
+      _ => ret_err!(sum, Message::fatal(ICE_UNSUPPORTED_FEATURE))
+    };
+
+    Status::Success(val)
+  }
+
   fn get_u64(self, sum: &mut Summary) -> Status<u64> {
     let val = match self {
       Const::U8(v) => v as u64,

@@ -288,8 +288,8 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
   } else { (None, None) };
 
   let lhs_arg = match self_kind {
-    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref{ism: true, ..}) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true, None);
       hir::Expr {
         kind: hir::ExprKind::Ref(lhs, true),
         category: ExprCategory::RValue,
@@ -297,8 +297,8 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
         ety: ty,
       }.push(ctx.cre)
     }
-    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., false)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, false);
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref{ism: false, ..}) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, false, None);
       hir::Expr {
         kind: hir::ExprKind::Ref(lhs, false),
         category: ExprCategory::RValue,
@@ -310,8 +310,8 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
   };
 
   let rhs_arg = match param_ty {
-    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., true)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, true);
+    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref{ism: true, ..}) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, true, None);
       hir::Expr {
         kind: hir::ExprKind::Ref(rhs, true),
         category: ExprCategory::RValue,
@@ -319,8 +319,8 @@ fn low_binary_condition(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: as
         ety: ty,
       }.push(ctx.cre)
     }
-    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref(.., false)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, false);
+    Some(param_ty) if matches!(ctx.get(param_ty).kind, hir::TypeKind::Ref{ism: false, ..}) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, rhs_ety, false, None);
       hir::Expr {
         kind: hir::ExprKind::Ref(rhs, false),
         category: ExprCategory::RValue,
@@ -508,8 +508,8 @@ fn low_assign_arithmetic(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, op: a
   let self_kind = if let hir::TypeKind::Fun { self_kind, .. } = ctx.get(op_fun_ty).kind { self_kind } else { None };
 
   let lhs_arg = match self_kind {
-    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref(.., true)) => {
-      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true);
+    Some(self_ty) if matches!(ctx.get(self_ty).kind, hir::TypeKind::Ref{ism: true, ..}) => {
+      let ty = ctx.tin.ty_ref(ctx.cre, lhs_ety, true, None);
       hir::Expr {
         kind: hir::ExprKind::Ref(lhs, true),
         category: ExprCategory::RValue,

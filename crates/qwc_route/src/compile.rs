@@ -22,7 +22,9 @@ use qwc_hir_gen::HGen;
 use qwc_mir_gen::MGen;
 use qwc_resolve::{ExportMap, Imod, ImplFor, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
+use qwc_target::DialectOption;
 use qwc_unit::Unit;
+use rustc_hash::FxHashMap;
 
 use crate::{BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode};
 
@@ -44,6 +46,7 @@ pub struct CompileInfo<'a> {
   pub outdir: PathBuf,
   pub opt_level: OptLevel,
   pub variant: BuildVariant,
+  pub dialect: DialectOption,
   pub start_routine: BuildStartRoutine,
   pub triple: Option<String>,
   pub rtl: Option<String>,
@@ -215,9 +218,9 @@ pub fn build_ast_scope(ast_cre: &ast::Krate, sin: &mut StrInterner, far: &Files,
   }
 }
 
-pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, implst: Vec<ImplFor>, imods: &[hir::CID], ideps: &mut hir::Deps) -> Result<(hir::CID, Duration), Error> {
+pub fn build_hir_krate(ast_cre: &ast::Krate, sin: &StrInterner, far: &Files, ast_scp: &ScopeMap, implst: Vec<ImplFor>, imods: &[hir::CID], ideps: &mut hir::Deps, dialect: DialectOption) -> Result<(hir::CID, Duration), Error> {
   let now = Instant::now();
-  let (cid, sum) = HGen::low(ast_cre, sin, far, ast_scp, implst, imods, ideps);
+  let (cid, sum) = HGen::low(ast_cre, sin, far, ast_scp, implst, imods, ideps, dialect);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -248,9 +251,9 @@ pub fn build_hir_export(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterne
   }
 }
 
-pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo, expmaps: &[ExportMap]) -> Result<(mir::Krate, Duration), Error> {
+pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner, far: &Files, layinfo: &mir::LayoutInfo, expmaps: &[ExportMap], dialect: DialectOption) -> Result<(mir::Krate, Duration), Error> {
   let now = Instant::now();
-  let (mir_cre, sum) = MGen::low(hir_cre, deps, sin, layinfo, expmaps);
+  let (mir_cre, sum) = MGen::low(hir_cre, deps, sin, layinfo, expmaps, dialect);
   let time = now.elapsed();
 
   if !sum.is_empty() {
@@ -375,19 +378,33 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   };
 
   let mir_layinfo = mir::LayoutInfo{
-    arch_bit: mir::ArchBit::B64,
-    i8_lay:   mir::Layout::new_sst(1,  1),
-    i16_lay:  mir::Layout::new_sst(2,  2),
-    i32_lay:  mir::Layout::new_sst(4,  4),
-    i64_lay:  mir::Layout::new_sst(8,  8),
-    i128_lay: mir::Layout::new_sst(16, 16),
-    bf16_lay: mir::Layout::new_sst(1,  1),
-    f16_lay:  mir::Layout::new_sst(2,  2),
-    f32_lay:  mir::Layout::new_sst(4,  4),
-    f64_lay:  mir::Layout::new_sst(8,  8),
-    f128_lay: mir::Layout::new_sst(16, 16),
-    ptr_size: mir::Layout::new_sst(8, 8),
+    fun: 0,
+    ptr: {
+      let mut map = FxHashMap::default();
+      map.insert(0, qwc_mir::Layout::new_sst(8, 8));
+      map
+    },
+    int: {
+      let mut map = FxHashMap::default();
+      map.insert(128, qwc_mir::Layout::new_sst(16, 16));
+      map.insert(64,  qwc_mir::Layout::new_sst(8, 8));
+      map.insert(32,  qwc_mir::Layout::new_sst(4, 4));
+      map.insert(16,  qwc_mir::Layout::new_sst(2, 2));
+      map.insert(8,   qwc_mir::Layout::new_sst(1, 1));
+      map
+    },
+    float: {
+      let mut map = FxHashMap::default();
+      map.insert(mir::FloatKind::F128, qwc_mir::Layout::new_sst(16, 16));
+      map.insert(mir::FloatKind::F64,  qwc_mir::Layout::new_sst(8, 8));
+      map.insert(mir::FloatKind::F32,  qwc_mir::Layout::new_sst(4, 4));
+      map.insert(mir::FloatKind::F16,  qwc_mir::Layout::new_sst(2, 2));
+      map.insert(mir::FloatKind::BF16, qwc_mir::Layout::new_sst(2, 2));
+      map
+    },
+    nint: Some(64),
   };
+  
 
   let outdir = &info.outdir;
   if !outdir.exists() {
@@ -449,7 +466,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
 
   // PASS 2 (hgen)
   if info.verbose > 1 { eprintln!("{}", "PASS 2 (hgen)".red().bold()) }
-  let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, implst, &imod_cids, &mut deps)?;
+  let (hir_cid, time_pass2_hgen) = build_hir_krate(&ast_cre, &sin, &far, &scp, implst, &imod_cids, &mut deps, info.dialect)?;
   let hir_cre = deps.get(hir_cid);
   if info.dump.contains(&DumpStage::Hir) { eprintln!("{}", hir::Dump{cre: hir_cre, deps: &deps, sin: &sin}) }
 
@@ -470,7 +487,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
 
   // PASS 3 (mgen)
   if info.verbose > 1 { eprintln!("{}", "PASS 3 (mgen)".red().bold()) }
-  let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &deps, &sin, &far, &mir_layinfo, &all_exps)?;
+  let (mir_cre, time_pass3_mgen) = build_mir_krate(hir_cre, &deps, &sin, &far, &mir_layinfo, &all_exps, info.dialect)?;
   if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre, sin: &sin}) }
 
   // Choose Backend

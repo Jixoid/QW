@@ -250,7 +250,7 @@ impl SymbLow {
       let table = ctx.cre.extra(&method_symbs);
 
       let arch_int_ty = ctx.tin.ty_arch_int();
-      let ptr_ty = ctx.tin.ty_ptr();
+      let ptr_ty = ctx.tin.ty_ptr(ctx.cre, sum, 0)?;
 
       let mut vmt_fields = vec![arch_int_ty, arch_int_ty, ptr_ty];
       for _ in 0..method_symbs.len() {
@@ -261,7 +261,7 @@ impl SymbLow {
       let struct_kind = mir::TypeKind::Struct(rng);
       let ety = mir::Type {
         kind: struct_kind,
-        layout: Layouter::layout(&struct_kind, ctx.tin.layinfo, ctx.cre),
+        layout: Layouter::layout(sum, &struct_kind, ctx.tin.layinfo, ctx.cre)?,
       }.push(ctx.cre);
 
       let vmt_id = mir::Symbol {

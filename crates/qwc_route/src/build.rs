@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_diagnostic::Summary;
+use qwc_target::{Abi, Arch, Sys, Triple, Vendor, get_dialect};
 
 use crate::{compile, BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode};
 
@@ -51,6 +52,12 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
 
   // Config
   let conf = qwc_config::read_conf(&info.path.canonicalize().unwrap_or_else(|_| info.path.to_path_buf()), &mut far)?;
+
+
+  let triple = Triple(Arch::X86_64, Vendor::Unknown, Sys::Linux, Abi::Unknown);
+
+  let dialect = get_dialect(triple);
+
 
   let mut dep_artifacts = Vec::new();
 
@@ -95,6 +102,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let compile_info = compile::CompileInfo {
     path: info.path,
     outdir,
+    dialect,
     opt_level: info.opt_level,
     variant: info.variant,
     start_routine: info.start_routine,

@@ -49,7 +49,7 @@ impl TypeLow {
         FloatKind::F128 => ictx.ctx.f128_type().into(),
       }
 
-      TypeKind::Ptr => ictx.ctx.ptr_type(AddressSpace::from(0)).into(),
+      TypeKind::Ptr(addrspace) => ictx.ctx.ptr_type(AddressSpace::from(addrspace)).into(),
 
       TypeKind::Array(elem, count) => {
         let elem_ty = any_type_to_basic(Self::low(ictx, ictx.cre.get(elem)));

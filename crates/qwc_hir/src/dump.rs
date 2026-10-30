@@ -341,13 +341,23 @@ impl DumpHandler for Type {
       Str => write!(f, "{}", ty("str"))?,
       
 
-      Ref(kind, ism) => {
+      Ref {kind, ism, addrspace} => {
         write!(f, "{}{}", punct("&"), punct(if ism {"mut "} else {""}))?;
+        if let Some(addrspace) = addrspace {
+          write!(f, "{}", punct(":"))?;
+          addrspace.dump(ctx, f, indent)?;
+          write!(f, " ")?;
+        }
         kind.dump(ctx, f, indent)?;
       }
 
-      Ptr(kind, ism) => {
+      Ptr {kind, ism, addrspace} => {
         write!(f, "{}{}", punct("^"), punct(if ism {"mut "} else {""}))?;
+        if let Some(addrspace) = addrspace {
+          write!(f, "{}", punct(":"))?;
+          addrspace.dump(ctx, f, indent)?;
+          write!(f, " ")?;
+        }
         kind.dump(ctx, f, indent)?;
       }
       

@@ -92,8 +92,8 @@ pub fn low_cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBui
   let vmt = Value::GlobalRef(SymbLow::get_or_low_vmt(ctx, sum, ref_of_type, target_iface)?);
   
   // Get Types
-  let ptr = ctx.tin.ty_ptr();
-  let fatptr = ctx.tin.ty_fatptr();
+  let ptr = ctx.tin.ty_ptr(ctx.cre, sum, 0)?;
+  let fatptr = ctx.tin.ty_fatptr(ctx.cre, sum, 0)?;
   
   // Create
   let slot = bbld.build_alloca(fatptr);

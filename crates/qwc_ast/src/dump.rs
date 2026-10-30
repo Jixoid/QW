@@ -260,14 +260,26 @@ impl DumpHandler for Type {
 
 
       // Pointer
-      TypeKind::Ptr(sub, ism) => {
-        write!(f, "{}{}", "^".bright_black(), kw(if ism { "mut " } else { "" }))?;
-        sub.dump(cre, sin, far, f, indent)?;
+      TypeKind::Ptr{kind, ism, addrspace} => {
+        write!(f, "{}", "^".bright_black())?;
+        if let Some((addrspace, _)) = addrspace {
+          write!(f, "{}", punct(":"))?;
+          addrspace.dump(cre, sin, far, f, indent)?;
+          write!(f, " ")?;
+        };
+        write!(f, "{}", kw(if ism { "mut " } else { "" }))?;
+        kind.dump(cre, sin, far, f, indent)?;
       }
 
-      TypeKind::Ref(sub, ism) => {
-        write!(f, "{}{}", "&".bright_black(), kw(if ism { "mut " } else { "" }))?;
-        sub.dump(cre, sin, far, f, indent)?;
+      TypeKind::Ref{kind, ism, addrspace} => {
+        write!(f, "{}", "&".bright_black())?;
+        if let Some((addrspace, _)) = addrspace {
+          write!(f, "{}", punct(":"))?;
+          addrspace.dump(cre, sin, far, f, indent)?;
+          write!(f, " ")?;
+        };
+        write!(f, "{}", kw(if ism { "mut " } else { "" }))?;
+        kind.dump(cre, sin, far, f, indent)?;
       }
 
 
@@ -461,8 +473,8 @@ impl DumpHandler for Type {
         if let Some(self_id) = self_kind {
           let self_ty: &Type = cre.get(self_id);
           match self_ty.kind {
-            TypeKind::Ref(_, false) => write!(f, "{}{}", punct("&"), ident("self"))?,
-            TypeKind::Ref(_, true) => write!(f, "{}{} {}", punct("&"), kw("mut"), ident("self"))?,
+            TypeKind::Ref{ism: false, ..} => write!(f, "{}{}", punct("&"), ident("self"))?,
+            TypeKind::Ref{ism: true, ..} => write!(f, "{}{} {}", punct("&"), kw("mut"), ident("self"))?,
             TypeKind::SelfT => write!(f, "{}", ident("self"))?,
             _ => {
               write!(f, "{}{} ", ident("self"), punct(":"))?;
@@ -496,8 +508,8 @@ impl DumpHandler for Type {
         if let Some(self_id) = self_kind {
           let self_ty: &Type = cre.get(self_id);
           match self_ty.kind {
-            TypeKind::Ref(_, false) => write!(f, "{}", "&self".magenta())?,
-            TypeKind::Ref(_, true) => write!(f, "{}", "&mut self".magenta())?,
+            TypeKind::Ref{ism: false, ..} => write!(f, "{}", "&self".magenta())?,
+            TypeKind::Ref{ism: true, ..} => write!(f, "{}", "&mut self".magenta())?,
             TypeKind::SelfT => write!(f, "{}", "self".magenta())?,
             _ => {
               write!(f, "self: ")?;

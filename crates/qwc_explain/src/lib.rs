@@ -21,6 +21,7 @@ use qwc_hir_gen::HGen;
 use qwc_parse::Parse;
 use qwc_resolve::{Imod, ScopeCollector};
 use qwc_string_interner::StrInterner;
+use qwc_target::DialectOption;
 
 
 fn test_code(file: &str) {
@@ -102,7 +103,7 @@ fn test_code(file: &str) {
 
 
 	// HGen
-	let (_hir, sum) = HGen::low(ast, sin, far, &scp, implst, &imod_cids, &mut deps);
+	let (_hir, sum) = HGen::low(ast, sin, far, &scp, implst, &imod_cids, &mut deps, DialectOption::empty());
 
 	if !sum.is_empty() {
     for msg in &sum {

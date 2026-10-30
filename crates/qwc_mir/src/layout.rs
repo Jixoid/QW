@@ -11,26 +11,19 @@
 
 
 use std::num::{NonZeroU32, NonZeroU64};
+use rustc_hash::FxHashMap;
 
+use crate::FloatKind;
 
-pub enum ArchBit { B8, B16, B32, B64 }
 
 pub struct LayoutInfo {
-  pub arch_bit: ArchBit,
-  
-  pub ptr_size: Layout,
-  
-  pub i8_lay: Layout,
-  pub i16_lay: Layout,
-  pub i32_lay: Layout,
-  pub i64_lay: Layout,
-  pub i128_lay: Layout,
+  pub fun: u16,
+  pub ptr: FxHashMap<u16, Layout>,
+  pub int: FxHashMap<u16, Layout>,
 
-  pub bf16_lay: Layout,
-  pub f16_lay: Layout,
-  pub f32_lay: Layout,
-  pub f64_lay: Layout,
-  pub f128_lay: Layout,
+  pub float: FxHashMap<FloatKind, Layout>,
+
+  pub nint: Option<u16>,
 }
 
 

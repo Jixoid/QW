@@ -28,8 +28,8 @@ pub enum TypeKind {
   Path (TypeRng),
 
   // Pointer
-  Ptr (TypeId, bool),
-  Ref (TypeId, bool),
+  Ptr {kind: TypeId, ism: bool, addrspace: Option<(ExprId, Span)>},
+  Ref {kind: TypeId, ism: bool, addrspace: Option<(ExprId, Span)>},
   
   /// Vector
   Vector (TypeId, ExprId),

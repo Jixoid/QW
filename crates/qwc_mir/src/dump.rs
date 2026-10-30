@@ -16,7 +16,7 @@ use owo_colors::OwoColorize;
 use qwc_dump::{kw, lit_bool, lit_num, name, op, punct, tmpval, ty, write_indent};
 use qwc_string_interner::StrInterner;
 
-use crate::{AnyId, Block, BlokId, Const, Expr, FloatKind, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny}};
+use crate::{AnyId, Block, BlokId, Const, Expr, Inst, Krate, Layout, SymbId, Symbol, SymbolKind, SymbolStat, Terminator, Type, TypeId, TypeKind, Value, ValueId, id::{InstId, MirId, NodeKind, SpecAny}, types::FloatKind};
 
 
 pub trait DumpHandler {
@@ -112,7 +112,8 @@ impl DumpHandler for Type {
       TypeKind::Unit => write!(f, "{}", punct("()"))?,
 
       TypeKind::Bool => write!(f, "{}", ty("bool"))?,
-      TypeKind::Ptr => write!(f, "{}", ty("ptr"))?,
+      
+      TypeKind::Ptr(addr) => write!(f, "{}{}{}{}", ty("ptr"), punct("("), addr, punct(")"))?,
 
       TypeKind::Int(bits, signed) => {
         let prefix = if signed { "i" } else { "u" };

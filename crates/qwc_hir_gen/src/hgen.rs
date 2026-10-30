@@ -19,6 +19,7 @@ use qwc_diagnostic::{Label, Message, Span, Status::{Fail, Success}, StatusApi, S
 use qwc_hir::{self as hir, CID, Deps, HPoit, PathApi, PrimTypes};
 use qwc_resolve::{ImplFor, LocalScopeManager, Scope, ScopeMap};
 use qwc_string_interner::{Sid, StrInterner};
+use qwc_target::DialectOption;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{ItemLow, ty_interner::TypeInterner, type_p::TypeLow};
@@ -39,6 +40,7 @@ pub struct Ctx<'ast, 'hir, 'loc, 'imod> {
   pub prims: &'imod PrimTypes,
   pub type_impls: &'loc FxHashMap<hir::TypeId, TypeMethods>,
   pub path: hir::DefPathId,
+  pub dialect: DialectOption,
 }
 
 
@@ -128,7 +130,7 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
       | hir::TypeKind::ItemFlag { path, .. } => Some(path),
       hir::TypeKind::GenericRaw { kind, .. } => self.type_path(kind),
       hir::TypeKind::TraitFrom { trait_ty, .. } => self.type_path(trait_ty),
-      hir::TypeKind::Ref(sub, _) | hir::TypeKind::Ptr(sub, _) => self.type_path(sub),
+      hir::TypeKind::Ref{kind, ..} | hir::TypeKind::Ptr{kind, ..} => self.type_path(kind),
       _ => None,
     }
   }
@@ -184,8 +186,18 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 
 
       // Reference
-      hir::TypeKind::Ref(sub, ism) => format!("&{}{}", if ism {"mut "} else {""}, self.type_name(sum, sub)),
-      hir::TypeKind::Ptr(sub, ism) => format!("^{}{}", if ism {"mut "} else {""}, self.type_name(sum, sub)),
+      hir::TypeKind::Ref{kind, ism, addrspace} => format!("&{}{}{}",
+        if let Some(addr) = addrspace {format!(":{} ", eval.eval(sum, addr).unwrap().get_u64(sum).unwrap())} else {String::new()},
+        if ism {"mut "} else {""},
+        self.type_name(sum, kind)
+      ),
+
+      hir::TypeKind::Ptr{kind, ism, addrspace} => format!("^{}{}{}",
+        if let Some(addr) = addrspace {format!(":{} ", eval.eval(sum, addr).unwrap().get_u64(sum).unwrap())} else {String::new()},
+        if ism {"mut "} else {""},
+        self.type_name(sum, kind)
+      ),
+
       
 
       // Vector
@@ -257,19 +269,19 @@ impl<'ast, 'hir, 'loc, 'imod> Ctx<'ast, 'hir, 'loc, 'imod> {
 #[macro_export]
 macro_rules! ctx {
   ($lscp:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, path: $ctx.path, $lscp}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, path: $ctx.path, $lscp, dialect: $ctx.dialect}
   };
 
   ($lscp:ident, $path:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp, path: $path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, $lscp, path: $path, dialect: $ctx.dialect}
   };
 
   (path $path:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, lscp: $ctx.lscp, path: $path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut *$ctx.loc, lscp: $ctx.lscp, path: $path, dialect: $ctx.dialect}
   };
 
   (loc $loc:ident -> $ctx:expr) => {
-    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp, path: $ctx.path}
+    &mut Ctx{cre: $ctx.cre, tin: $ctx.tin, cmap: $ctx.cmap, imods: $ctx.imods, ideps: $ctx.ideps, prims: $ctx.prims, src: $ctx.src, sin: $ctx.sin, far: $ctx.far, scp: $ctx.scp, type_impls: $ctx.type_impls, loc: &mut $loc, lscp: $ctx.lscp, path: $ctx.path, dialect: $ctx.dialect}
   }
 }
 
@@ -279,7 +291,7 @@ pub struct HGen;
 
 impl<'ast, 'imod> HGen {
 
-  pub fn low(src: &'ast ast::Krate, sin: &'ast StrInterner, far: &'ast Files, scp: &'ast ScopeMap, implst: Vec<ImplFor>, imods: &'imod [CID], ideps: &'imod mut Deps) -> (Option<CID>, Summary) {
+  pub fn low(src: &'ast ast::Krate, sin: &'ast StrInterner, far: &'ast Files, scp: &'ast ScopeMap, implst: Vec<ImplFor>, imods: &'imod [CID], ideps: &'imod mut Deps, dialect: DialectOption) -> (Option<CID>, Summary) {
     let cid = ideps.get_next_id();
     let mut cre = hir::Krate::new(cid);
     
@@ -314,13 +326,13 @@ impl<'ast, 'imod> HGen {
     let lscp = scp.get(&root.to_any()).unwrap();
     
     // Pre 1
-    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc, path: root_path}, &mut sum, implst) {
+    let type_impls = match Self::pre1(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &FxHashMap::default(), loc: &mut loc, path: root_path, dialect}, &mut sum, implst) {
       Err(..) => return (None, sum),
       Ok(v) => v,
     };
 
     // Start
-    if let Success(Some(root)) = ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc, path: root_path}, &mut sum, root) {
+    if let Success(Some(root)) = ItemLow::low(&mut Ctx{cre: &mut cre, tin: &mut tin, cmap: &mut cmap, src, sin, far, scp, lscp, imods, ideps, prims: &prims, type_impls: &type_impls, loc: &mut loc, path: root_path, dialect}, &mut sum, root) {
       cre.set_root(root);
     }
     

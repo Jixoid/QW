@@ -11,9 +11,10 @@
 
 
 use qwc_comptime::{Evaluator, GetConst};
-use qwc_diagnostic::{Status::{self, Success}, Summary};
+use qwc_diagnostic::{Message, Status::{self, Success}, StatusApi, Summary, msg::{THE_ADDRESS_SPACE_MUST_BE_SPECIFIED, THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT}, ret_err};
 use qwc_hir as hir;
 use qwc_mir::{self as mir, PushOkApi};
+use qwc_target::DialectOption;
 
 use crate::{Ctx, Layouter};
 
@@ -39,8 +40,8 @@ impl TypeLow {
       Bool => ctx.tin.ty_bool(),
       Char => ctx.tin.ty_i32(),
 
-      Ref(id, _) => Self::low_ref(ctx, sum, id)?,
-      Ptr(id, _) => Self::low_ptr(ctx, sum, id)?,
+      Ref{kind, addrspace, ..} => Self::low_ref(ctx, sum, kind, addrspace)?,
+      Ptr{kind, addrspace, ..} => Self::low_ptr(ctx, sum, kind, addrspace)?,
 
       // Combinated
       Struct(rng) => Self::low_struct(ctx, sum, rng, id.cid())?,
@@ -101,29 +102,49 @@ impl TypeLow {
   }
 
 
-  fn low_ref(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
-    use hir::TypeKind::*;
-
-    let it = match ctx.get(id).kind {
-      Str | Slice(..) => ctx.tin.ty_fatptrint(),
-      
-      ItemIface{..} => ctx.tin.ty_fatptr(),
+  fn low_ref(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, addrspace: Option<hir::ExprId>) -> Status<mir::TypeId> {
+    let addr = addrspace.map(|id| Evaluator::new(ctx.src).eval(sum, id)).transpose()?.map(|cs| cs.get_u16(sum)).transpose()?;
     
-      _ => ctx.tin.ty_ptr()
+    let addr = match (ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES), addr) {
+      (true, None) => ret_err!(sum, Message::error_nopos(THE_ADDRESS_SPACE_MUST_BE_SPECIFIED)),
+      (false, Some(..)) => ret_err!(sum, Message::error_nopos(THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT)),
+
+      (true, Some(v)) => v,
+      (false, None) => 0,
+    };
+    
+    
+    use hir::TypeKind::*;
+    let it = match ctx.get(id).kind {
+      Str | Slice(..) => ctx.tin.ty_fatptrint(ctx.cre, sum, addr)?,
+      
+      ItemIface{..} => ctx.tin.ty_fatptr(ctx.cre, sum, addr)?,
+    
+      _ => ctx.tin.ty_ptr(ctx.cre, sum, addr)?,
     };
     
     Success(it)
   }
 
-  fn low_ptr(ctx: &mut Ctx, _sum: &mut Summary, id: hir::TypeId) -> Status<mir::TypeId> {
-    use hir::TypeKind::*;
-
-    let it = match ctx.get(id).kind {
-      Str | Slice(..) => ctx.tin.ty_fatptrint(),
-      
-      ItemIface{..} => ctx.tin.ty_fatptr(),
+  fn low_ptr(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, addrspace: Option<hir::ExprId>) -> Status<mir::TypeId> {
+    let addr = addrspace.map(|id| Evaluator::new(ctx.src).eval(sum, id)).transpose()?.map(|cs| cs.get_u16(sum)).transpose()?;
     
-      _ => ctx.tin.ty_ptr()
+    let addr = match (ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES), addr) {
+      (true, None) => ret_err!(sum, Message::error_nopos(THE_ADDRESS_SPACE_MUST_BE_SPECIFIED)),
+      (false, Some(..)) => ret_err!(sum, Message::error_nopos(THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT)),
+
+      (true, Some(v)) => v,
+      (false, None) => 0,
+    };
+
+
+    use hir::TypeKind::*;
+    let it = match ctx.get(id).kind {
+      Str | Slice(..) => ctx.tin.ty_fatptrint(ctx.cre, sum, addr)?,
+      
+      ItemIface{..} => ctx.tin.ty_fatptr(ctx.cre, sum, addr)?,
+    
+      _ => ctx.tin.ty_ptr(ctx.cre, sum, addr)?,
     };
     
     Success(it)
@@ -138,7 +159,7 @@ impl TypeLow {
     let kind = mir::TypeKind::Array(elem_ty, count);
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(sum, &kind, ctx.tin.layinfo, ctx.cre)?,
     }.push_ok(ctx.cre)
   }
 
@@ -163,7 +184,7 @@ impl TypeLow {
 
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(sum, &kind, ctx.tin.layinfo, ctx.cre)?,
     }.push_ok(ctx.cre)
   }
 
@@ -184,7 +205,7 @@ impl TypeLow {
 
     mir::Type {
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(sum, &kind, ctx.tin.layinfo, ctx.cre)?,
     }.push_ok(ctx.cre)
   }
 
@@ -223,7 +244,7 @@ impl TypeLow {
 
     mir::Type{
       kind,
-      layout: Layouter::layout(&kind, ctx.tin.layinfo, ctx.cre),
+      layout: Layouter::layout(sum, &kind, ctx.tin.layinfo, ctx.cre)?,
     }.push_ok(ctx.cre)
   }
 
