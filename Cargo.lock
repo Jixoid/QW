@@ -727,6 +727,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwc_cgen_circt"
+version = "0.1.0"
+
+[[package]]
 name = "qwc_cgen_llvm"
 version = "0.1.0"
 dependencies = [
@@ -759,6 +763,7 @@ dependencies = [
  "qwc_arena",
  "qwc_diagnostic",
  "qwc_ds",
+ "qwc_target",
  "rustc-hash",
 ]
 

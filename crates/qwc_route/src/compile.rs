@@ -9,11 +9,11 @@
   Copyright (c) 2025-2026 by Kadir Aydın.
 */
 
-use std::{env, fs, io::{self, Write}, path::{Path, PathBuf}, process::Command, time::{Duration, Instant}};
+use std::{env, fs, io::Write, path::{Path, PathBuf}, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_cgen::{self as cgen, ICGen, Optimization, OutKind};
+use qwc_cgen::{self as cgen, GenOptions, IBackend, ICodeGen, ILinkObj, IRunVM, LinkOptions};
 use qwc_hir as hir;
 use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
@@ -22,7 +22,7 @@ use qwc_hir_gen::HGen;
 use qwc_mir_gen::MGen;
 use qwc_resolve::{ExportMap, Imod, ImplFor, ScopeCollector, ScopeMap};
 use qwc_string_interner::StrInterner;
-use qwc_target::DialectOption;
+use qwc_target::{Arch, DialectOption, Triple};
 use qwc_unit::Unit;
 use rustc_hash::FxHashMap;
 
@@ -36,8 +36,6 @@ pub enum BuildKind { Exec, Lib }
 pub struct DepArtifact {
   pub name: String,
   pub qwu_path: PathBuf,
-  pub obj_path: Option<PathBuf>,
-  pub so_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -48,7 +46,7 @@ pub struct CompileInfo<'a> {
   pub variant: BuildVariant,
   pub dialect: DialectOption,
   pub start_routine: BuildStartRoutine,
-  pub triple: Option<String>,
+  pub triple: Triple,
   pub rtl: Option<String>,
   pub reloc: RelocMode,
   pub mcmodel: CodeModel,
@@ -267,31 +265,34 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(info: &CompileInfo, backend: &dyn ICGen, mir_cre: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
+pub fn build_cgen(info: &CompileInfo, backend: &dyn ICodeGen, mir_cre: &mir::Krate, sin: &StrInterner, emit_ir: bool) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
-  let (out, ll) = backend.generate(
+  let options = GenOptions {
+    triple: None,
+    emit_ir,
+    opt_level: match info.opt_level { OptLevel::O0 => cgen::Optimization::None, OptLevel::O1 => cgen::Optimization::Less, OptLevel::O2 => cgen::Optimization::Default, OptLevel::O3 => cgen::Optimization::Aggressive },
+    code_model: Some(match info.mcmodel { CodeModel::Small => cgen::CodeModel::Small, CodeModel::Medium => cgen::CodeModel::Medium, CodeModel::Large => cgen::CodeModel::Large, CodeModel::Kernel => cgen::CodeModel::Kernel }),
+    reloc_mode: Some(match info.reloc { RelocMode::PIC => cgen::RelocMode::PIC, RelocMode::Static => cgen::RelocMode::Static }),
+  };
+
+  let out = backend.generate(
     mir_cre,
     sin,
-    ext_ll,
-    outk,
-    &info.triple,
-    match info.reloc { RelocMode::PIC => cgen::RelocMode::PIC, RelocMode::Static => cgen::RelocMode::Static },
-    match info.mcmodel { CodeModel::Small => cgen::CodeModel::Small, CodeModel::Medium => cgen::CodeModel::Medium, CodeModel::Large => cgen::CodeModel::Large, CodeModel::Kernel => cgen::CodeModel::Kernel },
-    match info.opt_level { OptLevel::O0 => Optimization::None, OptLevel::O1 => Optimization::Less, OptLevel::O2 => Optimization::Default, OptLevel::O3 => Optimization::Aggressive },
+    &options,
   ).map_err(Error::Str)?;
 
   let time = now.elapsed();
 
-  Ok((out, ll, time))
+  Ok((out.binary, out.text_ir, time))
 }
 
-pub fn build_jit(info: &CompileInfo, backend: &dyn ICGen, bytecode: &[u8]) -> Result<(), Error> {
+pub fn build_jit(info: &CompileInfo, backend: &dyn IRunVM, bytecode: &[u8]) -> Result<(), Error> {
   if info.verbose > 0 {
     eprintln!("{}", "Running".green().bold());
   }
 
-  let dep_sos: Vec<PathBuf> = info.deps.iter().filter_map(|d| d.so_path.clone()).collect();
+  let dep_sos: Vec<&Path> = info.deps.iter().map(|d| d.qwu_path.as_path()).collect();
   let exitcode = backend.run_vm(bytecode, &dep_sos)?;
 
   if exitcode != 0 {
@@ -301,7 +302,7 @@ pub fn build_jit(info: &CompileInfo, backend: &dyn ICGen, bytecode: &[u8]) -> Re
   Ok(())
 }
 
-pub fn build_link(info: &CompileInfo, outdir: &Path, bld_kind: BuildKind, dep_objs: &[PathBuf]) -> Result<(), Error> {
+pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld_kind: BuildKind) -> Result<(), Error> {
   if info.verbose > 0 {
     eprintln!("{}", "Linking".green().bold());
   }
@@ -316,43 +317,48 @@ pub fn build_link(info: &CompileInfo, outdir: &Path, bld_kind: BuildKind, dep_ob
     }
   }
   
-  let mut cmd = Command::new("ld.lld");
-  
-  if bld_kind == BuildKind::Exec {
+  let mut deps = vec![];
+
+  deps.push("-L/usr/lib");
+
+  let src = if bld_kind == BuildKind::Exec {
     let rt = match info.start_routine {
-      BuildStartRoutine::CQRT => { cmd.arg("-lc").arg("--dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2"); "cqrt" },
-      BuildStartRoutine::CRT  => { cmd.arg("-lc").arg("--dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2"); "crt" },
+      BuildStartRoutine::CQRT => { deps.push("-lc"); "cqrt" },
+      BuildStartRoutine::CRT  => { deps.push("-lc"); "crt" },
       BuildStartRoutine::QRT  => "qrt",
     };
   
-    cmd.arg(format!("{}/obj/{}.o", get_rtl(&info.rtl)?, rt));
-  } else if bld_kind == BuildKind::Lib {
-    cmd.arg("-shared");
-  }
-  
-  cmd.arg("-L/usr/lib").arg("-o")
-    .arg(match bld_kind {
-      BuildKind::Exec => outdir.canonicalize().unwrap().join("out"),
-      BuildKind::Lib  => outdir.canonicalize().unwrap().join("out.so"),
-    })
-    .arg(outdir.canonicalize().unwrap().join("out.o"));
-
-  for dep_obj in dep_objs {
-    if dep_obj.exists() {
-      cmd.arg(dep_obj);
-    }
-  }
-  
-  let out = cmd.output().map_err(|err| err.to_string())?;
-  
-  if !out.status.success() {
-    eprintln!("{}{} {}", "Linker Exit Code".green().bold(), ":".bright_black(), out.status);
-    
-    io::stderr().write(&out.stdout).map_err(|err| err.to_string())?;
-    io::stderr().write(&out.stderr).map_err(|err| err.to_string())?;
+    Some(format!("{}/obj/{}.o", get_rtl(&info.rtl)?, rt))
   } else {
-    io::stderr().write(&out.stdout).map_err(|err| err.to_string())?;
-    io::stderr().write(&out.stderr).map_err(|err| err.to_string())?;
+    None
+  };
+
+  if let Some(ref str) = src {
+    deps.push(str);
+  }
+
+  for dep in &info.deps {
+    deps.push(dep.qwu_path.to_str().unwrap());
+  }
+
+  let options = LinkOptions {
+    target: Some(cgen::LinkTarget::Exec),
+    triple: None,
+    is_dynamic: true,
+    lto: false,
+    reloc_mode: Some(cgen::RelocMode::PIC),
+    code_model: Some(cgen::CodeModel::Small),
+  };
+
+  let out = backend.link(
+    outdir.canonicalize().unwrap().as_path(),
+    outdir.canonicalize().unwrap().as_path(),
+    &deps,
+    &options,
+  );
+  
+  if let Err(err) = out {
+    eprintln!("{}{} {}", "Linker Error".green().bold(), ":".bright_black(), err);
   }
 
   Ok(())
@@ -432,8 +438,6 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   let mut imod_cids = Vec::with_capacity(1 + info.deps.len());
   imod_cids.push(core_cid);
 
-  let mut dep_objs = Vec::new();
-
   for dep in &info.deps {
     let mut file = fs::File::open(&dep.qwu_path)
       .map_err(|e| Error::New | format!("cannot open dependency '{}' at {:?}: {}", dep.name, dep.qwu_path, e))?;
@@ -442,10 +446,6 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     let dep_cid = deps.add(dep_hir);
     imod_cids.push(dep_cid);
     dep_exps.push(dep_exp);
-
-    if let Some(obj) = &dep.obj_path {
-      dep_objs.push(obj.clone());
-    }
   }
 
   let mut all_exps = Vec::with_capacity(1 + info.deps.len());
@@ -491,17 +491,23 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   if info.dump.contains(&DumpStage::Mir) { eprint!("{}", mir::Dump{cre: &mir_cre, sin: &sin}) }
 
   // Choose Backend
-  let backend: Box<dyn ICGen> = Box::new(qwc_cgen_llvm::CGen);
+  let backend: Box<dyn IBackend> = match info.triple.0 {
+    Arch::X86_64 | Arch::I686 | Arch::ARM | Arch::AArch64 | Arch::RiscV32 | Arch::RiscV64 => Box::new(qwc_cgen_llvm::Gen),
+
+    Arch::SpirV32 | Arch::SpirV64 => panic!(),
+
+    Arch::CIRCT => panic!(),
+  };
+
 
   // PASS 4 (cgen)
   if info.verbose > 1 { eprintln!("{}", "PASS 4 (cgen)".red().bold()) }
   let (out, llir, time_pass4_cgen) = build_cgen(
     &info,
-    backend.as_ref(),
+    backend.code_gen().as_ref(),
     &mir_cre,
     &sin,
     info.dump.contains(&DumpStage::Lir),
-    if info.execute { OutKind::ByteCode } else { OutKind::Object },
   )?;
 
   let bytecode = (info.execute).then_some(&out);
@@ -518,9 +524,13 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   }
 
   if info.execute {
-    build_jit(&info, backend.as_ref(), bytecode.unwrap())?;
+    if let Some(link) = backend.run_vm() {
+      build_jit(&info, link.as_ref(), bytecode.unwrap())?;
+    } else {
+      return Err(Error::New | format!("this target not have a run feature"));
+    }
   } else {
-    build_link(&info, outdir, bld_kind, &dep_objs)?;
+    build_link(&info, backend.link_obj().as_ref(), outdir, bld_kind)?;
   }
 
   // Timings

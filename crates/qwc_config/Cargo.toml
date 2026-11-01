@@ -8,4 +8,5 @@ itertools = "0.15.0"
 rustc-hash = "2.1.3"
 qwc_ds = { path = "../qwc_ds" }
 qwc_arena = { path = "../qwc_arena" }
+qwc_target = { path = "../qwc_target" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }

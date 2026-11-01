@@ -35,7 +35,6 @@ pub fn run(info: RunInfo) -> Result<(), Error> {
     execute: true,
     variant: BuildVariant::Debug,
     start_routine: BuildStartRoutine::CRT,
-    triple: None,
     rtl: None,
     reloc: RelocMode::PIC,
     mcmodel: CodeModel::Small,

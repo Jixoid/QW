@@ -13,7 +13,9 @@
 use bitflags::bitflags;
 
 
+#[derive(Copy, Clone)]
 pub enum Arch {
+  CIRCT,
   X86_64,
   I686,
   ARM,
@@ -24,11 +26,13 @@ pub enum Arch {
   SpirV64,
 }
 
+#[derive(Copy, Clone)]
 pub enum Vendor {
   Unknown,
   Apple,
 }
 
+#[derive(Copy, Clone)]
 pub enum Sys {
   Vulkan,
   OpenCL,
@@ -39,6 +43,7 @@ pub enum Sys {
   IOS,
 }
 
+#[derive(Copy, Clone)]
 pub enum Abi {
   Unknown,
   GNU,
@@ -46,8 +51,8 @@ pub enum Abi {
 }
 
 
+#[derive(Copy, Clone)]
 pub struct Triple (pub Arch, pub Vendor, pub Sys, pub Abi);
-
 
 
 pub fn get_dialect(triple: Triple) -> DialectOption {
@@ -62,6 +67,14 @@ pub fn get_dialect(triple: Triple) -> DialectOption {
       DialectOption::DENY_RECURSIVE_CALLS |
       DialectOption::DENY_DYNAMIC_DISPATCH |
       DialectOption::DENY_FN_POINTERS,
+      
+    Triple(CIRCT, ..) => 
+      DialectOption::SPECIFIED_ADDRESS_SPACES |
+      DialectOption::DENY_RECURSIVE_TYPES |
+      DialectOption::DENY_RECURSIVE_CALLS |
+      DialectOption::DENY_DYNAMIC_DISPATCH |
+      DialectOption::DENY_FN_POINTERS |
+      DialectOption::DENY_POINTERS,
   }
 }
 
