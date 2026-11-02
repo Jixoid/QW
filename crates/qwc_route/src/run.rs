@@ -33,6 +33,7 @@ pub fn run(info: RunInfo) -> Result<(), Error> {
     dump: info.dump,
     check_only: false,
     execute: true,
+    dolink: false,
     variant: BuildVariant::Debug,
     start_routine: BuildStartRoutine::CRT,
     rtl: None,

@@ -35,7 +35,7 @@ pub enum BuildKind { Exec, Lib }
 #[derive(Clone, Debug)]
 pub struct DepArtifact {
   pub name: String,
-  pub qwu_path: PathBuf,
+  pub path: PathBuf,
 }
 
 #[derive(Clone)]
@@ -56,6 +56,7 @@ pub struct CompileInfo<'a> {
   pub dump: Vec<DumpStage>,
   pub check_only: bool,
   pub execute: bool,
+  pub dolink: bool,
   pub deps: Vec<DepArtifact>,
   pub krate_name: Option<String>,
 }
@@ -265,7 +266,7 @@ pub fn build_mir_krate(hir_cre: &hir::Krate, deps: &hir::Deps, sin: &StrInterner
   Ok((mir_cre.unwrap(), time))
 }
 
-pub fn build_cgen(info: &CompileInfo, backend: &dyn ICodeGen, mir_cre: &mir::Krate, sin: &StrInterner, emit_ir: bool) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
+pub fn build_cgen(info: &CompileInfo, backend: &dyn ICodeGen, mir_cre: &mir::Krate, sin: &StrInterner, outdir: &Path, emit_ir: bool) -> Result<(Vec<u8>, Option<String>, Duration), Error> {
   let now = Instant::now();
   
   let options = GenOptions {
@@ -279,6 +280,7 @@ pub fn build_cgen(info: &CompileInfo, backend: &dyn ICodeGen, mir_cre: &mir::Kra
   let out = backend.generate(
     mir_cre,
     sin,
+    outdir,
     &options,
   ).map_err(Error::Str)?;
 
@@ -292,7 +294,7 @@ pub fn build_jit(info: &CompileInfo, backend: &dyn IRunVM, bytecode: &[u8]) -> R
     eprintln!("{}", "Running".green().bold());
   }
 
-  let dep_sos: Vec<&Path> = info.deps.iter().map(|d| d.qwu_path.as_path()).collect();
+  let dep_sos: Vec<&Path> = info.deps.iter().map(|d| d.path.as_path()).collect();
   let exitcode = backend.run_vm(bytecode, &dep_sos)?;
 
   if exitcode != 0 {
@@ -318,13 +320,14 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
   }
   
   let mut deps = vec![];
+  let mut args = vec![];
 
-  deps.push("-L/usr/lib");
+  args.push("-L/usr/lib");
 
   let src = if bld_kind == BuildKind::Exec {
     let rt = match info.start_routine {
-      BuildStartRoutine::CQRT => { deps.push("-lc"); "cqrt" },
-      BuildStartRoutine::CRT  => { deps.push("-lc"); "crt" },
+      BuildStartRoutine::CQRT => { args.push("-lc"); "cqrt" },
+      BuildStartRoutine::CRT  => { args.push("-lc"); "crt" },
       BuildStartRoutine::QRT  => "qrt",
     };
   
@@ -333,13 +336,15 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
     None
   };
 
-  if let Some(ref str) = src {
-    deps.push(str);
+  if let Some(str) = &src {
+    args.push(str);
   }
 
   for dep in &info.deps {
-    deps.push(dep.qwu_path.to_str().unwrap());
+    deps.push(dep.path.clone());
   }
+
+  let deps: Vec<&Path> = deps.iter().map(|it| it.as_path()).collect();
 
   let options = LinkOptions {
     target: Some(cgen::LinkTarget::Exec),
@@ -354,6 +359,7 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
     outdir.canonicalize().unwrap().as_path(),
     outdir.canonicalize().unwrap().as_path(),
     &deps,
+    &args,
     &options,
   );
   
@@ -439,10 +445,10 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   imod_cids.push(core_cid);
 
   for dep in &info.deps {
-    let mut file = fs::File::open(&dep.qwu_path)
-      .map_err(|e| Error::New | format!("cannot open dependency '{}' at {:?}: {}", dep.name, dep.qwu_path, e))?;
+    let mut file = fs::File::open(&dep.path.join("out.qwu"))
+      .map_err(|e| Error::New | format!("cannot open dependency '{}' at {:?}: {}", dep.name, dep.path.join("out.qwu"), e))?;
     let (dep_hir, dep_exp) = Unit::deserialize(&mut file, &mut sin)
-      .map_err(|e| Error::New | format!("cannot deserialize dependency '{}' at {:?}: {}", dep.name, dep.qwu_path, e))?;
+      .map_err(|e| Error::New | format!("cannot deserialize dependency '{}' at {:?}: {}", dep.name, dep.path.join("out.qwu"), e))?;
     let dep_cid = deps.add(dep_hir);
     imod_cids.push(dep_cid);
     dep_exps.push(dep_exp);
@@ -507,20 +513,18 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     backend.code_gen().as_ref(),
     &mir_cre,
     &sin,
+    outdir,
     info.dump.contains(&DumpStage::Lir),
   )?;
 
   let bytecode = (info.execute).then_some(&out);
-  let object = (!info.execute).then_some(&out);
-
-  if !info.execute {
-    fs::write(outdir.join("out.o"), object.unwrap())?;
-  }
 
   if info.dump.contains(&DumpStage::Lir) {
-    let llir = llir.unwrap();
-    fs::write(outdir.join("out.ll"), &llir)?;
-    eprintln!("{}", llir);
+    eprintln!("{}", llir.unwrap());
+  }
+
+  if info.dolink {
+    build_link(&info, backend.link_obj().as_ref(), outdir, bld_kind)?;
   }
 
   if info.execute {
@@ -529,8 +533,6 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     } else {
       return Err(Error::New | format!("this target not have a run feature"));
     }
-  } else {
-    build_link(&info, backend.link_obj().as_ref(), outdir, bld_kind)?;
   }
 
   // Timings

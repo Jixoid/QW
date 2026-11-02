@@ -73,11 +73,11 @@ pub trait IBackend {
 
 
 pub trait ICodeGen {
-  fn generate(&self, mir: &Krate, sin: &StrInterner, options: &GenOptions) -> Result<GenOutput, String>;
+  fn generate(&self, mir: &Krate, sin: &StrInterner, outdir: &Path, options: &GenOptions) -> Result<GenOutput, String>;
 }
 
 pub trait ILinkObj {
-  fn link(&self, target: &Path, out: &Path, deps: &[&str], options: &LinkOptions) -> Result<(), String>;
+  fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String>;
 }
 
 pub trait IRunVM {

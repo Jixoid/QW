@@ -10,7 +10,7 @@
 */
 
 
-use std::{path::Path, process::Command};
+use std::{fs, path::{Path, PathBuf}, process::Command};
 
 use inkwell::{builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
 use inkwell::targets::{InitializationConfig, Target, TargetMachine, TargetTriple};
@@ -50,7 +50,7 @@ impl IBackend for GenLLVM {
 
 
 impl ICodeGen for GenLLVM {
-	fn generate(&self, cre: &Krate, sin: &StrInterner, options: &GenOptions) -> Result<GenOutput, String> {
+	fn generate(&self, cre: &Krate, sin: &StrInterner, outdir: &Path, options: &GenOptions) -> Result<GenOutput, String> {
 		let ctx = Context::create();
 		let mol = Self::compile_to_module(&ctx, "main", cre, sin);
 
@@ -77,6 +77,17 @@ impl ICodeGen for GenLLVM {
 			.to_vec();
 
 		let text_ir = options.emit_ir.then(|| mol.print_to_string().to_string());
+		
+		fs::write(outdir.join("out.o"), &binary).map_err(|err| format!("io: {err}"))?;
+		
+		let ll = outdir.join("out.ll");
+		
+		if let Some(text_ir) = &text_ir {
+			fs::write(ll, text_ir).map_err(|err| format!("io: {err}"))?;
+		}
+		else if text_ir.is_none() && ll.exists() {
+			fs::remove_file(ll).map_err(|err| format!("io: {err}"))?;
+		}
 
 		Ok(GenOutput{
 			binary,
@@ -86,20 +97,20 @@ impl ICodeGen for GenLLVM {
 }
 
 impl ILinkObj for GenLLVM {
-	fn link(&self, target: &Path, out: &Path, deps: &[&str], options: &LinkOptions) -> Result<(), String> {
+	fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String> {
 		let mut cmd = Command::new("ld.lld");
 
 		// reloc mode
 		if let Some(reloc_mode) = &options.reloc_mode {
-			cmd.arg(format!("-relocation-model={}", match reloc_mode {
-				RelocMode::PIC => "pic",
-				RelocMode::Static => "static",
-			}));
+			cmd.arg(match reloc_mode {
+				RelocMode::PIC => "--pie",
+				RelocMode::Static => "--static",
+			});
 		}
 
 		// code model
 		if let Some(code_model) = &options.code_model {
-			cmd.arg(format!("-code-model={}", match code_model {
+			cmd.arg("-mllvm").arg(format!("-code-model={}", match code_model {
 				CodeModel::Kernel => "kernel",
 				CodeModel::Small  => "small",
 				CodeModel::Medium => "medium",
@@ -121,14 +132,30 @@ impl ILinkObj for GenLLVM {
 		cmd.arg(target.join("out.o"));
 
 		// out
-		cmd.arg("-o")
-    	.arg(match options.target.unwrap() {
-				LinkTarget::Shared => out.join("out.so"),
-				LinkTarget::Exec   => out.join("out"),
-			});
+		cmd.arg("-o").arg(match options.target.unwrap() {
+			LinkTarget::Shared => out.join("out.so"),
+			LinkTarget::Exec   => out.join("out"),
+		});
 		
 		// deps
-		for dep in deps { cmd.arg(dep); }
+		for &dep in deps {
+			cmd.arg(PathBuf::from(dep).join("out.o"));
+		}
+
+		for &arg in args {
+			cmd.arg(arg);
+		}
+
+
+		// Linker
+		let out = cmd.output().map_err(|err| format!("linker: {err}"))?;
+
+		if !out.status.success() {
+			eprint!("{}", String::from_utf8_lossy(&out.stderr));
+			eprint!("{}", String::from_utf8_lossy(&out.stdout));
+
+			return Err(format!("linker return error"));
+		}
 
 		Ok(())
 	}
@@ -136,10 +163,12 @@ impl ILinkObj for GenLLVM {
 
 impl IRunVM for GenLLVM {
 	fn run_vm(&self, code: &[u8], deps: &[&Path]) -> Result<i32, String> {
-		for dep in deps { if dep.exists() {
+		for &dep in deps {
+			let dep = &dep.join("out.o");
+
 			inkwell::support::load_library_permanently(dep)
-				.map_err(|_| format!("cannot load dependency library: {}", dep.display()))?;
-		}}
+				.map_err(|err| format!("cannot load dependency library: {}: {err}", dep.display()))?;
+		}
 
 		let ctx = Context::create();
 

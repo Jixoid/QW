@@ -33,6 +33,7 @@ pub struct BuildInfo<'a> {
   pub dump: Vec<DumpStage>,
   pub check_only: bool,
   pub execute: bool,
+  pub dolink: bool,
 }
 
 
@@ -74,6 +75,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
       sub_info.path = path;
       sub_info.dump = vec![];
       sub_info.execute = false;
+      sub_info.dolink = false;
 
       build(sub_info)?;
 
@@ -83,7 +85,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
 
       dep_artifacts.push(compile::DepArtifact {
         name: name.clone(),
-        qwu_path: dep_outdir.join("out.qwu"),
+        path: dep_outdir,
       });
     }
   }
@@ -111,6 +113,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     execute: info.execute,
     deps: dep_artifacts,
     krate_name: Some(conf.name.clone()),
+    dolink: info.dolink,
   };
 
   compile::compile(compile_info)?;
