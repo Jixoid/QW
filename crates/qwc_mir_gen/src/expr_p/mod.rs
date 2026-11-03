@@ -144,15 +144,15 @@ impl ExprLow {
 
       Array(kind, rng) => Self::low_const_array(ctx, sum, bbld, kind, rng)?,
       
-      Str(sid) => Self::low_const_str(ctx, bbld, sid)?,
+      Str(sid) => Self::low_const_str(ctx, sum, bbld, sid)?,
     };
 
     Success(this)
   }
 
-  fn low_const_str(ctx: &mut Ctx, bbld: &mut FunBuilder, sid: Sid) -> Status<Value> {
-    let fatptr = ctx.tin.ty_fatptrint();
-    let ptr = ctx.tin.ty_ptr();
+  fn low_const_str(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, sid: Sid) -> Status<Value> {
+    let fatptr = ctx.tin.ty_fatptrint(ctx.cre, sum, 0)?;
+    let ptr = ctx.tin.ty_ptr(ctx.cre, sum, 0)?;
     let aint = ctx.tin.ty_arch_int();
 
     let slot = bbld.build_alloca(fatptr);

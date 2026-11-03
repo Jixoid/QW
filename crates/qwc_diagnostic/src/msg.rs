@@ -57,6 +57,9 @@ pub const GLOBAL_VARIABLES_CAN_ONLY_BE_CONSTANT:            CodedMsg = CodedMsg:
 pub const REQUIRES_UNSAFE_BLOCK:                            CodedMsg = CodedMsg::new(0x002a, "requires unsafe block");
 pub const TYPE_X_DOES_NOT_HAVE_A_GENERIC:                   CodedMsg = CodedMsg::new(0x002b, "type `{}` does not have a generic");
 pub const X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION:    CodedMsg = CodedMsg::new(0x002c, "`{}` in paths can only be used in start position");
+pub const THE_ADDRESS_SPACE_MUST_BE_SPECIFIED:              CodedMsg = CodedMsg::new(0x002d, "the address space must be specified");
+pub const THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT:      CodedMsg = CodedMsg::new(0x002e, "there are no address spaces in this dialect");
+pub const THE_ADDRESS_SPACE_X_WAS_NOT_FOUND_IN_THIS_TARGET: CodedMsg = CodedMsg::new(0x002f, "The address space `{}` was not found in this target");
 
 
 // Non Coded Messages
@@ -101,6 +104,7 @@ pub const CANNOT_USE_SUPER_AT_ROOT:                  CodedMsg = CodedMsg::new_st
 pub const EXPECTED_MODULE_FOR_GLOB:                  CodedMsg = CodedMsg::new_str("expected a module for glob import");
 pub const EXPECTED_MODULE_IN_PATH:                   CodedMsg = CodedMsg::new_str("expected module in import path");
 pub const MODULE_SCOPE_NOT_FOUND:                    CodedMsg = CodedMsg::new_str("module scope not found");
+pub const YOU_CAN_DELETE_THIS_DIRECTLY:              CodedMsg = CodedMsg::new_str("you can delete this directly");
 
 
 // Label
@@ -124,3 +128,4 @@ pub const ICE_MESSAGE:                      FmtMsg = FmtMsg::new("ICE: {}");
 pub const ICE_EXPECTED_BUT_FOUND:           FmtMsg = FmtMsg::new("ICE: expected `{}`, but found `{}`");
 pub const ERROR_X:                          FmtMsg = FmtMsg::new("error: {}");
 pub const VALUE_IS_HERE:                    FmtMsg = FmtMsg::new("value is here");
+pub const THIS_WILL_BE_IGNORED:             FmtMsg = FmtMsg::new("this will be ignored");

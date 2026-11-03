@@ -220,7 +220,7 @@ pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) -
 }
 
 pub fn low_string(ctx: &mut Ctx, it: &ast::Expr, sid: Sid) -> Status<hir::ExprId> {
-  let ety = ctx.tin.ty_ref(ctx.cre, ctx.prims.ty_str, false);
+  let ety = ctx.tin.ty_ref(ctx.cre, ctx.prims.ty_str, false, None);
   
   // Post
   let this = hir::Expr{

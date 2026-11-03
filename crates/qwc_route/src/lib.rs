@@ -17,6 +17,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 mod error;
 mod build;
+mod clean;
 mod compile;
 mod init;
 mod run;
@@ -24,6 +25,7 @@ mod run;
 //mod pkg;
 
 use error::Error;
+use qwc_target::{Abi, Arch, DialectOption, Sys, Triple, Vendor};
 
 
 pub fn route() {
@@ -41,7 +43,6 @@ struct Cli {
 #[derive(Subcommand)]
 enum MainCommands {
   /// Create a new qw package
-  #[command(alias = "i")]
   Init {
     /// Directory to initialize
     #[arg(long, default_value = ".")]
@@ -64,7 +65,6 @@ enum MainCommands {
     force: bool,
   },
 
-  #[command(alias = "r")]
   Run {
     /// Directory to build
     #[arg(long, default_value = ".")]
@@ -86,7 +86,6 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
-  #[command(alias = "cp")]
   /// Compile a single crate directly
   Compile {
     /// Directory or file to compile
@@ -98,7 +97,7 @@ enum MainCommands {
     outdir: Option<PathBuf>,
 
     /// External dependencies (format: NAME=PATH_TO_QWU or NAME=PATH_TO_QWU:PATH_TO_OBJ)
-    #[arg(long = "dep", value_name = "NAME=QWU[:OBJ]")]
+    #[arg(long = "dep", value_name = "NAME=QWU")]
     deps: Vec<String>,
 
     /// Optimization Level
@@ -112,11 +111,11 @@ enum MainCommands {
     /// Select start routine (only executable)
     #[arg(long, default_value = "cqrt")]
     start_routine: BuildStartRoutine,
-
-    /// Target triple
-    #[arg(long)]
-    triple: Option<String>,
     
+    /// Select start routine (only executable)
+    #[arg(long)]
+    arch: Option<String>,
+
     /// RTL Source
     #[arg(long)]
     rtl: Option<String>,
@@ -128,6 +127,10 @@ enum MainCommands {
     /// Code Model
     #[arg(long, default_value = "small")]
     mcmodel: CodeModel,
+
+    /// Execute after build
+    #[arg(long)]
+    exec: bool,
 
     /// Display execution times for each compiler phase
     #[arg(long)]
@@ -145,7 +148,6 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
-  #[command(alias = "b")]
   /// Compile the package
   Build {
     /// Directory to build
@@ -164,10 +166,6 @@ enum MainCommands {
     #[arg(long, default_value = "cqrt")]
     start_routine: BuildStartRoutine,
 
-    /// Target triple
-    #[arg(long)]
-    triple: Option<String>,
-    
     /// RTL Source
     #[arg(long)]
     rtl: Option<String>,
@@ -196,7 +194,13 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
-  #[command(alias = "c")]
+  /// Clean build dir
+  Clean {
+    /// Directory to build
+    #[arg(long, default_value = ".")]
+    path: PathBuf,
+  },
+
   /// Check the package for errors
   Check {
     /// Directory to check
@@ -219,7 +223,6 @@ enum MainCommands {
     dump: Vec<DumpStage>,
   },
 
-  #[command(alias = "e")]
   /// Explain error code with example
   Explain {
     /// Error code
@@ -285,7 +288,7 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, triple, rtl, reloc, mcmodel, verbose, timings, usages, dump} => {
+    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, arch, rtl, reloc, mcmodel, verbose, exec, timings, usages, dump} => {
       let variant_dir = match variant {
         BuildVariant::Debug => "debug",
         BuildVariant::Release => "release",
@@ -303,27 +306,31 @@ fn main_cmd(cmd: MainCommands) {
 
       let mut dep_artifacts = Vec::new();
       for dep_str in deps {
-        if let Some((name, paths)) = dep_str.split_once('=') {
-          let (qwu_str, obj_str) = if let Some((q, o)) = paths.split_once(':') {
-            (q, Some(o))
-          } else if let Some((q, o)) = paths.split_once(',') {
-            (q, Some(o))
-          } else {
-            (paths, None)
-          };
-          let so_path = obj_str.map(|o| PathBuf::from(o).with_extension("so")).filter(|p| p.exists());
+        if let Some((name, path)) = dep_str.split_once('=') {
           dep_artifacts.push(compile::DepArtifact {
             name: name.to_string(),
-            qwu_path: PathBuf::from(qwu_str),
-            obj_path: obj_str.map(PathBuf::from),
-            so_path,
+            path: PathBuf::from(path),
           });
         }
       }
 
+      let arch = if let Some(arch) = arch {
+        match arch.as_str() {
+          "circt" => Arch::CIRCT,
+          "spirv" => Arch::SpirV64,
+
+          c @_ => {eprintln!("unknown arch: {c}"); std::process::exit(1)}
+        }
+      } else {
+        Arch::RiscV64
+      };
+      
+      let triple = Triple(arch, Vendor::Unknown, Sys::Linux, Abi::Unknown);
+
       let info = compile::CompileInfo {
         path: &path,
         outdir,
+        dialect: DialectOption::empty(),
         opt_level,
         variant,
         start_routine,
@@ -336,7 +343,8 @@ fn main_cmd(cmd: MainCommands) {
         usages,
         dump,
         check_only: false,
-        execute: false,
+        execute: exec,
+        dolink: true,
         deps: dep_artifacts,
         krate_name: qwc_config::read_conf(&path, &mut Files::default()).ok().map(|c| c.name),
       };
@@ -350,13 +358,12 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Build{path, opt_level, variant, start_routine, triple, rtl, reloc, mcmodel, verbose, timings, usages, dump} => {
+    MainCommands::Build{path, opt_level, variant, start_routine, rtl, reloc, mcmodel, verbose, timings, usages, dump} => {
       let info = build::BuildInfo {
         path: &path,
         opt_level,
         variant,
         start_routine,
-        triple,
         rtl,
         reloc,
         mcmodel,
@@ -366,9 +373,24 @@ fn main_cmd(cmd: MainCommands) {
         dump,
         check_only: false,
         execute: false,
+        dolink: true,
       };
 
       match build::build(info) {
+        Ok(()) => (),
+        Err(e) => {
+          eprintln!("{}", e);
+          std::process::exit(1);
+        }
+      };
+    }
+
+    MainCommands::Clean{path} => {
+      let info = clean::CleanInfo {
+        path: &path,
+      };
+
+      match clean::clean(info) {
         Ok(()) => (),
         Err(e) => {
           eprintln!("{}", e);
@@ -383,7 +405,6 @@ fn main_cmd(cmd: MainCommands) {
         opt_level: OptLevel::O0,
         variant: BuildVariant::Debug,
         start_routine: BuildStartRoutine::CQRT,
-        triple: None,
         rtl: None,
         reloc: RelocMode::PIC,
         mcmodel: CodeModel::Small,
@@ -393,6 +414,7 @@ fn main_cmd(cmd: MainCommands) {
         dump,
         check_only: true,
         execute: false,
+        dolink: false,
       };
 
       match build::build(info) {

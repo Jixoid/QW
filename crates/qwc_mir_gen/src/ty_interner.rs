@@ -12,7 +12,9 @@
 
 use std::num::NonZeroU32;
 
-use qwc_mir::{self as mir, Krate, Layout, LayoutInfo, Type, TypeId, TypeKind, id::PushOkApi};
+use qwc_diagnostic::{Message, Status::{self, Success}, Summary, msg::THE_ADDRESS_SPACE_X_WAS_NOT_FOUND_IN_THIS_TARGET, ret_err};
+use qwc_mir::{self as mir, FloatKind, Krate, Layout, LayoutInfo, Type, TypeId, TypeKind, id::PushOkApi};
+use rustc_hash::FxHashMap;
 
 use crate::layout::Layouter;
 
@@ -25,9 +27,9 @@ pub struct TypeInterner<'a> {
   ty_bool: TypeId,
 
   // Ptr
-  ty_ptr: TypeId,
-  ty_fatptr: TypeId,
-  ty_fatptrint: TypeId,
+  ty_ptr: FxHashMap<u16, TypeId>,
+  ty_fatptr: FxHashMap<u16, TypeId>,
+  ty_fatptrint: FxHashMap<u16, TypeId>,
   
   // Int
   ty_i8: TypeId,
@@ -46,40 +48,6 @@ pub struct TypeInterner<'a> {
 
 impl<'a> TypeInterner<'a> {
   pub fn new(cre: &mut Krate, layinfo: &'a LayoutInfo) -> Self {
-    let ty_i8  = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},  true), layout: layinfo.i8_lay}.push(cre);
-    let ty_i16 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(16)}, true), layout: layinfo.i16_lay}.push(cre);
-    let ty_i32 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)}, true), layout: layinfo.i32_lay}.push(cre);
-    let ty_i64 = Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)}, true), layout: layinfo.i64_lay}.push(cre);
-
-    let ty_arch_int = || -> TypeId {
-      use mir::ArchBit::*;
-
-      match layinfo.arch_bit {
-        B8  => ty_i8,
-        B16 => ty_i16,
-        B32 => ty_i32,
-        B64 => ty_i64,
-      }
-    };
-
-
-    let ty_ptr = Type{kind: TypeKind::Ptr, layout: layinfo.ptr_size}.push(cre);
-
-    let ty_fatptr = {
-      let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_ptr]));
-      let layout = Layouter::layout(&kind, layinfo, cre);
-
-      Type{kind, layout}.push(cre)
-    };
-
-    let ty_fatptrint = {
-      let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_arch_int()]));
-      let layout = Layouter::layout(&kind, layinfo, cre);
-
-      Type{kind, layout}.push(cre)
-    };
-
-
     Self {
       layinfo,
 
@@ -87,44 +55,104 @@ impl<'a> TypeInterner<'a> {
 
       ty_bool: Type{kind: TypeKind::Bool, layout: Layout::new_sst(1, 1)}.push(cre),
 
-      ty_ptr,
-      ty_fatptr,
-      ty_fatptrint,
+      ty_ptr: FxHashMap::default(),
+      ty_fatptr: FxHashMap::default(),
+      ty_fatptrint: FxHashMap::default(),
       
       // Int
-      ty_i8:   Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},   true), layout: layinfo.i8_lay}.push(cre),
-      ty_i16:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(16)},  true), layout: layinfo.i16_lay}.push(cre),
-      ty_i32:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)},  true), layout: layinfo.i32_lay}.push(cre),
-      ty_i64:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)},  true), layout: layinfo.i64_lay}.push(cre),
-      ty_i128: Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(128)}, true), layout: layinfo.i128_lay}.push(cre),
+      ty_i8:   Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(8)},   true), layout: *layinfo.int.get(&8).unwrap()}.push(cre),
+      ty_i16:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(16)},  true), layout: *layinfo.int.get(&16).unwrap()}.push(cre),
+      ty_i32:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(32)},  true), layout: *layinfo.int.get(&32).unwrap()}.push(cre),
+      ty_i64:  Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(64)},  true), layout: *layinfo.int.get(&64).unwrap()}.push(cre),
+      ty_i128: Type{kind: TypeKind::Int(unsafe {NonZeroU32::new_unchecked(128)}, true), layout: *layinfo.int.get(&128).unwrap()}.push(cre),
 
       // Float
-      ty_f16:  Type{kind: TypeKind::Float(mir::FloatKind::F16), layout: layinfo.f16_lay}.push(cre),
-      ty_f32:  Type{kind: TypeKind::Float(mir::FloatKind::F32), layout: layinfo.f32_lay}.push(cre),
-      ty_f64:  Type{kind: TypeKind::Float(mir::FloatKind::F64), layout: layinfo.f64_lay}.push(cre),
-      ty_f128: Type{kind: TypeKind::Float(mir::FloatKind::F128), layout: layinfo.f128_lay}.push(cre),
+      ty_f16:  Type{kind: TypeKind::Float(mir::FloatKind::F16),  layout: *layinfo.float.get(&FloatKind::F16).unwrap()}.push(cre),
+      ty_f32:  Type{kind: TypeKind::Float(mir::FloatKind::F32),  layout: *layinfo.float.get(&FloatKind::F32).unwrap()}.push(cre),
+      ty_f64:  Type{kind: TypeKind::Float(mir::FloatKind::F64),  layout: *layinfo.float.get(&FloatKind::F64).unwrap()}.push(cre),
+      ty_f128: Type{kind: TypeKind::Float(mir::FloatKind::F128), layout: *layinfo.float.get(&FloatKind::F128).unwrap()}.push(cre),
     }
   }
 
-  
-  pub fn ty_unit(&self) -> TypeId { self.ty_unit }
 
+  // Primitive
+  pub fn ty_unit(&self) -> TypeId { self.ty_unit }
   pub fn ty_bool(&self) -> TypeId { self.ty_bool }
 
-  pub fn ty_ptr(&self) -> TypeId { self.ty_ptr }
-  pub fn ty_fatptr(&self) -> TypeId { self.ty_fatptr }
-  pub fn ty_fatptrint(&self) -> TypeId { self.ty_fatptrint }
+
+  // Ptr(s)
+  pub fn ty_ptr(&mut self, cre: &mut Krate, sum: &mut Summary, addrspace: u16) -> Status<TypeId> {
+    use std::collections::hash_map::Entry::*;
+    match self.ty_ptr.entry(addrspace) {
+      Occupied(entry) => Success(*entry.get()),
+
+      Vacant(entry) => {
+        let layout = self.layinfo.ptr.get(&addrspace);
+
+        let Some(&layout) = layout else {
+          ret_err!(sum, Message::error_nopos(THE_ADDRESS_SPACE_X_WAS_NOT_FOUND_IN_THIS_TARGET.args(&[&addrspace.to_string()])))
+        };
+
+        let id = Type{kind: TypeKind::Ptr(addrspace), layout}.push(cre);
+
+        entry.insert(id);
+        Success(id)
+      }
+    }
+  }
+
+  pub fn ty_fatptr(&mut self, cre: &mut Krate, sum: &mut Summary, addrspace: u16) -> Status<TypeId> {
+    let ty_ptr = self.ty_ptr(cre, sum, addrspace)?;
+
+    use std::collections::hash_map::Entry::*;
+    match self.ty_fatptr.entry(addrspace) {
+      Occupied(entry) => Success(*entry.get()),
+
+      Vacant(entry) => {
+        let id = {
+          let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_ptr]));
+          let layout = Layouter::layout(sum, &kind, self.layinfo, cre)?;
+
+          Type{kind, layout}.push(cre)
+        };
+
+        entry.insert(id);
+        Success(id)
+      }
+    }
+  }
+
+  pub fn ty_fatptrint(&mut self, cre: &mut Krate, sum: &mut Summary, addrspace: u16) -> Status<TypeId> {
+    let ty_ptr = self.ty_ptr(cre, sum, addrspace)?;
+    let ty_int = self.ty_arch_int();
+
+    use std::collections::hash_map::Entry::*;
+    match self.ty_fatptrint.entry(addrspace) {
+      Occupied(entry) => Success(*entry.get()),
+
+      Vacant(entry) => {
+        let id = {
+          let kind = TypeKind::Struct(cre.extra(&[ty_ptr, ty_int]));
+          let layout = Layouter::layout(sum, &kind, self.layinfo, cre)?;
+
+          Type{kind, layout}.push(cre)
+        };
+
+        entry.insert(id);
+        Success(id)
+      }
+    }
+  }
 
 
   // Int
   pub fn ty_arch_int(&self) -> TypeId {
-    use mir::ArchBit::*;
-
-    match self.layinfo.arch_bit {
-      B8  => self.ty_i8,
-      B16 => self.ty_i16,
-      B32 => self.ty_i32,
-      B64 => self.ty_i64,
+    match self.layinfo.nint.unwrap() {
+      8  => self.ty_i8,
+      16 => self.ty_i16,
+      32 => self.ty_i32,
+      64 => self.ty_i64,
+      _ => panic!()
     }
   }
 

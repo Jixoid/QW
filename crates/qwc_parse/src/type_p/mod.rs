@@ -207,30 +207,50 @@ impl TypeParser {
   fn pre_ref(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get(sum)?;
 
+    let addrspace = if lex.peek(sum)?.kind() == WK::Colon {
+      let start = lex.get(sum)?;
+
+      let exp = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
+
+      Some((exp, lex.pos_extend(start)))
+    } else {
+      None
+    };
+
     let ism = if lex.peek(sum)?.kind() == WK::Mut { lex.bump(sum)?; true } else { false };
 
-    let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
+    let kind = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
     Type{
       pos: lex.pos_extend(start),
-      kind: TypeKind::Ref(sub, ism)
+      kind: TypeKind::Ref{kind, ism, addrspace}
     }.push_ok(cre)
   }
 
   fn pre_ptr(ctx: &mut Ctx) -> Status<TypeId> { ctx!(ctx => cre, sin, far, lex, sum, side);
     let start = lex.get(sum)?;
 
+    let addrspace = if lex.peek(sum)?.kind() == WK::Colon {
+      let start = lex.get(sum)?;
+
+      let exp = ExprParser::read_expr(ctx!(cre, sin, far, lex, sum, side))?;
+
+      Some((exp, lex.pos_extend(start)))
+    } else {
+      None
+    };
+
     let ism = if lex.peek(sum)?.kind() == WK::Mut { lex.bump(sum)?; true } else { false };
 
-    let sub = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
+    let kind = Self::read_type(ctx!(cre, sin, far, lex, sum, side))?;
 
 
     // Post
     Type{
       pos: lex.pos_extend(start),
-      kind: TypeKind::Ptr(sub, ism)
+      kind: TypeKind::Ptr{kind, ism, addrspace}
     }.push_ok(cre)
   }
 

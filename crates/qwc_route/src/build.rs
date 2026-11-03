@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_diagnostic::Summary;
+use qwc_target::{Abi, Sys, Triple, Vendor, get_dialect};
 
 use crate::{compile, BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode};
 
@@ -23,7 +24,6 @@ pub struct BuildInfo<'a> {
   pub opt_level: OptLevel,
   pub variant: BuildVariant,
   pub start_routine: BuildStartRoutine,
-  pub triple: Option<String>,
   pub rtl: Option<String>,
   pub reloc: RelocMode,
   pub mcmodel: CodeModel,
@@ -33,6 +33,7 @@ pub struct BuildInfo<'a> {
   pub dump: Vec<DumpStage>,
   pub check_only: bool,
   pub execute: bool,
+  pub dolink: bool,
 }
 
 
@@ -52,6 +53,11 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   // Config
   let conf = qwc_config::read_conf(&info.path.canonicalize().unwrap_or_else(|_| info.path.to_path_buf()), &mut far)?;
 
+  let triple = Triple(conf.arch, Vendor::Unknown, Sys::Linux, Abi::Unknown);
+
+  let dialect = get_dialect(triple);
+
+
   let mut dep_artifacts = Vec::new();
 
   if !conf.deps.is_empty() {
@@ -69,6 +75,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
       sub_info.path = path;
       sub_info.dump = vec![];
       sub_info.execute = false;
+      sub_info.dolink = false;
 
       build(sub_info)?;
 
@@ -76,14 +83,9 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
         .join("build")
         .join(variant_dir);
 
-      let so_path = dep_outdir.join("out.so");
-      let so_path = if so_path.exists() { Some(so_path) } else { None };
-
       dep_artifacts.push(compile::DepArtifact {
         name: name.clone(),
-        qwu_path: dep_outdir.join("out.qwu"),
-        obj_path: Some(dep_outdir.join("out.o")),
-        so_path,
+        path: dep_outdir,
       });
     }
   }
@@ -95,10 +97,11 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let compile_info = compile::CompileInfo {
     path: info.path,
     outdir,
+    dialect,
+    triple,
     opt_level: info.opt_level,
     variant: info.variant,
     start_routine: info.start_routine,
-    triple: info.triple,
     rtl: info.rtl,
     reloc: info.reloc,
     mcmodel: info.mcmodel,
@@ -110,6 +113,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     execute: info.execute,
     deps: dep_artifacts,
     krate_name: Some(conf.name.clone()),
+    dolink: info.dolink,
   };
 
   compile::compile(compile_info)?;

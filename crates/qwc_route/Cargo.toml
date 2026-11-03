@@ -20,6 +20,7 @@ qwc_deps = { path = "../qwc_deps" }
 qwc_config = { path = "../qwc_config" }
 qwc_arena = { path = "../qwc_arena" }
 qwc_intrinsic = { path = "../qwc_intrinsic" }
+qwc_target = { path = "../qwc_target" }
 qwc_diagnostic = { path = "../qwc_diagnostic" }
 qwc_string_interner = { path = "../qwc_string_interner" }
 qwc_parse = { path = "../qwc_parse" }
@@ -30,4 +31,6 @@ qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
 qwc_cgen = { path = "../qwc_cgen" }
 qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
+qwc_cgen_spirv = { path = "../qwc_cgen_spirv" }
+qwc_cgen_circt = { path = "../qwc_cgen_circt" }
 qwc_lsp = { path = "../qwc_lsp", optional = true }

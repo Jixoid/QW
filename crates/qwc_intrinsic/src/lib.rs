@@ -25,8 +25,8 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 	let ty_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty()});
 	let ty_generic_self_type = cre.push(Type{kind: TypeKind::GenericSelfType, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty()});
-	let ty_generic_ref_mut_self_type = cre.push(Type{kind: TypeKind::Ref(ty_generic_self_type, true), layout: layinfo.ptr_size, attr: TypeAttr::empty()});
-	let ty_generic_ref_self_type = cre.push(Type{kind: TypeKind::Ref(ty_generic_self_type, false), layout: layinfo.ptr_size, attr: TypeAttr::empty()});
+	let ty_generic_ref_mut_self_type = cre.push(Type{kind: TypeKind::Ref{kind: ty_generic_self_type, ism: true, addrspace: None}, layout: layinfo.ptr_size, attr: TypeAttr::empty()});
+	let ty_generic_ref_self_type = cre.push(Type{kind: TypeKind::Ref{kind: ty_generic_self_type, ism: false, addrspace: None}, layout: layinfo.ptr_size, attr: TypeAttr::empty()});
 	let ty_error = cre.push(Type{kind: TypeKind::Error, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty()});
 	let ty_unit = cre.push(Type{kind: TypeKind::Unit, layout: qwc_hir::Layout::STATIC, attr: TypeAttr::empty()});
 	let ty_never = cre.push(Type{kind: TypeKind::Never, layout: qwc_hir::Layout::new_inhabited(), attr: TypeAttr::empty()});
@@ -433,7 +433,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				// &Rhs
 				let ty_ref_rhs = cre.push(Type {
-					kind: TypeKind::Ref(ty_rhs, false),
+					kind: TypeKind::Ref{kind: ty_rhs, ism: false, addrspace: None},
 					layout: layinfo.ptr_size,
 					attr: TypeAttr::empty(),
 				});
@@ -648,7 +648,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 				// &Rhs
 				let ty_ref_rhs = cre.push(Type {
-					kind: TypeKind::Ref(ty_rhs, false),
+					kind: TypeKind::Ref{kind: ty_rhs, ism: false, addrspace: None},
 					layout: layinfo.ptr_size,
 					attr: TypeAttr::empty(),
 				});

@@ -10,38 +10,77 @@
 */
 
 
-use qwc_mir as mir;
+use std::{io::Write, path::Path};
+
+use qwc_mir::Krate;
 use qwc_string_interner::StrInterner;
 
 
-pub enum Optimization {
-  None,
-  Less,
-  Default,
-  Aggressive,
+#[derive(Copy, Clone)]
+pub enum Optimization { None, Less, Default, Aggressive }
+
+#[derive(Copy, Clone)]
+pub enum RelocMode { PIC, Static }
+
+#[derive(Copy, Clone)]
+pub enum CodeModel { Small, Medium, Large, Kernel }
+
+#[derive(Copy, Clone)]
+pub enum LinkTarget { Shared, Exec }
+
+
+
+pub struct GenOutput {
+  pub binary: Vec<u8>,
+  pub text_ir: Option<String>,
 }
 
-pub enum RelocMode {
-  PIC,
-  Static,
+pub struct GenOptions {
+  pub triple: Option<String>,
+  pub opt_level: Optimization,
+  pub emit_ir: bool,
+  
+  pub reloc_mode: Option<RelocMode>,
+  pub code_model: Option<CodeModel>,
 }
 
-pub enum CodeModel {
-  Small,
-  Medium,
-  Large,
-  Kernel,
+pub struct LinkOptions {
+  pub triple: Option<String>,
+  
+  pub lto: bool,
+  pub strip: bool,
+
+  pub target: Option<LinkTarget>,
+  pub is_dynamic: bool,
+  pub reloc_mode: Option<RelocMode>,
+  pub code_model: Option<CodeModel>,
 }
 
-pub enum OutKind {
-  Object, ByteCode
+pub struct RunEnv<'a> {
+  pub arg: &'a [&'a str],
+  pub env: &'a [&'a str],
+  pub panic: &'a dyn Fn(),
+  pub stdout: &'a dyn Write,
+  pub stderr: &'a dyn Write,
 }
 
 
-use std::path::PathBuf;
+pub trait IBackend {
+  fn code_gen(&self) -> Box<dyn ICodeGen>;
+  fn link_obj(&self) -> Box<dyn ILinkObj>;
 
-pub trait ICGen {
-  fn generate(&self, mir: &mir::Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind, triple: &Option<String>, reloc: RelocMode, mcmodel: CodeModel, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String>;
+  fn run_vm(&self) -> Option<Box<dyn IRunVM>>;
+}
 
-  fn run_vm(&self, code: &[u8], deps: &[PathBuf]) -> Result<i32, String>;
+
+pub trait ICodeGen {
+  fn generate(&self, mir: &Krate, sin: &StrInterner, outdir: &Path, options: &GenOptions) -> Result<GenOutput, String>;
+}
+
+pub trait ILinkObj {
+  fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String>;
+}
+
+pub trait IRunVM {
+  fn run_vm(&self, code: &[u8], deps: &[&Path]) -> Result<i32, String>;
 }

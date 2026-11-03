@@ -727,6 +727,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qwc_cgen_circt"
+version = "0.1.0"
+dependencies = [
+ "qwc_cgen",
+ "qwc_mir",
+ "qwc_string_interner",
+]
+
+[[package]]
 name = "qwc_cgen_llvm"
 version = "0.1.0"
 dependencies = [
@@ -737,6 +746,15 @@ dependencies = [
  "qwc_string_interner",
  "rustc-hash",
  "rustc_apfloat",
+]
+
+[[package]]
+name = "qwc_cgen_spirv"
+version = "0.1.0"
+dependencies = [
+ "qwc_cgen",
+ "qwc_mir",
+ "qwc_string_interner",
 ]
 
 [[package]]
@@ -755,6 +773,7 @@ dependencies = [
  "qwc_arena",
  "qwc_diagnostic",
  "qwc_ds",
+ "qwc_target",
  "rustc-hash",
 ]
 
@@ -811,6 +830,7 @@ dependencies = [
  "qwc_parse",
  "qwc_resolve",
  "qwc_string_interner",
+ "qwc_target",
 ]
 
 [[package]]
@@ -840,6 +860,7 @@ dependencies = [
  "qwc_hir",
  "qwc_resolve",
  "qwc_string_interner",
+ "qwc_target",
  "rustc-hash",
  "rustc_apfloat",
 ]
@@ -877,6 +898,7 @@ dependencies = [
  "qwc_parse",
  "qwc_resolve",
  "qwc_string_interner",
+ "qwc_target",
  "qwc_vfs",
  "rustc-hash",
  "serde_json",
@@ -901,6 +923,7 @@ dependencies = [
  "qwc_diagnostic",
  "qwc_dump",
  "qwc_string_interner",
+ "rustc-hash",
  "rustc_apfloat",
 ]
 
@@ -915,6 +938,7 @@ dependencies = [
  "qwc_mir",
  "qwc_resolve",
  "qwc_string_interner",
+ "qwc_target",
  "rustc-hash",
 ]
 
@@ -958,7 +982,9 @@ dependencies = [
  "qwc_arena",
  "qwc_ast",
  "qwc_cgen",
+ "qwc_cgen_circt",
  "qwc_cgen_llvm",
+ "qwc_cgen_spirv",
  "qwc_config",
  "qwc_deps",
  "qwc_diagnostic",
@@ -974,6 +1000,7 @@ dependencies = [
  "qwc_parse",
  "qwc_resolve",
  "qwc_string_interner",
+ "qwc_target",
  "qwc_unit",
  "rustc-hash",
 ]
@@ -1004,6 +1031,13 @@ dependencies = [
  "lasso",
  "qwc_serial",
  "qwc_serial_macro",
+]
+
+[[package]]
+name = "qwc_target"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.13.2",
 ]
 
 [[package]]

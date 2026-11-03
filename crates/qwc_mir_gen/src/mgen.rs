@@ -15,6 +15,7 @@ use qwc_hir::{self as hir, CID};
 use qwc_mir::{self as mir, LayoutInfo};
 use qwc_string_interner::StrInterner;
 
+use qwc_target::DialectOption;
 use rustc_hash::FxHashMap;
 
 use qwc_resolve::ExportMap;
@@ -29,6 +30,7 @@ pub struct Ctx<'ast, 'hir, 'mir, 'a> {
   pub cre: &'mir mut mir::Krate,
   pub tin: &'mir mut TypeInterner<'a>,
   pub cmap: &'mir mut CacheMap,
+  pub dialect: DialectOption,
   pub expmaps: FxHashMap<CID, &'hir ExportMap>,
 }
 
@@ -61,7 +63,7 @@ pub struct MGen;
 
 impl<'ast, 'hir, 'mir, 'a> MGen {
 
-  pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo, expmaps: &'hir [ExportMap]) -> (Option<mir::Krate>, Summary) {
+  pub fn low(src: &'hir hir::Krate, deps: &'hir hir::Deps, sin: &'ast StrInterner, layinfo: &'a LayoutInfo, expmaps: &'hir [ExportMap], dialect: DialectOption) -> (Option<mir::Krate>, Summary) {
     let mut cre = mir::Krate::default();
     let mut sum = Summary::new();
     let mut tin = TypeInterner::new(&mut cre, layinfo);
@@ -87,6 +89,7 @@ impl<'ast, 'hir, 'mir, 'a> MGen {
       cre: &mut cre,
       tin: &mut tin,
       cmap: &mut cmap,
+      dialect,
       src,
       deps,
       sin,

@@ -26,4 +26,4 @@ use inst_p::InstLow;
 use type_p::TypeLow;
 use value_p::ValueLow;
 
-pub use cgen::CGenLLVM as CGen;
+pub use cgen::GenLLVM as Gen;

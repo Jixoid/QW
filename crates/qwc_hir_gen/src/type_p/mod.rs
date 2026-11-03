@@ -12,10 +12,11 @@
 
 use itertools::{Itertools, izip};
 use qwc_comptime::{Evaluator, GetConst};
-use qwc_diagnostic::{Label, Message, Status, Summary, msg::*, ret_err};
+use qwc_diagnostic::{Applicability, Label, Message, Status::{self, Success}, StatusApi, Suggestion, Summary, msg::*, ret_err, send_err};
 use qwc_ast as ast;
 use qwc_hir::{self as hir, PushOkApi, Span, TypeAttr};
 
+use qwc_target::DialectOption;
 use rustc_hash::FxHashMap;
 use crate::{Ctx, ExprLow, FunCtx};
 
@@ -49,8 +50,8 @@ impl TypeLow {
       Unit => ctx.prims.ty_unit,
 
       // Reference
-      Ref(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ref(ctx.cre, id, ism)},
-      Ptr(id, ism) => {let id = Self::low(ctx, sum, id)?; ctx.tin.ty_ptr(ctx.cre, id, ism)},
+      Ref {kind, ism, addrspace} => Self::low_ref(ctx, sum, it, kind, ism, addrspace)?,
+      Ptr {kind, ism, addrspace} => Self::low_ptr(ctx, sum, it, kind, ism, addrspace)?,
       
       // Vector
       Vector(kind, ext) => Self::low_vector(ctx, sum, kind, ext)?,
@@ -97,6 +98,52 @@ impl TypeLow {
     ctx.cmap.cache_type.insert(id, it);
 
     Status::Success(it)
+  }
+
+
+  // Ref & Ptr
+  fn low_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: ast::TypeId, ism: bool, addrspace: Option<(ast::ExprId, Span)>) -> Status<hir::TypeId> {
+    let kind = Self::low(ctx, sum, kind)?;
+
+    let mut addr = addrspace.map(|(id, _)| {
+      let fctx = FunCtx::new_const(ctx.src.get(id).pos);
+
+      ExprLow::low(ctx, &fctx, sum, id)
+    }).transpose()?;
+
+    if ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES) && addr.is_none() {
+      ret_err!(sum, Message::error(THE_ADDRESS_SPACE_MUST_BE_SPECIFIED, Label::new_pos(it.pos)))
+    }
+    if !ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES) && let Some((addrspace, addr_pos)) = addrspace {
+      addr = None;
+      send_err!(sum, Message::warn(THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT, Label::new(ctx.src.get(addrspace).pos, THIS_WILL_BE_IGNORED))
+        + Suggestion::new(YOU_CAN_DELETE_THIS_DIRECTLY, Applicability::MaybeIncorrect, "".to_string(), Label::new_pos(addr_pos))
+      )
+    }
+    
+    Success(ctx.tin.ty_ref(ctx.cre, kind, ism, addr))
+  }
+  
+  fn low_ptr(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: ast::TypeId, ism: bool, addrspace: Option<(ast::ExprId, Span)>) -> Status<hir::TypeId> {
+    let kind = Self::low(ctx, sum, kind)?;
+
+    let mut addr = addrspace.map(|(id, _)| {
+      let fctx = FunCtx::new_const(ctx.src.get(id).pos);
+
+      ExprLow::low(ctx, &fctx, sum, id)
+    }).transpose()?;
+
+    if ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES) && addr.is_none() {
+      ret_err!(sum, Message::error(THE_ADDRESS_SPACE_MUST_BE_SPECIFIED, Label::new_pos(it.pos)))
+    }
+    if !ctx.dialect.contains(DialectOption::SPECIFIED_ADDRESS_SPACES) && let Some((addrspace, addr_pos)) = addrspace {
+      addr = None;
+      send_err!(sum, Message::warn(THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT, Label::new(ctx.src.get(addrspace).pos, THIS_WILL_BE_IGNORED))
+        + Suggestion::new(YOU_CAN_DELETE_THIS_DIRECTLY, Applicability::MaybeIncorrect, "".to_string(), Label::new_pos(addr_pos))
+      )
+    }
+    
+    Success(ctx.tin.ty_ptr(ctx.cre, kind, ism, addr))
   }
 
 
@@ -250,12 +297,30 @@ impl TypeMatch {
       (hir::TypeKind::Option(..), hir::TypeKind::Unit) => Status::Success(()),
       (hir::TypeKind::Option(t1), hir::TypeKind::Option(t2)) => Self::matches(ctx, sum, t1, t2, pos, assoc_types),
       
-      (hir::TypeKind::Ref(t1, t1_ism), hir::TypeKind::Ref(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches(ctx, sum, t1, t2, pos, assoc_types)
+      (hir::TypeKind::Ref{kind: t1, ism: t1_ism, addrspace: as1}, hir::TypeKind::Ref{kind: t2, ism: t2_ism, addrspace: as2}) if t1_ism == t2_ism => {
+        let eval = Evaluator::new(ctx.cre);
+
+        let len1 = if let Some(id) = as1 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+        let len2 = if let Some(id) = as2 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+
+        if len1 == len2 {
+          Self::matches(ctx, sum, t1, t2, pos, assoc_types)
+        } else {
+          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
+        }
       }
 
-      (hir::TypeKind::Ptr(t1, t1_ism), hir::TypeKind::Ptr(t2, t2_ism)) if t1_ism == t2_ism => {
-        Self::matches(ctx, sum, t1, t2, pos, assoc_types)
+      (hir::TypeKind::Ptr{kind: t1, ism: t1_ism, addrspace: as1}, hir::TypeKind::Ptr{kind: t2, ism: t2_ism, addrspace: as2}) if t1_ism == t2_ism => {
+        let eval = Evaluator::new(ctx.cre);
+
+        let len1 = if let Some(id) = as1 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+        let len2 = if let Some(id) = as2 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+
+        if len1 == len2 {
+          Self::matches(ctx, sum, t1, t2, pos, assoc_types)
+        } else {
+          ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
+        }
       }
 
       (hir::TypeKind::Slice(t1), hir::TypeKind::Slice(t2)) => {
@@ -268,7 +333,7 @@ impl TypeMatch {
         let len1 = eval.eval(sum, l1)?.get_u64(sum)?;
         let len2 = eval.eval(sum, l2)?.get_u64(sum)?;
 
-        if l1 == l2 || len1 == len2 {
+        if len1 == len2 {
           Self::matches(ctx, sum, t1, t2, pos, assoc_types)
         } else {
           ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, ty1), &ctx.type_name(sum, ty2)]), Label::new_pos(pos)));
@@ -301,7 +366,16 @@ impl TypeMatch {
         let self_2_ty = ctx.get(self_2).kind;
 
         match (self_1_ty, self_2_ty) {
-          (hir::TypeKind::Ref(_, ism_1), hir::TypeKind::Ref(_, ism_2)) if ism_1 == ism_2 => {}
+          (hir::TypeKind::Ref{ism: ism_1, addrspace: as1, ..}, hir::TypeKind::Ref{ism: ism_2, addrspace: as2, ..}) if ism_1 == ism_2 => {
+            let eval = Evaluator::new(ctx.cre);
+            
+            let len1 = if let Some(id) = as1 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+            let len2 = if let Some(id) = as2 { eval.eval(sum, id)?.get_u64(sum)? } else { 0 };
+
+            if len1 != len2 {
+              ret_err!(sum, Message::error(MISMATCHED_TYPES.args(&[&ctx.type_name(sum, self_1), &ctx.type_name(sum, self_2)]), Label::new_pos(pos)));
+            }
+          }
           
           _ => TypeMatch::matches(ctx, sum, self_1, self_2, pos, assoc_types)?,
         }

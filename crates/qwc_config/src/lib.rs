@@ -18,6 +18,7 @@ use std::{collections::HashMap, path::Path, str::FromStr};
 use qwc_arena::Files;
 use qwc_diagnostic::{Summary, Status::{Fail, Success}};
 use qwc_ds::Value;
+use qwc_target::Arch;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 pub use version::*;
@@ -45,12 +46,14 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
   struct Setup {
     name: Option<String>,
     vers: Option<Version>,
+
+    arch: Option<Arch>,
     
     feat: Option<FxHashSet<String>>,
     deps: Option<FxHashMap<String, Deps>>,
   }
 
-  let mut setup = Setup{name: None, vers: None, feat: None, deps: None};
+  let mut setup = Setup{name: None, vers: None, arch: None, feat: None, deps: None};
 
   let dep_read = |val: &Value| -> Result<Deps, String> {
     let mut feat = None;
@@ -135,6 +138,17 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
       "desc" => {}, //check2(&mut setup.desc, val.expect_string()?)?,
       "vers" => check2(&mut setup.vers, Version::from_str(&val.expect_string()?).map_err(|err| format!("{err}"))?)?,
 
+      "arch" => {
+        let it = match val.expect_string()?.as_str() {
+          "circt" => Arch::CIRCT,
+          "spirv" => Arch::SpirV64,
+
+          c @_ => return Err(format!("unknown arch: {c}"))
+        };
+
+        check2(&mut setup.arch, it)?
+      }
+
       "feat" => {
         let mut set = FxHashSet::default();
 
@@ -166,6 +180,7 @@ pub fn read_conf(fpath: &Path, far: &mut Files) -> Result<Config, String> {
     name: setup.name.unwrap(),
     //desc: setup.desc.unwrap(),
     vers: setup.vers.unwrap(),
+    arch: setup.arch.unwrap_or(Arch::RiscV64),
     feat: setup.feat.unwrap_or_default(),
     deps: setup.deps.unwrap_or_default(),
   };

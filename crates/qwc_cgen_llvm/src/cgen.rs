@@ -10,85 +10,151 @@
 */
 
 
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}, process::Command};
 
 use inkwell::{builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
 use inkwell::targets::{InitializationConfig, Target, TargetMachine, TargetTriple};
-use qwc_cgen::{CodeModel, ICGen, Optimization, OutKind, RelocMode};
+use qwc_cgen::{CodeModel, GenOptions, GenOutput, IBackend, ICodeGen, ILinkObj, IRunVM, LinkOptions, LinkTarget, Optimization, RelocMode};
 use qwc_mir::{Krate, SymbId, TypeId};
 use qwc_string_interner::StrInterner;
 use rustc_hash::FxHashMap;
 
 use crate::SymbLow;
 
-#[derive(Clone, Copy, Debug)]
-pub enum SymbolVal<'ctx> {
-	Global(GlobalValue<'ctx>),
-	Function(FunctionValue<'ctx>),
+
+pub struct GenLLVM;
+
+impl IBackend for GenLLVM {
+	fn code_gen(&self) -> Box<dyn ICodeGen> { Box::new(Self) }
+	fn link_obj(&self) -> Box<dyn ILinkObj> { Box::new(Self) }
+	fn run_vm(&self) -> Option<Box<dyn IRunVM>> { Some(Box::new(Self)) }
 }
 
-pub struct CtxI<'ctx, 'a> {
-	pub ctx: &'ctx Context,
-	pub mol: &'a Module<'ctx>,
-	pub sin: &'a StrInterner,
-	pub builder: &'a Builder<'ctx>,
-	pub cre: &'a Krate,
-}
 
-pub struct CtxM<'ctx> {
-	pub type_cache: FxHashMap<TypeId, BasicTypeEnum<'ctx>>,
-	pub symbols: FxHashMap<SymbId, SymbolVal<'ctx>>,
-}
-
-pub struct CGenLLVM;
-
-impl ICGen for CGenLLVM {
-	fn generate(&self, cre: &Krate, sin: &StrInterner, ext_ll: bool, outk: OutKind, triple: &Option<String>, reloc: RelocMode, mcmodel: CodeModel, opt: Optimization) -> Result<(Vec<u8>, Option<String>), String> {
+impl ICodeGen for GenLLVM {
+	fn generate(&self, cre: &Krate, sin: &StrInterner, outdir: &Path, options: &GenOptions) -> Result<GenOutput, String> {
 		let ctx = Context::create();
 		let mol = Self::compile_to_module(&ctx, "main", cre, sin);
 
 		mol.verify().map_err(|err| err.to_string())?;
 
 		// Out
-		let out = match outk {
-			OutKind::ByteCode => {
-				mol.write_bitcode_to_memory().as_slice().to_vec()
-			}
-
-			OutKind::Object => {
-				Target::initialize_all(&InitializationConfig::default());
-				let triple = triple.clone().map(|str| TargetTriple::create(&str)).unwrap_or_else(TargetMachine::get_default_triple);
-				
-				Target::from_triple(&triple)
-				.map_err(|err| format!("{} for {}", err.to_string(), triple))?
-				.create_target_machine(
-					&triple,
-					"generic",
-					"",
-					opt_into(opt),
-					reloc_into(reloc),
-					mcmodel_into(mcmodel),
-				)
-				.ok_or_else(|| String::from("target machine cannot created"))?
-				.write_to_memory_buffer(&mol, inkwell::targets::FileType::Object)
-				.map_err(|err| err.to_string())?
-				.as_slice()
-				.to_vec()
-			}
-		};
+		Target::initialize_all(&InitializationConfig::default());
+		let triple = options.triple.clone().map(|str| TargetTriple::create(&str)).unwrap_or_else(TargetMachine::get_default_triple);
 		
+		let binary = Target::from_triple(&triple)
+			.map_err(|err| format!("{} for {}", err.to_string(), triple))?
+			.create_target_machine(
+				&triple,
+				"generic",
+				"",
+				opt_into(options.opt_level),
+				reloc_into(options.reloc_mode.unwrap_or(RelocMode::PIC)),
+				mcmodel_into(options.code_model.unwrap_or(CodeModel::Small)),
+			)
+			.ok_or_else(|| String::from("target machine cannot created"))?
+			.write_to_memory_buffer(&mol, inkwell::targets::FileType::Object)
+			.map_err(|err| err.to_string())?
+			.as_slice()
+			.to_vec();
 
-		let ll = ext_ll.then(|| mol.print_to_string().to_string());
+		let text_ir = options.emit_ir.then(|| mol.print_to_string().to_string());
+		
+		fs::write(outdir.join("out.o"), &binary).map_err(|err| format!("io: {err}"))?;
+		
+		let ll = outdir.join("out.ll");
+		
+		if let Some(text_ir) = &text_ir {
+			fs::write(ll, text_ir).map_err(|err| format!("io: {err}"))?;
+		}
+		else if text_ir.is_none() && ll.exists() {
+			fs::remove_file(ll).map_err(|err| format!("io: {err}"))?;
+		}
 
-		Ok((out, ll))
+		Ok(GenOutput{
+			binary,
+			text_ir,
+		})
 	}
+}
 
-	fn run_vm(&self, code: &[u8], deps: &[PathBuf]) -> Result<i32, String> {
-		for dep in deps {
-			if dep.exists() {
-				inkwell::support::load_library_permanently(dep)
-					.map_err(|_| format!("cannot load dependency library: {}", dep.display()))?;
-			}
+impl ILinkObj for GenLLVM {
+	fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String> {
+		let mut cmd = Command::new("ld.lld");
+
+		// reloc mode
+		if let Some(reloc_mode) = &options.reloc_mode {
+			cmd.arg(match reloc_mode {
+				RelocMode::PIC => "--pie",
+				RelocMode::Static => "--static",
+			});
+		}
+
+		// code model
+		if let Some(code_model) = &options.code_model {
+			cmd.arg("-mllvm").arg(format!("-code-model={}", match code_model {
+				CodeModel::Kernel => "kernel",
+				CodeModel::Small  => "small",
+				CodeModel::Medium => "medium",
+				CodeModel::Large  => "large",
+			}));
+		}
+
+		// lto
+		if options.lto {
+			cmd.arg("--lto-O2");
+		}
+
+		// dynamic
+		if options.is_dynamic {
+			cmd.arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2");
+		}
+
+		// strip
+		if options.strip {
+			cmd.arg("--strip-debug");
+		}
+		
+		// main
+		cmd.arg(target.join("out.o"));
+
+		// out
+		cmd.arg("-o").arg(match options.target.unwrap() {
+			LinkTarget::Shared => out.join("out.so"),
+			LinkTarget::Exec   => out.join("out"),
+		});
+		
+		// deps
+		for &dep in deps {
+			cmd.arg(PathBuf::from(dep).join("out.o"));
+		}
+
+		for &arg in args {
+			cmd.arg(arg);
+		}
+
+
+		// Linker
+		let out = cmd.output().map_err(|err| format!("linker: {err}"))?;
+
+		if !out.status.success() {
+			eprint!("{}", String::from_utf8_lossy(&out.stderr));
+			eprint!("{}", String::from_utf8_lossy(&out.stdout));
+
+			return Err(format!("linker return error"));
+		}
+
+		Ok(())
+	}
+}
+
+impl IRunVM for GenLLVM {
+	fn run_vm(&self, code: &[u8], deps: &[&Path]) -> Result<i32, String> {
+		for &dep in deps {
+			let dep = &dep.join("out.o");
+
+			inkwell::support::load_library_permanently(dep)
+				.map_err(|err| format!("cannot load dependency library: {}: {err}", dep.display()))?;
 		}
 
 		let ctx = Context::create();
@@ -115,7 +181,28 @@ impl ICGen for CGenLLVM {
 	}
 }
 
-impl CGenLLVM {
+
+
+#[derive(Clone, Copy, Debug)]
+pub enum SymbolVal<'ctx> {
+	Global(GlobalValue<'ctx>),
+	Function(FunctionValue<'ctx>),
+}
+
+pub struct CtxI<'ctx, 'a> {
+	pub ctx: &'ctx Context,
+	pub mol: &'a Module<'ctx>,
+	pub sin: &'a StrInterner,
+	pub builder: &'a Builder<'ctx>,
+	pub cre: &'a Krate,
+}
+
+pub struct CtxM<'ctx> {
+	pub type_cache: FxHashMap<TypeId, BasicTypeEnum<'ctx>>,
+	pub symbols: FxHashMap<SymbId, SymbolVal<'ctx>>,
+}
+
+impl GenLLVM {
 	pub fn compile_to_module<'ctx>(ctx: &'ctx Context, module_name: &str, cre: &Krate, sin: &StrInterner) -> Module<'ctx> {
 		let mol = ctx.create_module(module_name);
 		let builder = ctx.create_builder();

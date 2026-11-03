@@ -19,7 +19,6 @@ use crate::{DefPathId, ExprId, ItemId, Layout, ThingRng, TypeId, TypeRng};
 
 #[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum TypeKind {
-
   // Generic
   GenericType{generic: ItemId, idx: u32},
   GenericRaw{generic: ItemId, kind: TypeId},
@@ -45,8 +44,8 @@ pub enum TypeKind {
   Meta(TypeId),
   
   // Reference
-  Ref(TypeId, bool /* ism */),
-  Ptr(TypeId, bool /* ism */),
+  Ref {kind: TypeId, ism: bool, addrspace: Option<ExprId>},
+  Ptr {kind: TypeId, ism: bool, addrspace: Option<ExprId>},
   
   // VScale
   Vector(TypeId, ExprId),
@@ -121,7 +120,6 @@ impl Decoder for TypeAttr {
 
 #[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub struct Type {
-
   pub kind: TypeKind,
   pub layout: Layout,
   pub attr: TypeAttr,

@@ -9,6 +9,7 @@ qwc_ast = { path = "../qwc_ast" }
 qwc_hir = { path = "../qwc_hir" }
 qwc_arena = { path = "../qwc_arena" }
 qwc_parse = { path = "../qwc_parse" }
+qwc_target = { path = "../qwc_target" }
 qwc_resolve = { path = "../qwc_resolve" }
 qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_intrinsic = { path = "../qwc_intrinsic" }

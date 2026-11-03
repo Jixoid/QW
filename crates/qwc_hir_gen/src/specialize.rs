@@ -265,10 +265,11 @@ impl<'a> Specialization<'a> {
       hir::TypeKind::ItemEnum{..} => id,
       hir::TypeKind::ItemFlag{..} => id,
 
-      hir::TypeKind::Ref (kind, ism) => {
+      hir::TypeKind::Ref {kind, ism, addrspace} => {
         let kind = self.sub_spec_type(ctx, sum, kind);
+        let addr = addrspace.map(|id| self.sub_spec_expr(ctx, sum, id));
 
-        ctx.tin.ty_ref(ctx.cre, kind, ism)
+        ctx.tin.ty_ref(ctx.cre, kind, ism, addr)
       }
 
       hir::TypeKind::Option (kind) => {

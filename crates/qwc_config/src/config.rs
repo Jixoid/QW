@@ -10,6 +10,7 @@
 */
 
 
+use qwc_target::Arch;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{Version, VerReq};
@@ -19,6 +20,8 @@ use crate::{Version, VerReq};
 pub struct Config {
   pub name: String,
   pub vers: Version,
+
+  pub arch: Arch,
 
   pub feat: FxHashSet<String>,
   pub deps: FxHashMap<String, Deps>,

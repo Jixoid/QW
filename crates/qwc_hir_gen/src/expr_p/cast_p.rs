@@ -79,7 +79,7 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
   // Choose
   let ret: Option<(fn(_, _, _, _, _, _) -> _, hir::TypeId)> =
   match ctx.get(target).kind {
-    hir::TypeKind::Ref(target, _) => {
+    hir::TypeKind::Ref{kind: target, ..} => {
       match ctx.get(target).kind {
         hir::TypeKind::ItemIface{..} => Some((cast_to_iface_ref, target)),
         
@@ -87,7 +87,7 @@ pub fn low_cast(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr,
       }
     }
 
-    hir::TypeKind::Ptr(target, _) => Some((cast_to_ptr, target)),
+    hir::TypeKind::Ptr{kind: target, ..} => Some((cast_to_ptr, target)),
 
     hir::TypeKind::ItemTrait{..} => Some((cast_to_trait, target)),
     
@@ -110,7 +110,7 @@ fn cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir
   
   // Choose
   let expr_unwrap = match ctx.get(expr_ty).kind {
-    hir::TypeKind::Ref(expr_ty, _) => {
+    hir::TypeKind::Ref{kind: expr_ty, ..} => {
       
       // Choose
       match ctx.get(expr_ty).kind {
@@ -205,7 +205,7 @@ fn cast_to_ptr(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, expr: hir::Expr
   
   // Choose
   let expr_unwrap = match ctx.get(expr_ty).kind {
-    hir::TypeKind::Ref(expr_ty, _) => Some(expr_ty),
+    hir::TypeKind::Ref{kind: expr_ty, ..} => Some(expr_ty),
     _ => None
   }
   .status()

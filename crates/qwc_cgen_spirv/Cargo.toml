@@ -1,0 +1,9 @@
+[package]
+name = "qwc_cgen_spirv"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+qwc_mir = { path = "../qwc_mir" }
+qwc_cgen = { path = "../qwc_cgen" }
+qwc_string_interner = { path = "../qwc_string_interner" }

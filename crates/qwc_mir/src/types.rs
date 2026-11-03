@@ -17,15 +17,16 @@ use crate::{Layout, TypeId, TypeRng};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
-  // NST
+  // ZST
   Unit,
   
   // Primitive
   Int(NonZeroU32, bool),
   Float(FloatKind),
-  
   Bool,
-  Ptr,
+  
+  // Pointer
+  Ptr(u16),
 
   // Combinated
   Struct(TypeRng),
