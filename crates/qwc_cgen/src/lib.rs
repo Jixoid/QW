@@ -48,6 +48,7 @@ pub struct LinkOptions {
   pub triple: Option<String>,
   
   pub lto: bool,
+  pub strip: bool,
 
   pub target: Option<LinkTarget>,
   pub is_dynamic: bool,

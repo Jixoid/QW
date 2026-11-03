@@ -12,4 +12,4 @@
 
 mod cgen;
 
-pub use cgen::CGenSpirV as CGen;
+pub use cgen::GenSpirV as Gen;

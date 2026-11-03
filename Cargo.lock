@@ -729,6 +729,11 @@ dependencies = [
 [[package]]
 name = "qwc_cgen_circt"
 version = "0.1.0"
+dependencies = [
+ "qwc_cgen",
+ "qwc_mir",
+ "qwc_string_interner",
+]
 
 [[package]]
 name = "qwc_cgen_llvm"
@@ -746,6 +751,11 @@ dependencies = [
 [[package]]
 name = "qwc_cgen_spirv"
 version = "0.1.0"
+dependencies = [
+ "qwc_cgen",
+ "qwc_mir",
+ "qwc_string_interner",
+]
 
 [[package]]
 name = "qwc_comptime"
@@ -913,7 +923,6 @@ dependencies = [
  "qwc_diagnostic",
  "qwc_dump",
  "qwc_string_interner",
- "qwc_target",
  "rustc-hash",
  "rustc_apfloat",
 ]
@@ -973,7 +982,9 @@ dependencies = [
  "qwc_arena",
  "qwc_ast",
  "qwc_cgen",
+ "qwc_cgen_circt",
  "qwc_cgen_llvm",
+ "qwc_cgen_spirv",
  "qwc_config",
  "qwc_deps",
  "qwc_diagnostic",

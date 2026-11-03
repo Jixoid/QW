@@ -12,4 +12,4 @@
 
 mod cgen;
 
-pub use cgen::CGenCIRCT as CGen;
+pub use cgen::GenCIRCT as Gen;

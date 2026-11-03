@@ -351,6 +351,7 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
     triple: None,
     is_dynamic: true,
     lto: false,
+    strip: matches!(info.variant, BuildVariant::Release),
     reloc_mode: Some(cgen::RelocMode::PIC),
     code_model: Some(cgen::CodeModel::Small),
   };
@@ -500,9 +501,9 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   let backend: Box<dyn IBackend> = match info.triple.0 {
     Arch::X86_64 | Arch::I686 | Arch::ARM | Arch::AArch64 | Arch::RiscV32 | Arch::RiscV64 => Box::new(qwc_cgen_llvm::Gen),
 
-    Arch::SpirV32 | Arch::SpirV64 => panic!(),
+    Arch::SpirV32 | Arch::SpirV64 => Box::new(qwc_cgen_spirv::Gen),
 
-    Arch::CIRCT => panic!(),
+    Arch::CIRCT => Box::new(qwc_cgen_circt::Gen),
   };
 
 

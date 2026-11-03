@@ -31,4 +31,6 @@ qwc_hir_gen = { path = "../qwc_hir_gen" }
 qwc_mir_gen = { path = "../qwc_mir_gen" }
 qwc_cgen = { path = "../qwc_cgen" }
 qwc_cgen_llvm = { path = "../qwc_cgen_llvm" }
+qwc_cgen_spirv = { path = "../qwc_cgen_spirv" }
+qwc_cgen_circt = { path = "../qwc_cgen_circt" }
 qwc_lsp = { path = "../qwc_lsp", optional = true }

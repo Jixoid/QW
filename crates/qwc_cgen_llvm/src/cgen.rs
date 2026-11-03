@@ -21,24 +21,6 @@ use rustc_hash::FxHashMap;
 
 use crate::SymbLow;
 
-#[derive(Clone, Copy, Debug)]
-pub enum SymbolVal<'ctx> {
-	Global(GlobalValue<'ctx>),
-	Function(FunctionValue<'ctx>),
-}
-
-pub struct CtxI<'ctx, 'a> {
-	pub ctx: &'ctx Context,
-	pub mol: &'a Module<'ctx>,
-	pub sin: &'a StrInterner,
-	pub builder: &'a Builder<'ctx>,
-	pub cre: &'a Krate,
-}
-
-pub struct CtxM<'ctx> {
-	pub type_cache: FxHashMap<TypeId, BasicTypeEnum<'ctx>>,
-	pub symbols: FxHashMap<SymbId, SymbolVal<'ctx>>,
-}
 
 pub struct GenLLVM;
 
@@ -127,6 +109,11 @@ impl ILinkObj for GenLLVM {
 		if options.is_dynamic {
 			cmd.arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2");
 		}
+
+		// strip
+		if options.strip {
+			cmd.arg("--strip-debug");
+		}
 		
 		// main
 		cmd.arg(target.join("out.o"));
@@ -195,6 +182,25 @@ impl IRunVM for GenLLVM {
 }
 
 
+
+#[derive(Clone, Copy, Debug)]
+pub enum SymbolVal<'ctx> {
+	Global(GlobalValue<'ctx>),
+	Function(FunctionValue<'ctx>),
+}
+
+pub struct CtxI<'ctx, 'a> {
+	pub ctx: &'ctx Context,
+	pub mol: &'a Module<'ctx>,
+	pub sin: &'a StrInterner,
+	pub builder: &'a Builder<'ctx>,
+	pub cre: &'a Krate,
+}
+
+pub struct CtxM<'ctx> {
+	pub type_cache: FxHashMap<TypeId, BasicTypeEnum<'ctx>>,
+	pub symbols: FxHashMap<SymbId, SymbolVal<'ctx>>,
+}
 
 impl GenLLVM {
 	pub fn compile_to_module<'ctx>(ctx: &'ctx Context, module_name: &str, cre: &Krate, sin: &StrInterner) -> Module<'ctx> {

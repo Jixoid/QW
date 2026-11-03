@@ -10,4 +10,13 @@
 */
 
 
-pub struct CGenCIRCT;
+use qwc_cgen::{IBackend, ICodeGen, ILinkObj, IRunVM};
+
+
+pub struct GenCIRCT;
+
+impl IBackend for GenCIRCT {
+	fn code_gen(&self) -> Box<dyn ICodeGen> { todo!() }
+	fn link_obj(&self) -> Box<dyn ILinkObj> { todo!() }
+	fn run_vm(&self) -> Option<Box<dyn IRunVM>> { None }
+}
