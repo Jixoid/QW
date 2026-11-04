@@ -48,6 +48,7 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
 
     for sugg in &msg.suggestions {
       for label in &sugg.labels {
+        if label.span.is_builtin() { continue }
         let hr = label.span.interval(far);
         let s = hr.start[0].get();
         let e = hr.end[0].get();
@@ -89,6 +90,7 @@ impl<'a> fmt::Display for MessageHumanDisplay<'a> {
       // Group labels of this suggestion by file
       let mut file_groups: BTreeMap<u16, Vec<(usize, &crate::Label)>> = BTreeMap::new();
       for (idx, label) in sugg.labels.iter().enumerate() {
+        if label.span.is_builtin() { continue; }
         file_groups.entry(label.span.fid()).or_default().push((idx, label));
       }
 

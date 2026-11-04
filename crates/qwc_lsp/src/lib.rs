@@ -63,7 +63,7 @@ impl CoreUnit {
     let mut sin = StrInterner::default();
     let mut deps = hir::Deps::default();
     let core_cid = deps.get_next_id();
-    let (core_cre, core_exp, core_prims, core_prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+    let (core_cre, core_exp, core_prims, core_prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo, qwc_target::Arch::X86_64);
     //deps.add(core_cre);
     deps.set_prims(core_prims);
     deps.set_prim_op(core_prim_op);

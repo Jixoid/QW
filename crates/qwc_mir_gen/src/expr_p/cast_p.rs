@@ -99,11 +99,11 @@ pub fn low_cast_to_iface_ref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBui
   let slot = bbld.build_alloca(fatptr);
 
   let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 0 }).unwrap();
-  bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr, value: ref_of_expr });
+  bbld.build_store(f0.into(), ptr, ref_of_expr);
   let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 1 }).unwrap();
-  bbld.emit(mir::Expr::Store { target: f1.into(), kind: ptr, value: vmt });
+  bbld.build_store(f1.into(), ptr, vmt);
 
-  let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
+  let fat_val = bbld.build_load(slot, fatptr);
   
   Success(fat_val.into())
 }

@@ -69,13 +69,22 @@ pub fn get_dialect(triple: Triple) -> DialectOption {
       DialectOption::DENY_FN_POINTERS,
       
     Triple(CIRCT, ..) => 
-      DialectOption::SPECIFIED_ADDRESS_SPACES |
       DialectOption::DENY_RECURSIVE_TYPES |
       DialectOption::DENY_RECURSIVE_CALLS |
       DialectOption::DENY_DYNAMIC_DISPATCH |
       DialectOption::DENY_FN_POINTERS |
-      DialectOption::DENY_POINTERS,
+      DialectOption::DENY_POINTERS |
+      DialectOption::DENY_STACK |
+      DialectOption::DENY_HEAP |
+      DialectOption::DENY_MUTABLE_VARS |
+      DialectOption::DENY_FLOAT,
   }
+}
+
+impl Arch {
+  pub fn is_circt(&self) -> bool { matches!(self, Arch::CIRCT) }
+  pub fn is_spirv(&self) -> bool { matches!(self, Arch::SpirV32 | Arch::SpirV64) }
+  pub fn is_classic(&self) -> bool { !self.is_circt() && !self.is_spirv() }
 }
 
 
@@ -124,5 +133,18 @@ bitflags! {
     /// 
     /// e.g., `^T` `&T`
     const DENY_POINTERS = 1 << 5;
+    
+
+    /// Prevents stack.
+    const DENY_STACK = 1 << 6;
+
+    /// Prevents heap.
+    const DENY_HEAP = 1 << 7;
+
+    /// Prevents mutable variables (`var`, assignment).
+    const DENY_MUTABLE_VARS = 1 << 8;
+
+    /// Prevents floating-point types and operations (`f16`, `f32`, `f64`, `f128`).
+    const DENY_FLOAT = 1 << 9;
   }
 }

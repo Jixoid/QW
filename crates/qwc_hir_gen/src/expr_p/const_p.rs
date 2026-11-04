@@ -98,6 +98,10 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
       _ => ret_err!(sum, Message::error(INVALID_SUFFIX_X_FOR_X_LITERAL.args(&[suffix, "int"]), Label::new_pos(span)))
     };
 
+    if matches!(fp, FP::F16 | FP::F32 | FP::F64 | FP::F128) && ctx.dialect.contains(qwc_target::DialectOption::DENY_FLOAT) {
+      ret_err!(sum, Message::error(FLOATS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(span)));
+    }
+
     (fp, begin)
   } else {
     (FP::I32, str)
@@ -170,6 +174,10 @@ pub fn low_number(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) 
 }
 
 pub fn low_float(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Expr, span: Span) -> Status<hir::ExprId> {
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_FLOAT) {
+    ret_err!(sum, Message::error(FLOATS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(span)));
+  }
+
   let str = span.str(ctx.far);
 
   enum FP { F16, F32, F64, F128 }

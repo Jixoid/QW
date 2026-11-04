@@ -82,10 +82,10 @@ pub fn low_int_arithmetic_op(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBui
 
 
   // Post
-  let lhs = mir::Expr::Load {
+  let lhs = bbld.build_load(
     target,
     kind,
-  }.emit(bbld).unwrap().into();
+  );
 
   let value = mir::Expr::IntArithmetic {
     op,
@@ -96,11 +96,11 @@ pub fn low_int_arithmetic_op(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBui
     rhs
   }.emit(bbld).unwrap().into();
 
-  mir::Expr::Store {
+  bbld.build_store(
     target,
     kind,
     value,
-  }.emit(bbld);
+  );
 
   Success(())
 }

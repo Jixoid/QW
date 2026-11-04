@@ -203,5 +203,9 @@ pub fn low_resolved_kind(ctx: &mut Ctx, sum: &mut Summary, pos: Span, kind: reso
     }
   };
 
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_FLOAT) && matches!(ctx.get(ty).kind, hir::TypeKind::Float(..)) {
+    ret_err!(sum, Message::error(FLOATS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(pos)));
+  }
+
   Status::Success(ty)
 }

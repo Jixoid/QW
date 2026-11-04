@@ -12,9 +12,8 @@
 
 use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir as hir;
-use qwc_mir as mir;
 
-use crate::{Ctx, ExprLow, FunBuilder, RawTerminator, ExprEmit};
+use crate::{Ctx, ExprLow, FunBuilder, RawTerminator};
 
 
 
@@ -35,11 +34,11 @@ pub fn low_break(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, val: O
   if let Some(val_id) = val {
     if let Some(slot) = frame.result_slot {
       if let Some(v) = ExprLow::low(ctx, sum, bbld, val_id)? {
-        mir::Expr::Store {
-          target: slot.into(),
-          kind: frame.result_ty,
-          value: v,
-        }.emit(bbld);
+        bbld.build_store(
+          slot.into(),
+          frame.result_ty,
+          v,
+        );
       }
     }
   }

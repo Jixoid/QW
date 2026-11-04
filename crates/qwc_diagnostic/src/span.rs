@@ -57,6 +57,11 @@ impl Span {
   }
 
   pub fn interval(&self, far: &Files) -> Range<[NonZero<u32>; 2]> {
+    if self.is_builtin() {
+      let one = NonZero::<u32>::new(1).unwrap();
+      return [one, one]..[one, one];
+    }
+
     let calc = |text: &[u8], offset: usize| -> [NonZero<u32>; 2] {
       let mut line = 1;
       let mut last_newline_pos = 0;
@@ -84,6 +89,9 @@ impl Span {
   }
 
   pub fn range(&self) -> Range<usize> {
+    if self.is_builtin() {
+      return 0..0;
+    }
     (self.off as usize)..((self.off as usize) + (NonZero::<u16>::new(self.len).unwrap().get() as usize))
   }
 

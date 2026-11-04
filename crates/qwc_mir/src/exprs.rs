@@ -26,6 +26,10 @@ impl SSA {
   pub fn new(val: u32) -> Self {
     Self(val)
   }
+
+  pub fn get(&self) -> u32 {
+    self.0
+  }
 }
 
 
@@ -125,14 +129,15 @@ pub use float_s::*;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Expr {
-  Alloca {kind: TypeId},
-  
-  Store {target: Value, kind: TypeId, value: Value},
-  Load {target: Value, kind: TypeId},
+  StackAlloca {kind: TypeId},
+  HeapStore {target: Value, kind: TypeId, value: Value},
+  HeapLoad {target: Value, kind: TypeId},
 
   Call {callee: Value, args: ValueRng},
 
   Gep {target: Value, kind: TypeId, idx: u32},
+
+  Select {cond: Value, then_val: Value, else_val: Value, kind: TypeId},
 
   IntArithmetic {op: IntArithmeticOp, flg: IntArithmeticFlg, flg2: IntArithmeticFlg2, kind: TypeId, lhs: Value, rhs: Value},
   IntCondition {op: IntConditionOp, flg2: IntConditionFlg2, kind: TypeId, lhs: Value, rhs: Value},
@@ -152,14 +157,14 @@ pub enum Expr {
 impl Expr {
   pub fn have_result(&self) -> bool {
     match self {
-      Expr::Alloca{..} => true,
-
-      Expr::Load{..} => true,
-      Expr::Store{..} => false,
+      Expr::StackAlloca{..} => true,
+      Expr::HeapLoad{..} => true,
+      Expr::HeapStore{..} => false,
 
       Expr::Call{..} => true,
 
       Expr::Gep{..} => true,
+      Expr::Select{..} => true,
 
       Expr::IntArithmetic{..} => true,
       Expr::IntCondition{..} => true,

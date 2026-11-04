@@ -10,7 +10,7 @@
 */
 
 
-use qwc_cgen::{IBackend, ICodeGen, ILinkObj, IRunVM};
+use qwc_cgen::{IBackend, ICodeGen, ILinkObj, IRun};
 
 
 pub struct GenSpirV;
@@ -18,5 +18,5 @@ pub struct GenSpirV;
 impl IBackend for GenSpirV {
 	fn code_gen(&self) -> Box<dyn ICodeGen> { todo!() }
 	fn link_obj(&self) -> Box<dyn ILinkObj> { todo!() }
-	fn run_vm(&self) -> Option<Box<dyn IRunVM>> { None }
+	fn run(&self) -> Option<Box<dyn IRun>> { None }
 }

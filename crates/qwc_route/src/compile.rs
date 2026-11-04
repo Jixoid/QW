@@ -13,7 +13,7 @@ use std::{env, fs, io::Write, path::{Path, PathBuf}, time::{Duration, Instant}};
 use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_ast as ast;
-use qwc_cgen::{self as cgen, GenOptions, IBackend, ICodeGen, ILinkObj, IRunVM, LinkOptions};
+use qwc_cgen::{self as cgen, GenOptions, IBackend, ICodeGen, ILinkObj, IRun, LinkOptions};
 use qwc_hir as hir;
 use qwc_mir as mir;
 use qwc_diagnostic::{Label, Message, Summary, msg::*};
@@ -128,7 +128,7 @@ pub fn read_file(fpath: &Path, base_path: ast::DefPathId, cre: &mut ast::Krate, 
 }
 
 
-pub fn build_ast_krate(fpath: &Path, far: &mut Files, krate_name: Option<&str>) -> Result<(ast::Krate, StrInterner, BuildKind, Duration), Error> {
+pub fn build_ast_krate(fpath: &Path, far: &mut Files, krate_name: &str) -> Result<(ast::Krate, StrInterner, BuildKind, Duration), Error> {
   let mut cre = ast::Krate::default();
   let mut sin = StrInterner::default();
 
@@ -162,17 +162,7 @@ pub fn build_ast_krate(fpath: &Path, far: &mut Files, krate_name: Option<&str>) 
     raw_entry
   };
 
-  let crate_name_str = if let Some(name) = krate_name {
-    name.to_string()
-  } else if let Ok(conf) = qwc_config::read_conf(fpath, far) {
-    conf.name
-  } else if fpath.is_file() {
-    fpath.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string()
-  } else {
-    fpath.file_name().and_then(|s| s.to_str()).unwrap_or("main").to_string()
-  };
-
-  let crate_sid = sin.sid(&crate_name_str);
+  let crate_sid = sin.sid(&krate_name);
   let root_path = cre.push(ast::DefPath::Root(crate_sid));
 
   let now = Instant::now();
@@ -289,13 +279,12 @@ pub fn build_cgen(info: &CompileInfo, backend: &dyn ICodeGen, mir_cre: &mir::Kra
   Ok((out.binary, out.text_ir, time))
 }
 
-pub fn build_jit(info: &CompileInfo, backend: &dyn IRunVM, bytecode: &[u8]) -> Result<(), Error> {
+pub fn build_run(info: &CompileInfo, backend: &dyn IRun, target: &Path, args: &[&str]) -> Result<(), Error> {
   if info.verbose > 0 {
     eprintln!("{}", "Running".green().bold());
   }
 
-  let dep_sos: Vec<&Path> = info.deps.iter().map(|d| d.path.as_path()).collect();
-  let exitcode = backend.run_vm(bytecode, &dep_sos)?;
+  let exitcode = backend.run(target, args)?;
 
   if exitcode != 0 {
     eprintln!("{}{} {}", "Exit Code".green().bold(), ":".bright_black(), exitcode);
@@ -305,6 +294,10 @@ pub fn build_jit(info: &CompileInfo, backend: &dyn IRunVM, bytecode: &[u8]) -> R
 }
 
 pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld_kind: BuildKind) -> Result<(), Error> {
+  if info.triple.0.is_circt() || info.triple.0.is_spirv() {
+    return Ok(());
+  }
+
   if info.verbose > 0 {
     eprintln!("{}", "Linking".green().bold());
   }
@@ -373,6 +366,20 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
 
 
 pub fn compile(info: CompileInfo) -> Result<(), Error> {
+  let crate_name = if let Some(name) = &info.krate_name {
+    name.to_string()
+  } else if info.path.is_file() {
+    info.path.file_stem().and_then(|s| s.to_str()).unwrap_or("main").to_string()
+  } else {
+    info.path.file_name().and_then(|s| s.to_str()).unwrap_or("main").to_string()
+  };
+
+
+  if info.verbose > 0 {
+    eprintln!("{}{} {}", "Compiling".green().bold(), ":".bright_black(), &crate_name);
+  }
+
+
   // Layout
   let hir_layinfo = hir::LayoutInfo{
     str_lay:  hir::Layout::DST,
@@ -428,13 +435,13 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
 
   // PASS 1 (parse)
   if info.verbose > 1 { eprintln!("{}", "PASS 1 (parse)".red().bold()) }
-  let (ast_cre, mut sin, bld_kind, time_pass1_parse) = build_ast_krate(info.path, &mut far, info.krate_name.as_deref())?;
+  let (ast_cre, mut sin, bld_kind, time_pass1_parse) = build_ast_krate(info.path, &mut far, &crate_name)?;
   if info.dump.contains(&DumpStage::Ast) { eprintln!("{}", ast::Dump{cre: &ast_cre, sin: &sin, far: &far}) }
 
   // Core setup
   let mut deps = hir::Deps::default();
   let core_cid = deps.get_next_id();
-  let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo);
+  let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, &mut sin, &hir_layinfo, info.triple.0);
   deps.add(core_cre);
   deps.set_prims(prims);
   deps.set_prim_op(prim_op);
@@ -509,7 +516,7 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
 
   // PASS 4 (cgen)
   if info.verbose > 1 { eprintln!("{}", "PASS 4 (cgen)".red().bold()) }
-  let (out, llir, time_pass4_cgen) = build_cgen(
+  let (_out, llir, time_pass4_cgen) = build_cgen(
     &info,
     backend.code_gen().as_ref(),
     &mir_cre,
@@ -517,8 +524,6 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     outdir,
     info.dump.contains(&DumpStage::Lir),
   )?;
-
-  let bytecode = (info.execute).then_some(&out);
 
   if info.dump.contains(&DumpStage::Lir) {
     eprintln!("{}", llir.unwrap());
@@ -528,9 +533,13 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     build_link(&info, backend.link_obj().as_ref(), outdir, bld_kind)?;
   }
 
+  if info.verbose > 0 {
+    eprintln!("{}{} {}", "Compiled".green().bold(), ":".bright_black(), &crate_name);
+  }
+
   if info.execute {
-    if let Some(link) = backend.run_vm() {
-      build_jit(&info, link.as_ref(), bytecode.unwrap())?;
+    if let Some(link) = backend.run() {
+      build_run(&info, link.as_ref(), outdir, &[])?;
     } else {
       return Err(Error::New | format!("this target not have a run feature"));
     }

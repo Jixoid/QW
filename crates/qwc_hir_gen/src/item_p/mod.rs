@@ -104,6 +104,10 @@ impl ItemLow {
 
 
   fn low_let(ctx: &mut Ctx, sum: &mut Summary, id: ast::ItemId, it: &ast::Item, kind: Option<ast::TypeId>, expr: ast::ExprId, ism: bool) -> Status<hir::ItemId> {
+    if ctx.dialect.contains(qwc_target::DialectOption::DENY_MUTABLE_VARS) && ism {
+      ret_err!(sum, Message::error(MUTABLE_VARIABLES_NOT_ALLOWED_IN_DIALECT, Label::new_pos(it.pos)));
+    }
+
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 

@@ -392,6 +392,10 @@ fn low_binary_logic(ctx: &mut Ctx, it: &ast::Expr, op: ast::BinaryOp, lhs: hir::
 
 // Assign
 pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Status<hir::ExprId> {
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_MUTABLE_VARS) {
+    ret_err!(sum, Message::error(MUTABLE_VARIABLES_NOT_ALLOWED_IN_DIALECT, Label::new_pos(op_span)));
+  }
+
   let lhs_hir = ExprLow::low(ctx, fctx, sum, lhs)?;
   let rhs_hir = ExprLow::low(ctx, fctx, sum, rhs)?;
   err_bypass!(ctx, it.pos, lhs_hir, rhs_hir);
@@ -417,6 +421,10 @@ pub fn low_assign(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Exp
 
 // Assign Op
 pub fn low_assign_op(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, op: ast::BinaryOp, lhs: ast::ExprId, rhs: ast::ExprId, op_span: Span) -> Status<hir::ExprId> {
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_MUTABLE_VARS) {
+    ret_err!(sum, Message::error(MUTABLE_VARIABLES_NOT_ALLOWED_IN_DIALECT, Label::new_pos(op_span)));
+  }
+
   let lhs_hir = ExprLow::low(ctx, fctx, sum, lhs)?;
   let rhs_hir = ExprLow::low(ctx, fctx, sum, rhs)?;
   err_bypass!(ctx, it.pos, lhs_hir, rhs_hir);

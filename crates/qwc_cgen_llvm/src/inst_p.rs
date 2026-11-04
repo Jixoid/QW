@@ -22,7 +22,7 @@ impl InstLow {
   pub fn low_result<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FunCtx<'ctx>, inst_kind: &Expr, dest: SSA) {
     match *inst_kind {
       // Alloca
-      Expr::Alloca { kind } => {
+      Expr::StackAlloca { kind } => {
         let kind = TypeLow::low_basic_cached(uctx, ictx, kind);
 
         let a = ictx.builder.build_alloca(kind, "").unwrap();
@@ -31,9 +31,9 @@ impl InstLow {
       }
 
       // Memory
-      Expr::Store{..} => panic!(),
+      Expr::HeapStore{..} => panic!(),
 
-      Expr::Load{target, kind} => {
+      Expr::HeapLoad{target, kind} => {
         let target = ValueLow::low(uctx, ictx, fctx, &target).into_pointer_value();
         let kind = TypeLow::low_basic_cached(uctx, ictx, kind);
         
@@ -75,6 +75,14 @@ impl InstLow {
         let struct_ty = TypeLow::low_basic_cached(uctx, ictx, kind).into_struct_type();
         let field_ptr = ictx.builder.build_struct_gep(struct_ty, target_ptr, idx, "").unwrap();
         fctx.ssa_map.insert(dest, field_ptr.into());
+      }
+
+      Expr::Select { cond, then_val, else_val, kind: _ } => {
+        let cond = ValueLow::low(uctx, ictx, fctx, &cond).into_int_value();
+        let then_val = ValueLow::low(uctx, ictx, fctx, &then_val);
+        let else_val = ValueLow::low(uctx, ictx, fctx, &else_val);
+        let res = ictx.builder.build_select(cond, then_val, else_val, "").unwrap();
+        fctx.ssa_map.insert(dest, res);
       }
 
 
@@ -240,18 +248,18 @@ impl InstLow {
   pub fn low_sideff<'ctx>(uctx: &mut CtxM<'ctx>, ictx: &CtxI<'ctx, '_>, fctx: &mut FunCtx<'ctx>, inst_kind: &Expr) {
     match *inst_kind {
       // Alloca
-      Expr::Alloca{..} => panic!(),
+      Expr::StackAlloca{..} => panic!(),
 
 
       // Memory
-      Expr::Store{target, kind: _, value} => {
+      Expr::HeapStore{target, kind: _, value} => {
         let target = ValueLow::low(uctx, ictx, fctx, &target).into_pointer_value();
         let value = ValueLow::low(uctx, ictx, fctx, &value);
 
         ictx.builder.build_store(target, value).unwrap();
       }
 
-      Expr::Load{..} => panic!(),
+      Expr::HeapLoad{..} => panic!(),
 
 
       // Call
@@ -276,7 +284,8 @@ impl InstLow {
 
 
       // Field
-      Expr::Gep{..} => panic!(),
+      Expr::Gep{..} |
+      Expr::Select{..} => panic!(),
 
       // Binary
       Expr::IntArithmetic{..} |

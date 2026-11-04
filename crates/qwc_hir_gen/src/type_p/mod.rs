@@ -103,6 +103,10 @@ impl TypeLow {
 
   // Ref & Ptr
   fn low_ref(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: ast::TypeId, ism: bool, addrspace: Option<(ast::ExprId, Span)>) -> Status<hir::TypeId> {
+    if ctx.dialect.contains(DialectOption::DENY_POINTERS) {
+      ret_err!(sum, Message::error(POINTERS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(it.pos)));
+    }
+
     let kind = Self::low(ctx, sum, kind)?;
 
     let mut addr = addrspace.map(|(id, _)| {
@@ -125,6 +129,10 @@ impl TypeLow {
   }
   
   fn low_ptr(ctx: &mut Ctx, sum: &mut Summary, it: &ast::Type, kind: ast::TypeId, ism: bool, addrspace: Option<(ast::ExprId, Span)>) -> Status<hir::TypeId> {
+    if ctx.dialect.contains(DialectOption::DENY_POINTERS) {
+      ret_err!(sum, Message::error(POINTERS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(it.pos)));
+    }
+
     let kind = Self::low(ctx, sum, kind)?;
 
     let mut addr = addrspace.map(|(id, _)| {

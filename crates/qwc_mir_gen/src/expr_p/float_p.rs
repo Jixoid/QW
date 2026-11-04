@@ -56,10 +56,10 @@ pub fn low_float_arithmetic_op(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunB
 
 
   // Post
-  let lhs = mir::Expr::Load {
+  let lhs = bbld.build_load(
     target,
     kind,
-  }.emit(bbld).unwrap().into();
+  );
 
   let value = mir::Expr::FloatArithmetic {
     op,
@@ -68,11 +68,11 @@ pub fn low_float_arithmetic_op(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunB
     rhs
   }.emit(bbld).unwrap().into();
 
-  mir::Expr::Store {
+  bbld.build_store(
     target,
     kind,
     value,
-  }.emit(bbld);
+  );
 
   Success(())
 }

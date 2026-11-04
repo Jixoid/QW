@@ -112,7 +112,7 @@ impl SymbLow {
 
     let ety = TypeLow::low(ctx, sum, kind)?;
 
-    let value = ExprLow::low(ctx, sum, &mut FunBuilder::new(), expr)?.unwrap();
+    let value = ExprLow::low(ctx, sum, &mut FunBuilder::new(ctx), expr)?.unwrap();
 
     assert_matches!(value, mir::Value::Const(..) | mir::Value::GlobalRef(..));
 

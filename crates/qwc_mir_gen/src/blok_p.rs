@@ -22,17 +22,17 @@ pub struct BlokLow;
 impl BlokLow {
 
   pub fn low_fn(ctx: &mut Ctx, sum: &mut Summary, id: hir::ExprId, is_ret_unit: bool, param_tys: &[mir::TypeId]) -> Status<(mir::BlokId, mir::BlokRng)> {
-    let mut fbld = FunBuilder::new();
+    let mut fbld = FunBuilder::new(ctx);
 
-    // Args to stack
+    // Args
     for (idx, &param_ty) in param_tys.iter().enumerate() {
-      let slot = fbld.build_alloca(param_ty);
-      fbld.local_to_alloca.insert(idx as u32, slot);
-      fbld.emit(mir::Expr::Store {
-        target: slot,
-        kind: param_ty,
-        value: mir::Value::Param(idx as u32),
-      });
+      if fbld.dialect.contains(qwc_target::DialectOption::DENY_STACK) {
+        fbld.set_local_value(idx as u32, mir::Value::Param(idx as u32));
+      } else {
+        let slot = fbld.build_alloca(param_ty);
+        fbld.set_local_slot(idx as u32, slot);
+        fbld.build_store(slot, param_ty, mir::Value::Param(idx as u32));
+      }
     }
 
     match ctx.src.get(id).kind {

@@ -69,7 +69,7 @@ pub trait IBackend {
   fn code_gen(&self) -> Box<dyn ICodeGen>;
   fn link_obj(&self) -> Box<dyn ILinkObj>;
 
-  fn run_vm(&self) -> Option<Box<dyn IRunVM>>;
+  fn run(&self) -> Option<Box<dyn IRun>>;
 }
 
 
@@ -81,6 +81,6 @@ pub trait ILinkObj {
   fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String>;
 }
 
-pub trait IRunVM {
-  fn run_vm(&self, code: &[u8], deps: &[&Path]) -> Result<i32, String>;
+pub trait IRun {
+  fn run(&self, target: &Path, args: &[&str]) -> Result<i32, String>;
 }

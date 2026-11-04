@@ -10,7 +10,6 @@
 */
 
 use std::path::{Path, PathBuf};
-use owo_colors::OwoColorize;
 use qwc_arena::Files;
 use qwc_diagnostic::Summary;
 use qwc_target::{Abi, Sys, Triple, Vendor, get_dialect};
@@ -90,10 +89,6 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     }
   }
 
-  if info.verbose > 0 {
-    eprintln!("{}{} {}", "Compiling".green().bold(), ":".bright_black(), conf.name);
-  }
-
   let compile_info = compile::CompileInfo {
     path: info.path,
     outdir,
@@ -116,11 +111,5 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     dolink: info.dolink,
   };
 
-  compile::compile(compile_info)?;
-
-  if info.verbose > 0 {
-    eprintln!("{}{} {}", "Compiled".green().bold(), ":".bright_black(), conf.name);
-  }
-
-  Ok(())
+  compile::compile(compile_info)
 }

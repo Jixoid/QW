@@ -11,5 +11,10 @@
 
 
 mod cgen;
+mod symb_p;
+mod inst_p;
+mod adapter;
 
+use symb_p::SymbLow;
+use inst_p::InstLow;
 pub use cgen::GenCIRCT as Gen;

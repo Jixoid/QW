@@ -89,7 +89,7 @@ fn test_code(file: &str) {
 	// Core & Imods
   let mut deps = hir::Deps::default();
   let core_cid = deps.get_next_id();
-  let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, sin, &hir_layinfo);
+  let (core_cre, core_exp, prims, prim_op) = qwc_intrinsic::new_core(core_cid, sin, &hir_layinfo, qwc_target::Arch::X86_64);
   deps.add(core_cre);
   deps.set_prims(prims);
   deps.set_prim_op(prim_op);

@@ -7,3 +7,4 @@ edition = "2024"
 qwc_hir = { path = "../qwc_hir" }
 qwc_resolve = { path = "../qwc_resolve" }
 qwc_string_interner = { path = "../qwc_string_interner" }
+qwc_target = { path = "../qwc_target" }

@@ -120,6 +120,10 @@ fn low_unary_deref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Ex
 }
 
 fn low_unary_ref(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, id: ast::ExprId, ism: bool) -> Status<hir::ExprId> {
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_POINTERS) {
+    ret_err!(sum, Message::error(POINTERS_NOT_ALLOWED_IN_DIALECT, Label::new_pos(it.pos)));
+  }
+
   let id = ExprLow::low(ctx, fctx, sum, id)?;
   err_bypass!(ctx, ctx.cre.get(id).pos, id);
   

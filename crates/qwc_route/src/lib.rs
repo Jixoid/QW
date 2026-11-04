@@ -25,7 +25,7 @@ mod run;
 //mod pkg;
 
 use error::Error;
-use qwc_target::{Abi, Arch, DialectOption, Sys, Triple, Vendor};
+use qwc_target::{Abi, Arch, Sys, Triple, Vendor, get_dialect};
 
 
 pub fn route() {
@@ -326,11 +326,12 @@ fn main_cmd(cmd: MainCommands) {
       };
       
       let triple = Triple(arch, Vendor::Unknown, Sys::Linux, Abi::Unknown);
+      let dialect = get_dialect(triple);
 
       let info = compile::CompileInfo {
         path: &path,
         outdir,
-        dialect: DialectOption::empty(),
+        dialect,
         opt_level,
         variant,
         start_routine,

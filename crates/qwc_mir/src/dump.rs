@@ -225,13 +225,13 @@ impl DumpHandler for Inst {
 impl DumpHandler for Expr {
   fn dump(&self, cre: &Krate, sin: &StrInterner, f: &mut fmt::Formatter, indent: usize) -> fmt::Result {
     match *self {
-      Expr::Alloca { kind } => {
+      Expr::StackAlloca {kind} => {
         write!(f, "{} ", kw("alloca"))?;
         kind.dump(cre, sin, f, indent)?;
       }
 
 
-      Expr::Store{target, kind, value} => {
+      Expr::HeapStore {target, kind, value} => {
         write!(f, "{} ", kw("store"))?;
         kind.dump(cre, sin, f, indent)?;
         
@@ -242,7 +242,7 @@ impl DumpHandler for Expr {
         target.dump(cre, sin, f, indent)?;
       }
 
-      Expr::Load{target, kind} => {
+      Expr::HeapLoad {target, kind} => {
         write!(f, "{} ", kw("load"))?;
         kind.dump(cre, sin, f, indent)?;
         write!(f, " ")?;
@@ -271,6 +271,17 @@ impl DumpHandler for Expr {
         write!(f, " ")?;
         target.dump(cre, sin, f, indent)?;
         write!(f, ", {}", idx)?;
+      }
+
+      Expr::Select { cond, then_val, else_val, kind } => {
+        write!(f, "{} ", kw("select"))?;
+        kind.dump(cre, sin, f, indent)?;
+        write!(f, " ")?;
+        cond.dump(cre, sin, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        then_val.dump(cre, sin, f, indent)?;
+        write!(f, "{} ", punct(","))?;
+        else_val.dump(cre, sin, f, indent)?;
       }
 
       

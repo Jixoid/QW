@@ -88,6 +88,10 @@ pub fn low_block(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr
 
 // Variable
 pub fn low_let(ctx: &mut Ctx, fctx: &FunCtx, sum: &mut Summary, it: &ast::Expr, item: ast::PattId, kind: Option<ast::TypeId>, init: Option<ast::ExprId>, ism: bool) -> Status<hir::ExprId> {
+  if ctx.dialect.contains(qwc_target::DialectOption::DENY_MUTABLE_VARS) && ism {
+    ret_err!(sum, Message::error(MUTABLE_VARIABLES_NOT_ALLOWED_IN_DIALECT, Label::new_pos(it.pos)));
+  }
+
   let (name, span) = match *ctx.src.get(item) {
     ast::Patt::One(ident) => (ident.sid(), ident),
 

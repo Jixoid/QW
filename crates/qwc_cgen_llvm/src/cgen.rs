@@ -12,9 +12,9 @@
 
 use std::{fs, path::{Path, PathBuf}, process::Command};
 
-use inkwell::{builder::Builder, context::Context, memory_buffer::MemoryBuffer, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
+use inkwell::{builder::Builder, context::Context, module::Module, types::BasicTypeEnum, values::{FunctionValue, GlobalValue}};
 use inkwell::targets::{InitializationConfig, Target, TargetMachine, TargetTriple};
-use qwc_cgen::{CodeModel, GenOptions, GenOutput, IBackend, ICodeGen, ILinkObj, IRunVM, LinkOptions, LinkTarget, Optimization, RelocMode};
+use qwc_cgen::{CodeModel, GenOptions, GenOutput, IBackend, ICodeGen, ILinkObj, IRun, LinkOptions, LinkTarget, Optimization, RelocMode};
 use qwc_mir::{Krate, SymbId, TypeId};
 use qwc_string_interner::StrInterner;
 use rustc_hash::FxHashMap;
@@ -27,7 +27,7 @@ pub struct GenLLVM;
 impl IBackend for GenLLVM {
 	fn code_gen(&self) -> Box<dyn ICodeGen> { Box::new(Self) }
 	fn link_obj(&self) -> Box<dyn ILinkObj> { Box::new(Self) }
-	fn run_vm(&self) -> Option<Box<dyn IRunVM>> { Some(Box::new(Self)) }
+	fn run(&self) -> Option<Box<dyn IRun>> { Some(Box::new(Self)) }
 }
 
 
@@ -148,36 +148,23 @@ impl ILinkObj for GenLLVM {
 	}
 }
 
-impl IRunVM for GenLLVM {
-	fn run_vm(&self, code: &[u8], deps: &[&Path]) -> Result<i32, String> {
-		for &dep in deps {
-			let dep = &dep.join("out.o");
+impl IRun for GenLLVM {
+	fn run(&self, target: &Path, args: &[&str]) -> Result<i32, String> {
+		let exe = target.join("out");
 
-			inkwell::support::load_library_permanently(dep)
-				.map_err(|err| format!("cannot load dependency library: {}: {err}", dep.display()))?;
+		let mut cmd = Command::new(exe);
+		cmd.args(args);
+
+		let out = cmd.output().map_err(|err| format!("program: {err}"))?;
+
+		if !out.status.success() {
+			eprint!("{}", String::from_utf8_lossy(&out.stderr));
+			eprint!("{}", String::from_utf8_lossy(&out.stdout));
+
+			return Err(format!("linker return error"));
 		}
-
-		let ctx = Context::create();
-
-		let mol = Module
-			::parse_bitcode_from_buffer(&MemoryBuffer::create_from_memory_range(code, "main"), &ctx)
-			.map_err(|err| err.to_string())?;
-	
-		let execution_engine = mol
-			.create_jit_execution_engine(inkwell::OptimizationLevel::Default)
-			.map_err(|e| e.to_string())?;
-
-		type QwEntryFunc = unsafe extern "C" fn();
-
-    let qw_entry_jit_fn = unsafe {
-			execution_engine.get_function::<QwEntryFunc>("qw_entry")
-    };
-
-		match qw_entry_jit_fn {
-			Ok(func) => {unsafe { func.call(); }; Ok(0)},
-
-			Err(err) => Err(err.to_string())
-    }
+		
+		Ok(out.status.code().unwrap_or(1))
 	}
 }
 

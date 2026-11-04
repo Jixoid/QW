@@ -15,7 +15,7 @@ use qwc_resolve::ExportMap;
 use qwc_string_interner::StrInterner;
 
 
-pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate, ExportMap, PrimTypes, PrimOps) {
+pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo, target: qwc_target::Arch) -> (Krate, ExportMap, PrimTypes, PrimOps) {
 	let mut cre = Krate::new(cid);
 
 	let path_root = cre.push(DefPath::Root(sin.sid_core()));
@@ -33,6 +33,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 	// types
 	let (types, prim_ty) = {
+		let is_circt = target.is_circt();
 		let mut types = vec![];
 
 		macro_rules! reg {
@@ -50,6 +51,27 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 				});
 
 				types.push(item);
+				kind
+			}};
+		}
+
+		macro_rules! reg_cond {
+			($name:literal => $kind:expr, $lay:expr, $cond:expr) => {{
+				let kind = cre.push(Type{kind: $kind, layout: $lay, attr: TypeAttr::empty()});
+				if $cond {
+					let name_sid = sin.sid($name);
+					let path = cre.push(DefPath::Path{base: path_types, name: name_sid});
+
+					let item = cre.push(Item{
+						vis: ItemVis::Public(SymVis::Internal),
+						name: Some(name_sid),
+						kind: ItemKind::Using{kind},
+						path,
+						attr: ItemAttr::empty()
+					});
+
+					types.push(item);
+				}
 				kind
 			}};
 		}
@@ -80,10 +102,10 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 		let ty_b64  = reg!("b64"  => TypeKind::Bit(64),  layinfo.i64_lay);
 		let ty_b128 = reg!("b128" => TypeKind::Bit(128), layinfo.i128_lay);
 		
-		let ty_f16  = reg!("f16"  => TypeKind::Float(16),  layinfo.f16_lay);
-		let ty_f32  = reg!("f32"  => TypeKind::Float(32),  layinfo.f32_lay);
-		let ty_f64  = reg!("f64"  => TypeKind::Float(64),  layinfo.f64_lay);
-		let ty_f128 = reg!("f128" => TypeKind::Float(128), layinfo.f128_lay);
+		let ty_f16  = reg_cond!("f16"  => TypeKind::Float(16),  layinfo.f16_lay, !is_circt);
+		let ty_f32  = reg_cond!("f32"  => TypeKind::Float(32),  layinfo.f32_lay, !is_circt);
+		let ty_f64  = reg_cond!("f64"  => TypeKind::Float(64),  layinfo.f64_lay, !is_circt);
+		let ty_f128 = reg_cond!("f128" => TypeKind::Float(128), layinfo.f128_lay, !is_circt);
 
 		let prims = PrimTypes {
 			ty_type,
@@ -132,6 +154,7 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 	// ops
 	let (ops, prim_op) = {
+		let is_circt = target.is_circt();
 		let path_ops = cre.push(DefPath::Path{base: path_root, name: sin.sid("ops")});
 
 		macro_rules! def_bin_op {
@@ -317,7 +340,9 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 					attr: ItemAttr::empty(),
 				};
 
-				$its.push(item_trait);
+				if !is_circt {
+					$its.push(item_trait);
+				}
 				
 				trait_ty
 			}};
@@ -811,7 +836,13 @@ pub fn new_core(cid: CID, sin: &mut StrInterner, layinfo: &LayoutInfo) -> (Krate
 
 		let op_neg = def_unary_op!(its, "Neg", "neg");
 		let op_not = def_unary_op!(its, "Not", "not");
-		let op_deref = def_unary_op!(its, "Deref", "deref");
+		let op_deref = {
+			let dt = def_unary_op!(its, "Deref", "deref");
+			if is_circt {
+				its.pop();
+			}
+			dt
+		};
 
 		let op_partial_eq = def_partial_eq!(its);
 		let op_eq = def_eq!(its);

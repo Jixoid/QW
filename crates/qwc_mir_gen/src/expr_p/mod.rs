@@ -56,7 +56,7 @@ impl ExprLow {
       Assign{lhs, rhs} => {Self::low_assign(ctx, sum, bbld, lhs, rhs)?; None},
 
       // Loop
-      Loop{blok, elsb} => Self::low_loop(ctx, sum, bbld, it, blok, elsb)?,
+      Loop{blok, elsb} => Some(Self::low_loop(ctx, sum, bbld, it, blok, elsb)?),
 
       // Route
       Return(val) => {route_p::low_return(ctx, sum, bbld, val)?; None},
@@ -64,7 +64,7 @@ impl ExprLow {
       Continue => {route_p::low_continue(ctx, sum, bbld)?; None},
 
       // Branch
-      If{cond, then, elsb} => Self::low_if(ctx, sum, bbld, it, cond, then, elsb)?,
+      If{cond, then, elsb} => Some(Self::low_if(ctx, sum, bbld, it, cond, then, elsb)?),
 
       // Call
       Call{callee, args} => Some(Self::low_call(ctx, sum, bbld, callee, args)?),
@@ -158,11 +158,11 @@ impl ExprLow {
     let slot = bbld.build_alloca(fatptr);
 
     let f0 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 0 }).unwrap();
-    bbld.emit(mir::Expr::Store { target: f0.into(), kind: ptr, value: mir::Const::Str(sid).into() });
+    bbld.build_store(f0.into(), ptr, mir::Const::Str(sid).into());
     let f1 = bbld.emit(mir::Expr::Gep { target: slot, kind: fatptr, idx: 1 }).unwrap();
-    bbld.emit(mir::Expr::Store { target: f1.into(), kind: aint, value: mir::Const::I32(ctx.sin.str(sid).len() as u32 -1).into() });
+    bbld.build_store(f1.into(), aint, mir::Const::I32(ctx.sin.str(sid).len() as u32 -1).into());
 
-    let fat_val = bbld.emit(mir::Expr::Load { target: slot, kind: fatptr }).unwrap();
+    let fat_val = bbld.build_load(slot, fatptr);
     
     Success(fat_val.into())
   }
@@ -202,17 +202,15 @@ impl ExprLow {
   }
 
   fn low_local_ref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, local: u32) -> Status<Value> {
-    let target = *bbld.local_to_alloca.get(&local).expect("local variable alloca not found");
-    let ty = TypeLow::low(ctx, sum, it.ety)?;
-    
-    
-    // Post
-    let this = mir::Expr::Load {
-      target,
-      kind: ty,
-    };
-
-    Success(bbld.emit(this).unwrap().into())
+    let binding = bbld.get_local(local).expect("local variable not found");
+    match binding {
+      crate::builder::LocalBinding::Value(val) => Success(val),
+      crate::builder::LocalBinding::StackSlot(target) => {
+        let kind = TypeLow::low(ctx, sum, it.ety)?;
+        let this = bbld.build_load(target, kind);
+        Success(this)
+      }
+    }
   }
 
 
@@ -227,7 +225,7 @@ impl ExprLow {
   fn low_deref(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, expr: hir::ExprId) -> Status<Value> {
     let ptr_val = ExprLow::low(ctx, sum, bbld, expr)?.unwrap();
     let target_ty = TypeLow::low(ctx, sum, it.ety)?;
-    let val = bbld.emit(mir::Expr::Load { target: ptr_val, kind: target_ty }).unwrap();
+    let val = bbld.build_load(ptr_val, target_ty);
     
     Success(val.into())
   }
@@ -238,20 +236,24 @@ impl ExprLow {
     let init_hir = ctx.src.get(init);
     let ty = TypeLow::low(ctx, sum, init_hir.ety)?;
 
-    let slot = bbld.build_alloca(ty);
-    bbld.local_to_alloca.insert(local, slot);
-
-    if let hir::ExprKind::CombinatedInit { kind, fields } = init_hir.kind {
-      let kind = TypeLow::low(ctx, sum, kind)?;
-      Self::low_combinated_init_into(ctx, sum, bbld, slot, kind, fields)?;
-    } else {
+    if bbld.dialect.contains(qwc_target::DialectOption::DENY_STACK) {
       let val = ExprLow::low(ctx, sum, bbld, init)?.unwrap();
-      let this = mir::Expr::Store {
-        target: slot,
-        kind: ty,
-        value: val,
-      };
-      bbld.emit(this);
+      bbld.set_local_value(local, val);
+    } else {
+      let slot = bbld.build_alloca(ty);
+      bbld.set_local_slot(local, slot);
+
+      if let hir::ExprKind::CombinatedInit { kind, fields } = init_hir.kind {
+        let kind = TypeLow::low(ctx, sum, kind)?;
+        Self::low_combinated_init_into(ctx, sum, bbld, slot, kind, fields)?;
+      } else {
+        let val = ExprLow::low(ctx, sum, bbld, init)?.unwrap();
+        bbld.build_store(
+          slot,
+          ty,
+          val,
+        );
+      }
     }
 
     Success(())
@@ -285,11 +287,11 @@ impl ExprLow {
       let kind = TypeLow::low(ctx, sum, ctx.src.get(lhs).ety)?;
       let value = ExprLow::low(ctx, sum, bbld, rhs)?.unwrap();
 
-      mir::Expr::Store {
+      bbld.build_store(
         target, 
         kind, 
         value,
-      }.emit(bbld);
+      );
     }
     
     Success(())
@@ -297,7 +299,7 @@ impl ExprLow {
 
 
   // Loop
-  fn low_loop(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Option<Value>> {
+  fn low_loop(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, blok: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Value> {
     let loop_ty = TypeLow::low(ctx, sum, it.ety)?;
     
     let is_unit_or_never = matches!(ctx.cre.get(loop_ty).kind, mir::TypeKind::Unit);
@@ -322,11 +324,7 @@ impl ExprLow {
     bbld.switch_to(body_bb);
     let body_val = ExprLow::low(ctx, sum, bbld, blok)?;
     if let (Some(slot), Some(val)) = (result_slot, body_val) {
-      bbld.emit(mir::Expr::Store {
-        target: slot,
-        kind: loop_ty,
-        value: val,
-      });
+      bbld.build_store(slot, loop_ty, val);
     }
 
     if !bbld.is_current_terminated() {
@@ -342,11 +340,7 @@ impl ExprLow {
 
       let else_val = ExprLow::low(ctx, sum, bbld, elsb)?;
       if let (Some(slot), Some(val)) = (result_slot, else_val) {
-        bbld.emit(mir::Expr::Store {
-          target: slot,
-          kind: loop_ty,
-          value: val,
-        });
+        bbld.build_store(slot, loop_ty, val);
       }
       if !bbld.is_current_terminated() {
         bbld.terminate(RawTerminator::Jump(exit_bb));
@@ -357,13 +351,10 @@ impl ExprLow {
     bbld.switch_to(exit_bb);
 
     if let Some(slot) = result_slot {
-      let dest = bbld.emit(mir::Expr::Load {
-        target: slot,
-        kind: loop_ty,
-      });
-      Success(dest.map(Value::SSA))
+      let dest = bbld.build_load(slot, loop_ty);
+      Success(dest)
     } else {
-      Success(Some(Value::Const(mir::Const::Unit)))
+      Success(Value::Const(mir::Const::Unit))
     }
   }
 
@@ -374,8 +365,11 @@ impl ExprLow {
 
     match it.kind {
       LocalRef(local) => {
-        let target = *bbld.local_to_alloca.get(&local).expect("local variable alloca not found");
-        Success(target)
+        let binding = bbld.get_local(local).expect("local variable not found");
+        match binding {
+          crate::builder::LocalBinding::StackSlot(target) => Success(target),
+          crate::builder::LocalBinding::Value(_) => panic!("cannot take lvalue of pure SSA value"),
+        }
       }
       
       GlobalRef(item) => {
@@ -400,10 +394,33 @@ impl ExprLow {
 
 
   // Branch
-  fn low_if(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Option<Value>> {
+  fn low_if(ctx: &mut Ctx, sum: &mut Summary, bbld: &mut FunBuilder, it: &hir::Expr, cond: hir::ExprId, then: hir::ExprId, elsb: Option<hir::ExprId>) -> Status<Value> {
     let if_ty = TypeLow::low(ctx, sum, it.ety)?;
 
     let is_unit_or_never = matches!(ctx.cre.get(if_ty).kind, mir::TypeKind::Unit);
+
+    if bbld.dialect.contains(qwc_target::DialectOption::DENY_STACK) {
+      let cond_val = ExprLow::low(ctx, sum, bbld, cond)?.expect("condition must produce a value");
+      let then_val = ExprLow::low(ctx, sum, bbld, then)?.unwrap_or(Value::Const(mir::Const::Unit));
+      let else_val = if let Some(elsb_id) = elsb {
+        ExprLow::low(ctx, sum, bbld, elsb_id)?.unwrap_or(Value::Const(mir::Const::Unit))
+      } else {
+        Value::Const(mir::Const::Unit)
+      };
+
+      if is_unit_or_never {
+        return Success(Value::Const(mir::Const::Unit));
+      }
+
+      let res = bbld.emit(mir::Expr::Select {
+        cond: cond_val,
+        then_val,
+        else_val,
+        kind: if_ty,
+      }).unwrap();
+
+      return Success(res.into());
+    }
 
     let result_slot = (!is_unit_or_never).then(|| bbld.build_alloca(if_ty));
 
@@ -427,11 +444,7 @@ impl ExprLow {
     bbld.switch_to(then_bb);
     let then_val = ExprLow::low(ctx, sum, bbld, then)?;
     if let (Some(slot), Some(val)) = (result_slot, then_val) {
-      bbld.emit(mir::Expr::Store {
-        target: slot,
-        kind: if_ty,
-        value: val,
-      });
+      bbld.build_store(slot, if_ty, val);
     }
     if !bbld.is_current_terminated() {
       bbld.terminate(RawTerminator::Jump(merge_bb));
@@ -442,11 +455,7 @@ impl ExprLow {
       bbld.switch_to(else_bb);
       let else_val = ExprLow::low(ctx, sum, bbld, elsb_id)?;
       if let (Some(slot), Some(val)) = (result_slot, else_val) {
-        bbld.emit(mir::Expr::Store {
-          target: slot,
-          kind: if_ty,
-          value: val,
-        });
+        bbld.build_store(slot, if_ty, val);
       }
       if !bbld.is_current_terminated() {
         bbld.terminate(RawTerminator::Jump(merge_bb));
@@ -457,13 +466,10 @@ impl ExprLow {
     bbld.switch_to(merge_bb);
 
     if let Some(slot) = result_slot {
-      let dest = bbld.emit(mir::Expr::Load {
-        target: slot,
-        kind: if_ty,
-      });
-      Success(dest.map(Value::SSA))
+      let dest = bbld.build_load(slot, if_ty);
+      Success(dest)
     } else {
-      Success(Some(Value::Const(mir::Const::Unit)))
+      Success(Value::Const(mir::Const::Unit))
     }
   }
 
@@ -507,11 +513,7 @@ impl ExprLow {
         idx: idx as u32,
       }).unwrap();
 
-      bbld.emit(mir::Expr::Store {
-        target: field_ptr.into(),
-        kind: field_ty,
-        value: field_val,
-      });
+      bbld.build_store(field_ptr.into(), field_ty, field_val);
     }
 
     Success(())
@@ -522,10 +524,7 @@ impl ExprLow {
     let slot = bbld.build_alloca(kind);
     Self::low_combinated_init_into(ctx, sum, bbld, slot, kind, fields)?;
 
-    let val = bbld.emit(mir::Expr::Load {
-      target: slot,
-      kind,
-    }).unwrap();
+    let val = bbld.build_load(slot, kind);
 
     Success(val.into())
   }
@@ -542,12 +541,12 @@ impl ExprLow {
     } else {
       let target_val = ExprLow::low(ctx, sum, bbld, target)?.unwrap();
       let slot = bbld.build_alloca(struct_ty);
-      bbld.emit(mir::Expr::Store { target: slot, kind: struct_ty, value: target_val });
+      bbld.build_store(slot, struct_ty, target_val);
       slot
     };
 
     let field_ptr = bbld.emit(mir::Expr::Gep { target: target_ptr, kind: struct_ty, idx }).unwrap();
-    let val = bbld.emit(mir::Expr::Load { target: field_ptr.into(), kind: field_ty }).unwrap();
+    let val = bbld.build_load(field_ptr.into(), field_ty);
     Success(val.into())
   }
 

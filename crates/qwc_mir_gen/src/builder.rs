@@ -11,7 +11,10 @@
 
 
 use qwc_mir::{self as mir, PushOkApi, SSA, TypeId, Value};
+use qwc_target::DialectOption;
 use rustc_hash::FxHashMap;
+
+use crate::Ctx;
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -47,41 +50,51 @@ pub struct LoopFrame {
 }
 
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LocalBinding {
+  Value(mir::Value),
+  StackSlot(mir::Value),
+}
+
+
 pub struct FunBuilder {
+  pub dialect: DialectOption,
   pub blocks: Vec<BasicBlockData>,
   pub current_bb: BlockHandle,
   next_ssa: u32,
   pub loop_stack: Vec<LoopFrame>,
-  pub local_to_alloca: FxHashMap<u32, mir::Value>,
+  pub local_bindings: FxHashMap<u32, LocalBinding>,
 }
 
 
 impl FunBuilder {
 
-  pub fn new() -> Self {
+  pub fn new(ctx: &Ctx) -> Self {
     let entry = BasicBlockData {
       insts: vec![],
       pre_insts: vec![],
       term: None,
     };
     Self {
+      dialect: ctx.dialect,
       blocks: vec![entry],
       current_bb: BlockHandle(0),
       next_ssa: 0,
       loop_stack: vec![],
-      local_to_alloca: FxHashMap::default(),
+      local_bindings: FxHashMap::default(),
     }
   }
 
+  pub fn set_local_value(&mut self, local: u32, val: mir::Value) {
+    self.local_bindings.insert(local, LocalBinding::Value(val));
+  }
 
-  pub fn build_alloca(&mut self, kind: TypeId) -> Value {
-    let dest = mir::SSA::new(self.next_ssa);
-    self.next_ssa += 1;
-    self.blocks[0].pre_insts.push(mir::Inst {
-      kind: mir::Expr::Alloca { kind },
-      dest: Some(dest),
-    });
-    dest.into()
+  pub fn set_local_slot(&mut self, local: u32, slot: mir::Value) {
+    self.local_bindings.insert(local, LocalBinding::StackSlot(slot));
+  }
+
+  pub fn get_local(&self, local: u32) -> Option<LocalBinding> {
+    self.local_bindings.get(&local).copied()
   }
 
 
@@ -199,6 +212,34 @@ impl FunBuilder {
 
     let entry = block_ids[0];
     (entry, blocks)
+  }
+
+}
+
+impl FunBuilder {
+  
+  pub fn build_alloca(&mut self, kind: TypeId) -> Value {
+    if self.dialect.contains(DialectOption::DENY_STACK) { panic!("dialect setted: DENY_STACK") }
+
+    let dest = mir::SSA::new(self.next_ssa);
+    self.next_ssa += 1;
+    self.blocks[0].pre_insts.push(mir::Inst {
+      kind: mir::Expr::StackAlloca {kind},
+      dest: Some(dest),
+    });
+    dest.into()
+  }
+
+  pub fn build_store(&mut self, target: Value, kind: TypeId, value: Value) {
+    if self.dialect.contains(DialectOption::DENY_HEAP) { panic!("dialect setted: DENY_HEAP") }
+
+    self.emit(mir::Expr::HeapStore { target, kind, value });
+  }
+  
+  pub fn build_load(&mut self, target: Value, kind: TypeId) -> Value {
+    if self.dialect.contains(DialectOption::DENY_HEAP) { panic!("dialect setted: DENY_HEAP") }
+    
+    self.emit(mir::Expr::HeapLoad { target, kind }).unwrap().into()
   }
 
 }

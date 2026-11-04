@@ -60,6 +60,9 @@ pub const X_IN_PATHS_CAN_ONLY_BE_USED_IN_START_POSITION:    CodedMsg = CodedMsg:
 pub const THE_ADDRESS_SPACE_MUST_BE_SPECIFIED:              CodedMsg = CodedMsg::new(0x002d, "the address space must be specified");
 pub const THERE_ARE_NO_ADDRESS_SPACES_IN_THIS_DIALECT:      CodedMsg = CodedMsg::new(0x002e, "there are no address spaces in this dialect");
 pub const THE_ADDRESS_SPACE_X_WAS_NOT_FOUND_IN_THIS_TARGET: CodedMsg = CodedMsg::new(0x002f, "The address space `{}` was not found in this target");
+pub const MUTABLE_VARIABLES_NOT_ALLOWED_IN_DIALECT:          CodedMsg = CodedMsg::new(0x0030, "mutable variables (`var`) are not allowed in this dialect; use immutable `let`");
+pub const POINTERS_NOT_ALLOWED_IN_DIALECT:                   CodedMsg = CodedMsg::new(0x0031, "pointers and references are not allowed in this dialect");
+pub const FLOATS_NOT_ALLOWED_IN_DIALECT:                     CodedMsg = CodedMsg::new(0x0032, "floating-point types and literals are not allowed in this dialect");
 
 
 // Non Coded Messages
