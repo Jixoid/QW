@@ -297,6 +297,18 @@ pub fn build_run(info: &CompileInfo, backend: &dyn IRun, target: &Path, args: &[
 
 pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld_kind: BuildKind) -> Result<(), Error> {
   if info.triple.0.is_circt() || info.triple.0.is_spirv() {
+    if let Some(custom) = &info.outfile {
+      let artifact_name = if info.triple.0.is_spirv() { "out.spv" } else { "out.mlir" };
+      let src = outdir.join(artifact_name);
+      if src.exists() {
+        if let Some(parent) = custom.parent() {
+          if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)?;
+          }
+        }
+        fs::copy(&src, custom)?;
+      }
+    }
     return Ok(());
   }
 
@@ -704,10 +716,10 @@ pub fn validate_outfile(outfile: &Path, link: LinkMode) -> Result<(), Error> {
               e, outfile.display()
             ));
           }
-          "elf" | "bin" | "exe" | "out" | "run" => {}
+          "elf" | "bin" | "exe" | "out" | "run" | "spv" | "mlir" => {}
           _ => {
             return Err(Error::New | format!(
-              "invalid output file extension '.{}' for executable '{}'; expected no extension or one of: .elf, .bin, .exe, .out, .run",
+              "invalid output file extension '.{}' for executable '{}'; expected no extension or one of: .elf, .bin, .exe, .out, .run, .spv, .mlir",
               e, outfile.display()
             ));
           }
@@ -717,4 +729,42 @@ pub fn validate_outfile(outfile: &Path, link: LinkMode) -> Result<(), Error> {
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::path::Path;
+
+  #[test]
+  fn test_validate_outfile_shared() {
+    assert!(validate_outfile(Path::new("libtest.so"), LinkMode::Shared).is_ok());
+    assert!(validate_outfile(Path::new("libtest.so.1"), LinkMode::Shared).is_ok());
+    assert!(validate_outfile(Path::new("path/to/libtest.so"), LinkMode::Shared).is_ok());
+
+    assert!(validate_outfile(Path::new("libtest"), LinkMode::Shared).is_err());
+    assert!(validate_outfile(Path::new("libtest.a"), LinkMode::Shared).is_err());
+    assert!(validate_outfile(Path::new("libtest.dll"), LinkMode::Shared).is_err());
+    assert!(validate_outfile(Path::new("libtest.qw"), LinkMode::Shared).is_err());
+  }
+
+  #[test]
+  fn test_validate_outfile_exec() {
+    assert!(validate_outfile(Path::new("myapp"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("path/to/myapp"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.elf"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.bin"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.exe"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.out"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.run"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("myapp.spv"), LinkMode::Exec).is_ok());
+    assert!(validate_outfile(Path::new("app-1.0"), LinkMode::Exec).is_ok());
+
+    assert!(validate_outfile(Path::new("myapp.so"), LinkMode::Exec).is_err());
+    assert!(validate_outfile(Path::new("myapp.qw"), LinkMode::Exec).is_err());
+    assert!(validate_outfile(Path::new("myapp.qwu"), LinkMode::Exec).is_err());
+    assert!(validate_outfile(Path::new("myapp.o"), LinkMode::Exec).is_err());
+    assert!(validate_outfile(Path::new("myapp.a"), LinkMode::Exec).is_err());
+    assert!(validate_outfile(Path::new("myapp.txt"), LinkMode::Exec).is_err());
+  }
 }
