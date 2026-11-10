@@ -92,6 +92,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
   let compile_info = compile::CompileInfo {
     path: info.path,
     outdir,
+    outfile: None,
     dialect,
     triple,
     opt_level: info.opt_level,

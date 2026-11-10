@@ -125,10 +125,22 @@ impl ILinkObj for GenLLVM {
 		cmd.arg(target.join("out.o"));
 
 		// out
-		cmd.arg("-o").arg(match options.target.unwrap() {
-			LinkTarget::Shared => out.join("out.so"),
-			LinkTarget::Exec   => out.join("out"),
-		});
+		let out_path = if let Some(custom) = &options.output {
+			custom.clone()
+		} else {
+			match options.target.unwrap_or(LinkTarget::Exec) {
+				LinkTarget::Shared => out.join("out.so"),
+				LinkTarget::Exec   => out.join("out"),
+			}
+		};
+
+		if let Some(parent) = out_path.parent() {
+			if !parent.as_os_str().is_empty() && !parent.exists() {
+				fs::create_dir_all(parent).map_err(|err| format!("io: {err}"))?;
+			}
+		}
+
+		cmd.arg("-o").arg(&out_path);
 		
 		// deps
 		for &dep in deps {
@@ -156,21 +168,21 @@ impl ILinkObj for GenLLVM {
 
 impl IRun for GenLLVM {
 	fn run(&self, target: &Path, args: &[&str]) -> Result<i32, String> {
-		let exe = target.join("out");
+		let exe = if target.is_file() {
+			target.canonicalize().unwrap_or_else(|_| target.to_path_buf())
+		} else {
+			target.join("out").canonicalize().unwrap_or_else(|_| target.join("out"))
+		};
 
 		let mut cmd = Command::new(exe);
 		cmd.args(args);
 
 		let out = cmd.output().map_err(|err| format!("program: {err}"))?;
 
-		if !out.status.success() {
-			eprint!("{}", String::from_utf8_lossy(&out.stderr));
-			eprint!("{}", String::from_utf8_lossy(&out.stdout));
-
-			return Err(format!("linker return error"));
-		}
+		print!("{}", String::from_utf8_lossy(&out.stdout));
+		eprint!("{}", String::from_utf8_lossy(&out.stderr));
 		
-		Ok(out.status.code().unwrap_or(1))
+		Ok(out.status.code().unwrap_or(0))
 	}
 }
 

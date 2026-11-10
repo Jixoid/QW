@@ -42,6 +42,7 @@ pub struct DepArtifact {
 pub struct CompileInfo<'a> {
   pub path: &'a Path,
   pub outdir: PathBuf,
+  pub outfile: Option<PathBuf>,
   pub opt_level: OptLevel,
   pub variant: BuildVariant,
   pub dialect: DialectOption,
@@ -353,6 +354,7 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
     strip: matches!(info.variant, BuildVariant::Release),
     reloc_mode: Some(cgen::RelocMode::PIC),
     code_model: Some(cgen::CodeModel::Small),
+    output: info.outfile.clone(),
   };
 
   let out = backend.link(
@@ -365,6 +367,7 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
   
   if let Err(err) = out {
     eprintln!("{}{} {}", "Linker Error".green().bold(), ":".bright_black(), err);
+    return Err(Error::New | err);
   }
 
   Ok(())
@@ -372,6 +375,10 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
 
 
 pub fn compile(info: CompileInfo) -> Result<(), Error> {
+  if let Some(outfile) = &info.outfile {
+    validate_outfile(outfile, info.link)?;
+  }
+
   let crate_name = if let Some(name) = &info.krate_name {
     name.to_string()
   } else if info.path.is_file() {
@@ -547,7 +554,12 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
     if info.link == LinkMode::Shared {
       eprintln!("{}{} {}", "warning".yellow().bold(), ":".bright_black(), "cannot execute a shared library; --exec is ignored");
     } else if let Some(link) = backend.run() {
-      build_run(&info, link.as_ref(), outdir, &[])?;
+      let run_target = if let Some(outfile) = &info.outfile {
+        outfile.as_path()
+      } else {
+        outdir
+      };
+      build_run(&info, link.as_ref(), run_target, &[])?;
     } else {
       return Err(Error::New | format!("this target not have a run feature"));
     }
@@ -650,4 +662,59 @@ fn humanize_size(size: usize) -> String {
   let letter = match set { 0 => "b", 1 => "kb", 2 => "mb", 3 => "gb", 4 => "tb", _ => todo!() };
 
   format!("{:.2}{}", val, letter)
+}
+
+pub fn validate_outfile(outfile: &Path, link: LinkMode) -> Result<(), Error> {
+  let file_name = outfile.file_name().and_then(|s| s.to_str()).unwrap_or("");
+  let ext = outfile.extension().and_then(|s| s.to_str());
+
+  match link {
+    LinkMode::Shared => {
+      let is_so = ext == Some("so") || file_name.contains(".so.") || file_name.ends_with(".so");
+      if !is_so {
+        return Err(Error::New | format!(
+          "shared library output file must have a '.so' extension: '{}'",
+          outfile.display()
+        ));
+      }
+    }
+    LinkMode::Exec => {
+      if ext == Some("so") || file_name.contains(".so.") || file_name.ends_with(".so") {
+        return Err(Error::New | format!(
+          "output file '{}' has a '.so' extension, but --link exec was specified (did you mean '--link shared'?)",
+          outfile.display()
+        ));
+      }
+
+      if let Some(e) = ext {
+        if e.chars().all(|c| c.is_ascii_digit()) {
+          return Ok(());
+        }
+
+        match e {
+          "qw" | "qwu" => {
+            return Err(Error::New | format!(
+              "cannot use QW source/unit file extension '.{}' for executable output: '{}'",
+              e, outfile.display()
+            ));
+          }
+          "o" | "obj" | "a" | "lib" | "ll" | "bc" | "s" | "asm" | "c" | "h" | "cpp" | "hpp" => {
+            return Err(Error::New | format!(
+              "invalid output file extension '.{}' for executable: '{}'",
+              e, outfile.display()
+            ));
+          }
+          "elf" | "bin" | "exe" | "out" | "run" => {}
+          _ => {
+            return Err(Error::New | format!(
+              "invalid output file extension '.{}' for executable '{}'; expected no extension or one of: .elf, .bin, .exe, .out, .run",
+              e, outfile.display()
+            ));
+          }
+        }
+      }
+    }
+  }
+
+  Ok(())
 }

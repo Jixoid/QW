@@ -104,6 +104,10 @@ enum MainCommands {
     #[arg(long)]
     outdir: Option<PathBuf>,
 
+    /// Output file path
+    #[arg(short = 'o', long = "out")]
+    out: Option<PathBuf>,
+
     /// External dependencies (format: NAME=PATH_TO_QWU or NAME=PATH_TO_QWU:PATH_TO_OBJ)
     #[arg(long = "dep", value_name = "NAME=QWU")]
     deps: Vec<String>,
@@ -300,12 +304,19 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, arch, rtl, reloc, mcmodel, link, verbose, exec, timings, usages, dump} => {
+    MainCommands::Compile{path, outdir, out, deps, opt_level, variant, start_routine, arch, rtl, reloc, mcmodel, link, verbose, exec, timings, usages, dump} => {
       let variant_dir = match variant {
         BuildVariant::Debug => "debug",
         BuildVariant::Release => "release",
         BuildVariant::RelWithDebInfo => "relwithdebinfo",
       };
+
+      if let Some(outfile) = &out {
+        if let Err(err) = compile::validate_outfile(outfile, link) {
+          eprintln!("{}{} {}", "error".red().bold(), ":".bright_black(), err);
+          std::process::exit(1);
+        }
+      }
 
       let outdir = outdir.unwrap_or_else(|| {
         let base = if path.is_file() {
@@ -350,6 +361,7 @@ fn main_cmd(cmd: MainCommands) {
       let info = compile::CompileInfo {
         path: &path,
         outdir,
+        outfile: out,
         dialect,
         opt_level,
         variant,

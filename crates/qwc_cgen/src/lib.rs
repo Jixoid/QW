@@ -54,6 +54,7 @@ pub struct LinkOptions {
   pub is_dynamic: bool,
   pub reloc_mode: Option<RelocMode>,
   pub code_model: Option<CodeModel>,
+  pub output: Option<std::path::PathBuf>,
 }
 
 pub struct RunEnv<'a> {
