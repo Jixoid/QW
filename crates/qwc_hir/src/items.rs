@@ -48,13 +48,21 @@ bitflags! {
     const Entry = 1 << 1;
     const ManglingBare = 1 << 2;
     const ManglingQW = 1 << 3;
+    const ShaderVertex = 1 << 4;
+    const ShaderFragment = 1 << 5;
+    const ShaderCompute = 1 << 6;
   }
 }
 
 impl ItemAttr {
   #[inline]
   pub fn is_bare_mangling(&self) -> bool {
-    self.contains(ItemAttr::ManglingBare) || self.contains(ItemAttr::C)
+    self.contains(ItemAttr::ManglingBare) || self.contains(ItemAttr::C) || self.is_shader()
+  }
+
+  #[inline]
+  pub fn is_shader(&self) -> bool {
+    self.intersects(ItemAttr::ShaderVertex | ItemAttr::ShaderFragment | ItemAttr::ShaderCompute)
   }
 }
 

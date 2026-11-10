@@ -45,6 +45,11 @@ pub struct StrInterner {
   sid_mangling: Sid,
   sid_bare: Sid,
   sid_qw: Sid,
+  sid_shader: Sid,
+  sid_vertex: Sid,
+  sid_fragment: Sid,
+  sid_pixel: Sid,
+  sid_compute: Sid,
 
   sid_self: Sid,
 
@@ -116,6 +121,11 @@ impl StrInterner {
   pub fn sid_mangling(&self) -> Sid { self.sid_mangling }
   pub fn sid_bare(&self) -> Sid { self.sid_bare }
   pub fn sid_qw(&self) -> Sid { self.sid_qw }
+  pub fn sid_shader(&self) -> Sid { self.sid_shader }
+  pub fn sid_vertex(&self) -> Sid { self.sid_vertex }
+  pub fn sid_fragment(&self) -> Sid { self.sid_fragment }
+  pub fn sid_pixel(&self) -> Sid { self.sid_pixel }
+  pub fn sid_compute(&self) -> Sid { self.sid_compute }
   pub fn sid_self(&self) -> Sid   { self.sid_self }
 
   pub fn sid_add(&self) -> Sid { self.sid_add }
@@ -171,6 +181,11 @@ impl Default for StrInterner {
       sid_mangling: Sid::from(rodeo.get_or_intern_static("mangling").into_inner()),
       sid_bare:   Sid::from(rodeo.get_or_intern_static("bare").into_inner()),
       sid_qw:     Sid::from(rodeo.get_or_intern_static("qw").into_inner()),
+      sid_shader: Sid::from(rodeo.get_or_intern_static("shader").into_inner()),
+      sid_vertex: Sid::from(rodeo.get_or_intern_static("vertex").into_inner()),
+      sid_fragment: Sid::from(rodeo.get_or_intern_static("fragment").into_inner()),
+      sid_pixel:  Sid::from(rodeo.get_or_intern_static("pixel").into_inner()),
+      sid_compute: Sid::from(rodeo.get_or_intern_static("compute").into_inner()),
 
       sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
       

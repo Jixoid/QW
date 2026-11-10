@@ -22,6 +22,7 @@ use crate::{inst_p::InstLow, type_p::TypeLow, value_p::FunCtx};
 pub struct EntryPointInfo {
   pub id: Word,
   pub name: String,
+  pub model: ExecutionModel,
 }
 
 pub struct SymbLow;
@@ -45,11 +46,25 @@ impl SymbLow {
           let fn_id = b.id();
           symbols.insert(sym_id, fn_id);
 
-          // Check if this is an entry point (e.g. main or qw_entry)
-          let is_entry = name == "main" || name == "qw_entry";
-          if is_entry {
+          // Check if this is an entry point
+          if let Some(stage) = sym.shader {
+            let model = match stage {
+              mir::ShaderStage::Vertex => ExecutionModel::Vertex,
+              mir::ShaderStage::Fragment => ExecutionModel::Fragment,
+              mir::ShaderStage::Compute => ExecutionModel::GLCompute,
+            };
+            entry_points.push(EntryPointInfo {
+              id: fn_id,
+              name: name.to_string(),
+              model,
+            });
+          } else if name == "main" || name == "qw_entry" {
             let entry_name = if name == "qw_entry" { "main".to_string() } else { name.to_string() };
-            entry_points.push(EntryPointInfo { id: fn_id, name: entry_name });
+            entry_points.push(EntryPointInfo {
+              id: fn_id,
+              name: entry_name,
+              model: ExecutionModel::GLCompute,
+            });
           }
         }
 
@@ -107,15 +122,15 @@ impl SymbLow {
             block_map.entry(blk_id).or_insert_with(|| b.id());
           }
 
-          // Process entry block first, then the remaining blocks
-          let mut all_blocks = vec![entry];
+          // Compute RPO block order so merge blocks appear after their constructs
+          let mut all_blocks = compute_rpo(cre, entry);
           for blk_id in cre.extra_get(blocks) {
-            if blk_id != entry && !all_blocks.contains(&blk_id) {
+            if !all_blocks.contains(&blk_id) {
               all_blocks.push(blk_id);
             }
           }
 
-          for blk_id in all_blocks {
+          for &blk_id in &all_blocks {
             let label_id = block_map[&blk_id];
             b.begin_block(Some(label_id)).map_err(|e| e.to_string())?;
 
@@ -124,7 +139,7 @@ impl SymbLow {
               InstLow::low_inst(b, cre, ty_low, symbols, &mut fctx, inst_id)?;
             }
 
-            InstLow::low_term(b, cre, ty_low, symbols, &fctx, &block_map, &blk.term)?;
+            InstLow::low_term(b, cre, ty_low, symbols, &fctx, &block_map, &blk.term, &all_blocks)?;
           }
 
           b.end_function().map_err(|e| e.to_string())?;
@@ -149,8 +164,52 @@ impl SymbLow {
     entry_points: &[EntryPointInfo],
   ) {
     for ep in entry_points {
-      b.entry_point(ExecutionModel::GLCompute, ep.id, &ep.name, vec![]);
-      b.execution_mode(ep.id, rspirv::spirv::ExecutionMode::LocalSize, vec![1, 1, 1]);
+      b.entry_point(ep.model, ep.id, &ep.name, vec![]);
+      match ep.model {
+        ExecutionModel::Fragment => {
+          b.execution_mode(ep.id, rspirv::spirv::ExecutionMode::OriginUpperLeft, vec![]);
+        }
+        ExecutionModel::GLCompute => {
+          b.execution_mode(ep.id, rspirv::spirv::ExecutionMode::LocalSize, vec![1, 1, 1]);
+        }
+        _ => {}
+      }
     }
   }
+}
+
+fn compute_rpo(cre: &mir::Krate, entry: mir::BlokId) -> Vec<mir::BlokId> {
+  let mut visited = rustc_hash::FxHashSet::default();
+  let mut post_order = Vec::new();
+
+  fn dfs(
+    cre: &mir::Krate,
+    blk_id: mir::BlokId,
+    visited: &mut rustc_hash::FxHashSet<mir::BlokId>,
+    post_order: &mut Vec<mir::BlokId>,
+  ) {
+    visited.insert(blk_id);
+    let blk = cre.get(blk_id);
+    match &blk.term {
+      mir::Terminator::Jump(to) => {
+        if !visited.contains(to) {
+          dfs(cre, *to, visited, post_order);
+        }
+      }
+      mir::Terminator::Branch { then_bb, else_bb, .. } => {
+        if !visited.contains(then_bb) {
+          dfs(cre, *then_bb, visited, post_order);
+        }
+        if !visited.contains(else_bb) {
+          dfs(cre, *else_bb, visited, post_order);
+        }
+      }
+      mir::Terminator::Return(..) | mir::Terminator::Unreachable => {}
+    }
+    post_order.push(blk_id);
+  }
+
+  dfs(cre, entry, &mut visited, &mut post_order);
+  post_order.reverse();
+  post_order
 }

@@ -12,8 +12,8 @@
 
 use qwc_mir::{self as mir, Expr, Terminator};
 use rspirv::dr::Builder;
-use rspirv::spirv::{StorageClass, Word};
-use rustc_hash::FxHashMap;
+use rspirv::spirv::{SelectionControl, StorageClass, Word};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{type_p::TypeLow, value_p::{FunCtx, ValueLow}};
 
@@ -77,8 +77,22 @@ impl InstLow {
         Some(call_res)
       }
 
-      Expr::Gep { target: _, kind: _, idx: _ } => {
-        return Err("SPIR-V: GEP not yet implemented".to_string());
+      Expr::Gep { target, kind, idx } => {
+        let base_w = ValueLow::low(b, cre, ty_low, symbols, fctx, &target, None)?;
+        let it = cre.get(kind);
+        let field_ty = match it.kind {
+          mir::TypeKind::Struct(fields) => {
+            cre.extra_get(fields).nth(idx as usize)
+              .ok_or_else(|| format!("field index {} out of bounds for struct", idx))?
+          }
+          _ => return Err(format!("GEP target kind is not a struct: {:?}", it.kind)),
+        };
+
+        let u32_ty = b.type_int(32, 0);
+        let idx_w = b.constant_bit32(u32_ty, idx);
+        let field_ptr_ty = ty_low.pointer_type(b, cre, field_ty, StorageClass::Function)?;
+        let res = b.access_chain(field_ptr_ty, None, base_w, vec![idx_w]).map_err(|e| e.to_string())?;
+        Some(res)
       }
 
       Expr::Select { cond, then_val, else_val, kind } => {
@@ -263,6 +277,7 @@ impl InstLow {
     fctx: &FunCtx,
     block_map: &FxHashMap<mir::BlokId, Word>,
     term: &Terminator,
+    all_blocks: &[mir::BlokId],
   ) -> Result<(), String> {
     match term {
       Terminator::Jump(to) => {
@@ -280,6 +295,14 @@ impl InstLow {
         let else_label = block_map.get(else_bb).copied().ok_or_else(|| {
           format!("SPIR-V: undefined else block {:?}", else_bb)
         })?;
+
+        if let Some(merge_bb) = Self::find_merge_block(cre, *then_bb, *else_bb, all_blocks) {
+          if let Some(&merge_label) = block_map.get(&merge_bb) {
+            b.selection_merge(merge_label, SelectionControl::NONE)
+              .map_err(|e| e.to_string())?;
+          }
+        }
+
         b.branch_conditional(cond_w, then_label, else_label, vec![]).map_err(|e| e.to_string())?;
       }
 
@@ -301,5 +324,59 @@ impl InstLow {
     }
 
     Ok(())
+  }
+
+  fn reachable_blocks(cre: &mir::Krate, start: mir::BlokId) -> FxHashSet<mir::BlokId> {
+    let mut visited = FxHashSet::default();
+    let mut queue = std::collections::VecDeque::new();
+    visited.insert(start);
+    queue.push_back(start);
+
+    while let Some(blk_id) = queue.pop_front() {
+      let blk = cre.get(blk_id);
+      match &blk.term {
+        mir::Terminator::Jump(to) => {
+          if visited.insert(*to) {
+            queue.push_back(*to);
+          }
+        }
+        mir::Terminator::Branch { then_bb, else_bb, .. } => {
+          if visited.insert(*then_bb) {
+            queue.push_back(*then_bb);
+          }
+          if visited.insert(*else_bb) {
+            queue.push_back(*else_bb);
+          }
+        }
+        mir::Terminator::Return(..) | mir::Terminator::Unreachable => {}
+      }
+    }
+
+    visited
+  }
+
+  pub fn find_merge_block(
+    cre: &mir::Krate,
+    then_bb: mir::BlokId,
+    else_bb: mir::BlokId,
+    all_blocks: &[mir::BlokId],
+  ) -> Option<mir::BlokId> {
+    if then_bb == else_bb {
+      return Some(then_bb);
+    }
+
+    let then_reach = Self::reachable_blocks(cre, then_bb);
+    if then_reach.contains(&else_bb) {
+      return Some(else_bb);
+    }
+
+    let else_reach = Self::reachable_blocks(cre, else_bb);
+    for &blk in all_blocks {
+      if then_reach.contains(&blk) && else_reach.contains(&blk) {
+        return Some(blk);
+      }
+    }
+
+    None
   }
 }

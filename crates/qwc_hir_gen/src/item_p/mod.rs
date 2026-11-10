@@ -400,6 +400,58 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
           ivis = Some((key, hir::SymVis::Export));
           attr |= ItemAttr::Entry;
         }
+
+        // Shader: ![shader: vertex], ![shader: fragment], ![shader: compute]
+        _ if key.sid() == ctx.sin.sid_shader() => {
+          if attr.is_shader() {
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          }
+          if let ast::AttrKind::Bin(val) = a.kind {
+            if val.sid() == ctx.sin.sid_vertex() {
+              attr |= ItemAttr::ShaderVertex;
+            } else if val.sid() == ctx.sin.sid_fragment() || val.sid() == ctx.sin.sid_pixel() {
+              attr |= ItemAttr::ShaderFragment;
+            } else if val.sid() == ctx.sin.sid_compute() {
+              attr |= ItemAttr::ShaderCompute;
+            } else {
+              ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[&format!("shader: {}", val.str(ctx.far))]), Label::new_pos(val)));
+            }
+          } else {
+            ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)));
+          }
+          ivis = Some((key, hir::SymVis::Export));
+        }
+
+        // Shorthand shader attributes: ![vertex], ![fragment], ![pixel], ![compute]
+        _ if key.sid() == ctx.sin.sid_vertex() => {
+          if attr.is_shader() {
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          }
+          attr |= ItemAttr::ShaderVertex;
+          ivis = Some((key, hir::SymVis::Export));
+        }
+        _ if key.sid() == ctx.sin.sid_fragment() || key.sid() == ctx.sin.sid_pixel() => {
+          if attr.is_shader() {
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          }
+          attr |= ItemAttr::ShaderFragment;
+          ivis = Some((key, hir::SymVis::Export));
+        }
+        _ if key.sid() == ctx.sin.sid_compute() => {
+          if attr.is_shader() {
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          }
+          attr |= ItemAttr::ShaderCompute;
+          ivis = Some((key, hir::SymVis::Export));
+        }
       
         _ => ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)))
       }
@@ -408,7 +460,13 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
 
 
   let vis = match vis {
-    ast::Visibility::Inherited => hir::ItemVis::Private,
+    ast::Visibility::Inherited => {
+      if attr.is_shader() {
+        hir::ItemVis::Public(hir::SymVis::Export)
+      } else {
+        hir::ItemVis::Private
+      }
+    }
     ast::Visibility::Public  => hir::ItemVis::Public(ivis.map(|v| v.1).unwrap_or(hir::SymVis::Internal)),
     ast::Visibility::Private => hir::ItemVis::Private,
     _ => panic!()

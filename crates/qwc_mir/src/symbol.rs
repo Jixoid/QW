@@ -30,10 +30,19 @@ pub enum SymbolStat {
 }
 
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum ShaderStage {
+  Vertex,
+  Fragment,
+  Compute,
+}
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Symbol {
   pub name: u32,
   pub kind: SymbolKind,
   pub stat: SymbolStat,
   pub ety: TypeId,
+  pub shader: Option<ShaderStage>,
 }  

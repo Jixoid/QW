@@ -37,6 +37,7 @@ impl SymbLow {
             name: ctx.cre.sym(&sym),
             stat: mir::SymbolStat::Import,
             ety,
+            shader: None,
             kind: mir::SymbolKind::Function {
               entry: mir::BlokId::from_any(mir::AnyId::new(0, mir::id::NodeKind::Blok)),
               blocks: mir::BlokRng::empty(),
@@ -51,6 +52,7 @@ impl SymbLow {
             name: ctx.cre.sym(&sym),
             stat: mir::SymbolStat::Import,
             ety,
+            shader: None,
             kind: mir::SymbolKind::Variable {
               value: mir::Value::Const(mir::Const::Unit),
               ism,
@@ -135,6 +137,7 @@ impl SymbLow {
       name: ctx.cre.sym(&sym),
       stat,
       ety,
+      shader: None,
       kind: mir::SymbolKind::Variable{ value, ism }
     }.push_ok(ctx.cre)
   }
@@ -152,6 +155,16 @@ impl SymbLow {
       ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path)
     };
 
+    let shader = if it.attr.contains(ItemAttr::ShaderVertex) {
+      Some(mir::ShaderStage::Vertex)
+    } else if it.attr.contains(ItemAttr::ShaderFragment) {
+      Some(mir::ShaderStage::Fragment)
+    } else if it.attr.contains(ItemAttr::ShaderCompute) {
+      Some(mir::ShaderStage::Compute)
+    } else {
+      None
+    };
+
     let ety = TypeLow::low(ctx, sum, kind)?;
 
     let Some(expr) = expr else {
@@ -159,6 +172,7 @@ impl SymbLow {
         name: ctx.cre.sym(&sym),
         stat: mir::SymbolStat::Import,
         ety,
+        shader: None,
         kind: mir::SymbolKind::Function {
           entry: mir::BlokId::from_any(mir::AnyId::new(0, mir::id::NodeKind::Blok)),
           blocks: mir::BlokRng::empty(),
@@ -185,7 +199,7 @@ impl SymbLow {
 
     let (entry, blocks) = BlokLow::low_fn(ctx, sum, expr, is_ret_unit, &param_tys)?;
 
-    let stat = if it.attr.contains(ItemAttr::Entry) {
+    let stat = if it.attr.contains(ItemAttr::Entry) || it.attr.is_shader() {
       mir::SymbolStat::Export
     } else {
       match convert_vis(it) {
@@ -199,6 +213,7 @@ impl SymbLow {
       name: ctx.cre.sym(&sym),
       stat,
       ety,
+      shader,
       kind: mir::SymbolKind::Function{ entry, blocks }
     }.push_ok(ctx.cre)
   }
@@ -246,6 +261,7 @@ impl SymbLow {
       name: ctx.cre.sym(&sym),
       stat,
       ety,
+      shader: None,
       kind: mir::SymbolKind::Function{ entry, blocks }
     }.push_ok(ctx.cre)
   }
@@ -303,6 +319,7 @@ impl SymbLow {
         kind: mir::SymbolKind::Vmt { size, align, table },
         stat: mir::SymbolStat::Private,
         ety,
+        shader: None,
       }.push(ctx.cre);
       ctx.cmap.cache_vmt.insert((struct_ty, trait_ty.unwrap()), vmt_id);
     }
