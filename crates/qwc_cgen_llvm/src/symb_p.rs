@@ -57,6 +57,7 @@ impl SymbLow {
           let fn_any_ty = TypeLow::low(ictx, ictx.cre.get(it.ety));
           let fn_ty = fn_any_ty.into_function_type();
           let fv = ictx.mol.add_function(name, fn_ty, None);
+          fv.set_call_conventions(0);
 
           match it.stat {
             SymbolStat::Private => {

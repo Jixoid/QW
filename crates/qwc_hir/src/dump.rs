@@ -227,8 +227,12 @@ impl DumpHandler for Item {
           write!(f, "{}{}", name(ctx.sin.str(name_sid)), punct(": "))?;
         }
         kind.dump(ctx, f, indent)?;
-        write!(f, " ")?;
-        expr.dump(ctx, f, indent)?;
+        if let Some(expr) = expr {
+          write!(f, " ")?;
+          expr.dump(ctx, f, indent)?;
+        } else {
+          write!(f, "{}", punct(";"))?;
+        }
       }
 
       ItemKind::Task { kind, expr } => {

@@ -44,8 +44,8 @@ impl TypeLow {
       Ptr{kind, addrspace, ..} => Self::low_ptr(ctx, sum, kind, addrspace)?,
 
       // Combinated
-      Struct(rng) => Self::low_struct(ctx, sum, rng, id.cid())?,
-      ItemStruct{fields: rng, ..} => Self::low_struct(ctx, sum, rng, id.cid())?,
+      Struct(rng) => Self::low_struct(ctx, sum, id, rng, id.cid())?,
+      ItemStruct{fields: rng, ..} => Self::low_struct(ctx, sum, id, rng, id.cid())?,
       Tuple(rng) => Self::low_tuple(ctx, sum, rng, id.cid())?,
       ItemTuple{fields: rng, ..} => Self::low_tuple(ctx, sum, rng, id.cid())?,
       
@@ -164,7 +164,7 @@ impl TypeLow {
   }
 
 
-  fn low_struct(ctx: &mut Ctx, sum: &mut Summary, rng: hir::ThingRng, cid: hir::CID) -> Status<mir::TypeId> {
+  fn low_struct(ctx: &mut Ctx, sum: &mut Summary, id: hir::TypeId, rng: hir::ThingRng, cid: hir::CID) -> Status<mir::TypeId> {
     let kinds: Vec<hir::TypeId> = {
       let krate = ctx.get_krate(cid);
       krate.extra_get(rng).map(|id| {
@@ -173,18 +173,21 @@ impl TypeLow {
       }).collect()
     };
 
+    let is_c = ctx.get(id).attr.contains(hir::TypeAttr::C);
+
     let mut sub = Vec::with_capacity(kinds.len());
     for kind in kinds {
       sub.push(TypeLow::low(ctx, sum, kind)?);
     }
     let rng = ctx.cre.extra(&sub);
 
+
     // Post
     let kind = mir::TypeKind::Struct(rng);
 
     mir::Type {
       kind,
-      layout: Layouter::layout(sum, &kind, ctx.tin.layinfo, ctx.cre)?,
+      layout: Layouter::layout_struct(sum, rng, ctx.tin.layinfo, ctx.cre, is_c)?,
     }.push_ok(ctx.cre)
   }
 

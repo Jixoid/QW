@@ -61,6 +61,7 @@ impl InstLow {
         };
 
         let call_res = ictx.builder.build_direct_call(callee, &args, "").unwrap();
+        call_res.set_call_convention(0);
         let val = match call_res.try_as_basic_value() {
           inkwell::values::ValueKind::Basic(v) => v,
           inkwell::values::ValueKind::Instruction(_) => ictx.ctx.const_struct(&[], false).into(),
@@ -279,7 +280,8 @@ impl InstLow {
           vec
         };
 
-        ictx.builder.build_direct_call(callee, &args, "").unwrap();
+        let call_res = ictx.builder.build_direct_call(callee, &args, "").unwrap();
+        call_res.set_call_convention(0);
       }
 
 

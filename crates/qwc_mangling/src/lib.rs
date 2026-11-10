@@ -16,6 +16,9 @@ use qwc_string_interner::StrInterner;
 mod qw;
 pub use qw::ManglerQW;
 
+mod bare;
+pub use bare::ManglerBare;
+
 
 pub trait Mangler {
   fn new(cre: &Krate, deps: &Deps, sin: &StrInterner, id: DefPathId) -> String;

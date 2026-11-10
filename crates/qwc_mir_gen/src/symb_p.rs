@@ -15,7 +15,7 @@ use std::assert_matches;
 use qwc_diagnostic::{Status::{self, Success}, Summary};
 use qwc_hir::{self as hir, ItemAttr};
 use qwc_mir::{self as mir, PushOkApi};
-use qwc_mangling::{Mangler, ManglerQW};
+use qwc_mangling::{Mangler, ManglerBare, ManglerQW};
 
 use crate::{BlokLow, Ctx, TypeLow, FunBuilder, Layouter, expr_p::ExprLow};
 
@@ -108,7 +108,15 @@ impl SymbLow {
 
 
   fn low_variable(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId, ism: bool) -> Status<mir::SymbId> {
-    let sym = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
+    let sym = if it.attr.is_bare_mangling() {
+      if let Some(name) = it.name {
+        ctx.sin.str(name).to_string()
+      } else {
+        ManglerBare::new(ctx.src, ctx.deps, ctx.sin, it.path)
+      }
+    } else {
+      ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path)
+    };
 
     let ety = TypeLow::low(ctx, sum, kind)?;
 
@@ -131,14 +139,32 @@ impl SymbLow {
     }.push_ok(ctx.cre)
   }
 
-  fn low_function(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId) -> Status<mir::SymbId> {
+  fn low_function(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: Option<hir::ExprId>) -> Status<mir::SymbId> {
     let sym = if it.attr.contains(ItemAttr::Entry) {
       String::from("qw_entry")
+    } else if it.attr.is_bare_mangling() {
+      if let Some(name) = it.name {
+        ctx.sin.str(name).to_string()
+      } else {
+        ManglerBare::new(ctx.src, ctx.deps, ctx.sin, it.path)
+      }
     } else {
       ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path)
     };
-    
+
     let ety = TypeLow::low(ctx, sum, kind)?;
+
+    let Some(expr) = expr else {
+      return mir::Symbol {
+        name: ctx.cre.sym(&sym),
+        stat: mir::SymbolStat::Import,
+        ety,
+        kind: mir::SymbolKind::Function {
+          entry: mir::BlokId::from_any(mir::AnyId::new(0, mir::id::NodeKind::Blok)),
+          blocks: mir::BlokRng::empty(),
+        },
+      }.push_ok(ctx.cre);
+    };
 
     let is_ret_unit = {
       let ty: &mir::Type = ctx.cre.get(ety);
@@ -179,7 +205,15 @@ impl SymbLow {
 
 
   fn low_method_sym(ctx: &mut Ctx, sum: &mut Summary, it: &hir::Item, kind: hir::TypeId, expr: hir::ExprId, is_trait: bool) -> Status<mir::SymbId> {
-    let sym = ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path);
+    let sym = if it.attr.is_bare_mangling() {
+      if let Some(name) = it.name {
+        ctx.sin.str(name).to_string()
+      } else {
+        ManglerBare::new(ctx.src, ctx.deps, ctx.sin, it.path)
+      }
+    } else {
+      ManglerQW::new(ctx.src, ctx.deps, ctx.sin, it.path)
+    };
     
     let ety = TypeLow::low(ctx, sum, kind)?;
 
@@ -230,7 +264,7 @@ impl SymbLow {
         continue;
       }
       let it = ctx.src.get(id);
-      let mir_id = if let hir::ItemKind::Function { kind, expr } = it.kind {
+      let mir_id = if let hir::ItemKind::Function { kind, expr: Some(expr) } = it.kind {
         let symb_id = Self::low_method_sym(ctx, sum, it, kind, expr, is_trait)?;
         method_symbs.push(symb_id);
         Some(symb_id)

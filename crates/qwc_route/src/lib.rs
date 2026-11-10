@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use qwc_arena::Files;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use owo_colors::OwoColorize;
 
 mod error;
 mod build;
@@ -29,7 +30,14 @@ use qwc_target::{Abi, Arch, Sys, Triple, Vendor, get_dialect};
 
 
 pub fn route() {
-  main_cmd(Cli::parse().command);
+  let args: Vec<String> = std::env::args().map(|a| {
+    if a == "-exec" {
+      "--exec".to_string()
+    } else {
+      a
+    }
+  }).collect();
+  main_cmd(Cli::parse_from(args).command);
 }
 
 
@@ -112,7 +120,7 @@ enum MainCommands {
     #[arg(long, default_value = "cqrt")]
     start_routine: BuildStartRoutine,
     
-    /// Select start routine (only executable)
+    /// Target machine arch
     #[arg(long)]
     arch: Option<String>,
 
@@ -128,8 +136,12 @@ enum MainCommands {
     #[arg(long, default_value = "small")]
     mcmodel: CodeModel,
 
+    /// Link output type (executable or shared library)
+    #[arg(long, value_enum, default_value = "exec")]
+    link: LinkMode,
+
     /// Execute after build
-    #[arg(long)]
+    #[arg(long, short = 'e')]
     exec: bool,
 
     /// Display execution times for each compiler phase
@@ -288,7 +300,7 @@ fn main_cmd(cmd: MainCommands) {
       };
     }
 
-    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, arch, rtl, reloc, mcmodel, verbose, exec, timings, usages, dump} => {
+    MainCommands::Compile{path, outdir, deps, opt_level, variant, start_routine, arch, rtl, reloc, mcmodel, link, verbose, exec, timings, usages, dump} => {
       let variant_dir = match variant {
         BuildVariant::Debug => "debug",
         BuildVariant::Release => "release",
@@ -328,6 +340,13 @@ fn main_cmd(cmd: MainCommands) {
       let triple = Triple(arch, Vendor::Unknown, Sys::Linux, Abi::Unknown);
       let dialect = get_dialect(triple);
 
+      let execute = if link == LinkMode::Shared && exec {
+        eprintln!("{}{} {}", "warning".yellow().bold(), ":".bright_black(), "cannot execute a shared library; --exec is ignored");
+        false
+      } else {
+        exec
+      };
+
       let info = compile::CompileInfo {
         path: &path,
         outdir,
@@ -339,12 +358,13 @@ fn main_cmd(cmd: MainCommands) {
         rtl,
         reloc,
         mcmodel,
+        link,
         verbose,
         timings,
         usages,
         dump,
         check_only: false,
-        execute: exec,
+        execute,
         dolink: true,
         deps: dep_artifacts,
         krate_name: qwc_config::read_conf(&path, &mut Files::default()).ok().map(|c| c.name),
@@ -474,6 +494,12 @@ enum BuildStartRoutine {
 pub enum RelocMode {
   PIC,
   Static,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkMode {
+  Exec,
+  Shared,
 }
 
 #[derive(ValueEnum, Clone, Debug)]

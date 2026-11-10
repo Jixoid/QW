@@ -93,6 +93,10 @@ impl ItemLow {
     
     let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
     
+    if attr.contains(ItemAttr::C) {
+      ctx.cre.get_mut(kind).attr |= hir::TypeAttr::C;
+    }
+
     // Post
     hir::Item {
       name: Some(name),
@@ -148,60 +152,74 @@ impl ItemLow {
     let name = it.name.unwrap().sid();
     let path = ctx.cre.push(hir::DefPath::Path { base: ctx.path, name });
 
-
     let hir_kind = TypeLow::low(ctx!(path path -> ctx), sum, kind)?;
-    
-    let mut loc = qwc_resolve::LocalScopeManager::default();
 
-    // Args
-    let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
-    let hir::TypeKind::Fun{self_kind, args, ret} = ctx.cre.get(hir_kind).kind else { unreachable!() };
-    
-    if let Some(ty) = self_kind {
-      let self_pos = ctx.src.get(self_ast.unwrap()).pos;
+    let (mut vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+
+    if let Some(expr) = expr {
+      let mut loc = qwc_resolve::LocalScopeManager::default();
+
+      // Args
+      let ast::TypeKind::Fun{self_kind: self_ast, args: args_ast, ..} = ctx.src.get(kind).kind else { unreachable!() };
+      let hir::TypeKind::Fun{self_kind, args, ret} = ctx.cre.get(hir_kind).kind else { unreachable!() };
       
-      loc.insert(ctx.sin.sid_self(), ty, false, self_pos);
-    }
-
-    for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
-      let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { unreachable!() };
-      let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { unreachable!() };
-
-      loc.insert(name, kind, false, name_pos);
-    }
-
-    let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
-
-    let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr.unwrap())?;
-    
-    let expr_ty = ctx.cre.get(expr_hir).ety;
-
-    // Trait Patch
-    let ret = if let hir::TypeKind::ItemTrait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
-      let fun_sign = ctx.cre.get_mut(hir_kind);
-
-      if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
-        fun_sign.kind = hir::TypeKind::Fun { self_kind, args, ret: expr_ty };
+      if let Some(ty) = self_kind {
+        let self_pos = ctx.src.get(self_ast.unwrap()).pos;
+        
+        loc.insert(ctx.sin.sid_self(), ty, false, self_pos);
       }
 
-      expr_ty
-    } else { ret };
+      for (id, id_pos) in ctx.cre.extra_get(args).zip(ctx.src.extra_get(args_ast)) {
+        let hir::Thing::NamedType(name, kind) = *ctx.cre.get(id) else { unreachable!() };
+        let ast::ThingKind::NamedType(name_pos, ..) = ctx.src.get(id_pos).kind else { unreachable!() };
 
-    TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None)?;
+        loc.insert(name, kind, false, name_pos);
+      }
 
-    let (vis, attr) = read_attrs(ctx, sum, it.vis, ctx.src.get_attached(id))?;
+      let fctx = FunCtx::new_fun(ret, ctx.src.get(kind).pos);
 
+      let expr_hir = ExprLow::low(ctx!(loc loc -> ctx), &fctx, sum, expr)?;
+      
+      let expr_ty = ctx.cre.get(expr_hir).ety;
 
-    // Post
-    hir::Item {
-      name: Some(name),
-      kind: hir::ItemKind::Function {
-        expr: expr_hir,
-        kind: hir_kind,
-      },
-      path,
-      vis, attr
-    }.push_ok(ctx.cre)
+      // Trait Patch
+      let ret = if let hir::TypeKind::ItemTrait{..} = ctx.get(ret).kind && let hir::TypeKind::TraitFrom{..} = ctx.get(expr_ty).kind {
+        let fun_sign = ctx.cre.get_mut(hir_kind);
+
+        if let hir::TypeKind::Fun { self_kind, args, .. } = fun_sign.kind {
+          fun_sign.kind = hir::TypeKind::Fun { self_kind, args, ret: expr_ty };
+        }
+
+        expr_ty
+      } else { ret };
+
+      TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None)?;
+
+      // Post
+      hir::Item {
+        name: Some(name),
+        kind: hir::ItemKind::Function {
+          expr: Some(expr_hir),
+          kind: hir_kind,
+        },
+        path,
+        vis, attr
+      }.push_ok(ctx.cre)
+    } else {
+      // Import function (no body)
+      vis = hir::ItemVis::Public(hir::SymVis::Import);
+
+      // Post
+      hir::Item {
+        name: Some(name),
+        kind: hir::ItemKind::Function {
+          expr: None,
+          kind: hir_kind,
+        },
+        path,
+        vis, attr
+      }.push_ok(ctx.cre)
+    }
   }
 
   fn low_task(_ctx: &mut Ctx, _sum: &mut Summary, _id: ast::ItemId, _it: &ast::Item, _kind: ast::TypeId, _expr: Option<ast::ExprId>) -> Status<hir::ItemId> {
@@ -250,7 +268,7 @@ impl ItemLow {
     let method_item = hir::Item {
       name: Some(name),
       kind: hir::ItemKind::Function {
-        expr: dummy_expr,
+        expr: Some(dummy_expr),
         kind: hir_kind,
       },
       path,
@@ -280,7 +298,7 @@ impl ItemLow {
     TypeMatch::matches(ctx, sum, ret, expr_ty, it.pos, None)?;
 
     if let hir::ItemKind::Function { expr: ref mut e, .. } = ctx.cre.get_mut(method_item).kind {
-      *e = expr_hir;
+      *e = Some(expr_hir);
     }
 
     Status::Success(())
@@ -294,8 +312,8 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
   let mut attr = ItemAttr::empty();
 
   if let Some(attrs) = attrs {
-    for key in attrs {
-      let key = key.ident;
+    for a in attrs {
+      let key = a.ident;
       
       match () {
         // C
@@ -306,7 +324,38 @@ fn read_attrs(ctx: &Ctx, sum: &mut Summary, vis: ast::Visibility, attrs: Option<
                + ONLY_ONE_DEFINITION_REMAIN
             );
           };
+          if attr.contains(ItemAttr::ManglingQW) {
+            ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(key, CONFLICTING_DEFINITION))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          }
           attr |= ItemAttr::C;
+          attr |= ItemAttr::ManglingBare;
+        }
+
+        // mangling: {bare, qw}
+        _ if key.sid() == ctx.sin.sid_mangling() => {
+          if (attr.contains(ItemAttr::ManglingBare) && !attr.contains(ItemAttr::C)) || attr.contains(ItemAttr::ManglingQW) {
+            ret_err!(sum, Message::error(DUPLICATE_ATTRIBUTE, Label::new(key, DEFINED_HERE))
+               + ONLY_ONE_DEFINITION_REMAIN
+            );
+          };
+          if let ast::AttrKind::Bin(val) = a.kind {
+            if val.sid() == ctx.sin.sid_bare() {
+              attr |= ItemAttr::ManglingBare;
+            } else if val.sid() == ctx.sin.sid_qw() {
+              if attr.contains(ItemAttr::C) {
+                ret_err!(sum, Message::error(MUTUALLY_CONTRADICTORY_DEFINITIONS, Label::new(val, CONFLICTING_DEFINITION))
+                   + ONLY_ONE_DEFINITION_REMAIN
+                );
+              }
+              attr |= ItemAttr::ManglingQW;
+            } else {
+              ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[&format!("mangling: {}", val.str(ctx.far))]), Label::new_pos(val)));
+            }
+          } else {
+            ret_err!(sum, Message::error(UNKNOWN_ATTRIBUTE.args(&[key.str(ctx.far)]), Label::new_pos(key)));
+          }
         }
 
         // Import

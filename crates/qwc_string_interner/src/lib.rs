@@ -42,6 +42,9 @@ pub struct StrInterner {
   sid_export: Sid,
   sid_entry: Sid,
   sid_c: Sid,
+  sid_mangling: Sid,
+  sid_bare: Sid,
+  sid_qw: Sid,
 
   sid_self: Sid,
 
@@ -110,6 +113,9 @@ impl StrInterner {
   pub fn sid_export(&self) -> Sid { self.sid_export }
   pub fn sid_entry(&self) -> Sid  { self.sid_entry }
   pub fn sid_c(&self) -> Sid  { self.sid_c }
+  pub fn sid_mangling(&self) -> Sid { self.sid_mangling }
+  pub fn sid_bare(&self) -> Sid { self.sid_bare }
+  pub fn sid_qw(&self) -> Sid { self.sid_qw }
   pub fn sid_self(&self) -> Sid   { self.sid_self }
 
   pub fn sid_add(&self) -> Sid { self.sid_add }
@@ -162,6 +168,9 @@ impl Default for StrInterner {
       sid_export: Sid::from(rodeo.get_or_intern_static("export").into_inner()),
       sid_entry:  Sid::from(rodeo.get_or_intern_static("entry").into_inner()),
       sid_c:      Sid::from(rodeo.get_or_intern_static("C").into_inner()),
+      sid_mangling: Sid::from(rodeo.get_or_intern_static("mangling").into_inner()),
+      sid_bare:   Sid::from(rodeo.get_or_intern_static("bare").into_inner()),
+      sid_qw:     Sid::from(rodeo.get_or_intern_static("qw").into_inner()),
 
       sid_self: Sid::from(rodeo.get_or_intern_static("self").into_inner()),
       

@@ -100,6 +100,7 @@ pub fn build(info: BuildInfo) -> Result<(), Error> {
     rtl: info.rtl,
     reloc: info.reloc,
     mcmodel: info.mcmodel,
+    link: crate::LinkMode::Exec,
     verbose: info.verbose,
     timings: info.timings,
     usages: info.usages,

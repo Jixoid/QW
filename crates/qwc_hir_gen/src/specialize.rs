@@ -439,7 +439,7 @@ impl<'a> Specialization<'a> {
     let id = match it.kind {
       hir::ItemKind::Function{kind, expr} => {
         let kind = self.sub_spec_type(ctx, sum, kind);
-        let expr = self.sub_spec_expr(ctx, sum, expr);
+        let expr = expr.map(|id| self.sub_spec_expr(ctx, sum, id));
 
         hir::Item {
           kind: hir::ItemKind::Function { kind, expr },

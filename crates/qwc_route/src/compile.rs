@@ -26,7 +26,7 @@ use qwc_target::{Arch, DialectOption, Triple};
 use qwc_unit::Unit;
 use rustc_hash::FxHashMap;
 
-use crate::{BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, OptLevel, RelocMode};
+use crate::{BuildStartRoutine, BuildVariant, CodeModel, DumpStage, Error, LinkMode, OptLevel, RelocMode};
 
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -50,6 +50,7 @@ pub struct CompileInfo<'a> {
   pub rtl: Option<String>,
   pub reloc: RelocMode,
   pub mcmodel: CodeModel,
+  pub link: LinkMode,
   pub verbose: u8,
   pub timings: bool,
   pub usages: bool,
@@ -317,7 +318,7 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
 
   args.push("-L/usr/lib");
 
-  let src = if bld_kind == BuildKind::Exec {
+  let src = if info.link == LinkMode::Exec && bld_kind == BuildKind::Exec {
     let rt = match info.start_routine {
       BuildStartRoutine::CQRT => { args.push("-lc"); "cqrt" },
       BuildStartRoutine::CRT  => { args.push("-lc"); "crt" },
@@ -339,8 +340,13 @@ pub fn build_link(info: &CompileInfo, backend: &dyn ILinkObj, outdir: &Path, bld
 
   let deps: Vec<&Path> = deps.iter().map(|it| it.as_path()).collect();
 
+  let link_target = match info.link {
+    LinkMode::Shared => cgen::LinkTarget::Shared,
+    LinkMode::Exec => cgen::LinkTarget::Exec,
+  };
+
   let options = LinkOptions {
-    target: Some(cgen::LinkTarget::Exec),
+    target: Some(link_target),
     triple: None,
     is_dynamic: true,
     lto: false,
@@ -538,7 +544,9 @@ pub fn compile(info: CompileInfo) -> Result<(), Error> {
   }
 
   if info.execute {
-    if let Some(link) = backend.run() {
+    if info.link == LinkMode::Shared {
+      eprintln!("{}{} {}", "warning".yellow().bold(), ":".bright_black(), "cannot execute a shared library; --exec is ignored");
+    } else if let Some(link) = backend.run() {
       build_run(&info, link.as_ref(), outdir, &[])?;
     } else {
       return Err(Error::New | format!("this target not have a run feature"));

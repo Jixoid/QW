@@ -82,12 +82,23 @@ impl ILinkObj for GenLLVM {
 	fn link(&self, target: &Path, out: &Path, deps: &[&Path], args: &[&str], options: &LinkOptions) -> Result<(), String> {
 		let mut cmd = Command::new("ld.lld");
 
-		// reloc mode
-		if let Some(reloc_mode) = &options.reloc_mode {
-			cmd.arg(match reloc_mode {
-				RelocMode::PIC => "--pie",
-				RelocMode::Static => "--static",
-			});
+		// target / reloc mode
+		match options.target {
+			Some(LinkTarget::Shared) => {
+				cmd.arg("-shared");
+			}
+			_ => {
+				if let Some(reloc_mode) = &options.reloc_mode {
+					cmd.arg(match reloc_mode {
+						RelocMode::PIC => "--pie",
+						RelocMode::Static => "--static",
+					});
+				}
+
+				if options.is_dynamic {
+					cmd.arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2");
+				}
+			}
 		}
 
 		// code model
@@ -103,11 +114,6 @@ impl ILinkObj for GenLLVM {
 		// lto
 		if options.lto {
 			cmd.arg("--lto-O2");
-		}
-
-		// dynamic
-		if options.is_dynamic {
-			cmd.arg("-dynamic-linker").arg("/lib64/ld-linux-x86-64.so.2");
 		}
 
 		// strip

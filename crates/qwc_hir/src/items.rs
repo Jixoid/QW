@@ -35,7 +35,7 @@ pub enum ItemKind {
   Using {kind: TypeId},
   
   Variable {kind: TypeId, expr: ExprId, ism: bool},
-  Function {kind: TypeId, expr: ExprId},
+  Function {kind: TypeId, expr: Option<ExprId>},
   Task {kind: TypeId, expr: ExprId},
 
   Impl {type_ty: TypeId, trait_ty: Option<TypeId>, methods: ItemRng},
@@ -44,8 +44,17 @@ pub enum ItemKind {
 bitflags! {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
   pub struct ItemAttr: u16 {
-    const C = 1;
-    const Entry = 2;
+    const C = 1 << 0;
+    const Entry = 1 << 1;
+    const ManglingBare = 1 << 2;
+    const ManglingQW = 1 << 3;
+  }
+}
+
+impl ItemAttr {
+  #[inline]
+  pub fn is_bare_mangling(&self) -> bool {
+    self.contains(ItemAttr::ManglingBare) || self.contains(ItemAttr::C)
   }
 }
 

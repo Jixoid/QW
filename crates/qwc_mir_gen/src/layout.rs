@@ -19,9 +19,13 @@ pub struct Layouter;
 
 impl Layouter {
   pub fn layout(sum: &mut Summary, it: &TypeKind, layinfo: &LayoutInfo, cre: &Krate) -> Status<Layout> {
+    Self::layout_opt(sum, it, layinfo, cre, false)
+  }
+
+  pub fn layout_opt(sum: &mut Summary, it: &TypeKind, layinfo: &LayoutInfo, cre: &Krate, is_c: bool) -> Status<Layout> {
     match *it {
       // Combinated
-      TypeKind::Struct(rng) => lay_struct(cre, rng),
+      TypeKind::Struct(rng) => lay_struct(cre, rng, is_c),
 
       // Sequential
       TypeKind::Array(ty, count) => lay_array(cre, ty, count),
@@ -39,10 +43,14 @@ impl Layouter {
       _ => todo!("{it:#?}")
     }
   }
+
+  pub fn layout_struct(_sum: &mut Summary, rng: TypeRng, _layinfo: &LayoutInfo, cre: &Krate, is_c: bool) -> Status<Layout> {
+    lay_struct(cre, rng, is_c)
+  }
 }
 
 
-fn lay_struct(cre: &Krate, rng: TypeRng) -> Status<Layout> {
+fn lay_struct(cre: &Krate, rng: TypeRng, is_c: bool) -> Status<Layout> {
   let var = {
     let mut var = vec![];
     
@@ -52,13 +60,19 @@ fn lay_struct(cre: &Krate, rng: TypeRng) -> Status<Layout> {
 
       match lay {
         Layout::SST {..} => var.push((it, lay)),
-        Layout::ZST {..} => {/* ignore */}
+        Layout::ZST {..} => {
+          if is_c {
+            var.push((it, lay));
+          }
+        }
 
         Layout::DST {..} | Layout::DSAT => panic!()
       }
     }
     
-    var.sort_by(|(_, a), (_, b)| b.align().cmp(&a.align()));
+    if !is_c {
+      var.sort_by(|(_, a), (_, b)| b.align().cmp(&a.align()));
+    }
     var
   };
 
@@ -67,8 +81,14 @@ fn lay_struct(cre: &Krate, rng: TypeRng) -> Status<Layout> {
     let mut off: u64 = 0;
     
     for (_, lay) in var {
-      align = align.max(lay.align().unwrap());
-      off = lay.align_to(off).unwrap() + lay.aligned_size().unwrap();
+      if let Some(f_align) = lay.align() {
+        align = align.max(f_align);
+        off = lay.align_to(off).unwrap_or(off) + lay.aligned_size().unwrap_or(0);
+      }
+    }
+
+    if is_c && align > 1 {
+      off = ((off + align as u64 -1) / align as u64) * align as u64;
     }
 
     (align, off)

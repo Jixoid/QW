@@ -12,7 +12,7 @@
 
 use qwc_diagnostic::Summary;
 use qwc_hir::{AnyId, Deps, ItemAttr, ItemId, ItemKind, Krate};
-use qwc_mangling::{Mangler, ManglerQW};
+use qwc_mangling::{Mangler, ManglerBare, ManglerQW};
 
 use qwc_string_interner::StrInterner;
 
@@ -88,7 +88,15 @@ impl<'a> ExportCollector<'a> {
         ItemKind::Using{kind} => (it.name.unwrap(), if let Some(generic) = generic {ExportKind::GenericType(generic, kind)} else {ExportKind::Type(kind)}),
 
         ItemKind::Variable{kind, ..} => {
-          let sym = ManglerQW::new(self.cre, self.deps, self.sin, it.path);
+          let sym = if it.attr.is_bare_mangling() {
+            if let Some(name) = it.name {
+              self.sin.str(name).to_string()
+            } else {
+              ManglerBare::new(self.cre, self.deps, self.sin, it.path)
+            }
+          } else {
+            ManglerQW::new(self.cre, self.deps, self.sin, it.path)
+          };
           self.scp.add_symbol(id, sym);
           (it.name.unwrap(), ExportKind::Expr(id, kind))
         }
@@ -96,6 +104,12 @@ impl<'a> ExportCollector<'a> {
         ItemKind::Function{kind, ..} => {
           let sym = if it.attr.contains(ItemAttr::Entry) {
             String::from("qw_entry")
+          } else if it.attr.is_bare_mangling() {
+            if let Some(name) = it.name {
+              self.sin.str(name).to_string()
+            } else {
+              ManglerBare::new(self.cre, self.deps, self.sin, it.path)
+            }
           } else {
             ManglerQW::new(self.cre, self.deps, self.sin, it.path)
           };
@@ -107,7 +121,15 @@ impl<'a> ExportCollector<'a> {
           for method_id in self.cre.extra_get(methods) {
             let m_it = self.cre.get(method_id);
             if let ItemKind::Function { .. } = m_it.kind {
-              let sym = ManglerQW::new(self.cre, self.deps, self.sin, m_it.path);
+              let sym = if m_it.attr.is_bare_mangling() {
+                if let Some(name) = m_it.name {
+                  self.sin.str(name).to_string()
+                } else {
+                  ManglerBare::new(self.cre, self.deps, self.sin, m_it.path)
+                }
+              } else {
+                ManglerQW::new(self.cre, self.deps, self.sin, m_it.path)
+              };
               self.scp.add_symbol(method_id, sym);
             }
           }
